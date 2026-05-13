@@ -98,7 +98,7 @@ async def build_oracle_graph():
         compare_names = {"compare_stocks", "get_peer_comparison"}
         compare_tools = [tool for tool in fundamentals_tools_all if tool.name in compare_names]
 
-        news_names = {"search_web", "search_news", "search_financial", "extract_url"}
+        news_names = {"search_web", "search_news", "search_financial", "extract_url", "get_latest_company_news"}
         news_tools = [tool for tool in server_tools.get("research_news", []) if tool.name in news_names]
 
         doc_tools = server_tools.get("docs_pipeline", [])
@@ -169,6 +169,9 @@ async def build_oracle_graph():
                     prompt=(
                         "You are a financial news and research analyst. Use Tavily to find the latest "
                         "market news, earnings reports, analyst opinions, and macro events. "
+                        "For prompts about latest or recent news on one or more companies, use "
+                        "get_latest_company_news first because it has built-in fallback and is more reliable "
+                        "than chaining multiple separate news searches. "
                         "Always cite sources with URLs and mention publication dates when available. "
                         f"{LIVE_DATA_GUARDRAIL}"
                     ),

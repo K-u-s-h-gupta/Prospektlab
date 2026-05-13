@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from datetime import datetime
 from typing import Any
 
@@ -56,6 +57,18 @@ mcp = FastMCP(
 # Tavily client (lazy init)
 # ---------------------------------------------------------------------------
 _tavily: TavilyClient | None = None
+TRANSIENT_ERROR_MARKERS = (
+    "connection",
+    "timeout",
+    "temporarily",
+    "temporarily unavailable",
+    "rate limit",
+    "429",
+    "503",
+    "504",
+    "reset by peer",
+    "name resolution",
+)
 
 
 def _get_tavily() -> TavilyClient:
@@ -69,6 +82,35 @@ def _get_tavily() -> TavilyClient:
             )
         _tavily = TavilyClient(api_key=TAVILY_API_KEY)
     return _tavily
+
+
+def _is_transient_search_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return any(marker in message for marker in TRANSIENT_ERROR_MARKERS)
+
+
+def _search_with_retries(client: TavilyClient, *, retries: int = 2, **kwargs) -> dict[str, Any]:
+    """Retry transient Tavily search failures a small number of times."""
+    last_exc: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            return client.search(**kwargs)
+        except Exception as exc:
+            last_exc = exc
+            logger.warning(
+                "Tavily search attempt %d/%d failed for query='%s' topic=%s: %s",
+                attempt,
+                retries,
+                kwargs.get("query"),
+                kwargs.get("topic"),
+                exc,
+            )
+            if attempt >= retries or not _is_transient_search_error(exc):
+                raise
+            time.sleep(0.5 * attempt)
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("Tavily search failed without returning a response.")
 
 
 # ---------------------------------------------------------------------------
@@ -159,38 +201,189 @@ def search_news(
 
     try:
         client = _get_tavily()
-        response = client.search(
-            query=query,
-            max_results=max_results,
-            search_depth="basic",
-            include_answer="basic",
-            topic="news",
-            time_range=time_range,
-        )
+        attempts = [
+            {
+                "strategy": "news",
+                "kwargs": {
+                    "query": query,
+                    "max_results": max_results,
+                    "search_depth": "basic",
+                    "include_answer": "basic",
+                    "topic": "news",
+                    "time_range": time_range,
+                },
+            },
+            {
+                "strategy": "finance",
+                "kwargs": {
+                    "query": query,
+                    "max_results": max_results,
+                    "search_depth": "basic",
+                    "include_answer": "basic",
+                    "topic": "finance",
+                },
+            },
+            {
+                "strategy": "general",
+                "kwargs": {
+                    "query": query,
+                    "max_results": max_results,
+                    "search_depth": "basic",
+                    "include_answer": "basic",
+                    "topic": "general",
+                },
+            },
+        ]
 
-        articles = []
-        for r in response.get("results", []):
-            articles.append({
-                "title": r.get("title"),
-                "url": r.get("url"),
-                "content": r.get("content"),
-                "score": r.get("score"),
-                "published_date": r.get("published_date"),
-            })
+        last_error = None
+        last_output = None
+        for attempt in attempts:
+            try:
+                response = _search_with_retries(client, **attempt["kwargs"])
+                articles = []
+                for r in response.get("results", []):
+                    articles.append({
+                        "title": r.get("title"),
+                        "url": r.get("url"),
+                        "content": r.get("content"),
+                        "score": r.get("score"),
+                        "published_date": r.get("published_date"),
+                    })
 
-        output = {
-            "query": query,
-            "answer": response.get("answer"),
-            "total_articles": len(articles),
-            "articles": articles,
-            "time_range": time_range,
-        }
+                output = {
+                    "query": query,
+                    "answer": response.get("answer"),
+                    "total_articles": len(articles),
+                    "articles": articles,
+                    "time_range": time_range,
+                    "strategy_used": attempt["strategy"],
+                }
+                last_output = output
 
-        logger.info("search_news OK: %d articles", len(articles))
-        return {"error": False, "data": output}
+                if articles:
+                    logger.info(
+                        "search_news OK: %d articles via %s",
+                        len(articles),
+                        attempt["strategy"],
+                    )
+                    return {"error": False, "data": output}
+            except Exception as exc:
+                last_error = str(exc)
+
+        if last_output is not None:
+            logger.info("search_news completed with 0 articles after fallback attempts.")
+            return {"error": False, "data": last_output}
+
+        logger.error("search_news failed after fallback attempts: %s", last_error)
+        return {"error": True, "message": last_error or "Unknown Tavily search failure."}
 
     except Exception as exc:
         logger.error("search_news failed: %s", exc)
+        return {"error": True, "message": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Tool: get_latest_company_news
+# ---------------------------------------------------------------------------
+@mcp.tool
+def get_latest_company_news(
+    companies: list[str],
+    max_results_per_company: int = 3,
+    time_range: str = "week",
+) -> dict:
+    """
+    Retrieve latest news for one or more companies with built-in fallback.
+
+    This tool is designed for prompts like:
+    - "Latest news on TCS and Infosys"
+    - "Fetch recent news for both companies"
+
+    It first tries Tavily's news topic, then falls back to finance search,
+    then finally to general web search if needed.
+    """
+    logger.info("get_latest_company_news: companies=%s, range=%s", companies, time_range)
+
+    try:
+        client = _get_tavily()
+        output: dict[str, Any] = {}
+
+        for company in companies[:5]:
+            name = company.strip()
+            if not name:
+                continue
+
+            company_result: dict[str, Any] = {
+                "company": name,
+                "strategy_used": None,
+                "results": [],
+                "answer": None,
+            }
+
+            attempts = [
+                {
+                    "strategy": "news",
+                    "kwargs": {
+                        "query": f"{name} latest news",
+                        "max_results": max_results_per_company,
+                        "search_depth": "basic",
+                        "include_answer": "basic",
+                        "topic": "news",
+                        "time_range": time_range,
+                    },
+                },
+                {
+                    "strategy": "finance",
+                    "kwargs": {
+                        "query": f"{name} latest news",
+                        "max_results": max_results_per_company,
+                        "search_depth": "basic",
+                        "include_answer": "basic",
+                        "topic": "finance",
+                    },
+                },
+                {
+                    "strategy": "general",
+                    "kwargs": {
+                        "query": f"{name} latest news",
+                        "max_results": max_results_per_company,
+                        "search_depth": "basic",
+                        "include_answer": "basic",
+                        "topic": "general",
+                    },
+                },
+            ]
+
+            last_error = None
+            for attempt in attempts:
+                try:
+                    response = _search_with_retries(client, **attempt["kwargs"])
+                    results = [
+                        {
+                            "title": r.get("title"),
+                            "url": r.get("url"),
+                            "content": r.get("content"),
+                            "score": r.get("score"),
+                            "published_date": r.get("published_date"),
+                        }
+                        for r in response.get("results", [])
+                    ]
+                    if results:
+                        company_result["strategy_used"] = attempt["strategy"]
+                        company_result["answer"] = response.get("answer")
+                        company_result["results"] = results
+                        break
+                except Exception as exc:
+                    last_error = str(exc)
+
+            if not company_result["results"] and last_error:
+                company_result["error"] = last_error
+
+            output[name] = company_result
+
+        return {"error": False, "data": {"companies": output, "time_range": time_range}}
+
+    except Exception as exc:
+        logger.error("get_latest_company_news failed: %s", exc)
         return {"error": True, "message": str(exc)}
 
 
