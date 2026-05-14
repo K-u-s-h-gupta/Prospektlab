@@ -1,0 +1,8 @@
+# FinAgent runtime — install into same venv as Prospektlab_intelligence Backend
+anthropic>=0.45.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+httpx>=0.27.0
+beautifulsoup4>=4.12.0
+pdfplumber>=0.11.0
+# playwright>=1.49.0  # optional: pip install playwright && playwright install

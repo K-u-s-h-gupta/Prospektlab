@@ -1,0 +1,220 @@
+<!doctype html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings · ProspektLab</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
+  <script>
+    tailwind.config = { darkMode: "class", theme: { extend: { colors: { bg: "#0a0f1e", card: "#131b2e", elev: "#1a2238", text: "#e6ebf7", muted: "#9aa3bb", primary: "#7da8ff", success: "#5ce0a4", error: "#ff8a80" }, fontFamily: { inter: ["Inter", "sans-serif"], mono: ["JetBrains Mono", "monospace"] } } } };
+  </script>
+  <style>
+    html, body { background: #0a0f1e; }
+    body { font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif; color: #e6ebf7; }
+    .label-mono { font-family: "JetBrains Mono", monospace; letter-spacing: 0.05em; }
+    .glass { background: linear-gradient(135deg, rgba(26,34,56,0.6) 0%, rgba(19,27,46,0.3) 100%); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.07); }
+    .toggle { position: relative; width: 42px; height: 24px; background: #2a3450; border-radius: 999px; cursor: pointer; transition: background 0.2s; }
+    .toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+    .toggle.on { background: #7da8ff; }
+    .toggle.on::after { transform: translateX(18px); }
+  </style>
+</head>
+<body class="min-h-screen">
+
+<div class="flex min-h-screen">
+  <aside class="hidden md:flex flex-col py-8 w-[250px] bg-bg/80 border-r border-white/5">
+    <div class="px-6 mb-10 flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-elev flex items-center justify-center border border-white/10">
+        <span class="text-primary text-lg font-bold">P</span>
+      </div>
+      <div>
+        <div class="text-[14px] font-semibold tracking-tight">ProspektLab</div>
+        <div class="label-mono text-[10px] text-muted tracking-[0.2em]">INTELLIGENCE</div>
+      </div>
+    </div>
+    <nav class="px-3 space-y-1.5">
+      <a href="/app" class="flex items-center gap-3 px-4 py-3 rounded-xl text-muted hover:text-text hover:bg-elev/40 transition">
+        <span class="material-symbols-outlined text-[20px]">terminal</span>
+        <span class="label-mono text-[11px] uppercase tracking-wider">Command</span>
+      </a>
+      <a href="/profile" class="flex items-center gap-3 px-4 py-3 rounded-xl text-muted hover:text-text hover:bg-elev/40 transition">
+        <span class="material-symbols-outlined text-[20px]">account_circle</span>
+        <span class="label-mono text-[11px] uppercase tracking-wider">Profile</span>
+      </a>
+      <a href="/settings" class="flex items-center gap-3 px-4 py-3 rounded-xl text-primary bg-primary/5 border border-primary/15 font-medium">
+        <span class="material-symbols-outlined text-[20px]">tune</span>
+        <span class="label-mono text-[11px] uppercase tracking-wider">Settings</span>
+      </a>
+      <a href="/landing" class="flex items-center gap-3 px-4 py-3 rounded-xl text-muted hover:text-text hover:bg-elev/40 transition">
+        <span class="material-symbols-outlined text-[20px]">home</span>
+        <span class="label-mono text-[11px] uppercase tracking-wider">Home</span>
+      </a>
+    </nav>
+  </aside>
+
+  <main class="flex-1 px-6 md:px-12 py-12">
+    <div class="max-w-3xl mx-auto space-y-6">
+      <header>
+        <h1 class="text-3xl font-bold tracking-tight">Settings</h1>
+        <p class="text-muted text-sm mt-1.5">Tune how ProspektLab runs and displays its research.</p>
+      </header>
+
+      <!-- Research tuning -->
+      <section class="glass rounded-2xl p-6">
+        <h2 class="text-base font-semibold mb-5 flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-[20px]">science</span>
+          Research engine
+        </h2>
+        <div class="space-y-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-sm">Default max steps</div>
+              <div class="text-xs text-muted mt-0.5">Higher = deeper, slower. Pro tier extends to 50.</div>
+            </div>
+            <input id="maxSteps" type="number" min="6" max="50" value="14" class="w-24 bg-card border border-white/10 rounded-lg px-3 py-2 text-sm text-right" />
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-sm">Compounding deep-dive rounds</div>
+              <div class="text-xs text-muted mt-0.5">More rounds = better coverage but slower.</div>
+            </div>
+            <select id="rounds" class="bg-card border border-white/10 rounded-lg px-3 py-2 text-sm">
+              <option value="1">1 round (fastest)</option>
+              <option value="2" selected>2 rounds (balanced)</option>
+              <option value="3">3 rounds (most coverage)</option>
+            </select>
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-sm">Include community signal</div>
+              <div class="text-xs text-muted mt-0.5">Reddit + StockTwits + Hacker News.</div>
+            </div>
+            <div id="tgCommunity" class="toggle on"></div>
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-sm">Pump-and-dump heuristic</div>
+              <div class="text-xs text-muted mt-0.5">Auto-downgrades hype-heavy social posts to LOW confidence.</div>
+            </div>
+            <div id="tgViral" class="toggle on"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Display -->
+      <section class="glass rounded-2xl p-6">
+        <h2 class="text-base font-semibold mb-5 flex items-center gap-2">
+          <span class="material-symbols-outlined text-success text-[20px]">palette</span>
+          Display
+        </h2>
+        <div class="space-y-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-sm">Currency display</div>
+              <div class="text-xs text-muted mt-0.5">Choose how monetary figures are rendered.</div>
+            </div>
+            <select id="currency" class="bg-card border border-white/10 rounded-lg px-3 py-2 text-sm">
+              <option value="dual">USD &amp; INR (recommended)</option>
+              <option value="inr">INR only</option>
+              <option value="usd">USD only</option>
+            </select>
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-sm">FX override</div>
+              <div class="text-xs text-muted mt-0.5">Force a specific USD/INR rate (server-side env <code class="label-mono text-[11px] text-primary">FINAGENT_USD_INR</code>).</div>
+            </div>
+            <input id="fxOverride" type="number" step="0.01" placeholder="auto" class="w-32 bg-card border border-white/10 rounded-lg px-3 py-2 text-sm text-right" />
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-medium text-sm">Streaming memo</div>
+              <div class="text-xs text-muted mt-0.5">Token-by-token render while Claude composes.</div>
+            </div>
+            <div id="tgStreaming" class="toggle on"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Account / API -->
+      <section class="glass rounded-2xl p-6">
+        <h2 class="text-base font-semibold mb-5 flex items-center gap-2">
+          <span class="material-symbols-outlined text-warn text-[20px]">key</span>
+          Anthropic key (optional)
+        </h2>
+        <p class="text-xs text-muted mb-3">Bring your own Claude key to enable LLM-streamed prose synthesis. Stored only in your browser.</p>
+        <input id="anthropicKey" type="password" placeholder="sk-ant-…" class="w-full bg-card border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:border-primary outline-none" />
+        <div class="text-[11px] text-muted mt-2">Set <code class="label-mono text-primary">ANTHROPIC_API_KEY</code> on the server for production use.</div>
+      </section>
+
+      <!-- Danger zone -->
+      <section class="glass rounded-2xl p-6 border-error/30">
+        <h2 class="text-base font-semibold mb-3 flex items-center gap-2 text-error">
+          <span class="material-symbols-outlined text-[20px]">warning</span>
+          Danger zone
+        </h2>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-medium text-sm">Clear local data</div>
+            <div class="text-xs text-muted mt-0.5">Wipes saved profile, preferences and watchlist from this browser.</div>
+          </div>
+          <button id="clearLocal" class="bg-error/10 text-error border border-error/30 px-4 py-2 rounded-lg text-sm font-medium hover:bg-error/20">Clear</button>
+        </div>
+      </section>
+
+      <div class="flex justify-end pt-2">
+        <button id="saveBtn" class="bg-primary text-bg font-semibold text-sm px-6 py-2.5 rounded-lg hover:opacity-90 transition">Save settings</button>
+      </div>
+      <div id="saveMsg" class="hidden text-success text-xs text-right">Saved.</div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const TOGGLES = ["tgCommunity", "tgViral", "tgStreaming"];
+  function loadPrefs() {
+    try {
+      const p = JSON.parse(localStorage.getItem("prospektlab_prefs") || "{}");
+      if (p.maxSteps) $("maxSteps").value = p.maxSteps;
+      if (p.rounds) $("rounds").value = p.rounds;
+      if (p.currency) $("currency").value = p.currency;
+      if (p.fxOverride) $("fxOverride").value = p.fxOverride;
+      if (p.anthropicKey) $("anthropicKey").value = p.anthropicKey;
+      TOGGLES.forEach((id) => {
+        const key = id.replace("tg", "tg_");
+        if (p[key] === false) $(id).classList.remove("on");
+        if (p[key] === true) $(id).classList.add("on");
+      });
+    } catch (_) {}
+  }
+  TOGGLES.forEach((id) => $(id).addEventListener("click", () => $(id).classList.toggle("on")));
+  $("saveBtn").addEventListener("click", () => {
+    const prefs = {
+      maxSteps: parseInt($("maxSteps").value, 10) || 14,
+      rounds: parseInt($("rounds").value, 10) || 2,
+      currency: $("currency").value,
+      fxOverride: $("fxOverride").value || null,
+      anthropicKey: $("anthropicKey").value || null,
+    };
+    TOGGLES.forEach((id) => { prefs[id.replace("tg", "tg_")] = $(id).classList.contains("on"); });
+    localStorage.setItem("prospektlab_prefs", JSON.stringify(prefs));
+    $("saveMsg").classList.remove("hidden");
+    setTimeout(() => $("saveMsg").classList.add("hidden"), 2200);
+  });
+  $("clearLocal").addEventListener("click", () => {
+    if (!confirm("Clear all local ProspektLab data from this browser?")) return;
+    localStorage.removeItem("prospektlab_user");
+    localStorage.removeItem("prospektlab_prefs");
+    localStorage.removeItem("prospektlab_watchlist");
+    window.location.href = "/landing";
+  });
+  loadPrefs();
+</script>
+
+</body>
+</html>

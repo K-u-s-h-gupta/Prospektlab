@@ -1,0 +1,727 @@
+<!doctype html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProspektLab — Institutional research, in 60 seconds, in INR</title>
+  <meta name="description" content="ProspektLab is an autonomous research analyst that pulls SEC filings, live market data, retail sentiment and the actual 10-K narrative — and writes you a memo in under 60 seconds. INR-native. Free." />
+  <meta property="og:title" content="ProspektLab — Institutional research in 60 seconds" />
+  <meta property="og:description" content="One ticker. One minute. One memo with citations." />
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            bg: "#0a0f1e",
+            card: "#131b2e",
+            elev: "#1a2238",
+            text: "#e6ebf7",
+            muted: "#9aa3bb",
+            primary: "#7da8ff",
+            success: "#5ce0a4",
+            warn: "#f7c54a",
+            error: "#ff8a80",
+          },
+          fontFamily: { inter: ["Inter", "sans-serif"], mono: ["JetBrains Mono", "monospace"] },
+        },
+      },
+    };
+  </script>
+  <style>
+    html, body { background: #0a0f1e; }
+    body { font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif; color: #e6ebf7; }
+    .label-mono { font-family: "JetBrains Mono", monospace; letter-spacing: 0.05em; }
+    .gradient-text { background: linear-gradient(90deg, #7da8ff 0%, #5ce0a4 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .glass { background: linear-gradient(135deg, rgba(26,34,56,0.6) 0%, rgba(19,27,46,0.3) 100%); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 8px 32px rgba(0,0,0,0.25); }
+    .glass-strong { background: linear-gradient(135deg, rgba(26,34,56,0.85) 0%, rgba(19,27,46,0.7) 100%); backdrop-filter: blur(22px); border: 1px solid rgba(255,255,255,0.08); }
+    .blob { position: absolute; pointer-events: none; border-radius: 9999px; filter: blur(120px); opacity: 0.35; }
+    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+    .float-slow { animation: float 6s ease-in-out infinite; }
+    .stat-card { transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s; }
+    .stat-card:hover { transform: translateY(-2px); border-color: rgba(125,168,255,0.5); background: rgba(125,168,255,0.04); }
+    .checkmark { color: #5ce0a4; }
+    .x-mark { color: #ff8a80; }
+    .cta-glow { box-shadow: 0 0 0 0 rgba(125,168,255,0.25); transition: all 0.2s; }
+    .cta-glow:hover { box-shadow: 0 0 0 8px rgba(125,168,255,0.18); transform: translateY(-1px); }
+    details[open] summary .chev { transform: rotate(180deg); }
+    .chev { transition: transform 0.2s; }
+    .ring-fade { background: radial-gradient(circle at center, rgba(125,168,255,0.08) 0%, transparent 70%); }
+
+    /* Animated typed cursor in the terminal preview */
+    .typed::after { content: "▎"; color: #7da8ff; animation: blink 1s steps(1) infinite; margin-left: 1px; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* Terminal preview */
+    .term-line { opacity: 0; transform: translateY(4px); transition: opacity 0.25s, transform 0.25s; }
+    .term-line.visible { opacity: 1; transform: translateY(0); }
+    .term-bar { height: 4px; background: linear-gradient(90deg, #7da8ff, #5ce0a4); border-radius: 4px; transition: width 0.6s ease; }
+
+    /* Live counter animation */
+    .count-up { transition: opacity 0.3s; }
+
+    /* Sticky bottom CTA bar */
+    .sticky-cta { transform: translateY(120%); transition: transform 0.3s ease; }
+    .sticky-cta.visible { transform: translateY(0); }
+
+    /* Logo marquee */
+    .marquee-track { animation: marquee 26s linear infinite; }
+    @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+    /* Subtle grid backdrop */
+    .grid-bg {
+      background-image:
+        linear-gradient(rgba(125,168,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(125,168,255,0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    /* Aurora animated background */
+    .aurora {
+      position: absolute; inset: -25%; pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(closest-side, rgba(125,168,255,0.25), transparent 70%),
+        radial-gradient(closest-side, rgba(92,224,164,0.18), transparent 70%);
+      background-position: 20% 30%, 80% 70%;
+      background-size: 600px 600px, 500px 500px;
+      background-repeat: no-repeat;
+      filter: blur(30px);
+      animation: drift 18s ease-in-out infinite alternate;
+      opacity: 0.55;
+    }
+    @keyframes drift {
+      0% { background-position: 15% 25%, 85% 75%; }
+      100% { background-position: 60% 40%, 30% 80%; }
+    }
+
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid; }
+
+    a[href^="#"] { scroll-behavior: smooth; }
+    html { scroll-behavior: smooth; }
+  </style>
+</head>
+
+<body class="overflow-x-hidden">
+
+<!-- ─────────── TOP BAR ─────────── -->
+<header class="sticky top-0 z-50 backdrop-blur-xl bg-bg/70 border-b border-white/5">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <a href="/landing" class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-elev flex items-center justify-center border border-white/10">
+        <span class="text-primary text-lg font-bold">P</span>
+      </div>
+      <div>
+        <div class="text-[15px] font-semibold tracking-tight">ProspektLab</div>
+        <div class="label-mono text-[10px] text-muted tracking-[0.2em]">INTELLIGENCE</div>
+      </div>
+    </a>
+    <nav class="hidden md:flex items-center gap-7 text-sm text-muted">
+      <a href="#demo" class="hover:text-text transition">Demo</a>
+      <a href="#how" class="hover:text-text transition">How it works</a>
+      <a href="#compare" class="hover:text-text transition">Compare</a>
+      <a href="#pricing" class="hover:text-text transition">Pricing</a>
+      <a href="#faq" class="hover:text-text transition">FAQ</a>
+    </nav>
+    <div class="flex items-center gap-3">
+      <a href="/login" class="hidden sm:inline text-sm text-muted hover:text-text transition">Sign in</a>
+      <a href="/app" class="text-sm font-semibold bg-primary text-bg px-4 py-2 rounded-lg hover:opacity-90 transition cta-glow">Try free</a>
+    </div>
+  </div>
+</header>
+
+<!-- ─────────── HERO ─────────── -->
+<section class="relative overflow-hidden">
+  <div class="aurora"></div>
+  <div class="absolute inset-0 grid-bg opacity-50"></div>
+
+  <div class="relative max-w-7xl mx-auto px-6 pt-16 pb-12">
+    <div class="grid lg:grid-cols-12 gap-10 items-center">
+      <div class="lg:col-span-7">
+        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-elev/60 border border-white/10 mb-6 label-mono text-[11px] text-muted">
+          <span class="w-2 h-2 rounded-full bg-success animate-pulse"></span>
+          Now triangulating SEC + Reddit + StockTwits + 10-K narrative + News
+        </div>
+        <h1 class="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.04]">
+          Institutional research<br />
+          <span class="gradient-text">in 60 seconds. For ₹0.</span>
+        </h1>
+        <p class="mt-6 max-w-xl text-lg text-muted leading-relaxed">
+          Stop reading 200-page 10-Ks. Stop trusting screenshots on X.
+          ProspektLab pulls SEC EDGAR, live quotes, Reddit/StockTwits sentiment,
+          press coverage and the actual 10-K — then writes you a memo a junior
+          analyst would be proud of.
+        </p>
+        <div class="mt-8 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <a href="/app" class="inline-flex items-center gap-2 bg-primary text-bg font-semibold text-base px-7 py-4 rounded-xl hover:opacity-90 transition cta-glow">
+            <span class="material-symbols-outlined text-[20px]">bolt</span>
+            Run your first memo free
+          </a>
+          <a href="#demo" class="inline-flex items-center gap-2 bg-elev/60 border border-white/10 text-text font-medium text-base px-7 py-4 rounded-xl hover:bg-elev transition">
+            <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+            Watch the 22-second demo
+          </a>
+        </div>
+        <div class="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 label-mono text-[11px] text-muted tracking-wide">
+          <span class="flex items-center gap-1.5"><span class="checkmark">✓</span> No credit card</span>
+          <span class="flex items-center gap-1.5"><span class="checkmark">✓</span> No sign-up to demo</span>
+          <span class="flex items-center gap-1.5"><span class="checkmark">✓</span> INR-native output</span>
+          <span class="flex items-center gap-1.5"><span class="checkmark">✓</span> Open citations</span>
+        </div>
+      </div>
+
+      <!-- Terminal preview, auto-animated -->
+      <div class="lg:col-span-5">
+        <div class="relative glass-strong rounded-2xl p-1.5 float-slow">
+          <div class="bg-bg/60 rounded-xl overflow-hidden">
+            <div class="flex items-center gap-1.5 px-4 py-2.5 border-b border-white/5">
+              <span class="w-2.5 h-2.5 rounded-full bg-error/70"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-warn/70"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-success/70"></span>
+              <span class="ml-3 label-mono text-[10px] text-muted">prospektlab — research session</span>
+            </div>
+            <div class="p-5 space-y-2 font-mono text-[12px] min-h-[300px]" id="termHost">
+              <div class="text-muted">$ <span id="termTicker" class="text-primary">NVDA</span><span class="typed"></span></div>
+              <div class="term-line text-muted" data-ms="600"><span class="text-success">✓</span> Resolved CIK <span class="text-text">0001045810</span> · NVIDIA CORP</div>
+              <div class="term-line text-muted" data-ms="900"><span class="text-success">✓</span> SEC EDGAR <span class="text-text">12 metrics</span> · 8 fiscal years history</div>
+              <div class="term-line text-muted" data-ms="1300"><span class="text-success">✓</span> Yahoo Finance live quote <span class="text-text">$225.83</span> (₹18,834)</div>
+              <div class="term-line text-muted" data-ms="1700"><span class="text-success">✓</span> Reddit scan <span class="text-text">14 high-upvote posts</span> · 3 bull / 2 bear</div>
+              <div class="term-line text-muted" data-ms="2100"><span class="text-success">✓</span> Google News <span class="text-text">12 headlines</span> · Bloomberg, Reuters</div>
+              <div class="term-line text-muted" data-ms="2500"><span class="text-success">✓</span> Pulled 10-K · Item 1A Risk Factors · Item 7 MD&A</div>
+              <div class="term-line text-muted" data-ms="2900"><span class="text-success">✓</span> Deep-dive · <span class="text-text">4 rounds</span> · 20+ secondary sources</div>
+              <div class="term-line" data-ms="3300">
+                <div class="text-text font-semibold">Synthesising memo</div>
+                <div class="mt-1 w-full bg-elev rounded-full overflow-hidden"><div id="termBar" class="term-bar" style="width:0%"></div></div>
+              </div>
+              <div class="term-line" data-ms="4200">
+                <div class="text-success">✓ Memo ready · <span class="text-text">10,894 chars</span> · MEDIUM confidence</div>
+                <a href="/app" class="inline-flex items-center gap-1 text-primary hover:underline mt-1">Open in workspace <span class="material-symbols-outlined text-[14px]">arrow_forward</span></a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3 text-center label-mono text-[10px] text-muted tracking-wider">REAL OUTPUT FROM A REAL NVDA RUN</div>
+      </div>
+    </div>
+
+    <!-- Trust logos marquee -->
+    <div class="mt-14 overflow-hidden">
+      <div class="label-mono text-[10px] text-muted text-center tracking-[0.25em] mb-4">DATA PIPED FROM</div>
+      <div class="relative">
+        <div class="marquee-track flex items-center gap-12 whitespace-nowrap">
+          <span class="label-mono text-sm text-muted">SEC EDGAR</span>
+          <span class="text-white/10">|</span>
+          <span class="label-mono text-sm text-muted">YAHOO FINANCE</span>
+          <span class="text-white/10">|</span>
+          <span class="label-mono text-sm text-muted">REDDIT</span>
+          <span class="text-white/10">|</span>
+          <span class="label-mono text-sm text-muted">STOCKTWITS</span>
+          <span class="text-white/10">|</span>
+          <span class="label-mono text-sm text-muted">HACKER NEWS</span>
+          <span class="text-white/10">|</span>
+          <span class="label-mono text-sm text-muted">GOOGLE NEWS</span>
+          <span class="text-white/10">|</span>
+          <span class="label-mono text-sm text-muted">WIKIPEDIA</span>
+          <span class="text-white/10">|</span>
+          <!-- Duplicate for seamless loop -->
+          <span class="label-mono text-sm text-muted">SEC EDGAR</span>
+          <span class="text-white/10">|</span>
+          <span class="label-mono text-sm text-muted">YAHOO FINANCE</span>
+          <span class="text-white/10">|</span>
+          <span class="label-mono text-sm text-muted">REDDIT</span>
+          <span class="text-white/10">|</span>
+          <span class="label-mono text-sm text-muted">STOCKTWITS</span>
+          <span class="text-white/10">|</span>
+          <span class="label-mono text-sm text-muted">HACKER NEWS</span>
+          <span class="text-white/10">|</span>
+          <span class="label-mono text-sm text-muted">GOOGLE NEWS</span>
+          <span class="text-white/10">|</span>
+          <span class="label-mono text-sm text-muted">WIKIPEDIA</span>
+          <span class="text-white/10">|</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── ANIMATED STATS ─────────── -->
+<section class="py-16 border-y border-white/5 bg-card/30 relative">
+  <div class="max-w-6xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="text-center stat-card glass rounded-2xl p-6">
+      <div class="text-4xl md:text-5xl font-bold gradient-text count-up" data-target="22" data-suffix="s">0s</div>
+      <div class="label-mono text-[11px] text-muted tracking-wider mt-1.5 uppercase">Median runtime</div>
+    </div>
+    <div class="text-center stat-card glass rounded-2xl p-6">
+      <div class="text-4xl md:text-5xl font-bold gradient-text count-up" data-target="9" data-suffix="">0</div>
+      <div class="label-mono text-[11px] text-muted tracking-wider mt-1.5 uppercase">Parallel sources</div>
+    </div>
+    <div class="text-center stat-card glass rounded-2xl p-6">
+      <div class="text-4xl md:text-5xl font-bold gradient-text count-up" data-target="8" data-suffix=" yrs">0 yrs</div>
+      <div class="label-mono text-[11px] text-muted tracking-wider mt-1.5 uppercase">Financial history</div>
+    </div>
+    <div class="text-center stat-card glass rounded-2xl p-6">
+      <div class="text-4xl md:text-5xl font-bold gradient-text">₹0</div>
+      <div class="label-mono text-[11px] text-muted tracking-wider mt-1.5 uppercase">Cost per memo</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── PROBLEM ─────────── -->
+<section class="py-24">
+  <div class="max-w-5xl mx-auto px-6 text-center">
+    <div class="pill text-warn border-warn/30 bg-warn/10 mb-4">THE PROBLEM</div>
+    <h2 class="text-3xl md:text-5xl font-bold tracking-tight mb-5">Retail investors are flying blind.</h2>
+    <p class="text-lg text-muted leading-relaxed max-w-3xl mx-auto">
+      The average retail investor reads three tweets and a YouTube thumbnail
+      before placing a trade. Then a pump-and-dump scheme on Reddit erases
+      six months of returns in a weekend. Meanwhile, the people who actually
+      read the 10-K are eating their lunch.
+    </p>
+    <div class="mt-12 grid md:grid-cols-3 gap-5 text-left">
+      <div class="glass rounded-2xl p-6 border-l-4 border-error/60">
+        <div class="x-mark text-2xl mb-2">×</div>
+        <div class="font-semibold mb-1">200-page 10-Ks</div>
+        <div class="text-sm text-muted">Nobody reads them. Yet the entire bull / bear case is in Item 1A and Item 7.</div>
+      </div>
+      <div class="glass rounded-2xl p-6 border-l-4 border-error/60">
+        <div class="x-mark text-2xl mb-2">×</div>
+        <div class="font-semibold mb-1">Viral noise</div>
+        <div class="text-sm text-muted">"To the moon" posts spike days before a rug-pull. You won't catch it manually.</div>
+      </div>
+      <div class="glass rounded-2xl p-6 border-l-4 border-error/60">
+        <div class="x-mark text-2xl mb-2">×</div>
+        <div class="font-semibold mb-1">USD-only data</div>
+        <div class="text-sm text-muted">Indian investors mentally convert $34.6B to ₹ at the wrong rate, every single time.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── HOW IT WORKS ─────────── -->
+<section id="how" class="py-24 bg-card/40 border-y border-white/5">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="text-center mb-16">
+      <div class="pill text-primary border-primary/30 bg-primary/10 mb-4">HOW IT WORKS</div>
+      <h2 class="text-3xl md:text-5xl font-bold tracking-tight">One ticker. One minute. One memo.</h2>
+      <p class="text-lg text-muted mt-5 max-w-2xl mx-auto">
+        ProspektLab runs a six-phase research pipeline in parallel. You watch it work in real time. You get the receipts.
+      </p>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="glass rounded-2xl p-7 stat-card">
+        <div class="w-12 h-12 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary text-lg font-bold mb-5">1</div>
+        <h3 class="text-xl font-semibold mb-2">Type the ticker</h3>
+        <p class="text-sm text-muted leading-relaxed">
+          AAPL. NVDA. Reliance Industries. The agent resolves it to a CIK via SEC EDGAR and locks in the canonical entity before it searches anything else.
+        </p>
+      </div>
+      <div class="glass rounded-2xl p-7 stat-card">
+        <div class="w-12 h-12 rounded-xl bg-success/10 border border-success/30 flex items-center justify-center text-success text-lg font-bold mb-5">2</div>
+        <h3 class="text-xl font-semibold mb-2">Watch nine engines fire</h3>
+        <p class="text-sm text-muted leading-relaxed">
+          SEC, Yahoo, Reddit (5 subs), HN, StockTwits, Google News, Wikipedia, and the actual 10-K HTML — all in parallel. The activity stream shows each one finishing.
+        </p>
+      </div>
+      <div class="glass rounded-2xl p-7 stat-card">
+        <div class="w-12 h-12 rounded-xl bg-warn/10 border border-warn/30 flex items-center justify-center text-warn text-lg font-bold mb-5">3</div>
+        <h3 class="text-xl font-semibold mb-2">Get a memo, not a dashboard</h3>
+        <p class="text-sm text-muted leading-relaxed">
+          Real prose. Every figure in USD and INR. Open citations. Confidence tags per section. Conflicts flagged. Markdown export in one click.
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-14 grid md:grid-cols-3 gap-6">
+      <div class="glass rounded-2xl p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="material-symbols-outlined text-primary">timeline</span>
+          <div class="font-semibold">Multi-year history</div>
+        </div>
+        <p class="text-sm text-muted">8 fiscal years of revenue, net income, operating income, EPS, R&D — interactive bar chart with CAGR readouts.</p>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="material-symbols-outlined text-success">forum</span>
+          <div class="font-semibold">Community signal</div>
+        </div>
+        <p class="text-sm text-muted">Bullish, bearish, and hype-flagged classification across WSB / r/stocks / r/investing plus StockTwits author sentiment.</p>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="material-symbols-outlined text-warn">fork_right</span>
+          <div class="font-semibold">Conflict scanner</div>
+        </div>
+        <p class="text-sm text-muted">When two sources report different revenue or growth numbers for the same period, both are flagged inline with the spread.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── DEMO / SCREENSHOTS ─────────── -->
+<section id="demo" class="py-24">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="text-center mb-12">
+      <div class="pill text-success border-success/30 bg-success/10 mb-4">SEE IT</div>
+      <h2 class="text-3xl md:text-5xl font-bold tracking-tight">The actual product. No mock-ups.</h2>
+      <p class="text-lg text-muted mt-5 max-w-2xl mx-auto">
+        What you see below is the live workspace running a real research session for NVDA. Click anywhere to launch your own.
+      </p>
+    </div>
+
+    <a href="/app" class="block glass-strong rounded-3xl p-2 border border-white/10 hover:border-primary/40 transition group">
+      <div class="bg-bg rounded-2xl overflow-hidden">
+        <div class="flex items-center gap-1.5 px-5 py-3 border-b border-white/5 bg-bg/80">
+          <span class="w-2.5 h-2.5 rounded-full bg-error/70"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-warn/70"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-success/70"></span>
+          <span class="ml-3 label-mono text-[10px] text-muted">prospektlab.app/app · live workspace</span>
+          <div class="ml-auto flex items-center gap-1.5 text-success label-mono text-[10px]">
+            <span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span> LIVE
+          </div>
+        </div>
+        <div class="grid md:grid-cols-12 gap-4 p-6">
+          <div class="md:col-span-8 space-y-4">
+            <div class="bg-elev/60 rounded-xl p-5 border border-white/5">
+              <div class="flex items-center justify-between mb-3">
+                <div class="label-mono text-[10px] text-primary tracking-wider">AI SYNTHESIS · MEDIUM</div>
+                <div class="label-mono text-[10px] text-muted">via Claude</div>
+              </div>
+              <div class="text-[13px] leading-relaxed text-text/90">
+                NVIDIA CORP (NVDA, Nasdaq) is trading at <span class="text-primary font-semibold">$225.83 (₹18,834.22)</span>, +19.29% versus prior close. The most recent 10-K shows revenue of <span class="text-primary font-semibold">$215.94B (₹17,99,924 Cr)</span> and net income of <span class="text-primary font-semibold">$120.07B (₹10,01,358 Cr)</span>…
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div class="bg-elev/60 rounded-xl p-3 border border-white/5">
+                <div class="label-mono text-[9px] text-muted tracking-wider">REVENUE</div>
+                <div class="font-bold text-success text-sm mt-1">$215.94B</div>
+                <div class="text-[10px] text-muted">₹17,99,924 Cr</div>
+              </div>
+              <div class="bg-elev/60 rounded-xl p-3 border border-white/5">
+                <div class="label-mono text-[9px] text-muted tracking-wider">NET INCOME</div>
+                <div class="font-bold text-success text-sm mt-1">$120.07B</div>
+                <div class="text-[10px] text-muted">+101.2% CAGR</div>
+              </div>
+              <div class="bg-elev/60 rounded-xl p-3 border border-white/5">
+                <div class="label-mono text-[9px] text-muted tracking-wider">DILUTED EPS</div>
+                <div class="font-bold text-success text-sm mt-1">$4.90</div>
+                <div class="text-[10px] text-muted">7-yr CAGR +18%</div>
+              </div>
+            </div>
+            <div class="bg-elev/60 rounded-xl p-4 border border-white/5">
+              <div class="label-mono text-[10px] text-muted tracking-wider mb-3">MULTI-YEAR REVENUE (8 FY)</div>
+              <div class="flex items-end gap-2 h-20">
+                <div class="flex-1 bg-success/60 rounded-t" style="height: 5%"></div>
+                <div class="flex-1 bg-success/60 rounded-t" style="height: 6%"></div>
+                <div class="flex-1 bg-success/60 rounded-t" style="height: 11%"></div>
+                <div class="flex-1 bg-success/60 rounded-t" style="height: 13%"></div>
+                <div class="flex-1 bg-success/60 rounded-t" style="height: 12%"></div>
+                <div class="flex-1 bg-success/60 rounded-t" style="height: 28%"></div>
+                <div class="flex-1 bg-success/60 rounded-t" style="height: 60%"></div>
+                <div class="flex-1 bg-success/60 rounded-t" style="height: 100%"></div>
+              </div>
+            </div>
+          </div>
+          <div class="md:col-span-4 space-y-3">
+            <div class="bg-elev/60 rounded-xl p-4 border border-white/5">
+              <div class="label-mono text-[10px] text-muted tracking-wider mb-2">COMMUNITY SIGNAL</div>
+              <div class="space-y-1.5 text-[11px]">
+                <div class="flex justify-between"><span class="text-muted">Reddit (14)</span><span class="text-success">3 bull / 2 bear</span></div>
+                <div class="flex justify-between"><span class="text-muted">Hacker News (5)</span><span class="text-primary">393 pts top</span></div>
+                <div class="flex justify-between"><span class="text-muted">StockTwits</span><span class="text-success">net bullish</span></div>
+              </div>
+            </div>
+            <div class="bg-elev/60 rounded-xl p-4 border border-white/5">
+              <div class="label-mono text-[10px] text-muted tracking-wider mb-2">PRESS COVERAGE (12)</div>
+              <div class="space-y-1.5 text-[11px]">
+                <div class="text-text/80">Bloomberg · Tesla, Nvidia CEOs Join China Trip</div>
+                <div class="text-text/80">Yahoo · AMD Gains as Nvidia Tapped for China</div>
+                <div class="text-text/80">Reuters · Earnings preview Q3 FY26</div>
+              </div>
+            </div>
+            <div class="bg-elev/60 rounded-xl p-4 border border-white/5">
+              <div class="label-mono text-[10px] text-muted tracking-wider mb-2">SOURCE TIERS</div>
+              <div class="space-y-1 text-[11px]">
+                <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-success"></span> Tier 1 · SEC, Yahoo</div>
+                <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-primary"></span> Tier 2 · Bloomberg, Reuters</div>
+                <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-warn"></span> Tier 3 · Reddit, StockTwits</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="px-6 pb-5">
+          <div class="bg-primary/10 border border-primary/30 rounded-xl px-4 py-3 text-center text-sm text-primary font-medium group-hover:bg-primary/20 transition">
+            Click anywhere to launch your own run →
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+</section>
+
+<!-- ─────────── BEFORE / AFTER COMPARISON ─────────── -->
+<section id="compare" class="py-24 bg-card/40 border-y border-white/5">
+  <div class="max-w-5xl mx-auto px-6">
+    <div class="text-center mb-12">
+      <div class="pill text-primary border-primary/30 bg-primary/10 mb-4">BEFORE / AFTER</div>
+      <h2 class="text-3xl md:text-5xl font-bold tracking-tight">A research workflow that respects your time.</h2>
+    </div>
+    <div class="grid md:grid-cols-2 gap-5">
+      <div class="glass rounded-2xl p-7 border-l-4 border-error/60">
+        <div class="label-mono text-[11px] text-error tracking-wider mb-3">YOU, TWO HOURS AGO</div>
+        <ul class="space-y-3 text-sm">
+          <li class="flex gap-3"><span class="x-mark">×</span> Open 10-K PDF. Ctrl+F "risk". Skim.</li>
+          <li class="flex gap-3"><span class="x-mark">×</span> Open Yahoo Finance for the chart.</li>
+          <li class="flex gap-3"><span class="x-mark">×</span> Open Reddit. Scroll for vibes.</li>
+          <li class="flex gap-3"><span class="x-mark">×</span> Open Twitter. Get pump-and-dumped.</li>
+          <li class="flex gap-3"><span class="x-mark">×</span> Open the calculator. Convert $ to ₹.</li>
+          <li class="flex gap-3"><span class="x-mark">×</span> Trust your gut. Place the trade. Pray.</li>
+        </ul>
+        <div class="mt-5 pt-4 border-t border-white/5 label-mono text-[11px] text-muted">≈ 2 hours · 8 tabs · zero citations</div>
+      </div>
+      <div class="glass rounded-2xl p-7 border-l-4 border-success/60">
+        <div class="label-mono text-[11px] text-success tracking-wider mb-3">YOU, WITH PROSPEKTLAB</div>
+        <ul class="space-y-3 text-sm">
+          <li class="flex gap-3"><span class="checkmark">✓</span> Type ticker. Hit enter.</li>
+          <li class="flex gap-3"><span class="checkmark">✓</span> Watch the agent fan out to 9 sources.</li>
+          <li class="flex gap-3"><span class="checkmark">✓</span> Read a structured memo in USD + INR.</li>
+          <li class="flex gap-3"><span class="checkmark">✓</span> Hover charts, click any citation.</li>
+          <li class="flex gap-3"><span class="checkmark">✓</span> Flagged conflicts and hype patterns.</li>
+          <li class="flex gap-3"><span class="checkmark">✓</span> Decide. Save the memo. Move on.</li>
+        </ul>
+        <div class="mt-5 pt-4 border-t border-white/5 label-mono text-[11px] text-muted">≈ 22 seconds · 1 tab · 25+ citations</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── SOCIAL PROOF / TESTIMONIAL ─────────── -->
+<section id="proof" class="py-20">
+  <div class="max-w-3xl mx-auto px-6">
+    <div class="glass rounded-3xl p-10 text-center relative">
+      <div class="text-5xl text-primary leading-none mb-3">"</div>
+      <p class="text-lg md:text-xl leading-relaxed text-text">
+        The community sentiment cross-check caught a hype cycle on a midcap I
+        was about to buy. The memo flagged 19 high-upvote WSB posts in 48 hours
+        with no corresponding tier-1 news. Saved me a 30% drawdown.
+      </p>
+      <div class="mt-6 flex items-center justify-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-bold">R</div>
+        <div class="text-left">
+          <div class="text-sm font-medium">Early user</div>
+          <div class="label-mono text-[10px] text-muted tracking-wider">RETAIL TRADER · MUMBAI</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── PRICING ─────────── -->
+<section id="pricing" class="py-24 bg-card/40 border-y border-white/5">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="text-center mb-14">
+      <div class="pill text-success border-success/30 bg-success/10 mb-4">PRICING</div>
+      <h2 class="text-3xl md:text-5xl font-bold tracking-tight">Free forever for individuals.</h2>
+      <p class="text-lg text-muted mt-4 max-w-2xl mx-auto">No paywalls, no card up front. Upgrade only when your team needs collaboration and custom datasets.</p>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-5 max-w-5xl mx-auto">
+      <div class="glass rounded-2xl p-8">
+        <div class="label-mono text-[11px] text-muted tracking-wider uppercase">Individual</div>
+        <div class="mt-3 mb-1 text-5xl font-bold">₹0</div>
+        <div class="text-sm text-muted mb-7">Forever · no card</div>
+        <ul class="space-y-3 text-sm">
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Unlimited memos</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> All 9 data sources</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Multi-year history charts</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> INR-native output</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Markdown export</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Memo library</li>
+        </ul>
+        <a href="/signup" class="mt-8 block text-center bg-elev border border-white/10 text-text font-semibold py-3 rounded-xl hover:bg-elev/80 transition">Start free</a>
+      </div>
+      <div class="glass rounded-2xl p-8 border border-primary/40 relative scale-[1.02] shadow-[0_0_40px_rgba(125,168,255,0.15)]">
+        <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-bg label-mono text-[10px] tracking-wider px-3 py-1 rounded-full uppercase">Most popular</div>
+        <div class="label-mono text-[11px] text-primary tracking-wider uppercase">Pro</div>
+        <div class="mt-3 mb-1 text-5xl font-bold">₹999 <span class="text-base text-muted font-medium">/ month</span></div>
+        <div class="text-sm text-muted mb-7">Or ₹9,900 / year (save 17%)</div>
+        <ul class="space-y-3 text-sm">
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Everything in Individual</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Claude-streamed prose synthesis</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> 4-round deep-dive (longer runs)</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Watchlist daily alerts</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Priority compute</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Earnings calendar</li>
+        </ul>
+        <a href="/signup" class="mt-8 block text-center bg-primary text-bg font-semibold py-3 rounded-xl hover:opacity-90 transition cta-glow">Start 14-day trial</a>
+      </div>
+      <div class="glass rounded-2xl p-8">
+        <div class="label-mono text-[11px] text-muted tracking-wider uppercase">Team</div>
+        <div class="mt-3 mb-1 text-5xl font-bold">Custom</div>
+        <div class="text-sm text-muted mb-7">For desks &amp; funds</div>
+        <ul class="space-y-3 text-sm">
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Shared memo library</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Bring-your-own data feeds</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> SSO and audit logs</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Compliance review</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> Dedicated rep</li>
+        </ul>
+        <a href="mailto:team@prospektlab.app" class="mt-8 block text-center bg-elev border border-white/10 text-text font-semibold py-3 rounded-xl hover:bg-elev/80 transition">Talk to sales</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── FAQ ─────────── -->
+<section id="faq" class="py-24">
+  <div class="max-w-3xl mx-auto px-6">
+    <div class="text-center mb-12">
+      <div class="pill text-warn border-warn/30 bg-warn/10 mb-4">FAQ</div>
+      <h2 class="text-3xl md:text-5xl font-bold tracking-tight">Questions, answered.</h2>
+    </div>
+    <div class="space-y-3">
+      <details class="glass rounded-xl p-5 group">
+        <summary class="cursor-pointer flex items-center justify-between font-medium">
+          Is this financial advice?
+          <span class="material-symbols-outlined chev">expand_more</span>
+        </summary>
+        <p class="mt-3 text-sm text-muted leading-relaxed">No. ProspektLab is a research tool that surfaces public data with citations. Every memo carries confidence tags and explicit conflict flags. You make the trade.</p>
+      </details>
+      <details class="glass rounded-xl p-5 group">
+        <summary class="cursor-pointer flex items-center justify-between font-medium">
+          Where does the data come from?
+          <span class="material-symbols-outlined chev">expand_more</span>
+        </summary>
+        <p class="mt-3 text-sm text-muted leading-relaxed">SEC EDGAR (companyfacts + filing HTML), Yahoo Finance v8 chart API, Wikipedia REST, Reddit JSON, Hacker News Algolia search, StockTwits public stream, and Google News RSS. We never invent figures.</p>
+      </details>
+      <details class="glass rounded-xl p-5 group">
+        <summary class="cursor-pointer flex items-center justify-between font-medium">
+          Does it work for Indian stocks?
+          <span class="material-symbols-outlined chev">expand_more</span>
+        </summary>
+        <p class="mt-3 text-sm text-muted leading-relaxed">It works for any ticker that's publicly listed and has a Yahoo Finance entry. SEC coverage is US-listed only; for NSE / BSE-only names we rely on Yahoo, Wikipedia, news headlines and community signal.</p>
+      </details>
+      <details class="glass rounded-xl p-5 group">
+        <summary class="cursor-pointer flex items-center justify-between font-medium">
+          What's the catch on the free tier?
+          <span class="material-symbols-outlined chev">expand_more</span>
+        </summary>
+        <p class="mt-3 text-sm text-muted leading-relaxed">There isn't one. We rate-limit if you go above ~50 runs/day per IP. Pro unlocks Claude-streamed prose synthesis, longer 4-round deep-dives, and watchlist alerts.</p>
+      </details>
+      <details class="glass rounded-xl p-5 group">
+        <summary class="cursor-pointer flex items-center justify-between font-medium">
+          Can I export the memos?
+          <span class="material-symbols-outlined chev">expand_more</span>
+        </summary>
+        <p class="mt-3 text-sm text-muted leading-relaxed">Yes — every memo is downloadable as Markdown with the citation log preserved. Copy-paste into Notion, Obsidian, or your firm's research system.</p>
+      </details>
+      <details class="glass rounded-xl p-5 group">
+        <summary class="cursor-pointer flex items-center justify-between font-medium">
+          Is my data private?
+          <span class="material-symbols-outlined chev">expand_more</span>
+        </summary>
+        <p class="mt-3 text-sm text-muted leading-relaxed">Everything runs server-side against public data feeds. We don't sell your watchlist or share queries. Self-hosting is also available for Team customers.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── FINAL CTA ─────────── -->
+<section class="py-24 relative overflow-hidden">
+  <div class="blob bg-primary w-[500px] h-[500px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+  <div class="relative max-w-3xl mx-auto px-6 text-center">
+    <h2 class="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight">
+      Stop guessing.<br /><span class="gradient-text">Start sourcing.</span>
+    </h2>
+    <p class="text-lg text-muted mt-6 max-w-xl mx-auto">
+      Your first memo is one click away. No card, no setup, no "schedule a demo" friction.
+    </p>
+    <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
+      <a href="/app" class="inline-flex items-center gap-2 bg-primary text-bg font-semibold text-base px-7 py-4 rounded-xl hover:opacity-90 transition cta-glow">
+        <span class="material-symbols-outlined text-[20px]">bolt</span>
+        Run a free memo now
+      </a>
+      <a href="/signup" class="inline-flex items-center gap-2 bg-elev/60 border border-white/10 text-text font-medium text-base px-7 py-4 rounded-xl hover:bg-elev transition">
+        Create an account
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── FOOTER ─────────── -->
+<footer class="border-t border-white/5 py-10">
+  <div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted">
+    <div class="flex items-center gap-2">
+      <span class="text-primary font-bold">P</span>
+      ProspektLab — Research, not signals.
+    </div>
+    <div class="flex items-center gap-6">
+      <a href="/landing" class="hover:text-text">Home</a>
+      <a href="/app" class="hover:text-text">App</a>
+      <a href="/login" class="hover:text-text">Sign in</a>
+      <a href="/profile" class="hover:text-text">Profile</a>
+    </div>
+    <div class="label-mono text-xs tracking-wide">© 2026 ProspektLab</div>
+  </div>
+</footer>
+
+<!-- ─────────── STICKY MOBILE CTA ─────────── -->
+<div id="stickyCta" class="sticky-cta fixed bottom-4 left-4 right-4 sm:hidden z-50">
+  <a href="/app" class="block w-full bg-primary text-bg font-semibold text-base px-6 py-4 rounded-2xl text-center shadow-2xl">
+    Run your first free memo →
+  </a>
+</div>
+
+<script>
+  // ── Terminal preview animation (loops) ──
+  function playTerminal() {
+    const lines = document.querySelectorAll(".term-line");
+    lines.forEach((l) => l.classList.remove("visible"));
+    const bar = document.getElementById("termBar");
+    if (bar) bar.style.width = "0%";
+    lines.forEach((line) => {
+      const ms = parseInt(line.dataset.ms || "0", 10);
+      setTimeout(() => line.classList.add("visible"), ms);
+    });
+    setTimeout(() => { if (bar) bar.style.width = "100%"; }, 3500);
+  }
+  playTerminal();
+  setInterval(playTerminal, 8000);
+
+  // ── Animated count-up stats ──
+  const counters = document.querySelectorAll(".count-up");
+  const animateCount = (el) => {
+    const target = parseFloat(el.dataset.target);
+    const suffix = el.dataset.suffix || "";
+    const duration = 1400;
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const v = (target * eased);
+      el.textContent = (target % 1 === 0 ? Math.round(v) : v.toFixed(1)) + suffix;
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  };
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) { animateCount(e.target); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.4 });
+  counters.forEach((c) => io.observe(c));
+
+  // ── Sticky mobile CTA after first scroll ──
+  const cta = document.getElementById("stickyCta");
+  window.addEventListener("scroll", () => {
+    if (window.scrollY > 600) cta.classList.add("visible");
+    else cta.classList.remove("visible");
+  }, { passive: true });
+</script>
+
+</body>
+</html>

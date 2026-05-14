@@ -1,0 +1,2192 @@
+<!doctype html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Intelligence OS · FinAgent</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin="" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            background: "#0b1326",
+            "on-surface": "#dae2fd",
+            "on-surface-variant": "#c2c6d6",
+            "surface": "#0b1326",
+            "surface-container-lowest": "#060e20",
+            "surface-container-low": "#131b2e",
+            "surface-container": "#171f33",
+            "surface-container-high": "#222a3d",
+            "surface-container-highest": "#2d3449",
+            "surface-bright": "#31394d",
+            "surface-variant": "#2d3449",
+            "outline": "#8c909f",
+            "outline-variant": "#424754",
+            "primary": "#adc6ff",
+            "primary-fixed-dim": "#adc6ff",
+            "primary-container": "#1e3a8a",
+            "secondary": "#b7c8e1",
+            "tertiary": "#bcc7de",
+            "error": "#ffb4ab",
+            "success": "#6ee7b7",
+            "warn": "#fbbf24",
+          },
+          fontFamily: {
+            inter: ["Inter", "sans-serif"],
+            mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html, body { background: #0b1326; }
+    body { font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif; color: #dae2fd; }
+    .material-symbols-outlined { font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24; }
+    .icon-fill { font-variation-settings: "FILL" 1; }
+    .label-mono { font-family: "JetBrains Mono", ui-monospace, monospace; letter-spacing: 0.05em; }
+    .glass { background: linear-gradient(135deg, rgba(34, 42, 61, 0.4) 0%, rgba(19, 27, 46, 0.2) 100%); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); }
+    .glass-strong { background: linear-gradient(180deg, rgba(23, 31, 51, 0.85) 0%, rgba(11, 19, 38, 0.65) 100%); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .ambient-orb { position: absolute; pointer-events: none; border-radius: 9999px; filter: blur(120px); opacity: 0.4; }
+    .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scroll-thin::-webkit-scrollbar-thumb { background: rgba(173, 198, 255, 0.15); border-radius: 999px; }
+    .scroll-thin::-webkit-scrollbar-thumb:hover { background: rgba(173, 198, 255, 0.3); }
+    @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(110, 231, 183, 0.0); } 50% { box-shadow: 0 0 0 12px rgba(110, 231, 183, 0.0); } }
+    @keyframes dotblink { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+    @keyframes slidein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .dot-pulse::after { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 999px; background: currentColor; margin-left: 6px; animation: dotblink 1.1s ease-in-out infinite; }
+    .anim-in { animation: slidein 0.35s ease-out both; }
+    .stream-cursor::after { content: "▍"; color: #6ee7b7; animation: dotblink 0.9s steps(2) infinite; margin-left: 1px; }
+    .chip { transition: all 0.18s ease; }
+    .chip:hover { transform: translateY(-1px); border-color: rgba(173, 198, 255, 0.5) !important; }
+
+    /* Memo prose (parsed markdown) */
+    .memo-prose h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; margin: 8px 0 10px; color: #dae2fd; }
+    .memo-prose h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; margin: 22px 0 8px; color: #adc6ff; display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(173,198,255,0.12); }
+    .memo-prose h3 { font-size: 14px; font-weight: 600; margin: 14px 0 4px; color: #c2c6d6; letter-spacing: 0.02em; }
+    .memo-prose p  { margin: 10px 0; }
+    .memo-prose ul { list-style: disc; padding-left: 1.5rem; margin: 8px 0; }
+    .memo-prose li { margin: 4px 0; }
+    .memo-prose table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 12px 0; }
+    .memo-prose th, .memo-prose td { padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .memo-prose th { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #c2c6d6; background: rgba(255,255,255,0.02); }
+    .memo-prose a { color: #adc6ff; text-decoration: underline; text-underline-offset: 2px; }
+    .memo-prose code { background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 4px; font-family: "JetBrains Mono", monospace; font-size: 12px; }
+    .memo-prose .conf-pill { font-family: "JetBrains Mono", monospace; font-size: 9px; padding: 2px 6px; border-radius: 4px; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid; }
+    .memo-prose .conf-high { color: #6ee7b7; background: rgba(110,231,183,0.1); border-color: rgba(110,231,183,0.25); }
+    .memo-prose .conf-medium { color: #adc6ff; background: rgba(173,198,255,0.1); border-color: rgba(173,198,255,0.25); }
+    .memo-prose .conf-low { color: #ffb4ab; background: rgba(255,180,171,0.1); border-color: rgba(255,180,171,0.25); }
+    .memo-prose .conf-derived { color: #b7c8e1; background: rgba(183,200,225,0.08); border-color: rgba(183,200,225,0.2); }
+
+    /* Interactive chart hover */
+    .chart-tooltip { position: absolute; pointer-events: none; padding: 6px 10px; border-radius: 8px; background: rgba(11,19,38,0.92); border: 1px solid rgba(255,255,255,0.1); font-family: "JetBrains Mono", monospace; font-size: 11px; color: #dae2fd; transform: translate(-50%, -120%); white-space: nowrap; transition: opacity 0.12s; opacity: 0; box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+    .chart-tooltip.visible { opacity: 1; }
+    .chart-host { position: relative; }
+  </style>
+</head>
+<body class="min-h-screen antialiased selection:bg-primary/30 selection:text-primary">
+
+<div class="flex h-screen overflow-hidden">
+
+  <!-- ─────────── SIDEBAR ─────────── -->
+  <aside class="hidden md:flex flex-col justify-between fixed left-0 top-0 h-full py-8 w-[260px] z-40 bg-surface-container-lowest/80 border-r border-outline-variant/15 backdrop-blur-xl">
+    <div>
+      <div class="px-7 mb-12 flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-surface-container-high flex items-center justify-center text-primary border border-outline-variant/30 shadow-lg shadow-primary/5">
+          <span class="text-lg font-bold">I</span>
+        </div>
+        <div>
+          <div class="text-[15px] font-semibold tracking-tight">INTELLIGENCE</div>
+          <div class="label-mono text-[10px] text-outline-variant mt-0.5 tracking-[0.2em]">OS · FINAGENT</div>
+        </div>
+      </div>
+      <nav class="px-3 space-y-1.5">
+        <a href="#" data-nav="command" class="nav-btn active flex items-center gap-3 px-4 py-3 rounded-xl text-primary font-medium bg-primary/5 border border-primary/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <span class="material-symbols-outlined text-[20px]">terminal</span>
+          <span class="label-mono text-[11px] uppercase tracking-wider">Command</span>
+        </a>
+        <a href="#" data-nav="library" class="nav-btn flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/40 transition-all">
+          <span class="material-symbols-outlined text-[20px]">library_books</span>
+          <span class="label-mono text-[11px] uppercase tracking-wider">Memos</span>
+        </a>
+        <a href="/profile" class="flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/40 transition-all">
+          <span class="material-symbols-outlined text-[20px]">account_circle</span>
+          <span class="label-mono text-[11px] uppercase tracking-wider">Profile</span>
+        </a>
+        <a href="/settings" class="flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/40 transition-all">
+          <span class="material-symbols-outlined text-[20px]">tune</span>
+          <span class="label-mono text-[11px] uppercase tracking-wider">Settings</span>
+        </a>
+        <a href="/landing" class="flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/40 transition-all">
+          <span class="material-symbols-outlined text-[20px]">home</span>
+          <span class="label-mono text-[11px] uppercase tracking-wider">Home</span>
+        </a>
+        <button id="tourReplayBtn" type="button" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/40 transition-all">
+          <span class="material-symbols-outlined text-[20px]">help</span>
+          <span class="label-mono text-[11px] uppercase tracking-wider">Tutorial</span>
+        </button>
+      </nav>
+    </div>
+    <div class="px-3 space-y-1.5">
+      <div class="px-4 py-3 rounded-xl bg-surface-container-low/30 border border-outline-variant/10">
+        <div class="label-mono text-[10px] text-outline-variant uppercase tracking-widest mb-2">System</div>
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-on-surface/80">SEC EDGAR</span>
+          <span class="flex items-center gap-1.5 text-success">
+            <span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(110,231,183,0.7)]"></span>
+            <span class="label-mono text-[10px] uppercase tracking-wider">live</span>
+          </span>
+        </div>
+        <div class="flex items-center justify-between text-xs mt-2">
+          <span class="text-on-surface/80">Anthropic</span>
+          <span id="anthropicState" class="flex items-center gap-1.5 text-outline">
+            <span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+            <span class="label-mono text-[10px] uppercase tracking-wider">template</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ─────────── MAIN ─────────── -->
+  <div class="flex-1 flex flex-col md:ml-[260px] overflow-y-auto scroll-thin">
+
+    <!-- TOP APP BAR -->
+    <header class="sticky top-0 z-30 flex items-center justify-between px-8 h-20 w-full bg-background/60 backdrop-blur-2xl border-b border-outline-variant/15">
+      <div class="flex items-center gap-5 flex-1 max-w-2xl">
+        <div class="relative w-full group">
+          <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] group-focus-within:text-primary transition-colors">search</span>
+          <input id="targetInput" autofocus type="text" data-tour="search" placeholder="Enter ticker, company name, or query…  (try AAPL, Tesla, NVDA)" class="w-full bg-surface-container-low/50 border border-outline-variant/25 text-on-surface text-[14px] rounded-2xl pl-12 pr-44 py-3 focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40 placeholder:text-outline transition-all" />
+          <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+            <button id="executeBtn" class="bg-primary/10 hover:bg-primary/20 active:scale-95 text-primary border border-primary/30 label-mono text-[11px] uppercase tracking-wider px-4 py-2 rounded-lg transition-all flex items-center gap-1.5">
+              <span>Execute</span>
+              <span class="material-symbols-outlined text-[14px]">keyboard_return</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="text-on-surface-variant hover:text-primary transition-all p-2 rounded-xl hover:bg-surface-container-low/50">
+          <span class="material-symbols-outlined">notifications</span>
+        </button>
+        <button class="text-on-surface-variant hover:text-primary transition-all p-2 rounded-xl hover:bg-surface-container-low/50">
+          <span class="material-symbols-outlined">account_circle</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="relative flex-1 px-8 lg:px-16 py-10 max-w-[1440px] w-full mx-auto">
+
+      <!-- Ambient background glows -->
+      <div class="ambient-orb -top-32 left-1/4 w-[700px] h-[500px] bg-primary/10"></div>
+      <div class="ambient-orb top-1/3 -right-20 w-[500px] h-[400px] bg-secondary/10"></div>
+
+      <!-- ─────────── STATE: COMMAND CENTER (idle) ─────────── -->
+      <section id="stateCommand" class="relative z-10 flex flex-col items-center justify-center min-h-[70vh]">
+        <div class="text-center mb-10">
+          <h1 class="text-[52px] font-light tracking-tight text-on-surface mb-3 leading-tight">
+            What would you like to <span class="font-semibold bg-gradient-to-r from-primary via-secondary to-on-surface bg-clip-text text-transparent">research</span>?
+          </h1>
+          <p class="text-on-surface-variant text-[16px] font-light max-w-2xl mx-auto">
+            Type any ticker or company name. ProspektLab fans out across SEC EDGAR, Yahoo Finance, Reddit, StockTwits, Hacker News and Google News — in parallel — and writes you a memo in USD + INR with open citations.
+          </p>
+        </div>
+
+        <!-- Categorised quick-pick chips -->
+        <div class="w-full max-w-5xl">
+          <div data-tour="chips" class="space-y-4">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="label-mono text-[10px] text-outline-variant uppercase tracking-[0.2em] min-w-[110px]"><span class="material-symbols-outlined text-[13px] align-middle mr-1 text-primary/80">memory</span>AI &amp; Semis</span>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="NVDA">NVIDIA</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="AMD">AMD</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="TSM">TSMC</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="AVGO">Broadcom</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="PLTR">Palantir</button>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="label-mono text-[10px] text-outline-variant uppercase tracking-[0.2em] min-w-[110px]"><span class="material-symbols-outlined text-[13px] align-middle mr-1 text-success/80">phone_iphone</span>Big Tech</span>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="AAPL">Apple</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="MSFT">Microsoft</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="GOOGL">Alphabet</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="META">Meta</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="AMZN">Amazon</button>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="label-mono text-[10px] text-outline-variant uppercase tracking-[0.2em] min-w-[110px]"><span class="material-symbols-outlined text-[13px] align-middle mr-1 text-warn/80">electric_car</span>EV &amp; Mobility</span>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="TSLA">Tesla</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="RIVN">Rivian</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="LCID">Lucid</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="UBER">Uber</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="NIO">NIO</button>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="label-mono text-[10px] text-outline-variant uppercase tracking-[0.2em] min-w-[110px]"><span class="material-symbols-outlined text-[13px] align-middle mr-1 text-error/80">currency_bitcoin</span>Crypto-adj.</span>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="MSTR">MicroStrategy</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="COIN">Coinbase</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="MARA">Marathon Digital</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="HOOD">Robinhood</button>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="label-mono text-[10px] text-outline-variant uppercase tracking-[0.2em] min-w-[110px]"><span class="material-symbols-outlined text-[13px] align-middle mr-1 text-error/80">trending_up</span>Meme &amp; retail</span>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="GME">GameStop</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="AMC">AMC</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="BB">BlackBerry</button>
+              <button class="chip suggest-chip flex items-center gap-2 border border-outline-variant/20 rounded-xl py-2.5 px-4 text-[12.5px] text-on-surface-variant hover:text-on-surface bg-surface-container-lowest/40" data-q="SOFI">SoFi</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sample workflow cards -->
+        <div class="mt-14 w-full max-w-5xl">
+          <div class="flex items-center justify-between mb-5">
+            <h3 class="label-mono text-[11px] text-outline-variant uppercase tracking-[0.2em]">Sample workflows</h3>
+            <span class="label-mono text-[10px] text-outline-variant/70 uppercase tracking-widest">One click to run</span>
+          </div>
+          <div data-tour="workflows" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button class="workflow-card text-left glass-strong rounded-2xl p-5 hover:border-primary/40 border border-outline-variant/15 transition-all group" data-q="NVDA">
+              <div class="flex items-center justify-between mb-3">
+                <span class="material-symbols-outlined text-primary text-[22px]">trending_up</span>
+                <span class="label-mono text-[9px] text-primary/80 bg-primary/10 border border-primary/20 px-2 py-0.5 rounded uppercase tracking-wider">Earnings</span>
+              </div>
+              <div class="text-[15px] font-semibold mb-1">Should I buy NVDA before earnings?</div>
+              <div class="text-[12.5px] text-on-surface-variant/80">Pulls 8 fiscal years of revenue / EPS, 10-K outlook, analyst sentiment, recent news, and conflict-checks the consensus number.</div>
+            </button>
+            <button class="workflow-card text-left glass-strong rounded-2xl p-5 hover:border-error/40 border border-outline-variant/15 transition-all group" data-q="GME">
+              <div class="flex items-center justify-between mb-3">
+                <span class="material-symbols-outlined text-error text-[22px]">warning</span>
+                <span class="label-mono text-[9px] text-error/80 bg-error/10 border border-error/20 px-2 py-0.5 rounded uppercase tracking-wider">Hype check</span>
+              </div>
+              <div class="text-[15px] font-semibold mb-1">Is GME being pumped on WSB again?</div>
+              <div class="text-[12.5px] text-on-surface-variant/80">Reads r/wallstreetbets + r/stocks for the last 48h, scores viral hype markers, and downgrades confidence on any non-tier-1 claim.</div>
+            </button>
+            <button class="workflow-card text-left glass-strong rounded-2xl p-5 hover:border-success/40 border border-outline-variant/15 transition-all group" data-q="MSFT">
+              <div class="flex items-center justify-between mb-3">
+                <span class="material-symbols-outlined text-success text-[22px]">menu_book</span>
+                <span class="label-mono text-[9px] text-success/80 bg-success/10 border border-success/20 px-2 py-0.5 rounded uppercase tracking-wider">10-K read</span>
+              </div>
+              <div class="text-[15px] font-semibold mb-1">What does Microsoft's 10-K actually say?</div>
+              <div class="text-[12.5px] text-on-surface-variant/80">Pulls the latest 10-K HTML, surfaces Item 1A (Risk Factors) and Item 7 (MD&A) as readable prose with citations to the filing.</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Recent memos + pipeline -->
+        <div class="mt-12 w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div class="md:col-span-2 glass-strong rounded-2xl p-6 backdrop-blur-2xl" data-tour="library">
+            <div class="flex items-center justify-between mb-5">
+              <h3 class="label-mono text-[11px] text-outline-variant uppercase tracking-[0.2em]">Recent memos</h3>
+              <div class="flex items-center gap-2 text-success label-mono text-[10px] uppercase tracking-widest">
+                <span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(110,231,183,0.7)]"></span>
+                <span>Live</span>
+              </div>
+            </div>
+            <div id="memoLibraryGrid" class="space-y-1">
+              <div class="text-outline-variant text-sm italic">Run your first research to populate this list.</div>
+            </div>
+          </div>
+          <div class="glass-strong rounded-2xl p-6 backdrop-blur-2xl flex flex-col justify-between" data-tour="pipeline">
+            <div>
+              <h3 class="label-mono text-[11px] text-outline-variant uppercase tracking-[0.2em] mb-4">Pipeline</h3>
+              <ol class="space-y-3 text-[13px]">
+                <li class="flex items-center gap-3"><span class="w-1 h-3 rounded-full bg-primary/80 shadow-[0_0_8px_rgba(173,198,255,0.4)]"></span><span class="text-on-surface/90">Identify → SEC ticker / CIK</span></li>
+                <li class="flex items-center gap-3"><span class="w-1 h-3 rounded-full bg-secondary/80 shadow-[0_0_8px_rgba(183,200,225,0.4)]"></span><span class="text-on-surface/90">Enrich → 9 sources in parallel</span></li>
+                <li class="flex items-center gap-3"><span class="w-1 h-3 rounded-full bg-tertiary/80 shadow-[0_0_8px_rgba(188,199,222,0.4)]"></span><span class="text-on-surface/90">Survey → 4 layered queries</span></li>
+                <li class="flex items-center gap-3"><span class="w-1 h-3 rounded-full bg-warn/80 shadow-[0_0_8px_rgba(251,191,36,0.4)]"></span><span class="text-on-surface/90">Deep-dive → 4 entity-aware rounds</span></li>
+                <li class="flex items-center gap-3"><span class="w-1 h-3 rounded-full bg-success/80 shadow-[0_0_8px_rgba(110,231,183,0.4)]"></span><span class="text-on-surface/90">Conflict scan + synthesis</span></li>
+              </ol>
+            </div>
+            <div class="mt-5 pt-4 border-t border-outline-variant/10 text-outline-variant/70 label-mono text-[10px] uppercase tracking-widest">Latency typically 20-40s</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────────── STATE: PROCESSING ─────────── -->
+      <section id="stateProcessing" class="hidden relative z-10">
+        <div class="mb-8">
+          <div class="flex items-center gap-2 text-on-surface-variant text-sm mb-3">
+            <span class="label-mono text-[10px] uppercase tracking-[0.2em]">Compiling intelligence</span>
+            <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+            <span id="processingTarget" class="label-mono text-[10px] text-primary uppercase tracking-[0.2em]"></span>
+          </div>
+          <h2 class="text-[36px] font-semibold tracking-tight">Researching <span id="processingTitle" class="text-primary">…</span></h2>
+        </div>
+
+        <div class="grid grid-cols-12 gap-6">
+          <!-- Activity stream -->
+          <div class="col-span-12 lg:col-span-8 space-y-6">
+            <div class="glass-strong rounded-2xl p-6">
+              <div class="flex items-center justify-between mb-4">
+                <span class="label-mono text-[10px] text-primary uppercase tracking-[0.2em]">Phase</span>
+                <span id="processingPercent" class="label-mono text-[11px] text-on-surface-variant">0%</span>
+              </div>
+              <div id="processingPhaseLabel" class="text-[17px] font-medium text-on-surface mb-3">Starting…</div>
+              <div class="h-1 w-full bg-surface-container-high rounded-full overflow-hidden">
+                <div id="processingBar" class="h-full bg-gradient-to-r from-primary via-secondary to-success rounded-full transition-all duration-500 shadow-[0_0_12px_rgba(173,198,255,0.6)]" style="width: 0%;"></div>
+              </div>
+              <div class="mt-4 grid grid-cols-3 gap-3 text-center">
+                <div class="bg-surface-container-low/50 rounded-xl p-3">
+                  <div id="ctrSources" class="text-[22px] font-semibold label-mono">0</div>
+                  <div class="text-[10px] text-outline-variant uppercase tracking-widest mt-0.5">Sources</div>
+                </div>
+                <div class="bg-surface-container-low/50 rounded-xl p-3">
+                  <div id="ctrPrimary" class="text-[22px] font-semibold label-mono text-success">0</div>
+                  <div class="text-[10px] text-outline-variant uppercase tracking-widest mt-0.5">Tier-1</div>
+                </div>
+                <div class="bg-surface-container-low/50 rounded-xl p-3">
+                  <div id="ctrElapsed" class="text-[22px] font-semibold label-mono">0s</div>
+                  <div class="text-[10px] text-outline-variant uppercase tracking-widest mt-0.5">Elapsed</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Memory recall ribbon (only visible when prior facts exist) -->
+            <div id="memoryRecallPanel" class="hidden glass-strong rounded-2xl p-5 border border-success/20">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="flex items-center gap-2 label-mono text-[10px] text-success uppercase tracking-[0.2em]">
+                  <span class="material-symbols-outlined text-[16px]">neurology</span>
+                  Memory recall
+                </h3>
+                <span id="memoryRecallCount" class="label-mono text-[10px] text-success">0 facts</span>
+              </div>
+              <div id="memoryRecallSummary" class="text-[12.5px] text-on-surface-variant/85 mb-3 leading-relaxed hidden"></div>
+              <div id="memoryRecallList" class="space-y-1.5 text-[12px]"></div>
+            </div>
+
+            <div class="glass-strong rounded-2xl overflow-hidden">
+              <div class="flex items-center justify-between px-6 py-4 border-b border-outline-variant/10">
+                <h3 class="label-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em]">Live activity stream</h3>
+                <span class="flex items-center gap-1.5 text-success label-mono text-[10px] uppercase tracking-widest">
+                  <span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(110,231,183,0.7)] animate-pulse"></span>
+                  <span>Streaming</span>
+                </span>
+              </div>
+              <div id="activityStream" class="max-h-[420px] overflow-y-auto scroll-thin divide-y divide-outline-variant/8"></div>
+            </div>
+
+            <div class="glass-strong rounded-2xl p-6">
+              <h3 class="label-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em] mb-4">Search queries in flight</h3>
+              <div id="queryGrid" class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[12.5px]"></div>
+            </div>
+          </div>
+
+          <!-- Sources + quality panels during processing -->
+          <aside class="col-span-12 lg:col-span-4 space-y-4">
+
+            <!-- Quality dial — climbs as the agent fills coverage gaps -->
+            <div class="glass-strong rounded-2xl p-5 sticky top-24">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="flex items-center gap-2 label-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em]">
+                  <span class="material-symbols-outlined text-[16px]">verified</span>
+                  Coverage quality
+                </h3>
+                <span id="qualityPhasePill" class="label-mono text-[9px] text-outline-variant uppercase tracking-wider">pending</span>
+              </div>
+              <div class="flex items-center gap-4">
+                <div class="relative w-20 h-20">
+                  <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3" />
+                    <circle id="qualityDial" cx="18" cy="18" r="15.9" fill="none" stroke="url(#qualityGrad)" stroke-width="3" stroke-linecap="round" stroke-dasharray="0 100" style="transition: stroke-dasharray 0.6s cubic-bezier(0.4,0,0.2,1);" />
+                    <defs>
+                      <linearGradient id="qualityGrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#ffb4ab" />
+                        <stop offset="50%" stop-color="#f7c54a" />
+                        <stop offset="100%" stop-color="#5ce0a4" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div class="absolute inset-0 flex items-center justify-center flex-col leading-none">
+                    <span id="qualityScoreText" class="text-[18px] font-semibold">--</span>
+                    <span class="label-mono text-[8px] text-outline-variant tracking-wider">/100</span>
+                  </div>
+                </div>
+                <div class="flex-1">
+                  <div id="qualityTrend" class="text-[12px] text-on-surface-variant/90 mb-1">Awaiting first measurement…</div>
+                  <div id="qualityGapList" class="space-y-0.5 text-[11px] text-outline-variant"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Reflection rounds — each round is a self-critique pass -->
+            <div id="reflectionPanel" class="hidden glass-strong rounded-2xl p-5">
+              <div class="flex items-center justify-between mb-3 pb-2 border-b border-outline-variant/10">
+                <h3 class="flex items-center gap-2 label-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em]">
+                  <span class="material-symbols-outlined text-[16px]">psychology</span>
+                  Self-improvement
+                </h3>
+                <span id="reflectionRoundsPill" class="label-mono text-[9px] text-primary">round 0</span>
+              </div>
+              <div id="reflectionList" class="space-y-2 text-[12px]"></div>
+            </div>
+
+            <!-- Multi-agent grid — one tile per specialist subagent -->
+            <div id="agentGridPanel" class="hidden glass-strong rounded-2xl p-5">
+              <div class="flex items-center justify-between mb-3 pb-2 border-b border-outline-variant/10">
+                <h3 class="flex items-center gap-2 label-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em]">
+                  <span class="material-symbols-outlined text-[16px]">hub</span>
+                  Specialist agents
+                </h3>
+                <span id="agentGridPill" class="label-mono text-[9px] text-primary">0 / 0</span>
+              </div>
+              <div id="agentGrid" class="grid grid-cols-2 gap-2 text-[12px]"></div>
+            </div>
+
+            <!-- Verifier + blind-spot summary -->
+            <div id="verifierPanel" class="hidden glass-strong rounded-2xl p-5">
+              <div class="flex items-center justify-between mb-3 pb-2 border-b border-outline-variant/10">
+                <h3 class="flex items-center gap-2 label-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em]">
+                  <span class="material-symbols-outlined text-[16px]">shield_person</span>
+                  Verifier &amp; blind spots
+                </h3>
+                <span id="verifierTier1Pill" class="label-mono text-[9px] text-success">tier-1 0%</span>
+              </div>
+              <div id="verifierBody" class="space-y-2 text-[12px]"></div>
+              <div id="blindspotBody" class="mt-3 pt-3 border-t border-outline-variant/10 space-y-2 text-[12px]"></div>
+            </div>
+
+            <div class="glass-strong rounded-2xl p-5 max-h-[calc(100vh-7rem)] overflow-y-auto scroll-thin">
+              <div class="flex items-center justify-between mb-4 pb-3 border-b border-outline-variant/10">
+                <h3 class="flex items-center gap-2 label-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em]">
+                  <span class="material-symbols-outlined text-[16px]">dataset</span>
+                  Live sources
+                </h3>
+                <span id="livesSourcesCount" class="label-mono text-[10px] text-primary">0</span>
+              </div>
+              <div id="liveSourcesList" class="space-y-2.5 text-[13px]">
+                <div class="text-outline-variant text-xs italic">Sources will appear as the agent fetches them.</div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ─────────── STATE: INTELLIGENCE VIEW (result) ─────────── -->
+      <section id="stateResult" class="hidden relative z-10">
+        <header class="mb-8">
+          <div class="flex items-center gap-2 text-on-surface-variant mb-3 text-sm">
+            <span class="label-mono text-[10px] uppercase tracking-[0.2em]">Intelligence</span>
+            <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+            <span id="resultBreadcrumb" class="label-mono text-[10px] text-primary uppercase tracking-[0.2em]"></span>
+          </div>
+          <div class="flex items-end justify-between flex-wrap gap-4">
+            <h1 id="resultTitle" class="text-[44px] font-bold tracking-tighter bg-gradient-to-r from-on-surface to-on-surface-variant bg-clip-text text-transparent">Result</h1>
+            <div class="flex gap-2">
+              <button id="newRunBtn" class="bg-surface-container-high border border-outline-variant/30 hover:border-primary/40 text-on-surface label-mono text-[11px] uppercase tracking-wider px-5 py-2.5 rounded-xl transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-[16px]">add</span>
+                New run
+              </button>
+              <button id="downloadMdBtn" class="bg-primary/10 border border-primary/30 hover:bg-primary/20 text-primary label-mono text-[11px] uppercase tracking-wider px-5 py-2.5 rounded-xl transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-[16px]">download</span>
+                Download .md
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <!-- Topline metric strip -->
+        <section id="meticStrip" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"></section>
+
+        <div class="grid grid-cols-12 gap-6">
+          <!-- Left column: synthesis + financial profile + charts -->
+          <div class="col-span-12 xl:col-span-8 space-y-6">
+
+            <!-- AI synthesis -->
+            <section class="glass-strong rounded-2xl p-7 relative overflow-hidden group">
+              <div class="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[80px] pointer-events-none group-hover:bg-primary/15 transition-colors duration-700"></div>
+              <div class="flex items-center justify-between mb-5 relative z-10">
+                <div class="flex items-center gap-3">
+                  <span class="material-symbols-outlined icon-fill text-primary drop-shadow-[0_0_8px_rgba(173,198,255,0.4)]">auto_awesome</span>
+                  <h2 class="text-[22px] font-bold tracking-tight">AI Synthesis</h2>
+                  <span id="memoViaPill" class="label-mono text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md bg-outline/15 text-on-surface-variant border border-outline-variant/30">via —</span>
+                </div>
+                <button id="copyMemoBtn" class="text-on-surface-variant hover:text-primary p-1.5 rounded-lg hover:bg-surface-variant/40 transition-all">
+                  <span class="material-symbols-outlined text-[18px]">content_copy</span>
+                </button>
+              </div>
+              <div id="memoBody" class="memo-prose relative z-10 break-words text-[14.5px] leading-[1.8] font-inter text-on-surface/90 max-h-[760px] overflow-y-auto scroll-thin pr-3"></div>
+            </section>
+
+            <!-- Financial profile (parsed from SEC) -->
+            <section id="financialPanel" class="glass-strong rounded-2xl p-7 hidden">
+              <div class="flex items-center justify-between mb-5">
+                <div class="flex items-center gap-3">
+                  <span class="material-symbols-outlined icon-fill text-success drop-shadow-[0_0_8px_rgba(110,231,183,0.4)]">finance</span>
+                  <h2 class="text-[20px] font-bold tracking-tight">Financial Profile</h2>
+                  <span id="financialPeriodPill" class="label-mono text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md bg-success/15 text-success border border-success/25"></span>
+                </div>
+                <a id="financialFilingLink" href="#" target="_blank" class="label-mono text-[10px] uppercase tracking-widest text-primary hover:text-primary-fixed-dim flex items-center gap-1">
+                  <span>Source filing</span>
+                  <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+                </a>
+              </div>
+              <div id="financialGrid" class="grid grid-cols-2 md:grid-cols-3 gap-3"></div>
+            </section>
+
+            <!-- Risk factors (Item 1A) pulled directly from the 10-K -->
+            <section id="riskFactorsPanel" class="hidden glass-strong rounded-2xl p-7">
+              <div class="flex items-center justify-between mb-5">
+                <div class="flex items-center gap-3">
+                  <span class="material-symbols-outlined icon-fill text-error drop-shadow-[0_0_6px_rgba(255,180,171,0.3)]">report</span>
+                  <h2 class="text-[20px] font-bold tracking-tight">Risk Factors</h2>
+                  <span id="riskFormPill" class="label-mono text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md bg-error/15 text-error border border-error/25"></span>
+                </div>
+                <a id="riskFilingLink" href="#" target="_blank" class="label-mono text-[10px] uppercase tracking-widest text-primary hover:text-primary-fixed-dim flex items-center gap-1">
+                  <span>Item 1A source</span>
+                  <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+                </a>
+              </div>
+              <div id="riskFactorsBody" class="text-[14px] leading-[1.75] text-on-surface/85 whitespace-pre-wrap"></div>
+            </section>
+
+            <!-- MD&A (Item 7) -->
+            <section id="mdnaPanel" class="hidden glass-strong rounded-2xl p-7">
+              <div class="flex items-center justify-between mb-5">
+                <div class="flex items-center gap-3">
+                  <span class="material-symbols-outlined icon-fill text-primary drop-shadow-[0_0_6px_rgba(173,198,255,0.3)]">trending_up</span>
+                  <h2 class="text-[20px] font-bold tracking-tight">MD&A · Outlook</h2>
+                  <span id="mdnaFormPill" class="label-mono text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md bg-primary/15 text-primary border border-primary/25"></span>
+                </div>
+                <a id="mdnaFilingLink" href="#" target="_blank" class="label-mono text-[10px] uppercase tracking-widest text-primary hover:text-primary-fixed-dim flex items-center gap-1">
+                  <span>Item 7 source</span>
+                  <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+                </a>
+              </div>
+              <div id="mdnaBody" class="text-[14px] leading-[1.75] text-on-surface/85 whitespace-pre-wrap"></div>
+            </section>
+
+            <!-- Cross-source conflicts -->
+            <section id="conflictsPanel" class="hidden glass-strong rounded-2xl p-7 border-error/20">
+              <div class="flex items-center gap-3 mb-5">
+                <span class="material-symbols-outlined icon-fill text-error drop-shadow-[0_0_6px_rgba(255,180,171,0.4)]">warning</span>
+                <h2 class="text-[20px] font-bold tracking-tight">Cross-source <span class="text-error">[CONFLICT]</span></h2>
+              </div>
+              <div id="conflictsList" class="space-y-4"></div>
+            </section>
+
+            <!-- Price chart (from Yahoo) — interactive with hover tooltip -->
+            <section id="chartPanel" class="hidden glass-strong rounded-2xl p-7">
+              <div class="flex items-center justify-between mb-5">
+                <div class="flex items-center gap-3">
+                  <span class="material-symbols-outlined icon-fill text-secondary">show_chart</span>
+                  <h2 class="text-[20px] font-bold tracking-tight">Price (1-month)</h2>
+                </div>
+                <div id="chartMeta" class="label-mono text-[11px] text-on-surface-variant"></div>
+              </div>
+              <div id="chartHost" class="chart-host h-52"></div>
+            </section>
+
+            <!-- Multi-year financial history (annual revenue / net income / EPS) -->
+            <section id="historyPanel" class="hidden glass-strong rounded-2xl p-7">
+              <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+                <div class="flex items-center gap-3">
+                  <span class="material-symbols-outlined icon-fill text-success">bar_chart</span>
+                  <h2 class="text-[20px] font-bold tracking-tight">Multi-year history</h2>
+                  <span id="historyPill" class="label-mono text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md bg-success/15 text-success border border-success/25"></span>
+                </div>
+                <div class="flex gap-2" id="historyTabs">
+                  <button data-hist="revenue" class="hist-tab active label-mono text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-lg bg-primary/15 text-primary border border-primary/30">Revenue</button>
+                  <button data-hist="net_income" class="hist-tab label-mono text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-lg bg-surface-container-low/50 text-on-surface-variant border border-outline-variant/20 hover:border-primary/30">Net income</button>
+                  <button data-hist="eps_diluted" class="hist-tab label-mono text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-lg bg-surface-container-low/50 text-on-surface-variant border border-outline-variant/20 hover:border-primary/30">Diluted EPS</button>
+                </div>
+              </div>
+              <div id="historyHost" class="chart-host h-64"></div>
+              <div id="historyMeta" class="label-mono text-[11px] text-on-surface-variant mt-3"></div>
+            </section>
+
+            <!-- News headlines (Google News RSS) -->
+            <section id="newsPanel" class="hidden glass-strong rounded-2xl p-7">
+              <div class="flex items-center justify-between mb-5">
+                <div class="flex items-center gap-3">
+                  <span class="material-symbols-outlined icon-fill text-warn">newspaper</span>
+                  <h2 class="text-[20px] font-bold tracking-tight">Latest press coverage</h2>
+                  <span id="newsCountPill" class="label-mono text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md bg-warn/15 text-warn border border-warn/25"></span>
+                </div>
+              </div>
+              <div id="newsList" class="space-y-2"></div>
+            </section>
+
+            <!-- Filing timeline -->
+            <section id="filingsPanel" class="hidden glass-strong rounded-2xl p-7">
+              <div class="flex items-center gap-3 mb-5">
+                <span class="material-symbols-outlined text-primary">history_edu</span>
+                <h2 class="text-[20px] font-bold tracking-tight">Recent SEC Filings</h2>
+              </div>
+              <div id="filingsList" class="space-y-2"></div>
+            </section>
+          </div>
+
+          <!-- Right column: sources sidebar (authoritative + scraped) -->
+          <aside class="col-span-12 xl:col-span-4">
+            <div class="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto scroll-thin space-y-5">
+              <div class="glass-strong rounded-2xl p-5">
+                <div class="flex items-center justify-between pb-3 mb-3 border-b border-outline-variant/10">
+                  <h3 class="flex items-center gap-2 label-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em]">
+                    <span class="material-symbols-outlined text-[16px]">dataset</span>
+                    Authoritative APIs
+                  </h3>
+                </div>
+                <div id="apiSources" class="space-y-3 text-[12.5px]"></div>
+              </div>
+
+              <div id="communityPanel" class="glass-strong rounded-2xl p-5 hidden">
+                <div class="flex items-center justify-between pb-3 mb-3 border-b border-outline-variant/10">
+                  <h3 class="flex items-center gap-2 label-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em]">
+                    <span class="material-symbols-outlined text-[16px]">groups</span>
+                    Community signal
+                  </h3>
+                  <span id="communityBadge" class="label-mono text-[10px] text-on-surface-variant"></span>
+                </div>
+                <div id="communityBody" class="space-y-3 text-[12.5px]"></div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<script>
+  // ────────────────────────────────────────────────────────────────────
+  // App state machine
+  // ────────────────────────────────────────────────────────────────────
+  const $ = (id) => document.getElementById(id);
+  const states = {
+    command: $("stateCommand"),
+    processing: $("stateProcessing"),
+    result: $("stateResult"),
+  };
+  let eventSource = null;
+  let sessionId = null;
+  let startedAt = 0;
+  let tickHandle = null;
+  let counters = { sources: 0, primary: 0 };
+  let fxRate = null;
+  let memoStreamBuf = "";
+  let memoStreaming = false;
+
+  const PHASE_PROGRESS = {
+    enrichment: 18,
+    "breadth-survey": 45,
+    "deep-dive": 70,
+    analysis: 85,
+    synthesis: 95,
+  };
+  const PHASE_LABEL = {
+    memory: "Memory · recalling prior facts",
+    enrichment: "Enrichment · pulling SEC / Yahoo / Wikipedia / News",
+    "breadth-survey": "Breadth survey · layered DDG + Bing queries",
+    "deep-dive": "Deep-dive · iterative gap-driven follow-ups",
+    reflection: "Reflection · self-critique loop closing coverage gaps",
+    "multi-agent": "Multi-agent · 8 specialists in parallel + verifier",
+    blindspot: "Blind-spot · auto-dispatching gap-coverage queries",
+    analysis: "Analysis · cross-source conflict scan",
+    synthesis: "Synthesis · composing the memo",
+  };
+
+  function showState(name) {
+    for (const [k, el] of Object.entries(states)) el.classList.toggle("hidden", k !== name);
+  }
+  function tierColor(tier) {
+    if (tier <= 2) return ["text-success", "bg-success/10", "border-success/25"];
+    if (tier <= 5) return ["text-primary", "bg-primary/10", "border-primary/25"];
+    if (tier <= 6) return ["text-warn", "bg-warn/10", "border-warn/25"];
+    return ["text-error", "bg-error/10", "border-error/25"];
+  }
+  function confColor(conf) {
+    return {
+      HIGH: "text-success bg-success/10 border-success/25",
+      MEDIUM: "text-primary bg-primary/10 border-primary/25",
+      LOW: "text-error bg-error/10 border-error/25",
+      DERIVED: "text-secondary bg-secondary/10 border-secondary/25",
+    }[conf] || "text-on-surface-variant bg-surface-container-low border-outline-variant/30";
+  }
+  function fmtUSD(v) {
+    if (v == null) return "—";
+    const a = Math.abs(v);
+    if (a >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
+    if (a >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+    if (a >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+    if (a >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+    return `$${v.toFixed(2)}`;
+  }
+  function escapeHtml(s) {
+    return (s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Activity stream renderers
+  // ────────────────────────────────────────────────────────────────────
+  function pushActivity(icon, agent, message, statusKind = "running", meta = "") {
+    const stream = $("activityStream");
+    if (stream.querySelector(".__empty")) stream.querySelector(".__empty").remove();
+    const dotCls = statusKind === "done" ? "bg-success shadow-[0_0_8px_rgba(110,231,183,0.5)]"
+      : statusKind === "error" ? "bg-error shadow-[0_0_8px_rgba(255,180,171,0.5)]"
+      : statusKind === "warning" ? "bg-warn shadow-[0_0_8px_rgba(251,191,36,0.5)]"
+      : "bg-primary shadow-[0_0_8px_rgba(173,198,255,0.5)] animate-pulse";
+    const div = document.createElement("div");
+    div.className = "anim-in flex items-center gap-4 px-6 py-3.5 hover:bg-surface-variant/8 transition-colors";
+    div.innerHTML = `
+      <div class="flex-shrink-0 w-2 h-2 rounded-full ${dotCls}"></div>
+      <div class="w-40 flex items-center gap-2">
+        <span class="material-symbols-outlined text-[15px] text-on-surface-variant">${icon}</span>
+        <span class="label-mono text-[11px] text-on-surface uppercase tracking-wider truncate">${escapeHtml(agent)}</span>
+      </div>
+      <div class="flex-1 text-[12.5px] text-on-surface/90 truncate">${escapeHtml(message)}</div>
+      <div class="hidden md:block label-mono text-[10px] text-on-surface-variant truncate max-w-[180px] text-right">${escapeHtml(meta)}</div>
+    `;
+    stream.prepend(div);
+    while (stream.children.length > 60) stream.removeChild(stream.lastChild);
+  }
+
+  function setPhase(phase, note) {
+    $("processingPhaseLabel").textContent = PHASE_LABEL[phase] || (note || phase);
+    const pct = PHASE_PROGRESS[phase] ?? 50;
+    $("processingBar").style.width = pct + "%";
+    $("processingPercent").textContent = pct + "%";
+  }
+
+  function upsertQuery(q, status, count) {
+    const grid = $("queryGrid");
+    let row = grid.querySelector(`[data-q="${CSS.escape(q)}"]`);
+    if (!row) {
+      row = document.createElement("div");
+      row.dataset.q = q;
+      row.className = "flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-surface-container-low/40 border border-outline-variant/15";
+      grid.appendChild(row);
+    }
+    const statusBadge =
+      status === "done" ? `<span class="label-mono text-[10px] text-success uppercase tracking-wider">${count} hits</span>` :
+      status === "error" || status === "timeout" ? `<span class="label-mono text-[10px] text-error uppercase tracking-wider">${status}</span>` :
+      `<span class="label-mono text-[10px] text-primary uppercase tracking-wider dot-pulse">running</span>`;
+    row.innerHTML = `
+      <span class="text-[12.5px] text-on-surface/90 truncate flex-1">${escapeHtml(q)}</span>
+      ${statusBadge}
+    `;
+  }
+
+  function tickElapsed() {
+    if (!startedAt) return;
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    $("ctrElapsed").textContent = s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+  }
+
+  function pushLiveSource(payload) {
+    const list = $("liveSourcesList");
+    list.querySelector(".__empty")?.remove();
+    const emptyItalic = list.querySelector("div.italic");
+    if (emptyItalic) emptyItalic.remove();
+    const tc = tierColor(payload.tier);
+    const cc = confColor(payload.confidence);
+    const card = document.createElement("div");
+    card.className = "anim-in bg-surface-container-low/40 border border-outline-variant/15 rounded-xl p-3";
+    card.innerHTML = `
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="label-mono text-[10px] uppercase tracking-widest ${tc[0]} ${tc[1]} ${tc[2]} border px-2 py-0.5 rounded-md">tier ${payload.tier}</span>
+        <span class="label-mono text-[10px] uppercase tracking-widest ${cc} border px-2 py-0.5 rounded-md">${payload.confidence}</span>
+      </div>
+      <div class="text-[12.5px] font-semibold text-on-surface truncate">${escapeHtml(payload.title || payload.domain)}</div>
+      <a class="label-mono text-[10px] text-primary/80 hover:text-primary block truncate mt-0.5" target="_blank" href="${escapeHtml(payload.url)}">${escapeHtml(payload.domain)}</a>
+    `;
+    list.prepend(card);
+    $("livesSourcesCount").textContent = String(counters.sources);
+  }
+
+  function resetCounters() {
+    counters = { sources: 0, primary: 0 };
+    fxRate = null;
+    memoStreamBuf = "";
+    memoStreaming = false;
+    $("ctrSources").textContent = "0";
+    $("ctrPrimary").textContent = "0";
+    $("ctrElapsed").textContent = "0s";
+    $("processingBar").style.width = "0%";
+    $("processingPercent").textContent = "0%";
+    $("processingPhaseLabel").textContent = "Starting…";
+    $("activityStream").innerHTML = '<div class="__empty px-6 py-6 text-outline-variant text-sm italic">Waiting for the agent to come online…</div>';
+    $("queryGrid").innerHTML = "";
+    $("liveSourcesList").innerHTML = '<div class="text-outline-variant text-xs italic">Sources will appear as the agent fetches them.</div>';
+    $("livesSourcesCount").textContent = "0";
+    $("memoBody").textContent = "";
+    $("memoBody").classList.remove("stream-cursor");
+    $("conflictsList").innerHTML = "";
+    $("conflictsPanel").classList.add("hidden");
+    $("financialPanel").classList.add("hidden");
+    $("filingsPanel").classList.add("hidden");
+    $("chartPanel").classList.add("hidden");
+    $("historyPanel").classList.add("hidden");
+    $("newsPanel").classList.add("hidden");
+    $("riskFactorsPanel").classList.add("hidden");
+    $("mdnaPanel").classList.add("hidden");
+    $("financialGrid").innerHTML = "";
+    $("filingsList").innerHTML = "";
+    $("riskFactorsBody").textContent = "";
+    $("mdnaBody").textContent = "";
+    $("apiSources").innerHTML = '<div class="text-outline-variant italic">No API enrichment yet.</div>';
+    $("communityPanel").classList.add("hidden");
+    $("communityBody").innerHTML = "";
+    // New panels added with memory/reflection
+    if ($("memoryRecallPanel")) {
+      $("memoryRecallPanel").classList.add("hidden");
+      $("memoryRecallList").innerHTML = "";
+      $("memoryRecallSummary").classList.add("hidden");
+      $("memoryRecallCount").textContent = "0 facts";
+    }
+    if ($("qualityDial")) {
+      $("qualityDial").setAttribute("stroke-dasharray", "0 100");
+      $("qualityScoreText").textContent = "--";
+      $("qualityPhasePill").textContent = "pending";
+      $("qualityPhasePill").className = "label-mono text-[9px] text-outline-variant uppercase tracking-wider";
+      $("qualityTrend").textContent = "Awaiting first measurement…";
+      $("qualityGapList").innerHTML = "";
+    }
+    if ($("reflectionPanel")) {
+      $("reflectionPanel").classList.add("hidden");
+      $("reflectionList").innerHTML = "";
+      $("reflectionRoundsPill").textContent = "round 0";
+    }
+    if ($("agentGridPanel")) {
+      $("agentGridPanel").classList.add("hidden");
+      $("agentGrid").innerHTML = "";
+      $("agentGridPill").textContent = "0 / 0";
+    }
+    if ($("verifierPanel")) {
+      $("verifierPanel").classList.add("hidden");
+      $("verifierBody").innerHTML = "";
+      $("blindspotBody").innerHTML = "";
+      $("verifierTier1Pill").textContent = "tier-1 0%";
+    }
+    $("communityBadge").textContent = "";
+    $("meticStrip").innerHTML = "";
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Render: intel (SEC + Yahoo + Wikipedia) into Result View
+  // ────────────────────────────────────────────────────────────────────
+  // ── Memory recall panel ──────────────────────────────────────────────
+  function fmtRelTime(ts) {
+    if (!ts) return "";
+    const now = Date.now() / 1000;
+    const d = now - ts;
+    if (d < 60) return "just now";
+    if (d < 3600) return Math.floor(d / 60) + "m ago";
+    if (d < 86400) return Math.floor(d / 3600) + "h ago";
+    return Math.floor(d / 86400) + "d ago";
+  }
+  function renderMemoryRecall(d) {
+    const panel = $("memoryRecallPanel");
+    const count = d.fact_count || 0;
+    if (count === 0 && !d.last_summary) {
+      panel.classList.add("hidden");
+      return;
+    }
+    panel.classList.remove("hidden");
+    $("memoryRecallCount").textContent = `${count} fact${count === 1 ? "" : "s"}`;
+    const sumEl = $("memoryRecallSummary");
+    if (d.last_summary) {
+      sumEl.classList.remove("hidden");
+      const score = d.last_summary.quality_score ? ` · prev. score ${d.last_summary.quality_score.toFixed(0)}/100` : "";
+      sumEl.innerHTML = `<span class="material-symbols-outlined text-[14px] align-middle text-success/80">history</span> Last run ${fmtRelTime(d.last_summary.created_at)}${score} — ${escapeHtml(d.last_summary.summary)}`;
+    } else {
+      sumEl.classList.add("hidden");
+    }
+    const list = $("memoryRecallList");
+    list.innerHTML = "";
+    (d.facts || []).forEach((f) => {
+      const row = document.createElement("div");
+      const tone = f.confidence === "HIGH" ? "text-success" : f.confidence === "MEDIUM" ? "text-primary" : "text-outline-variant";
+      row.className = "flex items-start gap-2";
+      row.innerHTML = `
+        <span class="material-symbols-outlined text-[14px] ${tone} mt-0.5">label_important</span>
+        <div class="flex-1 min-w-0">
+          <div class="text-on-surface/85">${escapeHtml(f.body)}</div>
+          <div class="label-mono text-[9px] text-outline-variant tracking-wider uppercase mt-0.5">${f.kind} · ${f.confidence}</div>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+  }
+
+  // ── Quality score dial + gap readout ──────────────────────────────────
+  function renderQualityScore(d) {
+    const score = Math.max(0, Math.min(100, d.score || 0));
+    const dial = $("qualityDial");
+    if (dial) dial.setAttribute("stroke-dasharray", `${score} ${100 - score}`);
+    const txt = $("qualityScoreText");
+    if (txt) txt.textContent = score.toFixed(0);
+    const pill = $("qualityPhasePill");
+    if (pill) {
+      const label = (d.phase || "").replace("reflection_round_", "round ");
+      pill.textContent = label || "measured";
+      pill.className = "label-mono text-[9px] uppercase tracking-wider " + (score >= 75 ? "text-success" : score >= 55 ? "text-primary" : "text-warn");
+    }
+    const trend = $("qualityTrend");
+    if (trend) {
+      trend.textContent = score >= 75
+        ? `Coverage passes the ${75}/100 bar — moving to synthesis.`
+        : `Filling gaps below the ${75}/100 quality bar.`;
+    }
+    const gapList = $("qualityGapList");
+    if (gapList) {
+      gapList.innerHTML = "";
+      (d.gaps || []).slice(0, 3).forEach((g) => {
+        const li = document.createElement("div");
+        li.className = "flex items-start gap-1.5";
+        li.innerHTML = `<span class="material-symbols-outlined text-[12px] text-warn">priority_high</span><span>${escapeHtml(g)}</span>`;
+        gapList.appendChild(li);
+      });
+    }
+  }
+
+  // ── Multi-agent grid ──────────────────────────────────────────────────
+  const AGENT_ICON = {
+    financials: "monitoring",
+    risk: "warning",
+    technical: "show_chart",
+    news: "newspaper",
+    community: "groups",
+    competitor: "swap_horiz",
+    macro: "public",
+    governance: "gavel",
+    verifier: "shield_person",
+  };
+  function initAgentGrid(names) {
+    const panel = $("agentGridPanel");
+    if (!panel) return;
+    panel.classList.remove("hidden");
+    const grid = $("agentGrid");
+    grid.innerHTML = "";
+    names.forEach((n) => {
+      const tile = document.createElement("div");
+      tile.id = `agentTile-${n}`;
+      tile.className = "p-2.5 rounded-xl bg-surface-container-low/40 border border-outline-variant/15 flex items-center gap-2";
+      tile.innerHTML = `
+        <span class="material-symbols-outlined text-[14px] text-outline-variant" data-icon>${AGENT_ICON[n] || "smart_toy"}</span>
+        <div class="flex-1 min-w-0">
+          <div class="text-[12px] text-on-surface truncate" data-label>${escapeHtml(n)}</div>
+          <div class="label-mono text-[9px] text-outline-variant uppercase tracking-wider mt-0.5" data-status>pending</div>
+        </div>
+        <span class="w-1.5 h-1.5 rounded-full bg-outline-variant" data-dot></span>
+      `;
+      grid.appendChild(tile);
+    });
+    $("agentGridPill").textContent = `0 / ${names.length}`;
+  }
+  function updateAgentTile(name, info) {
+    const tile = $(`agentTile-${name}`);
+    if (!tile) return;
+    const labelEl = tile.querySelector("[data-label]");
+    const statusEl = tile.querySelector("[data-status]");
+    const dot = tile.querySelector("[data-dot]");
+    if (info.display) labelEl.textContent = info.display;
+    let dotCls = "bg-outline-variant";
+    let statusTxt = info.status || "pending";
+    if (info.status === "running") {
+      dotCls = "bg-primary animate-pulse shadow-[0_0_8px_rgba(173,198,255,0.7)]";
+      statusTxt = "running";
+    } else if (info.status === "ok") {
+      dotCls = "bg-success shadow-[0_0_8px_rgba(94,225,160,0.5)]";
+      statusTxt = `${info.findings || 0} findings · ${info.elapsed_ms || 0}ms`;
+    } else if (info.status === "partial") {
+      dotCls = "bg-warn shadow-[0_0_8px_rgba(247,197,74,0.5)]";
+      statusTxt = `partial · ${info.findings || 0} findings`;
+    } else if (info.status === "skipped") {
+      dotCls = "bg-outline-variant/40";
+      statusTxt = `skipped · ${(info.reason || "n/a").slice(0, 30)}`;
+    } else if (info.status === "failed") {
+      dotCls = "bg-error";
+      statusTxt = `failed · ${(info.error || "").slice(0, 30)}`;
+    }
+    dot.className = `w-1.5 h-1.5 rounded-full ${dotCls}`;
+    statusEl.textContent = statusTxt;
+
+    // Update the X / Y completed pill
+    const pill = $("agentGridPill");
+    if (pill) {
+      const tiles = document.querySelectorAll("[id^=agentTile-]");
+      const done = Array.from(tiles).filter((t) => {
+        const s = (t.querySelector("[data-status]")?.textContent || "");
+        return !/^(pending|running)/.test(s);
+      }).length;
+      pill.textContent = `${done} / ${tiles.length}`;
+    }
+  }
+
+  // ── Verifier readout ──────────────────────────────────────────────────
+  function renderVerifier(d) {
+    const body = $("verifierBody");
+    if (!body) return;
+    const tier1 = d.tier1_coverage_pct;
+    $("verifierTier1Pill").textContent = `tier-1 ${tier1}%`;
+    $("verifierTier1Pill").className = "label-mono text-[9px] uppercase tracking-wider " + (tier1 >= 50 ? "text-success" : tier1 >= 25 ? "text-primary" : "text-warn");
+    body.innerHTML = `
+      <div class="grid grid-cols-2 gap-2">
+        <div class="bg-surface-container-low/40 rounded-lg p-2 border border-success/20"><div class="label-mono text-[9px] text-success uppercase tracking-wider">Promoted</div><div class="text-[15px] font-semibold mt-0.5">${d.promoted || 0}</div></div>
+        <div class="bg-surface-container-low/40 rounded-lg p-2 border border-warn/20"><div class="label-mono text-[9px] text-warn uppercase tracking-wider">Demoted</div><div class="text-[15px] font-semibold mt-0.5">${d.demoted || 0}</div></div>
+        <div class="bg-surface-container-low/40 rounded-lg p-2 border border-primary/20"><div class="label-mono text-[9px] text-primary uppercase tracking-wider">Corroborated</div><div class="text-[15px] font-semibold mt-0.5">${d.corroborated || 0}</div></div>
+        <div class="bg-surface-container-low/40 rounded-lg p-2 border border-error/20"><div class="label-mono text-[9px] text-error uppercase tracking-wider">Conflicts</div><div class="text-[15px] font-semibold mt-0.5">${d.conflicts || 0}</div></div>
+      </div>
+    `;
+  }
+
+  function renderBlindspots(spots) {
+    const body = $("blindspotBody");
+    if (!body) return;
+    if (!spots.length) {
+      body.innerHTML = `<div class="flex items-center gap-2 text-success text-[11.5px]"><span class="material-symbols-outlined text-[14px]">check_circle</span> No high-priority blind spots — coverage looks complete.</div>`;
+      return;
+    }
+    const sevColor = { high: "text-error border-error/25 bg-error/10", medium: "text-warn border-warn/25 bg-warn/10", low: "text-outline-variant border-outline-variant/25 bg-surface-container-low/40" };
+    body.innerHTML = `
+      <div class="label-mono text-[9px] text-warn uppercase tracking-wider mb-1">${spots.length} blind spot${spots.length === 1 ? "" : "s"} flagged</div>
+      ${spots.slice(0, 5).map((s) => `
+        <div class="p-2 rounded-lg border ${sevColor[s.severity] || sevColor.medium}">
+          <div class="flex items-center gap-1.5 mb-0.5"><span class="material-symbols-outlined text-[12px]">visibility_off</span><span class="label-mono text-[9px] uppercase tracking-wider">${escapeHtml(s.topic)} · ${escapeHtml(s.severity)}</span></div>
+          <div class="text-[11.5px] text-on-surface/80">${escapeHtml(s.question)}</div>
+        </div>
+      `).join("")}
+    `;
+  }
+
+  // ── Reflection round cards (one per round) ────────────────────────────
+  function renderReflectionRound(d) {
+    const panel = $("reflectionPanel");
+    panel.classList.remove("hidden");
+    const pill = $("reflectionRoundsPill");
+    if (pill) pill.textContent = `round ${d.round}`;
+    const list = $("reflectionList");
+    const card = document.createElement("div");
+    card.className = "p-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/15";
+    const queries = (d.planned_queries || []).slice(0, 5);
+    const gaps = (d.gaps || []).slice(0, 3);
+    card.innerHTML = `
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="label-mono text-[10px] text-primary uppercase tracking-wider">Round ${d.round}</span>
+        <span class="label-mono text-[9px] text-outline-variant uppercase tracking-wider">${queries.length} queries</span>
+      </div>
+      ${gaps.length ? `<div class="text-[11.5px] text-warn/90 mb-2">${gaps.map((g) => escapeHtml(g)).join(" · ")}</div>` : ""}
+      <div class="space-y-1">
+        ${queries.map((q) => `<div class="text-[11px] text-on-surface-variant flex items-start gap-1.5"><span class="material-symbols-outlined text-[12px] text-primary/70 mt-0.5">search</span><span class="truncate">${escapeHtml(q)}</span></div>`).join("")}
+      </div>
+    `;
+    list.appendChild(card);
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function renderIntel(intel) {
+    const { sec, yahoo, wikipedia, filing, fx } = intel;
+    if (fx && fx.rate) fxRate = fx.rate;
+    renderCommunity(intel);
+    const apiHost = $("apiSources");
+    apiHost.innerHTML = "";
+    if (fx && fx.rate) {
+      const cf = document.createElement("div");
+      cf.className = "p-3 rounded-xl bg-warn/5 border border-warn/15";
+      cf.innerHTML = `
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="label-mono text-[10px] uppercase tracking-widest text-warn">USD / INR</span>
+          <span class="label-mono text-[10px] text-on-surface-variant">${escapeHtml(fx.source || "")}</span>
+        </div>
+        <div class="font-semibold text-on-surface text-[13px]">1 USD = ₹${fx.rate.toFixed(4)}</div>
+        <div class="text-[11px] text-on-surface-variant mt-1">All USD figures show INR equivalent inline.</div>
+      `;
+      apiHost.appendChild(cf);
+    }
+
+    if (sec) {
+      const filingsLatest = (sec.recent_filings || [])[0];
+      const apiCard = document.createElement("div");
+      apiCard.className = "p-3 rounded-xl bg-success/5 border border-success/15";
+      apiCard.innerHTML = `
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="label-mono text-[10px] uppercase tracking-widest text-success">SEC EDGAR</span>
+          <span class="label-mono text-[10px] text-on-surface-variant">CIK ${escapeHtml(sec.cik)}</span>
+        </div>
+        <div class="font-semibold text-on-surface text-[13px]">${escapeHtml(sec.name)} <span class="text-on-surface-variant label-mono text-[11px] ml-1">${escapeHtml(sec.ticker)}</span></div>
+        <div class="text-[11px] text-on-surface-variant mt-1">${escapeHtml(sec.sic_description || "")} · ${escapeHtml((sec.exchanges || []).join(", "))}</div>
+        ${filingsLatest ? `<a target="_blank" href="${escapeHtml(filingsLatest.url)}" class="block label-mono text-[10px] text-primary/80 hover:text-primary mt-2 truncate">latest: ${escapeHtml(filingsLatest.form)} filed ${escapeHtml(filingsLatest.filed)}</a>` : ""}
+      `;
+      apiHost.appendChild(apiCard);
+    }
+    if (yahoo) {
+      const c = document.createElement("div");
+      c.className = "p-3 rounded-xl bg-primary/5 border border-primary/15";
+      const chg = yahoo.change_pct == null ? "—" : `${yahoo.change_pct >= 0 ? "+" : ""}${yahoo.change_pct.toFixed(2)}%`;
+      const chgCls = (yahoo.change_pct ?? 0) >= 0 ? "text-success" : "text-error";
+      c.innerHTML = `
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="label-mono text-[10px] uppercase tracking-widest text-primary">Yahoo Finance</span>
+          <span class="label-mono text-[10px] ${chgCls}">${chg}</span>
+        </div>
+        <div class="font-semibold text-on-surface text-[13px]">${escapeHtml(yahoo.ticker)} · ${escapeHtml(yahoo.currency || "")} ${yahoo.price != null ? yahoo.price.toFixed(2) : "—"}</div>
+        <div class="text-[11px] text-on-surface-variant mt-1">52w: ${yahoo.fifty_two_week_low?.toFixed(2)}-${yahoo.fifty_two_week_high?.toFixed(2)} · ${escapeHtml(yahoo.exchange || "")}</div>
+        <a target="_blank" href="${escapeHtml(yahoo.source_url)}" class="block label-mono text-[10px] text-primary/80 hover:text-primary mt-2 truncate">finance.yahoo.com</a>
+      `;
+      apiHost.appendChild(c);
+    }
+    if (wikipedia) {
+      const c = document.createElement("div");
+      c.className = "p-3 rounded-xl bg-secondary/5 border border-secondary/15";
+      c.innerHTML = `
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="label-mono text-[10px] uppercase tracking-widest text-secondary">Wikipedia</span>
+        </div>
+        <div class="font-semibold text-on-surface text-[13px]">${escapeHtml(wikipedia.title)}</div>
+        <div class="text-[11px] text-on-surface-variant mt-1 italic">${escapeHtml(wikipedia.description || "")}</div>
+        <a target="_blank" href="${escapeHtml(wikipedia.url)}" class="block label-mono text-[10px] text-primary/80 hover:text-primary mt-2 truncate">en.wikipedia.org</a>
+      `;
+      apiHost.appendChild(c);
+    }
+
+    // ── Metric strip top-of-page (revenue / income / EPS / market cap) ──
+    const strip = $("meticStrip");
+    strip.innerHTML = "";
+    const stripCards = [];
+    if (sec && sec.metrics?.revenue) stripCards.push({ label: "Revenue", value: sec.metrics.revenue.display, inr: formatINR(metricUsdValue(sec.metrics.revenue)), sub: `${sec.metrics.revenue.form} ${sec.metrics.revenue.fp || ""} · ${sec.metrics.revenue.end}` });
+    if (sec && sec.metrics?.net_income) stripCards.push({ label: "Net income", value: sec.metrics.net_income.display, inr: formatINR(metricUsdValue(sec.metrics.net_income)), sub: `${sec.metrics.net_income.form}` });
+    if (sec && sec.metrics?.eps_diluted) stripCards.push({ label: "Diluted EPS", value: sec.metrics.eps_diluted.display, inr: formatINR(metricUsdValue(sec.metrics.eps_diluted)), sub: `${sec.metrics.eps_diluted.form}` });
+    if (yahoo && yahoo.price != null) stripCards.push({ label: "Live price", value: `$${yahoo.price.toFixed(2)}`, inr: formatINR(yahoo.price), sub: `${yahoo.change_pct != null ? (yahoo.change_pct >= 0 ? "+" : "") + yahoo.change_pct.toFixed(2) + "%" : "—"} session` });
+    if (yahoo && yahoo.market_cap) stripCards.push({ label: "Market cap", value: fmtUSD(yahoo.market_cap), inr: formatINR(yahoo.market_cap), sub: `Yahoo Finance` });
+    for (const card of stripCards.slice(0, 4)) {
+      const div = document.createElement("div");
+      div.className = "glass-strong rounded-2xl p-5";
+      div.innerHTML = `
+        <div class="label-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2">${escapeHtml(card.label)}</div>
+        <div class="text-[26px] font-bold text-on-surface tracking-tight">${escapeHtml(card.value)}</div>
+        ${card.inr ? `<div class="text-[13px] font-medium text-warn mt-0.5">${escapeHtml(card.inr)}</div>` : ""}
+        <div class="label-mono text-[10px] text-on-surface-variant mt-1.5 truncate">${escapeHtml(card.sub)}</div>
+      `;
+      strip.appendChild(div);
+    }
+
+    // ── Financial profile grid ──
+    if (sec && Object.keys(sec.metrics || {}).length) {
+      $("financialPanel").classList.remove("hidden");
+      const period = Object.values(sec.metrics)[0];
+      $("financialPeriodPill").textContent = `${period.form || "filed"} · ${period.fp || "FY"} ending ${period.end || ""}`;
+      const filingTop = sec.recent_filings?.[0];
+      $("financialFilingLink").href = filingTop ? filingTop.url : "#";
+      const order = [
+        ["revenue", "Revenue"], ["operating_income", "Operating income"], ["net_income", "Net income"],
+        ["eps_diluted", "Diluted EPS"], ["eps_basic", "Basic EPS"], ["rd_expense", "R&D expense"],
+        ["total_assets", "Total assets"], ["total_liabilities", "Total liabilities"], ["stockholders_equity", "Stockholders' equity"],
+        ["cash_and_equivalents", "Cash & equivalents"], ["long_term_debt", "Long-term debt"], ["shares_outstanding", "Shares outstanding"],
+      ];
+      const grid = $("financialGrid");
+      grid.innerHTML = "";
+      for (const [key, label] of order) {
+        const m = sec.metrics[key];
+        if (!m) continue;
+        const cell = document.createElement("div");
+        cell.className = "bg-surface-container-low/40 rounded-xl p-4 border border-outline-variant/15";
+        const inr = formatINR(metricUsdValue(m));
+        cell.innerHTML = `
+          <div class="label-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-1.5">${escapeHtml(label)}</div>
+          <div class="text-[17px] font-semibold text-on-surface">${escapeHtml(m.display)}</div>
+          ${inr ? `<div class="text-[12px] font-medium text-warn mt-0.5">${escapeHtml(inr)}</div>` : ""}
+          <div class="label-mono text-[10px] text-on-surface-variant mt-1 truncate">${escapeHtml(m.form)} ${m.fp || ""}</div>
+        `;
+        grid.appendChild(cell);
+      }
+    }
+
+    // ── Filings panel ──
+    if (sec && (sec.recent_filings || []).length) {
+      $("filingsPanel").classList.remove("hidden");
+      const list = $("filingsList");
+      list.innerHTML = "";
+      for (const f of sec.recent_filings.slice(0, 6)) {
+        const row = document.createElement("a");
+        row.target = "_blank";
+        row.href = f.url;
+        row.className = "flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/15 hover:border-primary/40 hover:bg-surface-variant/10 transition-all group";
+        row.innerHTML = `
+          <div class="flex items-center gap-3">
+            <span class="label-mono text-[10px] uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded-md">${escapeHtml(f.form)}</span>
+            <div>
+              <div class="text-[13px] text-on-surface group-hover:text-primary transition-colors">Filed ${escapeHtml(f.filed)} · period ${escapeHtml(f.report || "")}</div>
+              <div class="label-mono text-[10px] text-on-surface-variant truncate max-w-md">${escapeHtml(f.accession)}</div>
+            </div>
+          </div>
+          <span class="material-symbols-outlined text-[18px] text-on-surface-variant group-hover:text-primary transition-colors">open_in_new</span>
+        `;
+        list.appendChild(row);
+      }
+    }
+
+    // ── Risk Factors panel from 10-K Item 1A ──
+    if (filing && filing.risk_factors) {
+      $("riskFactorsPanel").classList.remove("hidden");
+      $("riskFormPill").textContent = `${filing.form || "filing"} · filed ${filing.filed_date || ""}`;
+      $("riskFilingLink").href = filing.source_url || "#";
+      $("riskFactorsBody").textContent = filing.risk_factors;
+    }
+    if (filing && filing.mdna) {
+      $("mdnaPanel").classList.remove("hidden");
+      $("mdnaFormPill").textContent = `${filing.form || "filing"} · filed ${filing.filed_date || ""}`;
+      $("mdnaFilingLink").href = filing.source_url || "#";
+      $("mdnaBody").textContent = filing.mdna;
+    }
+
+    // ── Price chart (interactive) ──
+    if (yahoo && yahoo.series_closes?.length >= 2) {
+      $("chartPanel").classList.remove("hidden");
+      renderInteractivePriceChart(yahoo);
+    }
+
+    // ── Multi-year financial history (annual revenue / NI / EPS bars) ──
+    if (intel && intel.sec && intel.sec.history && Object.keys(intel.sec.history).length) {
+      $("historyPanel").classList.remove("hidden");
+      window.__lastHistory = intel.sec.history;
+      window.__lastFx = intel.fx;
+      const initial = intel.sec.history.revenue ? "revenue" : Object.keys(intel.sec.history)[0];
+      renderHistoryBars(initial);
+    }
+
+    // ── News headlines ──
+    if (intel && Array.isArray(intel.news) && intel.news.length) {
+      $("newsPanel").classList.remove("hidden");
+      renderNewsList(intel.news);
+    }
+  }
+
+  function renderInteractivePriceChart(yahoo) {
+    const data = yahoo.series_closes;
+    const dates = yahoo.series_dates || [];
+    const min = Math.min(...data);
+    const max = Math.max(...data);
+    const range = max - min || 1;
+    const W = 760, H = 220, PAD_L = 50, PAD_R = 12, PAD_T = 18, PAD_B = 30;
+    const innerW = W - PAD_L - PAD_R;
+    const innerH = H - PAD_T - PAD_B;
+    const xAt = (i) => PAD_L + (i / (data.length - 1)) * innerW;
+    const yAt = (v) => PAD_T + innerH - ((v - min) / range) * innerH;
+    const last = data[data.length - 1];
+    const first = data[0];
+    const direction = last >= first ? "#6ee7b7" : "#ffb4ab";
+    const directionClass = last >= first ? "text-success" : "text-error";
+    const pts = data.map((v, i) => `${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`);
+    // Y-axis ticks
+    const yTicks = 4;
+    const yLines = [];
+    for (let t = 0; t <= yTicks; t++) {
+      const v = min + (range * t) / yTicks;
+      const y = yAt(v);
+      yLines.push(`<line x1="${PAD_L}" y1="${y}" x2="${W - PAD_R}" y2="${y}" stroke="rgba(255,255,255,0.05)" />`);
+      yLines.push(`<text x="${PAD_L - 6}" y="${y + 3}" text-anchor="end" fill="#94a0c2" style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">$${v.toFixed(2)}</text>`);
+    }
+    // X-axis labels (4 evenly-spaced)
+    const xLabels = [];
+    const labelIdx = [0, Math.floor(data.length / 3), Math.floor((2 * data.length) / 3), data.length - 1];
+    for (const i of labelIdx) {
+      if (!dates[i]) continue;
+      const x = xAt(i);
+      const d = (dates[i] || "").slice(5); // MM-DD
+      xLabels.push(`<text x="${x}" y="${H - 10}" text-anchor="middle" fill="#94a0c2" style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">${d}</text>`);
+    }
+    $("chartHost").innerHTML = `
+      <svg id="priceSvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="w-full h-full">
+        <defs>
+          <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${direction}" stop-opacity="0.4"/>
+            <stop offset="100%" stop-color="${direction}" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        ${yLines.join("")}
+        ${xLabels.join("")}
+        <polyline points="${pts.join(" ")}" fill="none" stroke="${direction}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+        <polygon points="${pts.join(" ")} ${(PAD_L + innerW).toFixed(1)},${(PAD_T + innerH).toFixed(1)} ${PAD_L},${(PAD_T + innerH).toFixed(1)}" fill="url(#chartGrad)"/>
+        <line id="priceHairline" x1="0" y1="${PAD_T}" x2="0" y2="${PAD_T + innerH}" stroke="${direction}" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="2 3" style="display:none;" />
+        <circle id="priceDot" r="4" fill="${direction}" stroke="#0b1326" stroke-width="2" style="display:none;" />
+      </svg>
+      <div id="priceTooltip" class="chart-tooltip"></div>
+    `;
+    const pct = ((last - first) / first * 100).toFixed(2);
+    $("chartMeta").innerHTML = `<span class="${directionClass}">${pct >= 0 ? '+' : ''}${pct}%</span> over ${dates.length} sessions · range $${min.toFixed(2)} – $${max.toFixed(2)}`;
+
+    // Hover interactions
+    const svg = document.getElementById("priceSvg");
+    const tip = document.getElementById("priceTooltip");
+    const hair = document.getElementById("priceHairline");
+    const dot = document.getElementById("priceDot");
+    const host = $("chartHost");
+    function onMove(ev) {
+      const rect = svg.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const xPx = (ev.clientX - rect.left) * scaleX;
+      const ratio = Math.max(0, Math.min(1, (xPx - PAD_L) / innerW));
+      const idx = Math.round(ratio * (data.length - 1));
+      const v = data[idx];
+      const cx = xAt(idx);
+      const cy = yAt(v);
+      hair.style.display = "block"; hair.setAttribute("x1", cx); hair.setAttribute("x2", cx);
+      dot.style.display = "block"; dot.setAttribute("cx", cx); dot.setAttribute("cy", cy);
+      tip.classList.add("visible");
+      const hostRect = host.getBoundingClientRect();
+      tip.style.left = ((cx / W) * hostRect.width) + "px";
+      tip.style.top = ((cy / H) * hostRect.height) + "px";
+      tip.innerHTML = `<span style="color:${direction};">$${v.toFixed(2)}</span> · <span style="color:#94a0c2;">${dates[idx] || ""}</span>`;
+    }
+    function onLeave() {
+      hair.style.display = "none"; dot.style.display = "none"; tip.classList.remove("visible");
+    }
+    svg.addEventListener("mousemove", onMove);
+    svg.addEventListener("mouseleave", onLeave);
+  }
+
+  function fmtCompactUsd(v) {
+    const a = Math.abs(v);
+    if (a >= 1e12) return `$${(v / 1e12).toFixed(2)}T`;
+    if (a >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+    if (a >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+    if (a >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+    return `$${v.toFixed(2)}`;
+  }
+  function fmtCompactInr(usdValue, rate) {
+    if (!rate) return "";
+    const v = usdValue * rate;
+    const a = Math.abs(v);
+    if (a >= 1e7) return `₹${(v / 1e7).toFixed(2)} Cr`;
+    if (a >= 1e5) return `₹${(v / 1e5).toFixed(2)} L`;
+    return `₹${v.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  }
+
+  function renderHistoryBars(key) {
+    const series = (window.__lastHistory || {})[key];
+    if (!series) return;
+    document.querySelectorAll(".hist-tab").forEach((b) => {
+      const on = b.dataset.hist === key;
+      b.classList.toggle("active", on);
+      b.classList.toggle("bg-primary/15", on);
+      b.classList.toggle("text-primary", on);
+      b.classList.toggle("border-primary/30", on);
+      b.classList.toggle("bg-surface-container-low/50", !on);
+      b.classList.toggle("text-on-surface-variant", !on);
+      b.classList.toggle("border-outline-variant/20", !on);
+    });
+    const points = series.annual || [];
+    if (!points.length) return;
+    const W = 760, H = 240, PAD_L = 60, PAD_R = 18, PAD_T = 18, PAD_B = 38;
+    const innerW = W - PAD_L - PAD_R;
+    const innerH = H - PAD_T - PAD_B;
+    const vals = points.map((p) => p.value);
+    const maxV = Math.max(...vals, 0);
+    const minV = Math.min(...vals, 0);
+    const range = (maxV - minV) || 1;
+    const zeroY = PAD_T + innerH - ((0 - minV) / range) * innerH;
+    const barW = (innerW / points.length) * 0.65;
+    const stepX = innerW / points.length;
+    const isPct = false;
+    const isEps = key === "eps_diluted";
+    const fx = window.__lastFx;
+    const fxRate = fx ? fx.rate : null;
+    // Y ticks
+    const yTicks = 4;
+    const yLines = [];
+    for (let t = 0; t <= yTicks; t++) {
+      const v = minV + (range * t) / yTicks;
+      const y = PAD_T + innerH - ((v - minV) / range) * innerH;
+      yLines.push(`<line x1="${PAD_L}" y1="${y}" x2="${W - PAD_R}" y2="${y}" stroke="rgba(255,255,255,0.05)" />`);
+      const lbl = isEps ? `$${v.toFixed(2)}` : fmtCompactUsd(v);
+      yLines.push(`<text x="${PAD_L - 6}" y="${y + 3}" text-anchor="end" fill="#94a0c2" style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">${lbl}</text>`);
+    }
+    // Bars
+    const bars = points.map((p, i) => {
+      const x = PAD_L + i * stepX + (stepX - barW) / 2;
+      const top = PAD_T + innerH - ((p.value - minV) / range) * innerH;
+      const y = p.value >= 0 ? top : zeroY;
+      const h = Math.abs(zeroY - top);
+      const color = p.value >= 0 ? "#6ee7b7" : "#ffb4ab";
+      const fy = p.fy || (p.end || "").slice(0, 4);
+      const lblBase = isEps ? `$${p.value.toFixed(2)}` : fmtCompactUsd(p.value);
+      const inr = (!isEps && fxRate) ? ` / ${fmtCompactInr(p.value, fxRate)}` : "";
+      const tipHtml = `${fy}: ${lblBase}${inr}`.replace(/"/g, "&quot;");
+      return `<g class="hist-bar" data-tip="${tipHtml}" data-x="${x + barW / 2}" data-y="${top}">
+        <rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${color}" fill-opacity="0.85" rx="3" />
+      </g>
+      <text x="${x + barW / 2}" y="${H - 14}" text-anchor="middle" fill="#94a0c2" style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">${fy}</text>`;
+    }).join("");
+    $("historyHost").innerHTML = `
+      <svg id="histSvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="w-full h-full">
+        ${yLines.join("")}
+        ${bars}
+      </svg>
+      <div id="histTooltip" class="chart-tooltip"></div>
+    `;
+    $("historyPill").textContent = `FY ${points[0].fy || (points[0].end||'').slice(0,4)} – FY ${points[points.length-1].fy || (points[points.length-1].end||'').slice(0,4)}`;
+    // CAGR meta
+    const first = points[0].value, last = points[points.length - 1].value;
+    let cagr = null;
+    if (first > 0 && last > 0 && points.length >= 2) {
+      cagr = (Math.pow(last / first, 1 / (points.length - 1)) - 1) * 100;
+    }
+    $("historyMeta").innerHTML = `${series.label} · ${points.length} fiscal years` + (cagr !== null ? ` · CAGR <span class="${cagr >= 0 ? 'text-success' : 'text-error'}">${cagr >= 0 ? '+' : ''}${cagr.toFixed(1)}%</span>` : "");
+    // Bar hover
+    const host = $("historyHost");
+    const tip = document.getElementById("histTooltip");
+    document.querySelectorAll(".hist-bar").forEach((g) => {
+      g.addEventListener("mouseenter", (e) => {
+        const r = host.getBoundingClientRect();
+        const cx = parseFloat(g.dataset.x), cy = parseFloat(g.dataset.y);
+        tip.style.left = ((cx / W) * r.width) + "px";
+        tip.style.top = ((cy / H) * r.height) + "px";
+        tip.innerHTML = g.dataset.tip;
+        tip.classList.add("visible");
+      });
+      g.addEventListener("mouseleave", () => tip.classList.remove("visible"));
+    });
+  }
+
+  function renderNewsList(items) {
+    const host = $("newsList");
+    host.innerHTML = "";
+    $("newsCountPill").textContent = `${items.length} headlines`;
+    items.forEach((n) => {
+      const row = document.createElement("a");
+      row.href = n.link;
+      row.target = "_blank";
+      row.rel = "noopener";
+      row.className = "flex items-start justify-between gap-3 px-4 py-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/15 hover:border-warn/40 hover:bg-warn/5 transition-all group";
+      row.innerHTML = `
+        <div class="flex-1 min-w-0">
+          <div class="text-[13.5px] text-on-surface group-hover:text-warn transition-colors leading-snug">${escapeHtml(n.title)}</div>
+          <div class="label-mono text-[10px] text-on-surface-variant mt-1 truncate">${escapeHtml(n.source || "")} ${n.published ? " · " + escapeHtml(n.published) : ""}</div>
+        </div>
+        <span class="material-symbols-outlined text-[16px] text-on-surface-variant group-hover:text-warn transition-colors mt-1">open_in_new</span>
+      `;
+      host.appendChild(row);
+    });
+  }
+
+  function renderConflicts(c) {
+    $("conflictsPanel").classList.remove("hidden");
+    const list = $("conflictsList");
+    const card = document.createElement("div");
+    card.className = "anim-in p-4 rounded-xl bg-error/5 border border-error/20";
+    const obs = (c.observations || []).map(
+      (o) => `<li class="ml-4 mt-1.5"><span class="label-mono text-[11px] text-on-surface font-semibold">${escapeHtml(o.domain)}</span> <span class="label-mono text-[10px] text-on-surface-variant">tier ${o.tier}</span> — <span class="font-semibold">${escapeHtml(o.raw)}</span><div class="text-[11.5px] text-on-surface-variant mt-0.5">${escapeHtml(o.context || "")}</div></li>`
+    ).join("");
+    card.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <span class="label-mono text-[11px] uppercase tracking-widest text-error">${escapeHtml(c.metric.replace(/_/g, " "))}</span>
+        <span class="label-mono text-[10px] uppercase tracking-widest text-error bg-error/15 border border-error/25 px-2 py-0.5 rounded-md">${c.spread_pct}% spread</span>
+      </div>
+      <div class="text-[12.5px] text-on-surface-variant mb-2">${escapeHtml(c.note || "")}</div>
+      <ul class="text-[12px] list-disc pl-2">${obs}</ul>
+    `;
+    list.appendChild(card);
+  }
+
+  function renderCommunity(intel) {
+    const reddit = intel.reddit || [];
+    const hn = intel.hackernews || [];
+    const st = intel.stocktwits;
+    if (!reddit.length && !hn.length && !st) return;
+    $("communityPanel").classList.remove("hidden");
+    const host = $("communityBody");
+    host.innerHTML = "";
+    let totalSignals = reddit.length + hn.length + (st ? (st.bullish + st.bearish + st.unrated) : 0);
+    $("communityBadge").textContent = `${totalSignals} signals`;
+
+    if (st) {
+      const cls = st.net_sentiment === "bullish" ? "text-success" : st.net_sentiment === "bearish" ? "text-error" : "text-on-surface-variant";
+      const card = document.createElement("div");
+      card.className = "p-3 rounded-xl bg-primary/5 border border-primary/15";
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="label-mono text-[10px] uppercase tracking-widest text-primary">StockTwits · $${escapeHtml(st.ticker)}</span>
+          <span class="label-mono text-[10px] uppercase tracking-widest ${cls}">${escapeHtml(st.net_sentiment)}</span>
+        </div>
+        <div class="text-[12px] text-on-surface-variant">${st.bullish} bullish · ${st.bearish} bearish · ${st.unrated} unrated</div>
+      `;
+      host.appendChild(card);
+    }
+    if (reddit.length) {
+      const sent = { bullish: 0, bearish: 0, hype: 0, neutral: 0 };
+      for (const p of reddit) sent[p.sentiment] = (sent[p.sentiment] || 0) + 1;
+      const card = document.createElement("div");
+      card.className = "p-3 rounded-xl bg-secondary/5 border border-secondary/15";
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="label-mono text-[10px] uppercase tracking-widest text-secondary">Reddit (${reddit.length} posts)</span>
+          <span class="label-mono text-[10px] text-on-surface-variant">bull ${sent.bullish} · bear ${sent.bearish} · hype ${sent.hype}</span>
+        </div>
+        <div class="space-y-1.5 mt-2">
+          ${reddit.slice(0, 4).map((p) => `<a target="_blank" href="${escapeHtml(p.permalink)}" class="block label-mono text-[11px] text-on-surface-variant hover:text-primary truncate">r/${escapeHtml(p.subreddit)} · ${p.score}↑ · ${escapeHtml(p.title)}</a>`).join("")}
+        </div>
+      `;
+      host.appendChild(card);
+    }
+    if (hn.length) {
+      const card = document.createElement("div");
+      card.className = "p-3 rounded-xl bg-warn/5 border border-warn/15";
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="label-mono text-[10px] uppercase tracking-widest text-warn">Hacker News</span>
+          <span class="label-mono text-[10px] text-on-surface-variant">${hn.length} stories</span>
+        </div>
+        <div class="space-y-1.5 mt-2">
+          ${hn.slice(0, 3).map((h) => `<a target="_blank" href="${escapeHtml(h.hn_url || h.url)}" class="block label-mono text-[11px] text-on-surface-variant hover:text-primary truncate">${h.points}↑ · ${escapeHtml(h.title)}</a>`).join("")}
+        </div>
+      `;
+      host.appendChild(card);
+    }
+  }
+
+  function formatINR(usd) {
+    if (usd == null || !fxRate) return "";
+    const inr = usd * fxRate;
+    const abs = Math.abs(inr);
+    if (abs >= 1e7) return `₹${(inr / 1e7).toFixed(2)} Cr`;
+    if (abs >= 1e5) return `₹${(inr / 1e5).toFixed(2)} L`;
+    if (abs >= 1e3) return `₹${inr.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+    return `₹${inr.toFixed(2)}`;
+  }
+
+  function metricUsdValue(m) {
+    if (!m) return null;
+    if (m.unit !== "USD") return null;
+    return m.value;
+  }
+
+  // Strip stray markdown asterisks from streamed memo prose
+  function cleanMemoText(s) {
+    if (!s) return "";
+    return s.replace(/\*{2,}/g, "").replace(/\*([^*\n]+)\*/g, "$1");
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Inline markdown renderer — supports headings, paragraphs, lists,
+  // bold/italic-stripping, links, tables, and `[CONFIDENCE: X]` pills.
+  // Intentionally NOT using a heavy library; markdown shapes are limited
+  // and predictable since the agent emits them.
+  // ────────────────────────────────────────────────────────────────────
+  function escapeHtmlMd(s) {
+    return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+  }
+  function inlineMd(s) {
+    let t = escapeHtmlMd(s);
+    // [text](url)
+    t = t.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    // Bare http(s) URLs
+    t = t.replace(/(^|\s)(https?:\/\/[^\s<]+)/g, (m, sp, u) => `${sp}<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+    // `code`
+    t = t.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+    // **bold** -> plain, *italic* -> plain (we deliberately strip emphasis)
+    t = t.replace(/\*\*([^*\n]+)\*\*/g, "$1").replace(/\*([^*\n]+)\*/g, "$1");
+    return t;
+  }
+  function confPill(level) {
+    const c = ({ HIGH: "conf-high", MEDIUM: "conf-medium", LOW: "conf-low", DERIVED: "conf-derived" })[level] || "conf-derived";
+    return `<span class="conf-pill ${c}">${level}</span>`;
+  }
+  function renderMarkdown(src) {
+    if (!src) return "";
+    const lines = src.replace(/\r\n/g, "\n").split("\n");
+    const out = [];
+    let inList = false, inTable = false;
+    let tableHeader = null;
+    const closeList = () => { if (inList) { out.push("</ul>"); inList = false; } };
+    const closeTable = () => { if (inTable) { out.push("</tbody></table>"); inTable = false; tableHeader = null; } };
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const stripped = line.trim();
+      if (!stripped) { closeList(); closeTable(); continue; }
+      // Heading
+      let m = stripped.match(/^(#{1,3})\s+(.*?)(\s*\[CONFIDENCE:\s*(HIGH|MEDIUM|LOW|DERIVED)\])?$/i);
+      if (m) {
+        closeList(); closeTable();
+        const lvl = m[1].length;
+        const title = inlineMd(m[2].trim());
+        const pill = m[4] ? " " + confPill(m[4].toUpperCase()) : "";
+        out.push(`<h${lvl}>${title}${pill}</h${lvl}>`);
+        continue;
+      }
+      // Table separator
+      if (/^\|?\s*[-:]+\s*(\|\s*[-:]+\s*)+\|?\s*$/.test(stripped)) {
+        if (tableHeader) {
+          const cells = tableHeader.split("|").map((c) => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1 || arr.length === tableHeader.split("|").length);
+          // Simpler split: drop empty edges
+          const headerCells = tableHeader.split("|").map((c) => c.trim()).filter((c, idx, arr) => !(idx === 0 && !c) && !(idx === arr.length - 1 && !c));
+          out.push("<table><thead><tr>" + headerCells.map((c) => `<th>${inlineMd(c)}</th>`).join("") + "</tr></thead><tbody>");
+          inTable = true;
+          tableHeader = null;
+        }
+        continue;
+      }
+      // Table row candidate
+      if (stripped.startsWith("|") && stripped.endsWith("|")) {
+        if (!inTable && !tableHeader) {
+          tableHeader = stripped;
+          continue;
+        }
+        if (inTable) {
+          const cells = stripped.split("|").map((c) => c.trim()).filter((c, idx, arr) => !(idx === 0 && !c) && !(idx === arr.length - 1 && !c));
+          out.push("<tr>" + cells.map((c) => `<td>${inlineMd(c)}</td>`).join("") + "</tr>");
+          continue;
+        }
+      }
+      // Reset stale table header buffer if we never saw a separator
+      if (tableHeader && !stripped.startsWith("|")) { tableHeader = null; }
+      // Bullet
+      if (/^[-*•]\s+/.test(stripped)) {
+        if (!inList) { out.push("<ul>"); inList = true; }
+        out.push("<li>" + inlineMd(stripped.replace(/^[-*•]\s+/, "")) + "</li>");
+        continue;
+      }
+      closeList(); closeTable();
+      out.push("<p>" + inlineMd(stripped) + "</p>");
+    }
+    closeList(); closeTable();
+    return out.join("");
+  }
+
+  function setMemoMarkdown(text) {
+    const el = $("memoBody");
+    el.innerHTML = renderMarkdown(text);
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Memo library
+  // ────────────────────────────────────────────────────────────────────
+  async function loadMemoLibrary() {
+    try {
+      const r = await fetch("/memos");
+      if (!r.ok) return;
+      const { memos } = await r.json();
+      const grid = $("memoLibraryGrid");
+      if (!memos.length) {
+        grid.innerHTML = '<div class="text-outline-variant text-sm italic">Run your first research to populate this list.</div>';
+        return;
+      }
+      grid.innerHTML = "";
+      for (const m of memos.slice(0, 6)) {
+        const a = document.createElement("a");
+        a.href = `/sessions/${m.session_id}/memo`;
+        a.target = "_blank";
+        a.className = "flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/10 hover:border-primary/40 transition-all group";
+        const when = new Date(m.modified).toLocaleString();
+        a.innerHTML = `
+          <div class="min-w-0">
+            <div class="text-[13.5px] font-medium text-on-surface group-hover:text-primary transition-colors truncate">${escapeHtml(m.title || "Memo")}</div>
+            <div class="label-mono text-[10px] text-on-surface-variant truncate mt-0.5">${when} · ${Math.round(m.bytes / 1024)} KB</div>
+          </div>
+          <span class="material-symbols-outlined text-[18px] text-on-surface-variant group-hover:text-primary transition-colors">open_in_new</span>
+        `;
+        grid.appendChild(a);
+      }
+    } catch (_) {}
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Run flow
+  // ────────────────────────────────────────────────────────────────────
+  async function startRun() {
+    const target = $("targetInput").value.trim();
+    if (!target) { $("targetInput").focus(); return; }
+    if (eventSource) { eventSource.close(); eventSource = null; }
+    resetCounters();
+    showState("processing");
+    $("processingTarget").textContent = target;
+    $("processingTitle").textContent = target;
+    startedAt = Date.now();
+    if (tickHandle) clearInterval(tickHandle);
+    tickHandle = setInterval(tickElapsed, 250);
+
+    let resp;
+    try {
+      resp = await fetch("/research/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target }),
+      });
+    } catch (e) {
+      pushActivity("error", "Gateway", "Could not reach /research/start: " + e.message, "error");
+      return;
+    }
+    if (!resp.ok) {
+      pushActivity("error", "Gateway", "Failed to start: HTTP " + resp.status, "error");
+      return;
+    }
+    const { session_id, stream } = await resp.json();
+    sessionId = session_id;
+    pushActivity("play_circle", "Session", `Opened ${session_id}`, "done");
+
+    eventSource = new EventSource(stream);
+
+    eventSource.addEventListener("session_started", (e) => {
+      const d = JSON.parse(e.data);
+      pushActivity("compass_calibration", "Planner", `Plan built for ${d.target}`, "done");
+    });
+    eventSource.addEventListener("phase", (e) => {
+      const d = JSON.parse(e.data);
+      setPhase(d.phase, d.note);
+      pushActivity("hourglass_top", "Phase", PHASE_LABEL[d.phase] || d.phase, "running", d.note || "");
+    });
+    eventSource.addEventListener("memory_recall", (e) => {
+      const d = JSON.parse(e.data);
+      renderMemoryRecall(d);
+      pushActivity("neurology", "Memory", d.fact_count > 0 ? `Recalled ${d.fact_count} prior facts about ${d.target}` : `No prior memory for ${d.target} yet`, d.fact_count > 0 ? "done" : "info");
+    });
+    eventSource.addEventListener("quality_score", (e) => {
+      const d = JSON.parse(e.data);
+      renderQualityScore(d);
+      const phaseLabel = (d.phase || "").replace("reflection_round_", "round ");
+      pushActivity("verified", "Quality", `Score ${d.score}/100${d.phase ? ` (${phaseLabel})` : ""}`, d.score >= 75 ? "done" : "running", (d.gaps || []).slice(0, 2).join(" · "));
+    });
+    eventSource.addEventListener("reflection", (e) => {
+      const d = JSON.parse(e.data);
+      renderReflectionRound(d);
+      pushActivity("psychology", "Reflection", `Round ${d.round}: ${(d.gaps || []).length} gaps, ${(d.planned_queries || []).length} follow-up queries`, "running", (d.gaps || [])[0] || "");
+    });
+    eventSource.addEventListener("reflection_done", (e) => {
+      const d = JSON.parse(e.data);
+      pushActivity("psychology", "Reflection", `Done after ${d.rounds_run} rounds · score ${d.initial_score} → ${d.final_score} (+${d.delta || 0})`, d.final_score >= 75 ? "done" : "warning", `${d.new_docs_total} new docs`);
+    });
+    eventSource.addEventListener("warning", (e) => {
+      const d = JSON.parse(e.data);
+      pushActivity("warning", "Warning", d.message || "", "warning");
+    });
+
+    // ── Multi-agent orchestration events ─────────────────────────────
+    eventSource.addEventListener("orchestrator_started", (e) => {
+      const d = JSON.parse(e.data);
+      initAgentGrid(d.agents || []);
+      pushActivity("hub", "Orchestrator", `Dispatching ${(d.agents || []).length} specialist agents across ${(d.waves || []).length} wave(s)`, "running");
+    });
+    eventSource.addEventListener("orchestrator_wave", (e) => {
+      const d = JSON.parse(e.data);
+      pushActivity("hub", "Orchestrator", `Wave ${d.wave}/${d.wave_total}: ${(d.agents || []).join(", ")}`, "running");
+    });
+    eventSource.addEventListener("subagent_started", (e) => {
+      const d = JSON.parse(e.data);
+      updateAgentTile(d.agent, { status: "running", display: d.display });
+    });
+    eventSource.addEventListener("subagent_skipped", (e) => {
+      const d = JSON.parse(e.data);
+      updateAgentTile(d.agent, { status: "skipped", display: d.display, reason: d.reason });
+    });
+    eventSource.addEventListener("subagent_done", (e) => {
+      const d = JSON.parse(e.data);
+      updateAgentTile(d.agent, {
+        status: d.status,
+        display: d.display,
+        findings: d.findings_count,
+        new_docs: d.new_docs_count,
+        elapsed_ms: d.elapsed_ms,
+        error: d.error,
+      });
+      const verb = d.status === "ok" ? "delivered" : d.status === "partial" ? "returned partial" : d.status === "skipped" ? "skipped" : "failed";
+      pushActivity("hub", d.display || d.agent, `${verb}: ${d.findings_count || 0} findings, ${d.new_docs_count || 0} new docs (${d.elapsed_ms || 0}ms)`, d.status === "ok" ? "done" : d.status === "partial" ? "warning" : "warning");
+    });
+    eventSource.addEventListener("orchestrator_done", (e) => {
+      const d = JSON.parse(e.data);
+      $("agentGridPill").textContent = `${d.agents_total} agents · ${d.findings_total} findings`;
+      pushActivity("hub", "Orchestrator", `Done: ${d.findings_total} findings, ${d.new_docs_total} new docs across ${d.waves} waves (${d.elapsed_ms}ms)`, "done");
+    });
+    eventSource.addEventListener("verifier_started", (e) => {
+      const d = JSON.parse(e.data);
+      $("verifierPanel").classList.remove("hidden");
+      $("verifierBody").innerHTML = `<div class="text-on-surface-variant"><span class="material-symbols-outlined text-[14px] align-middle">hourglass_top</span> Cross-checking ${d.findings} finding(s) against ${d.docs} sources…</div>`;
+    });
+    eventSource.addEventListener("verifier_done", (e) => {
+      const d = JSON.parse(e.data);
+      renderVerifier(d);
+      pushActivity("shield_person", "Verifier", `${d.promoted} promoted · ${d.demoted} demoted · ${d.conflicts} conflict(s) · tier-1 coverage ${d.tier1_coverage_pct}%`, "done");
+    });
+    eventSource.addEventListener("blindspot", (e) => {
+      const d = JSON.parse(e.data);
+      renderBlindspots(d.blindspots || []);
+      const top = (d.blindspots || []).slice(0, 3).map((s) => s.topic).join(", ");
+      pushActivity("visibility_off", "Blind spots", `${d.blindspot_count || 0} detected${top ? ` · top: ${top}` : ""}`, d.blindspot_count > 0 ? "warning" : "done");
+    });
+    eventSource.addEventListener("blindspot_dispatched", (e) => {
+      const d = JSON.parse(e.data);
+      pushActivity("travel_explore", "Blind spots", `Auto-dispatched ${d.queries} follow-up queries · ${d.new_docs} new doc(s)`, "done");
+    });
+    eventSource.addEventListener("finding", (e) => {
+      const d = JSON.parse(e.data);
+      const icon = { financial: "monitoring", risk: "warning", technical: "show_chart", news: "newspaper", sentiment: "groups", competitor: "swap_horiz", macro: "public", governance: "gavel" }[d.kind] || "label";
+      pushActivity(icon, d.agent, `[${d.confidence}] ${d.headline}`, d.confidence === "HIGH" ? "done" : d.confidence === "MEDIUM" ? "running" : "info", (d.detail || "").slice(0, 120));
+    });
+    eventSource.addEventListener("agent_task", (e) => {
+      const d = JSON.parse(e.data);
+      const icon = d.task.includes("SEC") ? "account_balance" : d.task.includes("Yahoo") ? "show_chart" : d.task.includes("Wikipedia") ? "menu_book" : "memory";
+      pushActivity(icon, d.task, d.note || "", d.status);
+    });
+    eventSource.addEventListener("query", (e) => {
+      const d = JSON.parse(e.data);
+      upsertQuery(d.query, d.status, d.count || 0);
+      if (d.status === "done") {
+        pushActivity("search", "Search", `"${d.query}" → ${d.count} results`, "done");
+      } else if (d.status === "timeout" || d.status === "error") {
+        pushActivity("search_off", "Search", `"${d.query}" → ${d.status}`, "error");
+      }
+    });
+    eventSource.addEventListener("intel", (e) => {
+      const intel = JSON.parse(e.data);
+      window.__lastIntel = intel;
+    });
+    eventSource.addEventListener("source", (e) => {
+      const d = JSON.parse(e.data);
+      counters.sources += 1;
+      if (d.kind === "primary" || d.tier <= 2) counters.primary += 1;
+      $("ctrSources").textContent = String(counters.sources);
+      $("ctrPrimary").textContent = String(counters.primary);
+      pushLiveSource(d);
+      pushActivity("description", `tier ${d.tier}`, `${d.domain}${d.blocked ? " (blocked)" : ""}`, d.blocked ? "warning" : "done", d.title || "");
+    });
+    eventSource.addEventListener("compression", (e) => {
+      const d = JSON.parse(e.data);
+      pushActivity("compress", "Harness", `Context compressed at step ${d.step}`, "done");
+    });
+    eventSource.addEventListener("conflict", (e) => {
+      const d = JSON.parse(e.data);
+      renderConflicts(d);
+      pushActivity("warning", "Validator", `[CONFLICT] ${d.metric} ${d.spread_pct}% spread`, "warning");
+    });
+    eventSource.addEventListener("memo_token", (e) => {
+      const d = JSON.parse(e.data);
+      if (!memoStreaming) {
+        memoStreaming = true;
+        showState("result");
+        renderIntel(window.__lastIntel || {});
+        $("resultBreadcrumb").textContent = $("processingTarget").textContent;
+        $("resultTitle").textContent = $("processingTarget").textContent;
+        $("memoViaPill").textContent = "streaming";
+        $("memoBody").innerHTML = "";
+        $("memoBody").classList.add("stream-cursor");
+      }
+      memoStreamBuf += d.chunk || "";
+      // While streaming we render as plain text so a half-token doesn't
+      // produce broken HTML. The final 'memo' event re-renders as markdown.
+      $("memoBody").textContent = cleanMemoText(memoStreamBuf);
+    });
+    eventSource.addEventListener("memo", async (e) => {
+      const d = JSON.parse(e.data);
+      showState("result");
+      renderIntel(window.__lastIntel || {});
+      $("resultBreadcrumb").textContent = $("processingTarget").textContent;
+      $("resultTitle").textContent = $("processingTarget").textContent;
+      const viaLabel = d.via === "anthropic" ? "Claude" : "structured prose";
+      $("memoViaPill").textContent = viaLabel;
+      $("memoViaPill").className = `label-mono text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md border ${d.via === "anthropic" ? "bg-success/15 text-success border-success/25" : "bg-primary/15 text-primary border-primary/25"}`;
+      $("memoBody").classList.remove("stream-cursor");
+      // Pull the full memo and render as parsed markdown INSIDE the panel.
+      try {
+        const full = await fetch(`/sessions/${sessionId}/memo`).then((r) => r.text());
+        setMemoMarkdown(cleanMemoText(full));
+        window.__lastMemoMd = full;
+      } catch (_) {
+        setMemoMarkdown(cleanMemoText(d.preview || ""));
+      }
+      pushActivity("auto_awesome", "Synthesizer", `Memo synthesized via ${d.via} (${d.chars} chars)`, "done");
+    });
+    eventSource.addEventListener("final", (e) => {
+      const d = JSON.parse(e.data);
+      $("processingBar").style.width = "100%";
+      $("processingPercent").textContent = "100%";
+      $("processingPhaseLabel").textContent = "Done";
+      pushActivity("flag", "Final", `${d.steps} steps · ${d.citations} citations · ${d.primary_citations} primary · ${(d.elapsed_ms / 1000).toFixed(1)}s`, "done", d.canonical || "");
+      if (tickHandle) clearInterval(tickHandle);
+      tickHandle = null;
+      loadMemoLibrary();
+    });
+    eventSource.addEventListener("warning", (e) => {
+      const d = JSON.parse(e.data);
+      pushActivity("warning", "Notice", d.message || "", "warning");
+    });
+    eventSource.addEventListener("done", () => {
+      if (eventSource) { eventSource.close(); eventSource = null; }
+    });
+    eventSource.onerror = () => {
+      pushActivity("link_off", "Stream", "Connection lost", "error");
+    };
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Wire UI
+  // ────────────────────────────────────────────────────────────────────
+  document.querySelectorAll(".suggest-chip, .workflow-card").forEach((c) => c.addEventListener("click", () => {
+    $("targetInput").value = c.dataset.q;
+    startRun();
+  }));
+  $("executeBtn").addEventListener("click", startRun);
+  $("targetInput").addEventListener("keydown", (e) => { if (e.key === "Enter") startRun(); });
+  $("newRunBtn").addEventListener("click", () => { showState("command"); $("targetInput").focus(); });
+  document.querySelectorAll(".hist-tab").forEach((b) => {
+    b.addEventListener("click", () => renderHistoryBars(b.dataset.hist));
+  });
+  $("copyMemoBtn").addEventListener("click", async () => {
+    const txt = window.__lastMemoMd || $("memoBody").innerText;
+    try { await navigator.clipboard.writeText(txt); } catch (_) {}
+  });
+  $("downloadMdBtn").addEventListener("click", async () => {
+    if (!sessionId) return;
+    try {
+      const md = window.__lastMemoMd || await fetch(`/sessions/${sessionId}/memo`).then((r) => r.text());
+      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${($("resultTitle").textContent || "memo").toLowerCase().replace(/[^a-z0-9]+/g, "_")}.md`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (_) {}
+  });
+  document.querySelectorAll(".nav-btn").forEach((n) => n.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (n.dataset.nav === "command") { showState("command"); }
+    if (n.dataset.nav === "library") { showState("command"); document.getElementById("memoLibraryGrid").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  }));
+
+  // Check Anthropic availability
+  fetch("/config").then(r => r.ok ? r.json() : null).then(cfg => {
+    if (cfg?.anthropic) {
+      $("anthropicState").innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(110,231,183,0.7)]"></span><span class="label-mono text-[10px] uppercase tracking-wider text-success">live</span>';
+    }
+  }).catch(() => {});
+
+  loadMemoLibrary();
+  showState("command");
+
+  // ════════════════════════════════════════════════════════════════════
+  // First-time-user tutorial — spotlight coachmarks over key UI areas.
+  // Auto-shows once (gated on localStorage). Re-launchable from the
+  // sidebar "Tutorial" button. Keyboard: Esc closes, ←/→ navigates.
+  // ════════════════════════════════════════════════════════════════════
+  const TOUR_STEPS = [
+    {
+      title: "Welcome to ProspektLab",
+      body: "Your autonomous research analyst. We pull SEC EDGAR, Yahoo Finance, Reddit, StockTwits, Hacker News and Google News in parallel, then write you a memo with open citations — usually in under 30 seconds.",
+      placement: "center",
+    },
+    {
+      selector: 'input[data-tour="search"]',
+      title: "Step 1 · Type a ticker",
+      body: "AAPL, NVDA, TSLA, MSFT — anything publicly listed. The agent resolves it to a SEC CIK first, so it always works on the right company.",
+      placement: "bottom",
+    },
+    {
+      selector: '[data-tour="chips"]',
+      title: "Step 2 · Or pick a category",
+      body: "Curated quick-picks across AI / Semis, Big Tech, EV, Crypto-adj. and Meme & retail. One click runs the full pipeline.",
+      placement: "bottom",
+    },
+    {
+      selector: '[data-tour="workflows"]',
+      title: "Step 3 · Try a sample workflow",
+      body: "Pre-canned research objectives — earnings preview, hype-check, 10-K reading — that show off different parts of the pipeline.",
+      placement: "top",
+    },
+    {
+      selector: '[data-tour="library"]',
+      title: "Step 4 · Recent memos",
+      body: "Every run is saved here as Markdown. Click any memo to reopen it — your research history is yours.",
+      placement: "top",
+    },
+    {
+      selector: '[data-tour="pipeline"]',
+      title: "Step 5 · The pipeline, explained",
+      body: "While the agent runs you'll see each phase tick through here. Identify → Enrich → Survey → Deep-dive → Synthesise. Watch the receipts come in.",
+      placement: "left",
+    },
+    {
+      title: "You're ready",
+      body: "Press Enter to run your first memo, or click any chip / sample workflow above. You can replay this tour anytime from the Tutorial button in the sidebar.",
+      placement: "center",
+      cta: "Run my first memo",
+      action: () => { document.querySelector('input[data-tour="search"]').focus(); }
+    },
+  ];
+
+  function injectTourStyles() {
+    if (document.getElementById("tourStyles")) return;
+    const s = document.createElement("style");
+    s.id = "tourStyles";
+    s.textContent = `
+      .tour-backdrop { position: fixed; inset: 0; z-index: 100; pointer-events: auto; }
+      .tour-mask { position: fixed; inset: 0; background: rgba(5,8,18,0.78); transition: opacity 0.2s; }
+      .tour-spotlight { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(5,8,18,0.78), 0 0 0 3px rgba(173,198,255,0.6), 0 0 30px 6px rgba(173,198,255,0.35); transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none; z-index: 101; }
+      .tour-card { position: fixed; max-width: 380px; background: linear-gradient(135deg, rgba(11,19,38,0.96), rgba(7,12,28,0.96)); border: 1px solid rgba(173,198,255,0.25); border-radius: 16px; padding: 22px 22px 18px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); z-index: 102; color: #dae2fd; font-family: "Inter", sans-serif; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+      .tour-card.center { left: 50% !important; top: 50% !important; transform: translate(-50%, -50%); max-width: 440px; }
+      .tour-card .tour-step-pill { display: inline-block; font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.12em; color: #adc6ff; background: rgba(173,198,255,0.08); border: 1px solid rgba(173,198,255,0.25); padding: 3px 9px; border-radius: 6px; text-transform: uppercase; margin-bottom: 12px; }
+      .tour-card h4 { font-size: 18px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.01em; }
+      .tour-card p { font-size: 13.5px; line-height: 1.55; color: #b6becf; margin-bottom: 14px; }
+      .tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.06); }
+      .tour-dots { display: flex; gap: 6px; }
+      .tour-dot { width: 6px; height: 6px; border-radius: 999px; background: rgba(255,255,255,0.15); transition: all 0.2s; }
+      .tour-dot.active { background: #adc6ff; width: 20px; }
+      .tour-btn { font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; padding: 7px 14px; border-radius: 8px; cursor: pointer; transition: all 0.15s; border: 1px solid; }
+      .tour-btn-primary { background: rgba(173,198,255,0.15); color: #adc6ff; border-color: rgba(173,198,255,0.4); }
+      .tour-btn-primary:hover { background: rgba(173,198,255,0.25); }
+      .tour-btn-ghost { background: transparent; color: #94a0c2; border-color: rgba(255,255,255,0.1); }
+      .tour-btn-ghost:hover { color: #dae2fd; border-color: rgba(255,255,255,0.2); }
+      .tour-skip { position: absolute; top: 12px; right: 14px; color: rgba(255,255,255,0.3); cursor: pointer; font-size: 18px; }
+      .tour-skip:hover { color: rgba(255,255,255,0.6); }
+    `;
+    document.head.appendChild(s);
+  }
+
+  let tourIdx = 0;
+  let tourEls = null;
+
+  function buildTour() {
+    injectTourStyles();
+    const root = document.createElement("div");
+    root.className = "tour-backdrop";
+    root.id = "tourRoot";
+    root.innerHTML = `
+      <div class="tour-mask" id="tourMask"></div>
+      <div class="tour-spotlight" id="tourSpot" style="display:none;"></div>
+      <div class="tour-card" id="tourCard">
+        <span class="tour-skip" id="tourSkip" title="Skip tour">×</span>
+        <span class="tour-step-pill" id="tourStepPill"></span>
+        <h4 id="tourTitle"></h4>
+        <p id="tourBody"></p>
+        <div class="tour-actions">
+          <div class="tour-dots" id="tourDots"></div>
+          <div class="flex gap-2">
+            <button class="tour-btn tour-btn-ghost" id="tourPrev">Back</button>
+            <button class="tour-btn tour-btn-primary" id="tourNext">Next</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(root);
+    tourEls = {
+      root,
+      mask: root.querySelector("#tourMask"),
+      spot: root.querySelector("#tourSpot"),
+      card: root.querySelector("#tourCard"),
+      stepPill: root.querySelector("#tourStepPill"),
+      title: root.querySelector("#tourTitle"),
+      body: root.querySelector("#tourBody"),
+      dots: root.querySelector("#tourDots"),
+      prev: root.querySelector("#tourPrev"),
+      next: root.querySelector("#tourNext"),
+      skip: root.querySelector("#tourSkip"),
+    };
+    tourEls.dots.innerHTML = TOUR_STEPS.map((_, i) => `<div class="tour-dot${i === 0 ? " active" : ""}"></div>`).join("");
+    tourEls.skip.addEventListener("click", endTour);
+    tourEls.mask.addEventListener("click", endTour);
+    tourEls.prev.addEventListener("click", () => goTour(tourIdx - 1));
+    tourEls.next.addEventListener("click", () => {
+      const step = TOUR_STEPS[tourIdx];
+      if (tourIdx === TOUR_STEPS.length - 1) {
+        if (step.action) step.action();
+        endTour();
+        return;
+      }
+      goTour(tourIdx + 1);
+    });
+    document.addEventListener("keydown", tourKeyHandler);
+  }
+
+  function tourKeyHandler(e) {
+    if (!tourEls || !document.getElementById("tourRoot")) return;
+    if (e.key === "Escape") endTour();
+    else if (e.key === "ArrowRight") tourEls.next.click();
+    else if (e.key === "ArrowLeft") tourEls.prev.click();
+  }
+
+  function goTour(idx) {
+    tourIdx = Math.max(0, Math.min(TOUR_STEPS.length - 1, idx));
+    const step = TOUR_STEPS[tourIdx];
+    tourEls.stepPill.textContent = `Step ${tourIdx + 1} of ${TOUR_STEPS.length}`;
+    tourEls.title.textContent = step.title;
+    tourEls.body.textContent = step.body;
+    tourEls.prev.style.visibility = tourIdx === 0 ? "hidden" : "visible";
+    tourEls.next.textContent = tourIdx === TOUR_STEPS.length - 1 ? (step.cta || "Finish") : "Next →";
+    tourEls.dots.querySelectorAll(".tour-dot").forEach((d, i) => d.classList.toggle("active", i === tourIdx));
+
+    // Position spotlight + card
+    if (step.placement === "center" || !step.selector) {
+      tourEls.spot.style.display = "none";
+      tourEls.card.classList.add("center");
+      tourEls.card.style.left = "";
+      tourEls.card.style.top = "";
+    } else {
+      const target = document.querySelector(step.selector);
+      if (!target) {
+        tourEls.spot.style.display = "none";
+        tourEls.card.classList.add("center");
+        return;
+      }
+      target.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      // Wait a tick for scroll, then measure
+      setTimeout(() => positionSpot(target, step.placement), 320);
+    }
+  }
+
+  function positionSpot(target, placement) {
+    const r = target.getBoundingClientRect();
+    const pad = 10;
+    const spot = tourEls.spot;
+    spot.style.display = "block";
+    spot.style.left = (r.left - pad) + "px";
+    spot.style.top = (r.top - pad) + "px";
+    spot.style.width = (r.width + pad * 2) + "px";
+    spot.style.height = (r.height + pad * 2) + "px";
+    // Position card relative to spotlight
+    const card = tourEls.card;
+    card.classList.remove("center");
+    const cardW = 380, cardH = card.offsetHeight || 200, gap = 18;
+    let left, top;
+    switch (placement) {
+      case "top":
+        left = Math.min(window.innerWidth - cardW - 20, Math.max(20, r.left + r.width / 2 - cardW / 2));
+        top = Math.max(20, r.top - cardH - gap);
+        break;
+      case "left":
+        left = Math.max(20, r.left - cardW - gap);
+        top = Math.min(window.innerHeight - cardH - 20, Math.max(20, r.top + r.height / 2 - cardH / 2));
+        break;
+      case "right":
+        left = Math.min(window.innerWidth - cardW - 20, r.right + gap);
+        top = Math.min(window.innerHeight - cardH - 20, Math.max(20, r.top + r.height / 2 - cardH / 2));
+        break;
+      case "bottom":
+      default:
+        left = Math.min(window.innerWidth - cardW - 20, Math.max(20, r.left + r.width / 2 - cardW / 2));
+        top = Math.min(window.innerHeight - cardH - 20, r.bottom + gap);
+        break;
+    }
+    card.style.left = left + "px";
+    card.style.top = top + "px";
+  }
+
+  function startTour() {
+    if (document.getElementById("tourRoot")) endTour();
+    tourIdx = 0;
+    buildTour();
+    goTour(0);
+  }
+
+  function endTour() {
+    document.removeEventListener("keydown", tourKeyHandler);
+    const root = document.getElementById("tourRoot");
+    if (root) root.remove();
+    try { localStorage.setItem("prospektlab_tour_seen", "1"); } catch (_) {}
+  }
+
+  $("tourReplayBtn").addEventListener("click", startTour);
+
+  // Auto-launch on first visit (or right after signup which sets the new-user flag).
+  try {
+    const isNew = localStorage.getItem("prospektlab_new_user") === "1";
+    const seen = localStorage.getItem("prospektlab_tour_seen") === "1";
+    if (isNew || !seen) {
+      localStorage.removeItem("prospektlab_new_user");
+      setTimeout(startTour, 700);
+    }
+  } catch (_) {}
+</script>
+</body>
+</html>

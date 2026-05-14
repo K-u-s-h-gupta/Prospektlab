@@ -1,0 +1,253 @@
+<!doctype html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in · ProspektLab</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
+  <script>
+    tailwind.config = { darkMode: "class", theme: { extend: { colors: { bg: "#0a0f1e", card: "#131b2e", elev: "#1a2238", text: "#e6ebf7", muted: "#9aa3bb", primary: "#7da8ff", success: "#5ce0a4", warn: "#f7c54a", error: "#ff8a80" }, fontFamily: { inter: ["Inter", "sans-serif"], mono: ["JetBrains Mono", "monospace"] } } } };
+  </script>
+  <style>
+    html, body { background: #0a0f1e; }
+    body { font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif; color: #e6ebf7; }
+    .label-mono { font-family: "JetBrains Mono", monospace; letter-spacing: 0.05em; }
+    .gradient-text { background: linear-gradient(90deg, #7da8ff 0%, #5ce0a4 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .glass { background: linear-gradient(135deg, rgba(26,34,56,0.6) 0%, rgba(19,27,46,0.3) 100%); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.07); }
+    .glass-strong { background: linear-gradient(135deg, rgba(26,34,56,0.85) 0%, rgba(19,27,46,0.7) 100%); backdrop-filter: blur(22px); border: 1px solid rgba(255,255,255,0.08); }
+    .blob { position: absolute; pointer-events: none; border-radius: 9999px; filter: blur(120px); opacity: 0.4; }
+    input { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+    input:focus { box-shadow: 0 0 0 3px rgba(125,168,255,0.18); }
+    .aurora { position: absolute; inset: -25%; pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(closest-side, rgba(125,168,255,0.22), transparent 70%),
+        radial-gradient(closest-side, rgba(92,224,164,0.15), transparent 70%);
+      background-position: 20% 30%, 80% 70%;
+      background-size: 600px 600px, 500px 500px;
+      background-repeat: no-repeat; filter: blur(30px); opacity: 0.7; }
+    .grid-bg { background-image: linear-gradient(rgba(125,168,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(125,168,255,0.04) 1px, transparent 1px); background-size: 56px 56px; }
+    .toast { position: fixed; top: 1rem; right: 1rem; padding: 12px 16px; border-radius: 12px; font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); transform: translateY(-150%); transition: transform 0.3s ease; z-index: 100; }
+    .toast.visible { transform: translateY(0); }
+  </style>
+</head>
+<body class="min-h-screen overflow-x-hidden">
+
+<div class="min-h-screen grid lg:grid-cols-2">
+
+  <!-- ── LEFT: brand / value strip ── -->
+  <div class="relative hidden lg:flex flex-col justify-between p-12 bg-card/40 border-r border-white/5 overflow-hidden">
+    <div class="aurora"></div>
+    <div class="absolute inset-0 grid-bg opacity-40"></div>
+
+    <div class="relative">
+      <a href="/landing" class="flex items-center gap-2.5">
+        <div class="w-10 h-10 rounded-xl bg-elev flex items-center justify-center border border-white/10">
+          <span class="text-primary text-lg font-bold">P</span>
+        </div>
+        <div>
+          <div class="text-base font-semibold tracking-tight">ProspektLab</div>
+          <div class="label-mono text-[10px] text-muted tracking-[0.2em]">INTELLIGENCE</div>
+        </div>
+      </a>
+    </div>
+
+    <div class="relative max-w-md">
+      <div class="label-mono text-[11px] text-success tracking-[0.25em] mb-4">YOUR RESEARCH WORKSPACE</div>
+      <h2 class="text-3xl xl:text-4xl font-bold tracking-tight leading-tight">
+        Pick up where you left off.
+      </h2>
+      <p class="mt-5 text-muted leading-relaxed">
+        Your memo library, watchlist, and saved sessions are waiting. Sign in to keep building your institutional-grade research stack.
+      </p>
+
+      <div class="mt-10 space-y-3.5">
+        <div class="flex items-start gap-3">
+          <span class="material-symbols-outlined text-success text-[20px] mt-0.5">check_circle</span>
+          <div>
+            <div class="text-sm font-medium">9 live data sources</div>
+            <div class="text-xs text-muted">SEC EDGAR, Yahoo, Reddit, StockTwits, Google News and more — in parallel.</div>
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="material-symbols-outlined text-success text-[20px] mt-0.5">check_circle</span>
+          <div>
+            <div class="text-sm font-medium">INR-native, citation-backed</div>
+            <div class="text-xs text-muted">Every figure shown in USD and INR. Every claim linked to its source.</div>
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="material-symbols-outlined text-success text-[20px] mt-0.5">check_circle</span>
+          <div>
+            <div class="text-sm font-medium">Pump-and-dump detection</div>
+            <div class="text-xs text-muted">Viral hype patterns flagged. Confidence auto-downgraded. You trade smarter.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-12 glass rounded-2xl p-5">
+        <div class="text-[13px] text-text leading-relaxed">
+          "The community sentiment cross-check caught a hype cycle on a midcap I was about to buy. Saved me a 30% drawdown."
+        </div>
+        <div class="mt-3 flex items-center gap-3">
+          <div class="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-xs font-bold">R</div>
+          <div class="label-mono text-[10px] text-muted tracking-wider">EARLY USER · MUMBAI</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="relative label-mono text-[10px] text-muted tracking-wider">© 2026 PROSPEKTLAB · RESEARCH, NOT SIGNALS</div>
+  </div>
+
+  <!-- ── RIGHT: login form ── -->
+  <div class="relative flex items-center justify-center p-6 sm:p-10">
+    <div class="blob bg-primary w-[400px] h-[400px] -top-20 -right-32 lg:hidden"></div>
+
+    <div class="w-full max-w-md relative">
+      <!-- Mobile brand -->
+      <a href="/landing" class="lg:hidden flex items-center justify-center gap-2.5 mb-8">
+        <div class="w-10 h-10 rounded-xl bg-elev flex items-center justify-center border border-white/10">
+          <span class="text-primary text-lg font-bold">P</span>
+        </div>
+        <div>
+          <div class="text-base font-semibold tracking-tight">ProspektLab</div>
+          <div class="label-mono text-[10px] text-muted tracking-[0.2em]">INTELLIGENCE</div>
+        </div>
+      </a>
+
+      <div class="glass-strong rounded-2xl p-8">
+        <h1 class="text-2xl font-bold tracking-tight mb-1.5">Welcome back</h1>
+        <p class="text-sm text-muted mb-7">Sign in to your research workspace.</p>
+
+        <!-- OAuth at top (more common modern pattern) -->
+        <div class="grid grid-cols-2 gap-3 mb-5">
+          <button id="googleBtn" type="button" class="bg-elev border border-white/10 rounded-lg py-2.5 text-sm font-medium hover:bg-elev/80 transition flex items-center justify-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.76c-.99.66-2.25 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.11c-.22-.66-.35-1.36-.35-2.11s.13-1.45.35-2.11V7.05H2.18A11 11 0 0 0 1 12c0 1.78.43 3.46 1.18 4.95l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.05l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>
+            Google
+          </button>
+          <button id="githubBtn" type="button" class="bg-elev border border-white/10 rounded-lg py-2.5 text-sm font-medium hover:bg-elev/80 transition flex items-center justify-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.27a11 11 0 0 0-3.48 21.46c.55.1.75-.24.75-.53v-1.85c-3.06.67-3.71-1.47-3.71-1.47-.5-1.27-1.22-1.61-1.22-1.61-1-.68.07-.67.07-.67 1.11.08 1.7 1.14 1.7 1.14.98 1.68 2.58 1.2 3.21.92.1-.72.39-1.2.7-1.48-2.44-.28-5.01-1.22-5.01-5.43 0-1.2.43-2.18 1.13-2.95-.11-.28-.49-1.4.11-2.92 0 0 .93-.3 3.04 1.13a10.5 10.5 0 0 1 5.53 0c2.11-1.43 3.04-1.13 3.04-1.13.6 1.52.22 2.64.11 2.92.71.77 1.13 1.75 1.13 2.95 0 4.22-2.58 5.15-5.03 5.42.4.34.75 1.02.75 2.06v3.05c0 .3.2.64.76.53A11 11 0 0 0 12 1.27"/></svg>
+            GitHub
+          </button>
+        </div>
+
+        <div class="flex items-center gap-3 text-xs text-muted my-5">
+          <div class="flex-1 h-px bg-white/10"></div>
+          or with email
+          <div class="flex-1 h-px bg-white/10"></div>
+        </div>
+
+        <form id="loginForm" class="space-y-4">
+          <div>
+            <label class="label-mono text-[11px] text-muted tracking-wider uppercase block mb-1.5">Email</label>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">mail</span>
+              <input id="email" type="email" required placeholder="you@example.com" autocomplete="email"
+                     class="w-full bg-card border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm focus:border-primary outline-none" />
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="label-mono text-[11px] text-muted tracking-wider uppercase">Password</label>
+              <a href="#" class="text-[11px] text-primary hover:underline">Forgot?</a>
+            </div>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">lock</span>
+              <input id="password" type="password" required minlength="6" placeholder="••••••••" autocomplete="current-password"
+                     class="w-full bg-card border border-white/10 rounded-lg pl-10 pr-12 py-3 text-sm focus:border-primary outline-none" />
+              <button id="togglePw" type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-text p-1" aria-label="Toggle password visibility">
+                <span class="material-symbols-outlined text-[18px]">visibility</span>
+              </button>
+            </div>
+          </div>
+
+          <label class="flex items-center gap-2 text-xs text-muted cursor-pointer pt-1 select-none">
+            <input id="remember" type="checkbox" class="rounded border-white/10 bg-card text-primary focus:ring-primary/30" />
+            Keep me signed in for 30 days
+          </label>
+
+          <button type="submit" id="loginBtn" class="w-full bg-primary text-bg font-semibold py-3 rounded-lg hover:opacity-90 transition flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+            <span id="loginBtnLabel" class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">login</span> Sign in</span>
+            <span id="loginBtnSpinner" class="hidden">
+              <svg class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            </span>
+          </button>
+        </form>
+
+        <p class="text-center text-sm text-muted mt-6">
+          New here? <a href="/signup" class="text-primary hover:underline font-medium">Create an account</a>
+        </p>
+      </div>
+
+      <p class="text-center text-xs text-muted mt-5">
+        <a href="/app" class="hover:text-text underline-offset-2">Or skip and try the live demo →</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" class="toast bg-error/15 border border-error/30 text-error">
+  <div class="flex items-center gap-2">
+    <span class="material-symbols-outlined text-[16px]">error</span>
+    <span id="toastMsg">Something went wrong.</span>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function showToast(msg, kind = "error") {
+    const t = $("toast");
+    $("toastMsg").textContent = msg;
+    t.className = `toast border visible ${kind === "error" ? "bg-error/15 border-error/30 text-error" : "bg-success/15 border-success/30 text-success"}`;
+    setTimeout(() => t.classList.remove("visible"), 3500);
+  }
+
+  $("togglePw").addEventListener("click", () => {
+    const pw = $("password");
+    pw.type = pw.type === "password" ? "text" : "password";
+    $("togglePw").firstElementChild.textContent = pw.type === "password" ? "visibility" : "visibility_off";
+  });
+
+  $("googleBtn").addEventListener("click", () => showToast("Google sign-in coming soon. Use email for now.", "error"));
+  $("githubBtn").addEventListener("click", () => showToast("GitHub sign-in coming soon. Use email for now.", "error"));
+
+  $("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("email").value.trim();
+    const password = $("password").value;
+    const remember = $("remember").checked;
+    $("loginBtn").disabled = true;
+    $("loginBtnLabel").classList.add("hidden");
+    $("loginBtnSpinner").classList.remove("hidden");
+    try {
+      const r = await fetch("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, remember }),
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        showToast(data.detail || "Could not sign in. Check your credentials.");
+        return;
+      }
+      const data = await r.json();
+      try { localStorage.setItem("prospektlab_user", JSON.stringify(data.user)); } catch (_) {}
+      showToast("Signed in. Redirecting…", "success");
+      setTimeout(() => { window.location.href = "/app"; }, 400);
+    } catch (e) {
+      showToast("Network error — is the gateway running?");
+    } finally {
+      $("loginBtn").disabled = false;
+      $("loginBtnLabel").classList.remove("hidden");
+      $("loginBtnSpinner").classList.add("hidden");
+    }
+  });
+</script>
+
+</body>
+</html>
