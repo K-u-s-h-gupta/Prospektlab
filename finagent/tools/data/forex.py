@@ -87,26 +87,27 @@ async def get_usd_inr() -> FxRate:
         return entry
 
 
-def format_inr(amount_usd: float | None, rate: float, *, compact: bool = True) -> str:
-    """Format a USD amount as Indian-style INR (₹ with lakh/crore grouping).
+def format_inr(amount: float | None, rate: float, *, compact: bool = True) -> str:
+    """Format a monetary amount as Indian-style INR (Rs with lakh/crore grouping).
 
-    `compact=True` switches to ₹X.XX Cr / ₹X.XX L for big numbers so memos
-    don't drown in zeros. The Indian numbering system groups by 2s after
-    the first 3 digits (10,00,000 not 1,000,000) — we honour that.
+    If `rate` is 1.0, treats `amount` as already in INR.
+    If `rate` is the USD/INR exchange rate, converts from USD first.
+
+    `compact=True` switches to Rs X.XX Cr / Rs X.XX L for big numbers so
+    memos don't drown in zeros. Honours Indian grouping (2s after first 3 digits).
     """
-    if amount_usd is None:
+    if amount is None:
         return "n/a"
-    inr = amount_usd * rate
+    inr = amount * rate
     sign = "-" if inr < 0 else ""
     inr = abs(inr)
     if compact:
         if inr >= 1e7:
-            return f"{sign}₹{inr/1e7:,.2f} Cr"
+            return f"{sign}Rs.{inr/1e7:,.2f} Cr"
         if inr >= 1e5:
-            return f"{sign}₹{inr/1e5:,.2f} L"
+            return f"{sign}Rs.{inr/1e5:,.2f} L"
     # Indian comma grouping
     s = f"{inr:,.2f}"
-    # Python's locale-free grouping is western (1,234,567.89). Convert.
     if "." in s:
         whole, frac = s.split(".")
     else:
@@ -117,17 +118,21 @@ def format_inr(amount_usd: float | None, rate: float, *, compact: bool = True) -
         rest = whole[:-3]
         rest = ",".join([rest[max(0, i - 2):i] for i in range(len(rest), 0, -2)][::-1])
         whole = f"{rest},{last3}"
-    return f"{sign}₹{whole}.{frac}"
+    return f"{sign}Rs.{whole}.{frac}"
 
 
-def format_dual(amount_usd: float | None, rate: float) -> str:
-    """`$X.XX (₹Y.YY Cr)` — used in memo prose so the reader sees both."""
-    if amount_usd is None:
+def format_dual(amount: float | None, rate: float) -> str:
+    """India-first dual format: `Rs. X Cr ($Y.YYB)` — INR leads, USD in parentheses.
+
+    Used in memo prose for all financial figures so the reader sees both.
+    `amount` is in USD; `rate` is the USD/INR exchange rate.
+    """
+    if amount is None:
         return "n/a"
-    inr = format_inr(amount_usd, rate)
-    # USD compact for parity
-    usd_abs = abs(amount_usd)
-    sign = "-" if amount_usd < 0 else ""
+    inr = format_inr(amount, rate)
+    # USD compact for context
+    usd_abs = abs(amount)
+    sign = "-" if amount < 0 else ""
     if usd_abs >= 1e9:
         usd = f"{sign}${usd_abs/1e9:,.2f}B"
     elif usd_abs >= 1e6:
@@ -136,4 +141,4 @@ def format_dual(amount_usd: float | None, rate: float) -> str:
         usd = f"{sign}${usd_abs/1e3:,.2f}K"
     else:
         usd = f"{sign}${usd_abs:,.2f}"
-    return f"{usd} ({inr})"
+    return f"{inr} ({usd})"

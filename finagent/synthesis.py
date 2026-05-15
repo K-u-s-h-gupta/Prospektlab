@@ -1,6 +1,6 @@
 """LLM synthesis pass — turn the full evidence pool into a readable memo.
 
-When ANTHROPIC_API_KEY is set we stream tokens from Claude. When it isn't
+When OPENAI_API_KEY is set we stream tokens from OpenAI. When it isn't
 we still produce a polished prose memo (proper paragraphs, no bullet
 clutter, no boilerplate disclosures) from the same fact bundle.
 
@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from finagent.analysis.conflicts import ConflictReport
 from finagent.output.memo_formatter import MemoSection, format_memo
 from finagent.prompt_builder import default_system_prompt
-from finagent.runtime_provider import resolve_anthropic_config
+from finagent.runtime_provider import resolve_openai_config
 from finagent.state.checkpoint import Checkpoint
 from finagent.state.citation_log import Citation
 from finagent.tools.data import (
@@ -76,7 +76,7 @@ class EnrichmentBundle:
 @dataclass
 class SynthesisResult:
     memo: str
-    via: str  # "anthropic" | "structured"
+    via: str  # "openai" | "structured"
     used_sources: int
 
 
@@ -147,10 +147,37 @@ def _format_price(usd_price: float | None, currency: str | None, fx: FxRate | No
     if usd_price is None:
         return "n/a"
     currency = (currency or "USD").upper()
+    if currency == "INR":
+        # India-first: lead with INR for NSE/BSE listed companies
+        from finagent.tools.data.forex import format_inr as _fmt_inr
+        return _fmt_inr(usd_price, 1.0)
     if currency != "USD":
         return f"{currency} {usd_price:,.2f}"
     rate = fx.rate if fx else _FX_FALLBACK
-    return f"${usd_price:,.2f} (₹{usd_price*rate:,.2f})"
+    # For USD prices, show INR first (India-focused)
+    return f"₹{usd_price*rate:,.2f} (${usd_price:,.2f})"
+
+
+def _format_local_money(value: float | None, currency: str | None, fx: FxRate | None) -> str:
+    if value is None:
+        return "n/a"
+    currency = (currency or "USD").upper()
+    sign = "-" if value < 0 else ""
+    abs_value = abs(value)
+    if currency == "USD":
+        rate = fx.rate if fx else _FX_FALLBACK
+        return f"{sign}{format_dual(abs_value, rate)}"
+    if currency == "INR":
+        return f"{sign}{format_inr(abs_value, 1.0)}"
+    if abs_value >= 1e9:
+        compact = f"{abs_value/1e9:,.2f}B"
+    elif abs_value >= 1e6:
+        compact = f"{abs_value/1e6:,.2f}M"
+    elif abs_value >= 1e3:
+        compact = f"{abs_value/1e3:,.2f}K"
+    else:
+        compact = f"{abs_value:,.2f}"
+    return f"{sign}{currency} {compact}"
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -220,16 +247,68 @@ def _build_facts_block(bundle: EnrichmentBundle) -> str:
         usd_price_inr = ""
         if fx and (y.currency or "").upper() == "USD" and y.price:
             usd_price_inr = f" / INR ~₹{y.price*fx.rate:,.2f}"
+        price_text = f"{y.price:,.2f}" if y.price is not None else "quote unavailable"
+        prev_text = f"{y.previous_close:,.2f}" if y.previous_close is not None else "n/a"
+        range_low = f"{y.fifty_two_week_low:,.2f}" if y.fifty_two_week_low is not None else "n/a"
+        range_high = f"{y.fifty_two_week_high:,.2f}" if y.fifty_two_week_high is not None else "n/a"
         lines.append(
-            f"\nYahoo Finance: {y.ticker} = {y.currency or ''} {y.price:,.2f}{usd_price_inr} "
-            f"(prev {y.previous_close:,.2f}, {chg}); 52w {y.fifty_two_week_low}-{y.fifty_two_week_high}"
+            f"\nYahoo Finance: {y.ticker} = {y.currency or ''} {price_text}{usd_price_inr} "
+            f"(prev {prev_text}, {chg}); 52w {range_low}-{range_high}"
             f"; exchange {y.exchange or 'n/a'}"
         )
         if y.market_cap:
-            mc_inr = ""
-            if fx:
-                mc_inr = f" / INR ~ {format_inr(y.market_cap, fx.rate)}"
-            lines.append(f"  Market cap: ${y.market_cap/1e9:,.2f}B{mc_inr}")
+            lines.append(f"  Market cap: {_format_local_money(y.market_cap, y.currency, fx)}")
+        if y.business_summary:
+            lines.append(f"  Business summary: {y.business_summary[:900]}")
+        if y.financial_metrics:
+            for label, key in (
+                ("Total revenue", "total_revenue"),
+                ("EBITDA", "ebitda"),
+                ("Free cash flow", "free_cashflow"),
+                ("Total cash", "total_cash"),
+                ("Total debt", "total_debt"),
+            ):
+                value = y.financial_metrics.get(key)
+                if value is not None:
+                    lines.append(f"  {label}: {_format_local_money(value, y.currency, fx)}")
+            ratio_bits: list[str] = []
+            for label, key in (
+                ("Gross margin", "gross_margins"),
+                ("Operating margin", "operating_margins"),
+                ("Profit margin", "profit_margins"),
+                ("ROE", "return_on_equity"),
+                ("ROA", "return_on_assets"),
+                ("Revenue growth", "revenue_growth"),
+                ("Earnings growth", "earnings_growth"),
+            ):
+                value = y.financial_metrics.get(key)
+                if value is not None:
+                    ratio_bits.append(f"{label} {value * 100:.1f}%")
+            for label, key in (
+                ("Trailing P/E", "trailing_pe"),
+                ("Forward P/E", "forward_pe"),
+                ("P/B", "price_to_book"),
+                ("Debt/equity", "debt_to_equity"),
+                ("Current ratio", "current_ratio"),
+            ):
+                value = y.financial_metrics.get(key)
+                if value is not None:
+                    suffix = "%" if "yield" in key else "x"
+                    ratio_bits.append(f"{label} {value:.2f}{suffix}")
+            if ratio_bits:
+                lines.append("  Ratios: " + ", ".join(ratio_bits))
+        if y.annual_revenue:
+            rev_pairs = [
+                f"{date}: {_format_local_money(value, y.currency, fx)}"
+                for date, value in zip(y.annual_revenue_dates, y.annual_revenue)
+            ]
+            lines.append("  Annual revenue history: " + "; ".join(rev_pairs[:6]))
+        if y.annual_net_income:
+            ni_pairs = [
+                f"{date}: {_format_local_money(value, y.currency, fx)}"
+                for date, value in zip(y.annual_net_income_dates, y.annual_net_income)
+            ]
+            lines.append("  Annual net income history: " + "; ".join(ni_pairs[:6]))
     if bundle.wikipedia:
         w = bundle.wikipedia
         excerpt = (w.extract or "").replace("\n", " ").strip()
@@ -271,7 +350,7 @@ def _conflict_block(conflicts: list[ConflictReport]) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────────
-#  Claude streaming path
+#  OpenAI streaming path
 # ──────────────────────────────────────────────────────────────────────────
 
 
@@ -291,18 +370,23 @@ Writing style rules — follow strictly:
 1. Write in clear, natural paragraphs. NO bullet lists, NO bold-asterisks,
    NO Markdown headings inside paragraphs. The reader is reading a memo,
    not a slide.
-2. Every financial figure must appear with both USD and INR. Use the
-   FX rate from the FACTS block (USD/INR). Indian-style grouping
-   (e.g. ₹2,45,67,890 or "₹3.45 Cr").
-3. Do not invent numbers. If a figure is missing, say it is missing.
-4. Cite sources inline as [n] referring to the numbered SOURCES list.
-5. End each major section with a confidence tag on its own line:
+2. This is an India-focused research system. Present all monetary figures
+   in INR FIRST (crore / lakh notation), with USD equivalents in parentheses
+   only where relevant. Use Indian-style grouping (e.g. ₹3.45 Cr or ₹45.6 L).
+   Do NOT lead with USD for Indian-listed companies.
+3. Authoritative Indian sources: NSE India, BSE India, SEBI filings,
+   company investor relations, Screener.in, Trendlyne, Moneycontrol, Mint,
+   Economic Times. Regulatory framework is SEBI, not SEC.
+4. Do not invent numbers. If a figure is missing, say it is missing.
+5. Cite sources inline as [n] referring to the numbered SOURCES list.
+6. End each major section with a confidence tag on its own line:
    `[CONFIDENCE: HIGH]` | `MEDIUM` | `LOW` based on triangulation.
-6. Tone: junior equity analyst note — measured, specific, no hype words.
+7. Tone: junior equity analyst note — measured, specific, no hype words.
+   For IPO analysis use DRHP/RHP terminology. For earnings, use concall.
 """
 
 
-async def _anthropic_memo(
+async def _openai_memo(
     target: str,
     objective: str,
     digest: str,
@@ -310,16 +394,17 @@ async def _anthropic_memo(
     conflicts: list[ConflictReport],
     *,
     on_token: TokenSink = None,
+    synth_model: str | None = None,
 ) -> str:
-    cfg = resolve_anthropic_config()
+    cfg = resolve_openai_config()
     if cfg is None:
-        raise RuntimeError("ANTHROPIC_API_KEY not configured")
+        raise RuntimeError("OPENAI_API_KEY not configured")
     try:
-        from anthropic import AsyncAnthropic
+        from openai import AsyncOpenAI
     except ImportError as exc:
-        raise RuntimeError("anthropic package not installed") from exc
+        raise RuntimeError("openai package not installed") from exc
 
-    client = AsyncAnthropic(api_key=cfg.api_key)
+    client = AsyncOpenAI(api_key=cfg.api_key)
     system_prompt = default_system_prompt() + "\n" + _LLM_STYLE_GUIDE
     user_prompt = (
         f"Target: {target}\n"
@@ -333,7 +418,7 @@ async def _anthropic_memo(
         "  4. Market & Competitive Position — who they compete with, share.\n"
         "  5. Live Market Picture — price, 52-week context, sentiment.\n"
         "  6. Community & Retail Sentiment — Reddit / HN / StockTwits signal.\n"
-        "  7. Key Risks — pull from the 10-K Risk Factors, then add macro/sector.\n"
+        "  7. Key Risks — pull from the Annual Report / SEBI filing risk disclosures, then add macro/sector.\n"
         "  8. Bull and Bear Thesis — two paragraphs, each a coherent case.\n"
         "  9. Data Quality & Conflicts — list any cross-source conflicts.\n"
         " 10. Citations — numbered list of sources used.\n\n"
@@ -343,34 +428,60 @@ async def _anthropic_memo(
     )
 
     chunks: list[str] = []
+    model_to_use = synth_model or cfg.model
+    stream = await client.chat.completions.create(
+        model=model_to_use,
+        temperature=0.2,
+        max_tokens=4000,
+        stream=True,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    )
     try:
-        async with client.messages.stream(
+        async for event in stream:
+            if not event.choices:
+                continue
+            delta = event.choices[0].delta
+            text = getattr(delta, "content", None) or ""
+            if isinstance(text, list):
+                text = "".join(
+                    part.get("text", "") if isinstance(part, dict) else getattr(part, "text", "")
+                    for part in text
+                )
+            if not text:
+                continue
+            chunks.append(text)
+            await _emit_token(on_token, text)
+        full = _scrub_prose("".join(chunks).strip())
+        if full:
+            return full
+        resp = await client.chat.completions.create(
             model=cfg.model,
+            temperature=0.2,
             max_tokens=4000,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-        ) as stream:
-            async for text in stream.text_stream:
-                if not text:
-                    continue
-                chunks.append(text)
-                await _emit_token(on_token, text)
-        return _scrub_prose("".join(chunks).strip())
-    except AttributeError:
-        resp = await client.messages.create(
-            model=cfg.model,
-            max_tokens=4000,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
         )
-        parts: list[str] = []
-        for block in resp.content:
-            text = getattr(block, "text", None)
-            if text:
-                parts.append(text)
-        full = _scrub_prose("\n".join(parts).strip())
-        await _emit_token(on_token, full)
-        return full
+        final = resp.choices[0].message.content or ""
+        if isinstance(final, list):
+            final = "".join(
+                part.get("text", "") if isinstance(part, dict) else getattr(part, "text", "")
+                for part in final
+            )
+        final = _scrub_prose(str(final).strip())
+        if final:
+            await _emit_token(on_token, final)
+        return final
+    finally:
+        close = getattr(stream, "close", None)
+        if close is not None:
+            result = close()
+            if asyncio.iscoroutine(result):
+                await result
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -400,7 +511,35 @@ def _cagr(points: list) -> float | None:
 def _history_paragraph(bundle: EnrichmentBundle) -> str | None:
     s = bundle.sec
     fx = bundle.fx
+    y = bundle.yahoo
     if not s or not s.history:
+        if not y:
+            return None
+        parts: list[str] = []
+        if y.annual_revenue and len(y.annual_revenue) >= 2:
+            first_val = _format_local_money(y.annual_revenue[0], y.currency, fx)
+            last_val = _format_local_money(y.annual_revenue[-1], y.currency, fx)
+            first_date = y.annual_revenue_dates[0] if y.annual_revenue_dates else "start"
+            last_date = y.annual_revenue_dates[-1] if y.annual_revenue_dates else "latest"
+            years = len(y.annual_revenue) - 1
+            rev_cagr = _cagr([{"value": v} for v in y.annual_revenue])
+            cagr_clause = f" — a {rev_cagr:+.1f}% compound annual growth rate" if rev_cagr is not None else ""
+            parts.append(
+                f"Annual revenue moved from {first_val} in {first_date} to {last_val} in {last_date} "
+                f"over {years} years{cagr_clause}."
+            )
+        if y.annual_net_income and len(y.annual_net_income) >= 2:
+            first_val = _format_local_money(y.annual_net_income[0], y.currency, fx)
+            last_val = _format_local_money(y.annual_net_income[-1], y.currency, fx)
+            first_date = y.annual_net_income_dates[0] if y.annual_net_income_dates else "start"
+            last_date = y.annual_net_income_dates[-1] if y.annual_net_income_dates else "latest"
+            ni_cagr = _cagr([{"value": v} for v in y.annual_net_income]) if y.annual_net_income[0] > 0 and y.annual_net_income[-1] > 0 else None
+            cagr_clause = f", a {ni_cagr:+.1f}% CAGR" if ni_cagr is not None else ""
+            parts.append(
+                f"Net income moved from {first_val} in {first_date} to {last_val} in {last_date}{cagr_clause}."
+            )
+        if parts:
+            return " ".join(parts)
         return None
     parts: list[str] = []
     rev = s.history.get("revenue")
@@ -459,7 +598,7 @@ def _executive_summary_prose(target: str, bundle: EnrichmentBundle, conflicts: l
     y = bundle.yahoo
     w = bundle.wikipedia
     fx = bundle.fx
-    label = s.name if s else target
+    label = s.name if s else (y.name if y and y.name else target)
 
     sentences: list[str] = []
     if s and y and y.price is not None:
@@ -471,7 +610,7 @@ def _executive_summary_prose(target: str, bundle: EnrichmentBundle, conflicts: l
         )
     elif s:
         sentences.append(
-            f"{label} is a publicly reporting issuer registered with the SEC under CIK {s.cik}."
+            f"{label} is a registered issuer (CIK {s.cik}) with market data sourced from SEC EDGAR for cross-listed reference."
         )
     elif y and y.price is not None:
         sentences.append(f"{label} is trading at {_format_price(y.price, y.currency, fx)}.")
@@ -489,6 +628,12 @@ def _executive_summary_prose(target: str, bundle: EnrichmentBundle, conflicts: l
             f"The most recent {rev.form} (period ending {rev.end}) shows revenue of "
             f"{rev_money}{ni_clause}."
         )
+    elif y and y.financial_metrics.get("total_revenue") is not None:
+        revenue = _format_local_money(y.financial_metrics["total_revenue"], y.currency, fx)
+        ni_clause = ""
+        if y.financial_metrics.get("profit_margins") is not None:
+            ni_clause = f" with a reported profit margin of {y.financial_metrics['profit_margins'] * 100:.1f}%"
+        sentences.append(f"Yahoo Finance reports total revenue of {revenue}{ni_clause}.")
 
     if w and w.description:
         desc = w.description.strip().rstrip(".")
@@ -508,6 +653,7 @@ def _company_overview_prose(bundle: EnrichmentBundle, target: str) -> str:
     s = bundle.sec
     w = bundle.wikipedia
     f = bundle.filing
+    y = bundle.yahoo
     paras: list[str] = []
 
     if f and f.business:
@@ -526,6 +672,15 @@ def _company_overview_prose(bundle: EnrichmentBundle, target: str) -> str:
         if last > 400:
             cut = cut[: last + 1]
         paras.append(cut)
+    elif y and y.business_summary:
+        cut = y.business_summary.replace("\n", " ").strip()[:900]
+        last = cut.rfind(". ")
+        if last > 400:
+            cut = cut[: last + 1]
+        if cut:
+            name = y.name or y.ticker
+            exchange = f" and trades on {y.exchange}" if y.exchange else ""
+            paras.append(f"{name} is covered by Yahoo Finance{exchange}. {cut}")
     elif s:
         sentences = [f"{s.name} ({s.ticker}) is registered with the SEC under CIK {s.cik}."]
         if s.sic_description:
@@ -533,6 +688,11 @@ def _company_overview_prose(bundle: EnrichmentBundle, target: str) -> str:
         if s.exchanges:
             sentences.append(f"Shares trade on {', '.join(s.exchanges)}.")
         paras.append(" ".join(sentences))
+    elif y:
+        pieces = [f"{y.name or target} is tracked on Yahoo Finance under {y.ticker}."]
+        if y.exchange:
+            pieces.append(f"The shares trade on {y.exchange}.")
+        paras.append(" ".join(pieces))
 
     if not paras:
         paras.append(f"No authoritative profile was resolved for {target}.")
@@ -587,17 +747,61 @@ def _financial_profile_prose(bundle: EnrichmentBundle) -> str:
     if y and y.price is not None:
         price_dual = _format_price(y.price, y.currency, fx)
         prev_dual = _format_price(y.previous_close, y.currency, fx) if y.previous_close else "n/a"
+        range_low = f"{y.fifty_two_week_low:.2f}" if y.fifty_two_week_low is not None else "n/a"
+        range_high = f"{y.fifty_two_week_high:.2f}" if y.fifty_two_week_high is not None else "n/a"
+        currency_label = y.currency or "INR"
         line = (
             f"At session pull, the stock prints at {price_dual} versus a prior close of {prev_dual}, "
             f"a session move of {_format_pct(y.change_pct)}. "
-            f"The 52-week range spans {y.fifty_two_week_low:.2f} to {y.fifty_two_week_high:.2f} (in {y.currency or 'USD'})."
+            f"The 52-week range spans {range_low} to {range_high} ({currency_label})."
         )
         if y.market_cap:
-            mc_dual = ""
-            if fx:
-                mc_dual = f", roughly {format_inr(y.market_cap, fx.rate)}"
-            line += f" Market capitalisation sits near ${y.market_cap/1e9:,.2f}B{mc_dual}."
+            line += f" Market capitalisation sits near {_format_local_money(y.market_cap, y.currency, fx)}."
         paras.append(line)
+
+    if y and y.financial_metrics:
+        metric_sentences: list[str] = []
+        for label, key in (
+            ("Total revenue", "total_revenue"),
+            ("EBITDA", "ebitda"),
+            ("Free cash flow", "free_cashflow"),
+            ("Cash", "total_cash"),
+            ("Debt", "total_debt"),
+        ):
+            value = y.financial_metrics.get(key)
+            if value is not None:
+                metric_sentences.append(f"{label} is {_format_local_money(value, y.currency, fx)}.")
+        ratio_bits: list[str] = []
+        for label, key in (
+            ("gross margin", "gross_margins"),
+            ("operating margin", "operating_margins"),
+            ("profit margin", "profit_margins"),
+            ("ROE", "return_on_equity"),
+            ("ROA", "return_on_assets"),
+            ("revenue growth", "revenue_growth"),
+            ("earnings growth", "earnings_growth"),
+            ("dividend yield", "dividend_yield"),
+        ):
+            value = y.financial_metrics.get(key)
+            if value is not None:
+                ratio_bits.append(f"{label} {value * 100:.1f}%")
+        for label, key in (
+            ("trailing P/E", "trailing_pe"),
+            ("forward P/E", "forward_pe"),
+            ("price/book", "price_to_book"),
+            ("debt/equity", "debt_to_equity"),
+            ("current ratio", "current_ratio"),
+            ("quick ratio", "quick_ratio"),
+        ):
+            value = y.financial_metrics.get(key)
+            if value is not None:
+                ratio_bits.append(f"{label} {value:.2f}x")
+        if metric_sentences or ratio_bits:
+            paragraph = "Yahoo Finance fundamentals complement the price snapshot. "
+            paragraph += " ".join(metric_sentences)
+            if ratio_bits:
+                paragraph += " Key ratios include " + ", ".join(ratio_bits) + "."
+            paras.append(paragraph)
 
     return "\n\n".join(paras)
 
@@ -631,8 +835,8 @@ def _community_sentiment_prose(bundle: EnrichmentBundle) -> str:
         if sent["hype"] >= 3:
             hype_flag = " The hype-token density is high enough to warrant a pump-and-dump check before acting on retail flow."
         pieces.append(
-            f"Across {total} high-upvote Reddit threads in r/wallstreetbets, r/stocks, r/investing, "
-            f"r/SecurityAnalysis and r/ValueInvesting, the breakdown is {sent['bullish']} bullish, "
+            f"Across {total} high-upvote Reddit threads in r/IndianStreetBets, r/IndiaInvestments, "
+            f"r/DalalStreetTalks, r/IndiaFinance and r/investing, the breakdown is {sent['bullish']} bullish, "
             f"{sent['bearish']} bearish, {sent['hype']} hype-leaning, {sent['neutral']} neutral.{hype_flag}"
         )
     if bundle.stocktwits:
@@ -650,7 +854,13 @@ def _community_sentiment_prose(bundle: EnrichmentBundle) -> str:
                 f"\"{top.title}\" at {top.points} points with {top.num_comments} comments."
             )
     if not pieces:
-        return "No usable community signal was retrieved this session. Sentiment cannot be triangulated from retail flow."
+        return (
+            "Community and retail sentiment data was not available for this session. "
+            "For Indian stocks, discussions on r/IndianStreetBets, r/IndiaInvestments, "
+            "and platforms like Moneycontrol forums or TradingView Ideas may provide "
+            "additional retail sentiment signals. This section will auto-populate when "
+            "community APIs return valid data."
+        )
     return " ".join(pieces)
 
 
@@ -693,6 +903,7 @@ def _thesis_prose(bundle: EnrichmentBundle) -> str:
     bull: list[str] = []
     bear: list[str] = []
 
+    # SEC-based thesis points (US companies)
     if s and "revenue" in s.metrics:
         rev = s.metrics["revenue"]
         bull.append(
@@ -706,7 +917,7 @@ def _thesis_prose(bundle: EnrichmentBundle) -> str:
             ratio = debt / eq
             if ratio < 1.0:
                 bull.append(
-                    f"Debt to equity sits at {ratio:.2f}x — a conservative capital structure that protects "
+                    f"Debt to equity sits at {ratio:.2f}x \u2014 a conservative capital structure that protects "
                     "the bull case across most macro paths."
                 )
             else:
@@ -714,6 +925,51 @@ def _thesis_prose(bundle: EnrichmentBundle) -> str:
                     f"Debt to equity is elevated at {ratio:.2f}x, which narrows financial flexibility if "
                     "earnings compress."
                 )
+
+    # Yahoo-based thesis points (Indian companies with no SEC data)
+    if y and y.financial_metrics and not s:
+        ym = y.financial_metrics
+        # Revenue scale
+        if ym.get("total_revenue"):
+            rev_str = _format_local_money(ym["total_revenue"], y.currency, fx)
+            bull.append(f"TTM revenue of {rev_str} reflects operating scale that supports durable competitive positioning.")
+        # Profit margins
+        if ym.get("profit_margins"):
+            pm = ym["profit_margins"] * 100
+            if pm > 15:
+                bull.append(f"Net profit margin of {pm:.1f}% signals pricing power and operational efficiency.")
+            elif pm < 5:
+                bear.append(f"Thin net profit margin of {pm:.1f}% leaves limited buffer against cost inflation or demand slowdowns.")
+        # Revenue growth
+        if ym.get("revenue_growth"):
+            rg = ym["revenue_growth"] * 100
+            if rg > 10:
+                bull.append(f"Revenue growth of {rg:.1f}% YoY positions the company ahead of the broader market.")
+            elif rg < 0:
+                bear.append(f"Revenue is contracting at {rg:.1f}% YoY \u2014 a structural concern if the trend persists.")
+        # ROE
+        if ym.get("return_on_equity"):
+            roe = ym["return_on_equity"] * 100
+            if roe > 15:
+                bull.append(f"Return on equity of {roe:.1f}% demonstrates efficient capital deployment.")
+            elif roe < 8:
+                bear.append(f"ROE of {roe:.1f}% is below the cost of equity for most Indian blue-chips.")
+        # Debt to equity
+        if ym.get("debt_to_equity"):
+            de = ym["debt_to_equity"] / 100  # Yahoo returns as percentage
+            if de < 0.5:
+                bull.append(f"Debt/equity of {de:.2f}x indicates a clean balance sheet.")
+            elif de > 1.5:
+                bear.append(f"Debt/equity is stretched at {de:.2f}x \u2014 a concern if interest rates rise.")
+        # Valuation
+        if ym.get("trailing_pe"):
+            pe = ym["trailing_pe"]
+            if pe > 50:
+                bear.append(f"Trailing P/E of {pe:.1f}x prices in aggressive growth expectations that may not materialise.")
+            elif pe < 15:
+                bull.append(f"Trailing P/E of {pe:.1f}x implies the market is underweighting the company\u2019s earnings power.")
+
+    # Price-based thesis (works for all)
     if y and y.price and y.fifty_two_week_high:
         proximity = y.price / y.fifty_two_week_high
         if proximity > 0.9:
@@ -737,17 +993,18 @@ def _thesis_prose(bundle: EnrichmentBundle) -> str:
 
     if not bull:
         bull.append(
-            "The bull case will sharpen once segment-level revenue and margin triangulation completes."
+            "Insufficient data was available to construct a quantitative bull case this session. "
+            "A deeper dive into quarterly earnings and management commentary is recommended."
         )
     if not bear:
         bear.append(
-            "The bear case requires a fresh competitor and macro overlay that this run did not "
-            "fully capture."
+            "No clear bear signals emerged from the available data. Key risks may be hidden in "
+            "sector-level headwinds, regulatory shifts, or promoter-related governance issues."
         )
 
     return (
-        "Bull case. " + " ".join(bull) + "\n\n"
-        "Bear case. " + " ".join(bear)
+        "**Bull case.** " + " ".join(bull) + "\n\n"
+        "**Bear case.** " + " ".join(bear)
     )
 
 
@@ -761,6 +1018,96 @@ def _conflicts_prose(conflicts: list[ConflictReport]) -> str:
     return "\n\n".join(lines)
 
 
+
+def _financial_ratios_prose(bundle: EnrichmentBundle) -> str:
+    """Build a clean financial ratios summary from Yahoo metrics."""
+    y = bundle.yahoo
+    fx = bundle.fx
+    if not y or not y.financial_metrics:
+        return (
+            "Financial ratio data could not be retrieved for this company during this session. "
+            "This is common for recently listed or thinly-covered Indian equities. "
+            "Check screener.in or moneycontrol.com for up-to-date ratio snapshots."
+        )
+    ym = y.financial_metrics
+    rows: list[str] = []
+
+    # Valuation ratios
+    val_bits: list[str] = []
+    for label, key, fmt in [
+        ("Trailing P/E", "trailing_pe", ".1f"),
+        ("Forward P/E", "forward_pe", ".1f"),
+        ("PEG ratio", "peg_ratio", ".2f"),
+        ("Price/Book", "price_to_book", ".2f"),
+        ("EV/EBITDA", "enterprise_to_ebitda", ".1f"),
+        ("EV/Revenue", "enterprise_to_revenue", ".2f"),
+    ]:
+        v = ym.get(key)
+        if v is not None:
+            val_bits.append(f"{label}: {v:{fmt}}x")
+    if val_bits:
+        rows.append("**Valuation:** " + " · ".join(val_bits))
+
+    # Profitability ratios
+    prof_bits: list[str] = []
+    for label, key in [
+        ("Gross margin", "gross_margins"),
+        ("Operating margin", "operating_margins"),
+        ("Net margin", "profit_margins"),
+        ("ROE", "return_on_equity"),
+        ("ROA", "return_on_assets"),
+    ]:
+        v = ym.get(key)
+        if v is not None:
+            prof_bits.append(f"{label}: {v*100:.1f}%")
+    if prof_bits:
+        rows.append("**Profitability:** " + " · ".join(prof_bits))
+
+    # Growth metrics
+    growth_bits: list[str] = []
+    for label, key in [
+        ("Revenue growth", "revenue_growth"),
+        ("Earnings growth", "earnings_growth"),
+    ]:
+        v = ym.get(key)
+        if v is not None:
+            growth_bits.append(f"{label}: {v*100:.1f}%")
+    if growth_bits:
+        rows.append("**Growth:** " + " · ".join(growth_bits))
+
+    # Leverage & liquidity
+    lev_bits: list[str] = []
+    for label, key, fmt in [
+        ("Debt/Equity", "debt_to_equity", ".0f"),
+        ("Current ratio", "current_ratio", ".2f"),
+        ("Quick ratio", "quick_ratio", ".2f"),
+    ]:
+        v = ym.get(key)
+        if v is not None:
+            suffix = "%" if key == "debt_to_equity" else "x"
+            lev_bits.append(f"{label}: {v:{fmt}}{suffix}")
+    if lev_bits:
+        rows.append("**Leverage & liquidity:** " + " · ".join(lev_bits))
+
+    # Per-share & yield
+    ps_bits: list[str] = []
+    if ym.get("trailing_eps"):
+        ps_bits.append(f"EPS (TTM): {_format_local_money(ym['trailing_eps'], y.currency, fx)}")
+    if ym.get("dividend_yield"):
+        ps_bits.append(f"Div yield: {ym['dividend_yield']*100:.2f}%")
+    if ym.get("book_value"):
+        ps_bits.append(f"Book value: {_format_local_money(ym['book_value'], y.currency, fx)}")
+    if ps_bits:
+        rows.append("**Per-share:** " + " · ".join(ps_bits))
+
+    if not rows:
+        return (
+            "Financial ratio data was not available through our data pipeline for this company. "
+            "For Indian equities, try screener.in, trendlyne.com, or tickertape.in for detailed ratio analysis."
+        )
+    return "\n\n".join(rows)
+
+
 def _structured_memo(
     target: str,
     citations: list[Citation],
@@ -770,17 +1117,30 @@ def _structured_memo(
 ) -> str:
     blocked_count = sum(1 for d in docs if d.blocked_reason)
     primary_count = sum(1 for d in docs if d.tier <= 2 and not d.blocked_reason)
+    yahoo_financial_depth = bool(
+        bundle.yahoo and (bundle.yahoo.financial_metrics or bundle.yahoo.annual_revenue or bundle.yahoo.annual_net_income)
+    )
 
     overall_conf = "MEDIUM"
     if bundle.sec and primary_count >= 2:
         overall_conf = "HIGH"
-    elif blocked_count >= len(docs) // 2 and not bundle.sec:
+    elif yahoo_financial_depth and primary_count >= 1:
+        overall_conf = "MEDIUM"
+    elif blocked_count >= len(docs) // 2 and not bundle.sec and not yahoo_financial_depth:
         overall_conf = "LOW"
 
     sections: list[MemoSection] = [
         MemoSection(title="Executive summary", body=_executive_summary_prose(target, bundle, conflicts), confidence=overall_conf),
-        MemoSection(title="Company overview", body=_company_overview_prose(bundle, target), confidence="HIGH" if bundle.wikipedia or bundle.sec or bundle.filing else "LOW"),
-        MemoSection(title="Financial profile", body=_financial_profile_prose(bundle), confidence="HIGH" if bundle.sec else "LOW"),
+        MemoSection(
+            title="Company overview",
+            body=_company_overview_prose(bundle, target),
+            confidence="HIGH" if bundle.wikipedia or bundle.sec or bundle.filing else ("MEDIUM" if (bundle.yahoo and bundle.yahoo.business_summary) else "LOW"),
+        ),
+        MemoSection(
+            title="Financial profile",
+            body=_financial_profile_prose(bundle),
+            confidence="HIGH" if bundle.sec else ("MEDIUM" if yahoo_financial_depth else "LOW"),
+        ),
     ]
 
     if bundle.filing and bundle.filing.mdna:
@@ -805,6 +1165,15 @@ def _structured_memo(
         sections.append(
             MemoSection(title="Multi-year financial trajectory", body=hist_para, confidence="HIGH")
         )
+
+    # Financial ratios section (from Yahoo/yfinance metrics)
+    sections.append(
+        MemoSection(
+            title="Financial ratios",
+            body=_financial_ratios_prose(bundle),
+            confidence="HIGH" if (bundle.yahoo and bundle.yahoo.financial_metrics) else "LOW",
+        )
+    )
 
     sections.extend(
         [
@@ -840,7 +1209,7 @@ def _structured_memo(
         )
     if bundle.yahoo:
         methodology_bits.append(
-            "Live quote and one-month price series came from the Yahoo Finance v8 chart API."
+            "Yahoo Finance supplied live quote data, valuation ratios, and the fallback fundamentals/history layer for non-US companies."
         )
     if bundle.fx:
         methodology_bits.append(
@@ -893,19 +1262,20 @@ async def synthesize_memo(
     conflicts: list[ConflictReport] | None = None,
     on_token: TokenSink = None,
     enrichment: EnrichmentBundle | None = None,
+    synth_model: str | None = None,
 ) -> SynthesisResult:
     digest, used = _build_source_digest(docs)
     conflicts = conflicts or []
     bundle = enrichment or EnrichmentBundle()
     facts = _build_facts_block(bundle)
-    if os.getenv("ANTHROPIC_API_KEY"):
+    if os.getenv("OPENAI_API_KEY"):
         try:
             memo = await asyncio.wait_for(
-                _anthropic_memo(target, objective, digest, facts, conflicts, on_token=on_token),
+                _openai_memo(target, objective, digest, facts, conflicts, on_token=on_token, synth_model=synth_model),
                 timeout=timeout_s,
             )
-            return SynthesisResult(memo=memo, via="anthropic", used_sources=used)
+            return SynthesisResult(memo=memo, via="openai", used_sources=used)
         except Exception as exc:
-            logger.warning("Anthropic synthesis failed (%s); using structured prose builder", exc)
+            logger.warning("OpenAI synthesis failed (%s); using structured prose builder", exc)
     memo = _structured_memo(target, list(checkpoint.citation_log), docs, conflicts, bundle)
     return SynthesisResult(memo=memo, via="structured", used_sources=used)

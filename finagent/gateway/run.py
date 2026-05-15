@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 from pydantic import BaseModel, Field, field_validator
 
 from finagent.events import BUS
+from finagent.paths import finagent_data_path, finagent_home
 from finagent.run_agent import AgentLoopConfig, run_research_session
 from finagent.tools.web.http_fetcher import aclose_shared_client
 
@@ -35,8 +36,8 @@ _PAGE_PATHS = {
     "profile": _GATEWAY_DIR / "profile.html",
     "settings": _GATEWAY_DIR / "settings.html",
 }
-_MEMOS_DIR = Path.home() / ".finagent" / "memos"
-_USERS_DIR = Path.home() / ".finagent" / "users"
+_MEMOS_DIR = finagent_data_path("memos")
+_USERS_DIR = finagent_data_path("users")
 _USERS_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -45,6 +46,13 @@ class StartResearchRequest(BaseModel):
     objective: str = Field("Deep research memo")
     # Optional — when absent the agent auto-picks depth from the objective.
     max_steps: int | None = Field(default=None, ge=4, le=10000)
+    mode: str = Field(default="standard", description="standard or deep")
+
+
+class DeepResearchRequest(BaseModel):
+    target: str = Field(..., min_length=1)
+    passes: int = Field(default=5, ge=2, le=20, description="Number of chained research passes")
+    pass_depth: int = Field(default=40, ge=10, le=200, description="Max steps per pass")
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -84,7 +92,7 @@ _TASKS: dict[str, asyncio.Task[Any]] = {}
 
 # ──────────────────────────────────────────────────────────────────────────
 #  Lightweight local "auth" — stores hashed credentials per email under
-#  ~/.finagent/users/<sha>.json. No JWTs, no sessions — sufficient for a
+#  the FinAgent home directory. No JWTs, no sessions — sufficient for a
 #  single-user dev/demo deployment. Production should swap in real auth.
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -112,7 +120,8 @@ def health():
     return {
         "status": "ok",
         "active_sessions": list(_TASKS.keys()),
-        "anthropic": "enabled" if os.getenv("ANTHROPIC_API_KEY") else "fallback",
+        "openai": "enabled" if os.getenv("OPENAI_API_KEY") else "fallback",
+        "finagent_home": str(finagent_home()),
         "version": app.version,
     }
 
@@ -120,10 +129,106 @@ def health():
 @app.get("/config")
 def config():
     return {
-        "anthropic": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "openai": bool(os.getenv("OPENAI_API_KEY")),
+        "finagent_home": str(finagent_home()),
         "version": app.version,
         "fx_override": os.getenv("FINAGENT_USD_INR"),
     }
+
+
+# ── Memory viewer endpoints ─────────────────────────────────────────────
+
+from finagent.memory import get_memory_store
+from finagent.memory.store import normalize_target
+
+
+@app.get("/memory/stats")
+def memory_stats():
+    """Overall memory statistics."""
+    store = get_memory_store()
+    import sqlite3 as _sq
+    c = _sq.connect(str(store.db_path))
+    c.row_factory = _sq.Row
+    total = c.execute("SELECT COUNT(*) AS n FROM facts").fetchone()["n"]
+    targets = c.execute(
+        "SELECT target_key, COUNT(*) AS n FROM facts GROUP BY target_key ORDER BY n DESC LIMIT 20"
+    ).fetchall()
+    sessions = c.execute("SELECT COUNT(*) AS n FROM session_summaries").fetchone()["n"]
+    c.close()
+    return {
+        "total_facts": total,
+        "total_sessions": sessions,
+        "db_path": str(store.db_path),
+        "targets": [{"target": r["target_key"], "facts": r["n"]} for r in targets],
+    }
+
+
+@app.get("/memory/facts")
+def memory_facts(target: str = "", limit: int = 50):
+    """Browse facts — optionally filtered by target company."""
+    store = get_memory_store()
+    import sqlite3 as _sq
+    c = _sq.connect(str(store.db_path))
+    c.row_factory = _sq.Row
+    if target:
+        rows = c.execute(
+            "SELECT * FROM facts WHERE target_key = ? ORDER BY created_at DESC LIMIT ?",
+            (normalize_target(target), limit),
+        ).fetchall()
+    else:
+        rows = c.execute(
+            "SELECT * FROM facts ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    c.close()
+    return {
+        "count": len(rows),
+        "facts": [
+            {
+                "id": r["id"], "target_key": r["target_key"], "kind": r["kind"],
+                "body": r["body"], "confidence": r["confidence"],
+                "source_url": r["source_url"], "session_id": r["session_id"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.get("/memory/sessions")
+def memory_sessions(target: str = ""):
+    """List session summaries from memory."""
+    store = get_memory_store()
+    import sqlite3 as _sq
+    c = _sq.connect(str(store.db_path))
+    c.row_factory = _sq.Row
+    if target:
+        rows = c.execute(
+            "SELECT * FROM session_summaries WHERE target_key = ? ORDER BY created_at DESC LIMIT 20",
+            (normalize_target(target),),
+        ).fetchall()
+    else:
+        rows = c.execute("SELECT * FROM session_summaries ORDER BY created_at DESC LIMIT 20").fetchall()
+    c.close()
+    return {
+        "count": len(rows),
+        "sessions": [
+            {
+                "session_id": r["session_id"], "target_key": r["target_key"],
+                "target_display": r["target_display"],
+                "summary": r["summary"][:300], "quality_score": r["quality_score"],
+                "citation_count": r["citation_count"], "created_at": r["created_at"],
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.delete("/memory/clear/{target}")
+def memory_clear(target: str):
+    """Delete all stored facts for a specific target."""
+    store = get_memory_store()
+    deleted = store.clear_target(target)
+    return {"target": target, "deleted": deleted}
 
 
 # ── Static page handlers ────────────────────────────────────────────────
@@ -236,6 +341,90 @@ async def start_research(req: StartResearchRequest):
 
     _TASKS[session_id] = asyncio.create_task(_runner())
     return JSONResponse({"session_id": session_id, "stream": f"/sessions/{session_id}/stream"})
+
+
+# ── Deep Research: multi-pass long-chain reasoning ──────────────────────
+
+_DEEP_PASS_OBJECTIVES = [
+    "Core fundamentals: revenue, profit, margins, EPS, balance sheet, growth trajectory.",
+    "Competitive position: market share, peer comparison, moat analysis, sector dynamics.",
+    "Risk assessment: regulatory risks, governance, key-man risk, sector headwinds, SEBI compliance.",
+    "Macro overlay: interest rate sensitivity, FX exposure, crude/commodity linkage, government policy impact.",
+    "Final synthesis: triangulate all prior findings, resolve contradictions, produce investment-grade thesis.",
+]
+
+
+@app.post("/research/deep")
+async def start_deep_research(req: DeepResearchRequest):
+    """Multi-pass long-chain research that chains sequential sessions,
+    each building on memory from the previous pass. Each pass focuses
+    on a different analytical dimension — fundamentals, competition,
+    risk, macro, synthesis — so the final memo is deeply triangulated.
+    """
+    master_session = uuid.uuid4().hex[:12]
+    BUS.open(master_session)
+
+    async def _deep_runner() -> None:
+        total_passes = min(req.passes, len(_DEEP_PASS_OBJECTIVES))
+        try:
+            for i in range(total_passes):
+                objective = _DEEP_PASS_OBJECTIVES[i % len(_DEEP_PASS_OBJECTIVES)]
+                pass_label = f"Pass {i+1}/{total_passes}"
+                BUS.emit(
+                    master_session, "phase",
+                    phase="deep_research",
+                    note=f"{pass_label}: {objective[:60]}…",
+                )
+                BUS.emit(
+                    master_session, "deep_pass",
+                    pass_number=i + 1,
+                    total_passes=total_passes,
+                    objective=objective,
+                    status="running",
+                )
+
+                # Each pass is a full research session that reads+writes memory
+                pass_objective = f"{pass_label} — {objective}"
+                await run_research_session(
+                    req.target,
+                    pass_objective,
+                    loop_config=AgentLoopConfig(
+                        max_steps=req.pass_depth,
+                        session_id=master_session,
+                        auto_depth=False,
+                        enable_memory=True,
+                        reflection_max_rounds=3,
+                        quality_threshold=65.0,
+                        synth_model="gpt-4o",
+                    ),
+                )
+
+                BUS.emit(
+                    master_session, "deep_pass",
+                    pass_number=i + 1,
+                    total_passes=total_passes,
+                    objective=objective,
+                    status="done",
+                )
+
+                # Brief pause between passes to let memory persist
+                if i < total_passes - 1:
+                    await asyncio.sleep(2)
+
+            BUS.emit(master_session, "deep_complete", passes=total_passes)
+        except Exception as exc:
+            logger.exception("deep research %s crashed on pass", master_session)
+            BUS.emit(master_session, "error", message=f"Deep research failed: {exc}")
+        finally:
+            BUS.close(master_session)
+
+    _TASKS[master_session] = asyncio.create_task(_deep_runner())
+    return JSONResponse({
+        "session_id": master_session,
+        "stream": f"/sessions/{master_session}/stream",
+        "mode": "deep",
+        "passes": min(req.passes, len(_DEEP_PASS_OBJECTIVES)),
+    })
 
 
 @app.get("/memos")

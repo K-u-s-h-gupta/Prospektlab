@@ -201,7 +201,10 @@ async def _fetch_via_httpx(url: str, *, timeout_s: float, referer: str | None, i
                 headers=dict(resp.headers),
             )
         except Exception as exc:
-            logger.warning("httpx attempt %s failed: %s", attempt + 1, exc)
+            if attempt < 2:
+                logger.debug("httpx attempt %s for %s: %s (retrying)", attempt + 1, url[:80], exc)
+            else:
+                logger.warning("httpx final attempt failed for %s: %s", url[:80], exc)
             await asyncio.sleep(0.5 * (2**attempt))
     return FetchResult(url, url, 0, "", blocked_reason="all attempts failed")
 

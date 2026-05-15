@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 from finagent.accuracy_validator import Claim
+from finagent.geo.entity_resolver import ResolvedEntity
+from finagent.geo.query_localizer import localize_search_query
 from finagent.synthesis import EnrichmentBundle
 from finagent.tools.web.scraper import ScrapedDoc
 
@@ -108,6 +110,8 @@ class SubAgentContext:
     # Per-agent budgets
     deadline_ms: int = 45_000
     max_queries: int = 6
+    resolved_entity: ResolvedEntity | None = None
+    preferred_domains: list[str] = field(default_factory=list)
 
 
 class BaseSubAgent(abc.ABC):
@@ -227,9 +231,15 @@ async def search_and_dedupe(
     out: list[ScrapedDoc] = []
 
     async def _one(q: str):
+        localized = localize_search_query(q, ctx.resolved_entity) if ctx.resolved_entity else q
         try:
             return await asyncio.wait_for(
-                search_web(q, max_results=per_query_limit),
+                search_web(
+                    localized,
+                    max_results=per_query_limit,
+                    preferred_domains=ctx.preferred_domains,
+                    entity=ctx.resolved_entity,
+                ),
                 timeout=per_query_timeout,
             )
         except asyncio.TimeoutError:

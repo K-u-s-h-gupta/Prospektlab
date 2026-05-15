@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from finagent.paths import finagent_data_path
 from finagent.settings import FinAgentSettings, load_settings
 from finagent.state.checkpoint import Checkpoint, serialize_checkpoint
 from finagent.state.research_state import ResearchStateStore
@@ -23,7 +24,7 @@ class Harness:
         self.settings = settings or load_settings()
         from pathlib import Path
 
-        db = Path(config.db_path or Path.home() / ".finagent" / "research_state.sqlite3")
+        db = Path(config.db_path) if config.db_path else finagent_data_path("research_state.sqlite3")
         self.store = ResearchStateStore(db)
 
     def maybe_persist_checkpoint(self, step: int, cp: Checkpoint) -> None:

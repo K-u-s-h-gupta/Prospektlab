@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 from urllib.parse import quote_plus, urlparse
 
+from finagent.geo.entity_resolver import ResolvedEntity
+from finagent.retrieval.reranker import rerank_docs
 from finagent.tools.web.http_fetcher import FetchResult, fetch
 
 logger = logging.getLogger("finagent.scraper")
@@ -17,19 +19,42 @@ DUCKDUCKGO_HTML = "https://html.duckduckgo.com/html/?q={q}"
 
 # Domain → tier (per Section 3.1 source hierarchy).
 DOMAIN_TIER: dict[str, int] = {
+    # -- Indian Regulatory and Exchange (Tier 1) --
+    "nseindia.com": 1,
+    "bseindia.com": 1,
+    "sebi.gov.in": 1,
+    "rbi.org.in": 1,
+    # -- Indian IR / Company Filings (Tier 2) --
+    "ir.": 2,
+    "annualreports.com": 2,
+    # -- Indian Research and Analytics (Tier 3-4) --
+    "screener.in": 3,
+    "trendlyne.com": 3,
+    "tickertape.in": 3,
+    "tijorifinance.com": 3,
+    "moneycontrol.com": 4,
+    "economictimes.indiatimes.com": 4,
+    "livemint.com": 4,
+    "ndtvprofit.com": 4,
+    "businesstoday.in": 4,
+    "thehindubusinessline.com": 4,
+    "financialexpress.com": 4,
+    "business-standard.com": 4,
+    "valueresearchonline.com": 4,
+    # -- US / Global Regulatory (kept for cross-listed) --
     "sec.gov": 1,
     "investor.gov": 1,
-    "annualreports.com": 2,
-    "ir.": 2,
+    "edgar.sec.gov": 1,
+    # -- Global Wire Services (Tier 6) --
     "reuters.com": 6,
     "ft.com": 6,
     "wsj.com": 6,
     "bloomberg.com": 6,
+    # -- General Finance Portals (Tier 7) --
     "finance.yahoo.com": 7,
     "yahoo.com": 7,
     "macrotrends.net": 7,
     "seekingalpha.com": 3,
-    "edgar.sec.gov": 1,
 }
 
 SOCIAL_DOMAINS = {"x.com", "twitter.com", "reddit.com", "t.me", "telegram.me", "stocktwits.com", "tiktok.com"}
@@ -233,7 +258,13 @@ async def _search_bing(query: str, *, max_results: int) -> list[tuple[str, str]]
     return out
 
 
-async def search_web(query: str, *, max_results: int = 5) -> list[ScrapedDoc]:
+async def search_web(
+    query: str,
+    *,
+    max_results: int = 5,
+    preferred_domains: list[str] | None = None,
+    entity: ResolvedEntity | None = None,
+) -> list[ScrapedDoc]:
     """Multi-backend search: DuckDuckGo + Bing in parallel, dedup, then
     fetch+parse the top N. Falls back gracefully when one backend fails.
     """
@@ -282,7 +313,7 @@ async def search_web(query: str, *, max_results: int = 5) -> list[ScrapedDoc]:
     docs: list[ScrapedDoc] = []
     for fut in asyncio.as_completed(tasks):
         docs.append(await fut)
-    return docs
+    return rerank_docs(query, docs, entity=entity, preferred_domains=preferred_domains)
 
 
 def _zip_longest_pairs(a: list, b: list):
@@ -299,13 +330,16 @@ async def search_layered(
     on_doc: Callable[[ScrapedDoc], None] | None = None,
     on_query: Callable[[str, str, int], None] | None = None,
     per_query: int = 4,
+    queries: list[str] | None = None,
+    preferred_domains: list[str] | None = None,
+    entity: ResolvedEntity | None = None,
 ) -> list[ScrapedDoc]:
     """Section 4.3 layered queries: authoritative / news / competitive / social.
 
     All four queries fan out concurrently (~4x faster), and results are deduplicated
     by final URL so the user-facing source stream never repeats.
     """
-    queries = [
+    queries = queries or [
         f"{target} SEC filing 10-K",
         f"{target} investor relations",
         f"{target} earnings transcript",
@@ -316,7 +350,12 @@ async def search_layered(
         if on_query:
             on_query(q, "running", 0)
         try:
-            docs = await search_web(q, max_results=per_query)
+            docs = await search_web(
+                q,
+                max_results=per_query,
+                preferred_domains=preferred_domains,
+                entity=entity,
+            )
             if on_query:
                 on_query(q, "done", len(docs))
             return q, docs

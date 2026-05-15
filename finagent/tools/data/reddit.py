@@ -22,11 +22,14 @@ from finagent.tools.web.http_fetcher import fetch
 
 logger = logging.getLogger("finagent.reddit")
 
+# India-focused subreddits come first for ProspektLab
 _SUBS = (
-    "wallstreetbets",
+    "IndianStreetBets",
+    "IndiaInvestments",
+    "DalalStreetTalks",
+    "IndiaFinance",
     "stocks",
     "investing",
-    "SecurityAnalysis",
     "ValueInvesting",
 )
 _SEARCH_URL = "https://www.reddit.com/r/{sub}/search.json?q={q}&restrict_sr=1&sort=new&limit=8&t=year"

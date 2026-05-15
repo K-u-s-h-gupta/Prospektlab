@@ -7,7 +7,7 @@ Pipeline:
 3. breadth-survey — layered DuckDuckGo search across 4 angles
 4. deep-dive — iterative targeted second-pass queries to fill gaps
 5. analysis — cross-source conflict detection, viral scoring
-6. synthesis — Claude / template memo using the *facts*, not just excerpts
+6. synthesis — OpenAI / template memo using the *facts*, not just excerpts
 """
 
 from __future__ import annotations
@@ -29,12 +29,19 @@ from finagent.agents.specialists import default_roster
 from finagent.analysis.conflicts import detect_conflicts
 from finagent.analysis.quality import score_research
 from finagent.events import BUS
+from finagent.geo import resolve_entity
+from finagent.geo.query_localizer import localize_search_query
+from finagent.geo.source_policy import preferred_domains_for_entity
 from finagent.harness import Harness, HarnessConfig, compress_context_stub
 from finagent.harness.context_manager import should_compress
 from finagent.memory import MemoryFact, get_memory_store
 from finagent.memory.store import normalize_target
+from finagent.paths import finagent_data_path
+from finagent.playbooks import apply_playbook_to_queries, maybe_promote_playbook, retrieve_playbook
 from finagent.prompt_builder import default_system_prompt
+from finagent.retrieval import build_retrieval_plan
 from finagent.research_planner import ResearchPlan, build_default_plan
+from finagent.router import route_objective
 from finagent.state.checkpoint import Checkpoint, StepResult, empty_checkpoint
 from finagent.state.citation_log import Citation
 from finagent.synthesis import EnrichmentBundle, synthesize_memo
@@ -92,6 +99,8 @@ class AgentLoopConfig:
     enable_blindspot: bool = True
     blindspot_max_queries: int = 8
     blindspot_per_query_timeout: float = 18.0
+    # ── Synthesis ──
+    synth_model: str | None = None
 
 
 def _auto_max_steps(objective: str, base: int) -> int:
@@ -138,11 +147,22 @@ def _emit_source_event(session_id: str, doc: ScrapedDoc, step: int, confidence: 
 async def _run_enrichment(
     target: str,
     session_id: str,
+    *,
+    entity,
 ) -> EnrichmentBundle:
     """Fan-out to SEC, Yahoo, Wikipedia. None failures are non-fatal."""
-    BUS.emit(session_id, "phase", phase="enrichment", note="Pulling authoritative APIs (SEC, Yahoo, Wikipedia)")
+    BUS.emit(session_id, "phase", phase="enrichment", note="Pulling authoritative APIs (NSE/BSE, Yahoo Finance, Moneycontrol)")
 
     async def _sec() -> SECCompanySnapshot | None:
+        if entity.country_code not in ("US", "GLOBAL"):
+            BUS.emit(
+                session_id,
+                "agent_task",
+                task="SEC EDGAR",
+                status="warning",
+                note=f"Skipped for {entity.country_name}; using local-market retrieval instead",
+            )
+            return None
         BUS.emit(session_id, "agent_task", task="SEC EDGAR", status="running", note=f"Resolving {target} -> CIK")
         try:
             snap = await fetch_company_snapshot(target)
@@ -165,19 +185,27 @@ async def _run_enrichment(
     async def _yahoo(ticker: str | None) -> YahooQuote | None:
         if not ticker:
             return None
-        BUS.emit(session_id, "agent_task", task="Yahoo Finance", status="running", note=f"Fetching live quote for {ticker}")
+        BUS.emit(session_id, "agent_task", task="Yahoo Finance", status="running", note=f"Fetching market and fundamentals data for {ticker}")
         try:
             q = await fetch_yahoo_quote(ticker)
-            if q is None or q.price is None:
-                BUS.emit(session_id, "agent_task", task="Yahoo Finance", status="warning", note="No quote (rate-limited or unlisted)")
+            has_financials = bool(q and (q.financial_metrics or q.annual_revenue or q.annual_net_income))
+            if q is None or (q.price is None and not has_financials):
+                BUS.emit(session_id, "agent_task", task="Yahoo Finance", status="warning", note="No quote or fundamentals (rate-limited or unlisted)")
                 return None
-            chg = f"{q.change_pct:+.2f}%" if q.change_pct is not None else "—"
+            chg = f"{q.change_pct:+.2f}%" if q.change_pct is not None else "n/a"
+            metric_note = ""
+            if has_financials:
+                metric_note = f", {len(q.financial_metrics)} metrics, rev years {len(q.annual_revenue)}, ni years {len(q.annual_net_income)}"
             BUS.emit(
                 session_id,
                 "agent_task",
                 task="Yahoo Finance",
                 status="done",
-                note=f"{q.currency or ''} {q.price:,.2f} ({chg}) on {q.exchange or 'exchange'}",
+                note=(
+                    f"{(q.currency + ' ') if q.currency and q.price is not None else ''}"
+                    f"{f'{q.price:,.2f}' if q.price is not None else 'quote unavailable'} "
+                    f"({chg}) on {q.exchange or 'exchange'}{metric_note}"
+                ),
             )
             return q
         except Exception as exc:
@@ -193,11 +221,49 @@ async def _run_enrichment(
 
         def _strip_suffixes(name: str) -> str:
             n = name.strip()
-            for suf in (" Inc.", " Inc", " Corp.", " Corp", " Corporation", " Company", " Co.", " plc", " Ltd.", " Ltd", " Holdings", " Group"):
+            for suf in (" Inc.", " Inc", " Corp.", " Corp", " Corporation", " Company", " Co.", " plc", " Ltd.", " Ltd", " Holdings", " Group", " Limited"):
                 if n.lower().endswith(suf.lower()):
                     n = n[: -len(suf)].rstrip(" ,.")
                     break
             return n
+
+        # For Indian short-ticker aliases (e.g. "TCS"), try the full company
+        # name FIRST so Wikipedia resolves to the company, not a tech acronym.
+        _INDIA_FULL_NAMES: dict[str, list[str]] = {
+            "tcs": ["Tata Consultancy Services"],
+            "hdfcbank": ["HDFC Bank"],
+            "sbin": ["State Bank of India"],
+            "lici": ["Life Insurance Corporation of India"],
+            "wipro": ["Wipro"],
+            "infy": ["Infosys"],
+            "reliance": ["Reliance Industries"],
+            "itc": ["ITC Limited"],
+            "hul": ["Hindustan Unilever"],
+            "ongc": ["Oil and Natural Gas Corporation"],
+            "ntpc": ["NTPC Limited"],
+            "bhel": ["Bharat Heavy Electricals Limited"],
+            "bel": ["Bharat Electronics Limited"],
+            "sail": ["Steel Authority of India"],
+            "gail": ["GAIL India"],
+            "hpcl": ["Hindustan Petroleum"],
+            "ioc": ["Indian Oil Corporation"],
+            "bpcl": ["Bharat Petroleum"],
+            "nmdc": ["NMDC Limited"],
+            "pfc": ["Power Finance Corporation"],
+            "pnb": ["Punjab National Bank"],
+            "sbi": ["State Bank of India"],
+            "hul": ["Hindustan Unilever"],
+            "mrf": ["MRF Limited"],
+            "m&m": ["Mahindra and Mahindra"],
+            "lt": ["Larsen and Toubro"],
+        }
+        canonical_lower = (canonical or "").lower().strip()
+        target_lower = target.lower().strip()
+        for alias_key, full_names in _INDIA_FULL_NAMES.items():
+            if canonical_lower == alias_key or target_lower == alias_key:
+                for fn in full_names:
+                    if fn not in candidates:
+                        candidates.append(fn)
 
         if canonical:
             # 1) Bare company name (best for big names: "Microsoft", "Apple Inc." -> "Apple")
@@ -226,6 +292,7 @@ async def _run_enrichment(
         def _is_bad_match(summary: WikipediaSummary) -> bool:
             desc = (summary.description or "").lower()
             title = (summary.title or "").lower()
+            extract_snippet = (summary.extract or "").lower()[:400]
             bad_substrings = (
                 "fruit",
                 "given name",
@@ -238,8 +305,51 @@ async def _run_enrichment(
                 "village in",
                 "town in",
                 "wikimedia disambiguation",
+                # Tech/OS articles that share names with Indian company tickers
+                "unix shell",
+                "command shell",
+                "programming language",
+                "operating system kernel",
+                "computer program",
+                "shell scripting",
+                "backward compatible",
+                "open-source software",
+                # Geographic non-company
+                "river in",
+                "mountain in",
+                # Food / snack / recipe articles (e.g. "bhel puri" != BHEL the company)
+                "savoury snack",
+                "street food",
+                "puffed rice",
+                "chaat",
+                "tamarind chutney",
+                "gujarati cuisine",
+                "indian cuisine",
+                "recipe",
+                "type of food",
+                "type of dish",
+                "food dish",
+                "alcoholic beverage",
             )
-            return any(b in desc for b in bad_substrings) or any(b in title for b in bad_substrings)
+            bad_extract = (
+                "unix shell",
+                "backward compatible with the c shell",
+                "is a unix",
+                "tcsh is",
+                "shell scripting language",
+                # Food items
+                "puffed rice",
+                "bhel puri",
+                "tamarind chutney",
+                "savoury snack",
+                "street food in",
+                "is a type of food",
+            )
+            if any(b in desc for b in bad_substrings) or any(b in title for b in bad_substrings):
+                return True
+            if any(b in extract_snippet for b in bad_extract):
+                return True
+            return False
 
         for cand in candidates:
             try:
@@ -325,7 +435,7 @@ async def _run_enrichment(
             return None
 
     async def _reddit() -> list[RedditPost]:
-        query = canonical_name or target
+        query = canonical_name or entity.search_label or target
         BUS.emit(session_id, "agent_task", task="Reddit", status="running", note=f"r/wsb + 4 subs for {query!r}")
         try:
             posts = await asyncio.wait_for(search_reddit(query), timeout=20.0)
@@ -352,7 +462,7 @@ async def _run_enrichment(
         return posts
 
     async def _hn() -> list[HNStory]:
-        query = canonical_name or target
+        query = canonical_name or entity.search_label or target
         BUS.emit(session_id, "agent_task", task="Hacker News", status="running", note=f"Algolia search for {query!r}")
         try:
             stories = await asyncio.wait_for(search_hackernews(query), timeout=15.0)
@@ -401,10 +511,18 @@ async def _run_enrichment(
         return snap
 
     async def _news() -> list[NewsItem]:
-        query = canonical_name or target
+        query = canonical_name or entity.search_label or target
         BUS.emit(session_id, "agent_task", task="News headlines", status="running", note=f"Google News RSS for {query!r}")
         try:
-            items = await asyncio.wait_for(fetch_news(query), timeout=15.0)
+            items = await asyncio.wait_for(
+                fetch_news(
+                    query,
+                    hl=entity.profile.news_hl,
+                    gl=entity.profile.news_gl,
+                    ceid=entity.profile.news_ceid,
+                ),
+                timeout=15.0,
+            )
         except asyncio.TimeoutError:
             BUS.emit(session_id, "agent_task", task="News headlines", status="warning", note="Timed out (>15s)")
             return []
@@ -425,8 +543,15 @@ async def _run_enrichment(
         return items
 
     sec_snap = await _sec()
-    ticker = sec_snap.ticker if sec_snap else target.upper() if target.isalpha() and len(target) <= 5 else None
-    canonical_name = sec_snap.name if sec_snap else None
+    if sec_snap:
+        ticker = sec_snap.ticker
+    elif entity.yahoo_ticker:
+        ticker = entity.yahoo_ticker
+    elif target.isalpha() and len(target) <= 5:
+        ticker = target.upper()
+    else:
+        ticker = None
+    canonical_name = sec_snap.name if sec_snap else entity.canonical_name
     yahoo_quote, wiki, filing, fx, reddit_posts, hn_stories, stocktwits_snap, news_items = await asyncio.gather(
         _yahoo(ticker),
         _wiki(canonical_name),
@@ -554,6 +679,12 @@ def _serialize_yahoo(q: YahooQuote | None) -> dict | None:
         "fifty_two_week_low": q.fifty_two_week_low,
         "series_dates": q.series_dates,
         "series_closes": q.series_closes,
+        "financial_metrics": q.financial_metrics,
+        "annual_revenue": q.annual_revenue,
+        "annual_revenue_dates": q.annual_revenue_dates,
+        "annual_net_income": q.annual_net_income,
+        "annual_net_income_dates": q.annual_net_income_dates,
+        "business_summary": q.business_summary,
         "source_url": q.source_url,
     }
 
@@ -651,7 +782,14 @@ def _identify_gaps(docs: list[ScrapedDoc], sec_snap: SECCompanySnapshot | None) 
     return queries  # filled in by caller after passing target
 
 
-_TIER1_NEWS = ("reuters.com", "wsj.com", "ft.com", "bloomberg.com", "cnbc.com", "barrons.com", "marketwatch.com")
+_TIER1_NEWS = (
+    # Indian tier-1 financial sources
+    "economictimes.indiatimes.com", "livemint.com", "business-standard.com",
+    "thehindubusinessline.com", "financialexpress.com", "ndtvprofit.com",
+    "moneycontrol.com",
+    # Global wire services
+    "reuters.com", "bloomberg.com", "ft.com",
+)
 
 
 def _build_followup_queries(
@@ -661,11 +799,11 @@ def _build_followup_queries(
     *,
     round_index: int = 0,
 ) -> list[str]:
-    """Generate targeted follow-up queries based on what previous passes missed.
+    """Generate India-focused targeted follow-up queries based on what previous passes missed.
 
     Each round shifts emphasis: round 0 -> coverage gaps, round 1 -> entity
     expansion (competitors, suppliers, customers harvested from earlier docs),
-    round 2 -> sentiment/community + earnings call detail.
+    round 2 -> SEBI/regulatory + concall detail, round 3 -> shareholding/governance.
     """
     canonical = (sec_snap.name if sec_snap else target).strip()
     ticker = (sec_snap.ticker if sec_snap else "").strip()
@@ -673,49 +811,58 @@ def _build_followup_queries(
     domains = {d.domain for d in docs}
     text_blob = " ".join((d.excerpt or "")[:600].lower() for d in docs)
 
+    # India-aware: strip .NS / .BO suffix for readable queries
+    display_ticker = ticker.replace(".NS", "").replace(".BO", "") if ticker else ""
+
     candidate: list[tuple[str, str]] = []
 
     if round_index == 0:
-        if not any(d for d in domains if d.endswith(_TIER1_NEWS)):
-            candidate.append((f"{canonical} latest news earnings reuters", "missing tier-1 news"))
+        # Check for Indian financial press coverage
+        has_india_news = any(
+            any(d.endswith(src) for src in _TIER1_NEWS)
+            for d in domains
+        )
+        if not has_india_news:
+            candidate.append((f"{canonical} NSE quarterly results earnings moneycontrol", "missing Indian tier-1 news"))
         if "competit" not in text_blob and "market share" not in text_blob:
             if industry:
-                candidate.append((f"{canonical} competitors in {industry}", "competitive landscape"))
+                candidate.append((f"{canonical} competitors India {industry} market share", "competitive landscape"))
             else:
-                candidate.append((f"{canonical} competitors market share analysis", "competitive landscape"))
+                candidate.append((f"{canonical} top competitors India market share analysis", "competitive landscape"))
         if "risk" not in text_blob and "headwind" not in text_blob:
-            candidate.append((f"{canonical} risk factors regulatory headwinds", "risk discussion"))
+            candidate.append((f"{canonical} SEBI risk factors regulatory concerns India", "risk discussion"))
         if "analyst" not in text_blob and "price target" not in text_blob:
-            if ticker:
-                candidate.append((f"{ticker} analyst rating price target consensus", "analyst coverage"))
+            if display_ticker:
+                candidate.append((f"{display_ticker} NSE analyst target price broking report", "analyst coverage"))
             else:
-                candidate.append((f"{canonical} analyst outlook recommendation", "analyst coverage"))
+                candidate.append((f"{canonical} analyst recommendation target price NSE India", "analyst coverage"))
         if "guidance" not in text_blob and "forecast" not in text_blob:
-            candidate.append((f"{canonical} guidance forecast 2026", "forward guidance"))
+            candidate.append((f"{canonical} management guidance revenue outlook FY2026", "forward guidance"))
 
     elif round_index == 1:
         # Entity expansion: pull capitalised proper nouns from earlier excerpts
-        # and run targeted searches on the ones that look like peer companies.
         entities = _extract_entities(docs, exclude=(canonical, ticker))[:3]
         for ent in entities:
-            candidate.append((f"{ent} vs {canonical} comparison earnings", f"peer deep-dive: {ent}"))
-        candidate.append((f"{canonical} earnings call transcript Q&A", "earnings transcript"))
+            candidate.append((f"{ent} vs {canonical} comparison quarterly results India", f"peer deep-dive: {ent}"))
+        candidate.append((f"{canonical} concall transcript Q&A management commentary", "concall transcript"))
         if industry:
-            candidate.append((f"{industry} industry outlook 2026 trends", "industry outlook"))
+            candidate.append((f"{industry} India sector outlook FY2026 trends SEBI", "sector outlook"))
 
     elif round_index == 2:
-        candidate.append((f"{canonical} insider trading SEC form 4", "insider activity"))
-        candidate.append((f"{canonical} short interest data NASDAQ", "short interest"))
-        candidate.append((f"{canonical} ESG controversy lawsuit settlement", "legal & ESG"))
-        if ticker:
-            candidate.append((f"{ticker} options unusual activity flow", "options flow"))
+        # India-specific: insider trading disclosures, bulk/block deals, SEBI actions
+        candidate.append((f"{canonical} insider trading disclosure SEBI bulk deal", "insider activity"))
+        candidate.append((f"{canonical} SEBI investigation order regulatory action", "regulatory action"))
+        candidate.append((f"{canonical} ESG sustainability report controversy India", "ESG & legal"))
+        if display_ticker:
+            candidate.append((f"{display_ticker} NSE F&O options OI unusual activity", "F&O activity"))
 
     else:  # round 3+
-        candidate.append((f"{canonical} institutional holdings 13F", "institutional ownership"))
-        candidate.append((f"{canonical} supply chain customers segments", "supply chain"))
-        candidate.append((f"{canonical} R&D capex capital allocation", "capital allocation"))
-        if ticker:
-            candidate.append((f"{ticker} earnings beat miss surprise history", "earnings history"))
+        # Indian shareholding pattern, FII/DII holdings, promoter pledging
+        candidate.append((f"{canonical} shareholding pattern FII DII promoter stake", "institutional ownership"))
+        candidate.append((f"{canonical} promoter pledge shares NSE BSE disclosure", "promoter pledging"))
+        candidate.append((f"{canonical} capex expansion plan India 2025 2026", "capital allocation"))
+        if display_ticker:
+            candidate.append((f"{display_ticker} quarterly results beat miss EPS history NSE", "earnings history"))
 
     return [q for q, _ in candidate][:5]
 
@@ -961,8 +1108,48 @@ async def run_research_session(
     harness = Harness(HarnessConfig(session_id=session_id))
     cp = empty_checkpoint()
     validator = AccuracyValidator()
+    entity = resolve_entity(target)
+    preferred_domains = preferred_domains_for_entity(entity)
+    try:
+        playbook = retrieve_playbook(geography=entity.country_code, objective=objective)
+    except Exception as exc:
+        logger.warning("playbook retrieval failed: %s", exc)
+        playbook = None
+        BUS.emit(session_id, "warning", message=f"playbook retrieval failed: {exc}")
+    retrieval_plan = build_retrieval_plan(entity, objective)
+    retrieval_plan.breadth_queries = apply_playbook_to_queries(retrieval_plan.breadth_queries, playbook)
+    routing = route_objective(
+        objective,
+        entity,
+        playbook_agents=(playbook.selected_agents if playbook else None),
+    )
+    if routing.deep_research:
+        cfg.max_steps = max(cfg.max_steps, 80)
+        cfg.reflection_max_rounds = max(cfg.reflection_max_rounds, 6)
+        cfg.blindspot_max_queries = max(cfg.blindspot_max_queries, 10)
 
     BUS.emit(session_id, "session_started", target=target, objective=objective, plan=pl.to_prompt_block())
+    BUS.emit(session_id, "entity_resolved", **entity.to_event_payload())
+    if playbook is not None:
+        BUS.emit(
+            session_id,
+            "playbook_loaded",
+            name=playbook.name,
+            geography=playbook.geography,
+            selected_agents=playbook.selected_agents,
+            preferred_domains=playbook.preferred_domains,
+        )
+        for domain in playbook.preferred_domains:
+            if domain not in preferred_domains:
+                preferred_domains.append(domain)
+    BUS.emit(
+        session_id,
+        "routing",
+        selected_agents=routing.selected_agents,
+        country_code=entity.country_code,
+        preferred_domains=preferred_domains[:8],
+        deep_research=routing.deep_research,
+    )
     t0 = time.perf_counter()
 
     last_compression_step = 0
@@ -1012,10 +1199,10 @@ async def run_research_session(
 
     bundle = EnrichmentBundle()
     if cfg.enable_enrichment:
-        bundle = await _run_enrichment(target, session_id)
+        bundle = await _run_enrichment(target, session_id, entity=entity)
 
     # ── Phase 3: breadth survey ───────────────────────────────────────────
-    canonical_label = bundle.sec.name if bundle.sec else target
+    canonical_label = bundle.sec.name if bundle.sec else (bundle.yahoo.name if bundle.yahoo and bundle.yahoo.name else entity.canonical_name or target)
     if cfg.enable_scraping:
         BUS.emit(session_id, "phase", phase="breadth-survey", note="Layered DuckDuckGo: filings / IR / earnings / competitors")
 
@@ -1024,7 +1211,13 @@ async def run_research_session(
 
         try:
             docs = await asyncio.wait_for(
-                search_layered(canonical_label, on_query=_on_query),
+                search_layered(
+                    canonical_label,
+                    on_query=_on_query,
+                    queries=retrieval_plan.breadth_queries,
+                    preferred_domains=preferred_domains,
+                    entity=entity,
+                ),
                 timeout=45.0,
             )
         except asyncio.TimeoutError:
@@ -1063,7 +1256,16 @@ async def run_research_session(
         async def _one(q: str) -> list[ScrapedDoc]:
             _on_query(q, "running", 0)
             try:
-                results = await asyncio.wait_for(search_web(q, max_results=6), timeout=25.0)
+                localized_q = localize_search_query(q, entity)
+                results = await asyncio.wait_for(
+                    search_web(
+                        localized_q,
+                        max_results=6,
+                        preferred_domains=preferred_domains,
+                        entity=entity,
+                    ),
+                    timeout=25.0,
+                )
                 _on_query(q, "done", len(results))
                 return results
             except asyncio.TimeoutError:
@@ -1149,7 +1351,13 @@ async def run_research_session(
             )
 
         async def _search_for_reflection(query: str, max_results: int) -> list:
-            return await search_web(query, max_results=max_results)
+            localized_q = localize_search_query(query, entity)
+            return await search_web(
+                localized_q,
+                max_results=max_results,
+                preferred_domains=preferred_domains,
+                entity=entity,
+            )
 
         def _conflicts(d: list) -> list:
             return detect_conflicts(d)
@@ -1171,6 +1379,7 @@ async def run_research_session(
                 bundle=bundle,
                 docs=docs,
                 checkpoint=cp,
+                entity=entity,
                 conflicts_callable=_conflicts,
                 search_callable=_search_for_reflection,
                 process_doc_callable=_process_for_reflection,
@@ -1207,10 +1416,13 @@ async def run_research_session(
             seed_docs=docs,
             session_id=session_id,
             seen_urls=seen_urls,
+            resolved_entity=entity,
+            preferred_domains=preferred_domains,
         )
 
         try:
-            roster = default_roster()
+            allowed_agents = set(routing.selected_agents)
+            roster = [agent for agent in default_roster() if agent.name in allowed_agents] or default_roster()
             orchestrator = Orchestrator(
                 roster,
                 emit=_emit_event,
@@ -1296,8 +1508,14 @@ async def run_research_session(
                     async def _bs_one(q: str):
                         _emit_event("query", query=q, status="running", count=0)
                         try:
+                            localized_q = localize_search_query(q, entity)
                             r = await asyncio.wait_for(
-                                search_web(q, max_results=4),
+                                search_web(
+                                    localized_q,
+                                    max_results=4,
+                                    preferred_domains=preferred_domains,
+                                    entity=entity,
+                                ),
                                 timeout=cfg.blindspot_per_query_timeout,
                             )
                             _emit_event("query", query=q, status="done", count=len(r))
@@ -1368,8 +1586,9 @@ async def run_research_session(
         conflicts=conflicts,
         on_token=_on_memo_token,
         enrichment=bundle,
+        synth_model=loop_config.synth_model,
     )
-    memos_dir = Path.home() / ".finagent" / "memos"
+    memos_dir = finagent_data_path("memos")
     memos_dir.mkdir(parents=True, exist_ok=True)
     memo_path = memos_dir / f"{session_id}.md"
     memo_path.write_text(synthesis.memo, encoding="utf-8")
@@ -1391,6 +1610,7 @@ async def run_research_session(
         bundle=bundle,
         docs=docs,
         checkpoint=cp,
+        entity=entity,
         conflicts=conflicts,
     )
     if memory_store is not None:
@@ -1408,6 +1628,26 @@ async def run_research_session(
             )
         except Exception as exc:
             logger.warning("memory persist failed: %s", exc)
+    try:
+        promoted = maybe_promote_playbook(
+            quality_score=final_quality.score,
+            geography=entity.country_code,
+            objective=objective,
+            target=target,
+            selected_agents=routing.selected_agents,
+            preferred_domains=preferred_domains,
+            query_templates=retrieval_plan.breadth_queries,
+        )
+        if promoted is not None:
+            BUS.emit(
+                session_id,
+                "playbook_promoted",
+                name=promoted.name,
+                geography=promoted.geography,
+                selected_agents=promoted.selected_agents,
+            )
+    except Exception as exc:
+        logger.warning("playbook promotion failed: %s", exc)
 
     primary_count = sum(1 for c in cp.citation_log if c.kind == "primary")
     BUS.emit(
@@ -1434,6 +1674,7 @@ async def run_research_session(
         memory_seeded=last_summary is not None,
         orchestration=orchestration_payload,
         blindspot=blindspot_payload,
+        resolved_entity=entity.to_event_payload(),
     )
     BUS.close(session_id)
 

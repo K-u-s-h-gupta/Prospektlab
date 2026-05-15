@@ -21,7 +21,7 @@ from finagent.tools.web.http_fetcher import fetch
 
 logger = logging.getLogger("finagent.news_feed")
 
-_RSS_URL = "https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
+_RSS_URL = "https://news.google.com/rss/search?q={q}&hl={hl}&gl={gl}&ceid={ceid}"
 
 
 @dataclass
@@ -51,8 +51,17 @@ def _strip_html(s: str) -> str:
     return re.sub(r"<[^>]+>", "", s or "").strip()
 
 
-async def fetch_news(query: str, *, limit: int = 12) -> list[NewsItem]:
-    url = _RSS_URL.format(q=quote_plus(f"{query} stock"))
+async def fetch_news(
+    query: str,
+    *,
+    limit: int = 12,
+    hl: str = "en-IN",
+    gl: str = "IN",
+    ceid: str = "IN:en",
+) -> list[NewsItem]:
+    # ProspektLab is India-focused: append "NSE" for cleaner Indian results
+    india_query = f"{query} NSE" if gl == "IN" and "nse" not in query.lower() else query
+    url = _RSS_URL.format(q=quote_plus(india_query), hl=hl, gl=gl, ceid=ceid)
     try:
         res = await fetch(url, respect_robots=False, timeout_s=12.0)
     except Exception as exc:

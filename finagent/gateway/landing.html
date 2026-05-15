@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ProspektLab — Institutional research, in 60 seconds, in INR</title>
-  <meta name="description" content="ProspektLab is an autonomous research analyst that pulls SEC filings, live market data, retail sentiment and the actual 10-K narrative — and writes you a memo in under 60 seconds. INR-native. Free." />
+  <meta name="description" content="ProspektLab is an autonomous research analyst that pulls SEC filings, live market data, retail sentiment and the actual Annual Report narrative — and writes you a memo in under 60 seconds. INR-native. Free." />
   <meta property="og:title" content="ProspektLab — Institutional research in 60 seconds" />
   <meta property="og:description" content="One ticker. One minute. One memo with citations." />
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
@@ -144,16 +144,16 @@
       <div class="lg:col-span-7">
         <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-elev/60 border border-white/10 mb-6 label-mono text-[11px] text-muted">
           <span class="w-2 h-2 rounded-full bg-success animate-pulse"></span>
-          Now triangulating SEC + Reddit + StockTwits + 10-K narrative + News
+          Now triangulating SEC + Reddit + StockTwits + Annual Report narrative + News
         </div>
         <h1 class="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.04]">
           Institutional research<br />
           <span class="gradient-text">in 60 seconds. For ₹0.</span>
         </h1>
         <p class="mt-6 max-w-xl text-lg text-muted leading-relaxed">
-          Stop reading 200-page 10-Ks. Stop trusting screenshots on X.
-          ProspektLab pulls SEC EDGAR, live quotes, Reddit/StockTwits sentiment,
-          press coverage and the actual 10-K — then writes you a memo a junior
+          Stop reading 200-page Annual Reports. Stop trusting screenshots on X.
+          ProspektLab pulls NSE / BSE, live quotes, Reddit/StockTwits sentiment,
+          press coverage and the actual Annual Report — then writes you a memo a junior
           analyst would be proud of.
         </p>
         <div class="mt-8 flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -186,12 +186,12 @@
             </div>
             <div class="p-5 space-y-2 font-mono text-[12px] min-h-[300px]" id="termHost">
               <div class="text-muted">$ <span id="termTicker" class="text-primary">NVDA</span><span class="typed"></span></div>
-              <div class="term-line text-muted" data-ms="600"><span class="text-success">✓</span> Resolved CIK <span class="text-text">0001045810</span> · NVIDIA CORP</div>
-              <div class="term-line text-muted" data-ms="900"><span class="text-success">✓</span> SEC EDGAR <span class="text-text">12 metrics</span> · 8 fiscal years history</div>
+              <div class="term-line text-muted" data-ms="600"><span class="text-success">✓</span> Resolved NSE code <span class="text-text">0001045810</span> · NVIDIA CORP</div>
+              <div class="term-line text-muted" data-ms="900"><span class="text-success">✓</span> NSE / BSE <span class="text-text">12 metrics</span> · 8 fiscal years history</div>
               <div class="term-line text-muted" data-ms="1300"><span class="text-success">✓</span> Yahoo Finance live quote <span class="text-text">$225.83</span> (₹18,834)</div>
               <div class="term-line text-muted" data-ms="1700"><span class="text-success">✓</span> Reddit scan <span class="text-text">14 high-upvote posts</span> · 3 bull / 2 bear</div>
               <div class="term-line text-muted" data-ms="2100"><span class="text-success">✓</span> Google News <span class="text-text">12 headlines</span> · Bloomberg, Reuters</div>
-              <div class="term-line text-muted" data-ms="2500"><span class="text-success">✓</span> Pulled 10-K · Item 1A Risk Factors · Item 7 MD&A</div>
+              <div class="term-line text-muted" data-ms="2500"><span class="text-success">✓</span> Pulled Annual Report · Item 1A Risk Factors · Item 7 MD&A</div>
               <div class="term-line text-muted" data-ms="2900"><span class="text-success">✓</span> Deep-dive · <span class="text-text">4 rounds</span> · 20+ secondary sources</div>
               <div class="term-line" data-ms="3300">
                 <div class="text-text font-semibold">Synthesising memo</div>
@@ -213,7 +213,7 @@
       <div class="label-mono text-[10px] text-muted text-center tracking-[0.25em] mb-4">DATA PIPED FROM</div>
       <div class="relative">
         <div class="marquee-track flex items-center gap-12 whitespace-nowrap">
-          <span class="label-mono text-sm text-muted">SEC EDGAR</span>
+          <span class="label-mono text-sm text-muted">NSE / BSE</span>
           <span class="text-white/10">|</span>
           <span class="label-mono text-sm text-muted">YAHOO FINANCE</span>
           <span class="text-white/10">|</span>
@@ -228,7 +228,7 @@
           <span class="label-mono text-sm text-muted">WIKIPEDIA</span>
           <span class="text-white/10">|</span>
           <!-- Duplicate for seamless loop -->
-          <span class="label-mono text-sm text-muted">SEC EDGAR</span>
+          <span class="label-mono text-sm text-muted">NSE / BSE</span>
           <span class="text-white/10">|</span>
           <span class="label-mono text-sm text-muted">YAHOO FINANCE</span>
           <span class="text-white/10">|</span>
@@ -279,12 +279,12 @@
       The average retail investor reads three tweets and a YouTube thumbnail
       before placing a trade. Then a pump-and-dump scheme on Reddit erases
       six months of returns in a weekend. Meanwhile, the people who actually
-      read the 10-K are eating their lunch.
+      read the Annual Report are eating their lunch.
     </p>
     <div class="mt-12 grid md:grid-cols-3 gap-5 text-left">
       <div class="glass rounded-2xl p-6 border-l-4 border-error/60">
         <div class="x-mark text-2xl mb-2">×</div>
-        <div class="font-semibold mb-1">200-page 10-Ks</div>
+        <div class="font-semibold mb-1">200-page Annual Reports</div>
         <div class="text-sm text-muted">Nobody reads them. Yet the entire bull / bear case is in Item 1A and Item 7.</div>
       </div>
       <div class="glass rounded-2xl p-6 border-l-4 border-error/60">
@@ -317,14 +317,14 @@
         <div class="w-12 h-12 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary text-lg font-bold mb-5">1</div>
         <h3 class="text-xl font-semibold mb-2">Type the ticker</h3>
         <p class="text-sm text-muted leading-relaxed">
-          AAPL. NVDA. Reliance Industries. The agent resolves it to a CIK via SEC EDGAR and locks in the canonical entity before it searches anything else.
+          TCS. Reliance. Reliance Industries. The agent resolves it to a NSE code via NSE / BSE and locks in the canonical entity before it searches anything else.
         </p>
       </div>
       <div class="glass rounded-2xl p-7 stat-card">
         <div class="w-12 h-12 rounded-xl bg-success/10 border border-success/30 flex items-center justify-center text-success text-lg font-bold mb-5">2</div>
         <h3 class="text-xl font-semibold mb-2">Watch nine engines fire</h3>
         <p class="text-sm text-muted leading-relaxed">
-          SEC, Yahoo, Reddit (5 subs), HN, StockTwits, Google News, Wikipedia, and the actual 10-K HTML — all in parallel. The activity stream shows each one finishing.
+          SEC, Yahoo, Reddit (5 subs), HN, StockTwits, Google News, Wikipedia, and the actual Annual Report HTML — all in parallel. The activity stream shows each one finishing.
         </p>
       </div>
       <div class="glass rounded-2xl p-7 stat-card">
@@ -389,10 +389,10 @@
             <div class="bg-elev/60 rounded-xl p-5 border border-white/5">
               <div class="flex items-center justify-between mb-3">
                 <div class="label-mono text-[10px] text-primary tracking-wider">AI SYNTHESIS · MEDIUM</div>
-                <div class="label-mono text-[10px] text-muted">via Claude</div>
+                <div class="label-mono text-[10px] text-muted">via OpenAI</div>
               </div>
               <div class="text-[13px] leading-relaxed text-text/90">
-                NVIDIA CORP (NVDA, Nasdaq) is trading at <span class="text-primary font-semibold">$225.83 (₹18,834.22)</span>, +19.29% versus prior close. The most recent 10-K shows revenue of <span class="text-primary font-semibold">$215.94B (₹17,99,924 Cr)</span> and net income of <span class="text-primary font-semibold">$120.07B (₹10,01,358 Cr)</span>…
+                NVIDIA CORP (NVDA, Nasdaq) is trading at <span class="text-primary font-semibold">$225.83 (₹18,834.22)</span>, +19.29% versus prior close. The most recent Annual Report shows revenue of <span class="text-primary font-semibold">$215.94B (₹17,99,924 Cr)</span> and net income of <span class="text-primary font-semibold">$120.07B (₹10,01,358 Cr)</span>…
               </div>
             </div>
             <div class="grid grid-cols-3 gap-3">
@@ -474,7 +474,7 @@
       <div class="glass rounded-2xl p-7 border-l-4 border-error/60">
         <div class="label-mono text-[11px] text-error tracking-wider mb-3">YOU, TWO HOURS AGO</div>
         <ul class="space-y-3 text-sm">
-          <li class="flex gap-3"><span class="x-mark">×</span> Open 10-K PDF. Ctrl+F "risk". Skim.</li>
+          <li class="flex gap-3"><span class="x-mark">×</span> Open Annual Report PDF. Ctrl+F "risk". Skim.</li>
           <li class="flex gap-3"><span class="x-mark">×</span> Open Yahoo Finance for the chart.</li>
           <li class="flex gap-3"><span class="x-mark">×</span> Open Reddit. Scroll for vibes.</li>
           <li class="flex gap-3"><span class="x-mark">×</span> Open Twitter. Get pump-and-dumped.</li>
@@ -551,7 +551,7 @@
         <div class="text-sm text-muted mb-7">Or ₹9,900 / year (save 17%)</div>
         <ul class="space-y-3 text-sm">
           <li class="flex gap-2.5"><span class="checkmark">✓</span> Everything in Individual</li>
-          <li class="flex gap-2.5"><span class="checkmark">✓</span> Claude-streamed prose synthesis</li>
+          <li class="flex gap-2.5"><span class="checkmark">✓</span> OpenAI-streamed prose synthesis</li>
           <li class="flex gap-2.5"><span class="checkmark">✓</span> 4-round deep-dive (longer runs)</li>
           <li class="flex gap-2.5"><span class="checkmark">✓</span> Watchlist daily alerts</li>
           <li class="flex gap-2.5"><span class="checkmark">✓</span> Priority compute</li>
@@ -596,7 +596,7 @@
           Where does the data come from?
           <span class="material-symbols-outlined chev">expand_more</span>
         </summary>
-        <p class="mt-3 text-sm text-muted leading-relaxed">SEC EDGAR (companyfacts + filing HTML), Yahoo Finance v8 chart API, Wikipedia REST, Reddit JSON, Hacker News Algolia search, StockTwits public stream, and Google News RSS. We never invent figures.</p>
+        <p class="mt-3 text-sm text-muted leading-relaxed">NSE / BSE (NSE/BSE data + Yahoo Finance + Moneycontrol), Yahoo Finance v8 chart API, Wikipedia REST, Reddit JSON, Hacker News Algolia search, StockTwits public stream, and Google News RSS. We never invent figures.</p>
       </details>
       <details class="glass rounded-xl p-5 group">
         <summary class="cursor-pointer flex items-center justify-between font-medium">
@@ -610,7 +610,7 @@
           What's the catch on the free tier?
           <span class="material-symbols-outlined chev">expand_more</span>
         </summary>
-        <p class="mt-3 text-sm text-muted leading-relaxed">There isn't one. We rate-limit if you go above ~50 runs/day per IP. Pro unlocks Claude-streamed prose synthesis, longer 4-round deep-dives, and watchlist alerts.</p>
+        <p class="mt-3 text-sm text-muted leading-relaxed">There isn't one. We rate-limit if you go above ~50 runs/day per IP. Pro unlocks OpenAI-streamed prose synthesis, longer 4-round deep-dives, and watchlist alerts.</p>
       </details>
       <details class="glass rounded-xl p-5 group">
         <summary class="cursor-pointer flex items-center justify-between font-medium">

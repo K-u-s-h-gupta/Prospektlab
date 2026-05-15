@@ -1,7 +1,8 @@
 """SQLite-backed memory store with FTS5 search.
 
 Design goals (modelled on Hermes' `hermes_state.py`):
-- Single file under `~/.finagent/memory.sqlite3`. Cheap, durable, no server.
+- Single file under the FinAgent home directory (`FINAGENT_HOME` or the
+  runtime default). Cheap, durable, no server.
 - One row per *fact*. A fact is "thing the agent learned that's worth
   remembering next time". Examples: "NVDA fiscal year ends January",
   "AAPL has a $90B annual buyback program", "MSTR holds 214,400 BTC".
@@ -29,9 +30,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from finagent.paths import finagent_data_path
+
 logger = logging.getLogger("finagent.memory")
 
-_DEFAULT_DB = Path.home() / ".finagent" / "memory.sqlite3"
+_DEFAULT_DB = finagent_data_path("memory.sqlite3")
 _init_lock = threading.Lock()
 
 

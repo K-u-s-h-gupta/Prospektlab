@@ -5,6 +5,10 @@ Python only the package is importable if both exist, so the long-running harness
 :mod:`finagent.harness` (see :class:`finagent.harness.orchestrator.Harness`).
 """
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from finagent.settings import FinAgentSettings, load_settings
 
 __all__ = ["FinAgentSettings", "load_settings", "__version__"]

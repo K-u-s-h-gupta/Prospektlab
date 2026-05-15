@@ -7,6 +7,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from finagent.paths import finagent_data_path
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -63,7 +65,7 @@ def _cli_init() -> None:
     p.add_argument("--init", action="store_true", help="Create SQLite schema")
     p.add_argument(
         "--db",
-        default=str(Path.home() / ".finagent" / "research_state.sqlite3"),
+        default=str(finagent_data_path("research_state.sqlite3")),
         help="Database file path",
     )
     args = p.parse_args()

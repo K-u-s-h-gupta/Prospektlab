@@ -1,25 +1,9 @@
 """Research coverage / quality scoring.
 
-Rates the *current* research state across the dimensions a junior analyst
-would expect to see in a finished memo. Each dimension has a weight; the
-final score is 0-100. Anything below the configured threshold means the
-agent should keep digging instead of synthesising.
-
-Dimensions (with weights):
-- identity        (8)   canonical entity resolved (SEC CIK / Yahoo / Wiki)
-- financials      (16)  ≥6 of the 12 SEC concept metrics resolved
-- history         (12)  multi-year time series for revenue + net income
-- filing_narrative (10) Item 1A and / or Item 7 prose extracted
-- live_quote      (6)   Yahoo Finance current quote + 1-month series
-- press_coverage  (10)  ≥4 distinct news headlines from ≥3 outlets
-- community       (8)   Reddit/HN/StockTwits aggregated signal present
-- web_diversity   (12)  ≥10 scraped docs from ≥6 distinct domains
-- citation_tiering (10) ≥2 tier-1 citations + ≥4 tier-2
-- conflicts       (4)   conflict scan ran (presence of conflicts is OK)
-- competitive     (4)   at least one peer / competitor mentioned in docs
-
-This is intentionally heuristic — the goal is to detect *clear* gaps so
-the reflection loop can patch them.
+The score is intentionally heuristic. Its main job is not to be "correct" in
+an abstract sense, but to push reflection toward obvious gaps before the memo
+is written. The important nuance is that the score should not treat non-US
+companies as broken simply because SEC companyfacts are unavailable.
 """
 
 from __future__ import annotations
@@ -81,7 +65,25 @@ _COMPETITOR_HINTS = (
     "market share",
     "peer comparison",
     "alternatives to",
+    "industry leader",
+    "sector",
+    "compared to",
+    "outperform",
+    "underperform",
+    "peer group",
+    "industry peer",
+    "leading player",
+    "competitive advantage",
 )
+
+
+def _annual_len(history: dict, key: str) -> int:
+    if not history:
+        return 0
+    series = history.get(key)
+    if not series:
+        return 0
+    return len(getattr(series, "annual", []) or [])
 
 
 def score_research(
@@ -90,76 +92,129 @@ def score_research(
     bundle,  # EnrichmentBundle
     docs,  # list[ScrapedDoc]
     checkpoint,  # Checkpoint with citation_log
+    entity=None,
     conflicts: list | None = None,
 ) -> QualityReport:
     rep = QualityReport(score=0.0)
     earned = 0.0
 
-    # ── identity ──
-    has_sec = bundle and bundle.sec is not None
-    has_yahoo = bundle and bundle.yahoo is not None
-    has_wiki = bundle and bundle.wikipedia is not None
-    id_score = (has_sec * 0.6 + has_yahoo * 0.25 + has_wiki * 0.15)
+    country_code = (getattr(entity, "country_code", None) or "GLOBAL").upper()
+    is_us_like = country_code in {"US", "GLOBAL"}
+
+    has_sec = bool(bundle and bundle.sec is not None)
+    has_yahoo = bool(bundle and bundle.yahoo is not None)
+    has_wiki = bool(bundle and bundle.wikipedia is not None)
+
+    yahoo = getattr(bundle, "yahoo", None) if bundle else None
+    yahoo_metrics = dict(getattr(yahoo, "financial_metrics", {}) or {})
+    yahoo_rev_years = len(getattr(yahoo, "annual_revenue", []) or [])
+    yahoo_ni_years = len(getattr(yahoo, "annual_net_income", []) or [])
+    metrics_target = 6 if is_us_like else 4
+    history_target = 5 if is_us_like else 4
+    press_headline_target = 4 if is_us_like else 3
+    press_outlet_target = 3 if is_us_like else 2
+    doc_target = 10 if is_us_like else 6
+    domain_target = 6 if is_us_like else 3
+    primary_target = 2 if is_us_like else 1
+    secondary_target = 4 if is_us_like else 2
+
+    # Identity
+    if is_us_like:
+        id_score = (has_sec * 0.6) + (has_yahoo * 0.25) + (has_wiki * 0.15)
+        id_ok = id_score >= 0.6
+        id_detail = f"sec={has_sec} yahoo={has_yahoo} wiki={has_wiki}"
+        id_gap = "Canonical entity not fully resolved across SEC + Yahoo + Wikipedia."
+    else:
+        id_score = (has_yahoo * 0.7) + (has_wiki * 0.2) + (has_sec * 0.1)
+        id_ok = id_score >= 0.5
+        id_detail = f"market_entity={country_code} yahoo={has_yahoo} wiki={has_wiki} sec={has_sec}"
+        id_gap = "Canonical entity not fully resolved across local-market sources + Yahoo/Wikipedia."
     rep.dimensions["identity"] = {
         "weight": _WEIGHTS["identity"],
         "ratio": round(id_score, 2),
-        "ok": id_score >= 0.6,
-        "detail": f"sec={has_sec} yahoo={has_yahoo} wiki={has_wiki}",
+        "ok": id_ok,
+        "detail": id_detail,
     }
     earned += _WEIGHTS["identity"] * id_score
-    if id_score < 0.6:
-        rep.gaps.append("Canonical entity not fully resolved across SEC + Yahoo + Wikipedia.")
+    if not id_ok:
+        rep.gaps.append(id_gap)
 
-    # ── financials ──
-    metrics_n = len((bundle.sec.metrics if has_sec else {}) or {})
-    fin_ratio = min(1.0, metrics_n / 10.0)
+    # Financials
+    if has_sec:
+        metrics_n = len((bundle.sec.metrics if has_sec else {}) or {})
+        fin_detail = f"{metrics_n} SEC concept metrics resolved"
+        fin_queries = [
+            f"{target} latest 10-K revenue gross margin operating income",
+            f"{target} annual report fiscal year financial highlights",
+        ]
+    else:
+        metrics_n = len(yahoo_metrics)
+        fin_detail = f"{metrics_n} Yahoo/local-market financial metrics resolved"
+        fin_queries = [
+            f"{target} annual report investor presentation revenue margin debt",
+            f"{target} quarterly results financial highlights",
+        ]
+    fin_ratio = min(1.0, metrics_n / float(max(metrics_target, 6)))
     rep.dimensions["financials"] = {
         "weight": _WEIGHTS["financials"],
         "ratio": round(fin_ratio, 2),
-        "ok": metrics_n >= 6,
-        "detail": f"{metrics_n} SEC concept metrics resolved",
+        "ok": metrics_n >= metrics_target,
+        "detail": fin_detail,
     }
     earned += _WEIGHTS["financials"] * fin_ratio
-    if metrics_n < 6:
-        rep.gaps.append(f"Only {metrics_n} financial metrics resolved (target ≥6).")
-        rep.suggested_queries.extend([
-            f"{target} latest 10-K revenue gross margin operating income",
-            f"{target} annual report fiscal year financial highlights",
-        ])
+    if metrics_n < metrics_target:
+        rep.gaps.append(f"Only {metrics_n} financial metrics resolved (target >={metrics_target}).")
+        rep.suggested_queries.extend(fin_queries)
 
-    # ── history (multi-year time series) ──
-    hist = (bundle.sec.history if has_sec else {}) or {}
-    rev_years = len(((hist.get("revenue") or type("o", (), {"annual": []})()).annual)) if hist else 0
-    ni_years = len(((hist.get("net_income") or type("o", (), {"annual": []})()).annual)) if hist else 0
-    h_ratio = min(1.0, ((rev_years + ni_years) / 12.0))
+    # History
+    if has_sec:
+        sec_history = (bundle.sec.history if has_sec else {}) or {}
+        rev_years = _annual_len(sec_history, "revenue")
+        ni_years = _annual_len(sec_history, "net_income")
+    else:
+        rev_years = yahoo_rev_years
+        ni_years = yahoo_ni_years
+    history_target_total = max(history_target * 2, 8)
+    h_ratio = min(1.0, (rev_years + ni_years) / float(history_target_total))
     rep.dimensions["history"] = {
         "weight": _WEIGHTS["history"],
         "ratio": round(h_ratio, 2),
-        "ok": rev_years >= 5 and ni_years >= 5,
+        "ok": rev_years >= history_target and ni_years >= history_target,
         "detail": f"revenue years={rev_years}, net_income years={ni_years}",
     }
     earned += _WEIGHTS["history"] * h_ratio
-    if not (rev_years >= 5 and ni_years >= 5):
+    if not (rev_years >= history_target and ni_years >= history_target):
         rep.gaps.append(f"Multi-year history thin (rev={rev_years}, ni={ni_years}).")
 
-    # ── filing_narrative ──
+    # Filing narrative
     fil = bundle.filing if bundle else None
     has_risks = bool(fil and getattr(fil, "risk_factors", None))
     has_mdna = bool(fil and getattr(fil, "mdna", None))
-    fn_ratio = 0.5 * has_risks + 0.5 * has_mdna
+    if is_us_like:
+        fn_ratio = (0.5 * has_risks) + (0.5 * has_mdna)
+        fn_ok = has_risks and has_mdna
+        fn_gap = "Missing 10-K Item 1A and/or Item 7 narrative."
+        fn_query = f"{target} 10-K risk factors site:sec.gov"
+    else:
+        # For Indian companies: no SEBI electronic parser yet, so give a 0.7 base
+        # score to avoid unfairly failing quality gate. Full credit if we find narrative.
+        fn_ratio = 1.0 if (has_risks or has_mdna) else 0.7
+        fn_ok = True  # don't fail gate for non-US; narrative comes from web scrape
+        fn_gap = "Primary filing or annual-report narrative still thin for this local-market issuer."
+        fn_query = f"{target} annual report risk factors management discussion"
     rep.dimensions["filing_narrative"] = {
         "weight": _WEIGHTS["filing_narrative"],
         "ratio": round(fn_ratio, 2),
-        "ok": has_risks and has_mdna,
+        "ok": fn_ok,
         "detail": f"risk_factors={has_risks} mdna={has_mdna}",
     }
     earned += _WEIGHTS["filing_narrative"] * fn_ratio
-    if not (has_risks and has_mdna):
-        rep.gaps.append("Missing 10-K Item 1A and/or Item 7 narrative.")
-        rep.suggested_queries.append(f"{target} 10-K risk factors site:sec.gov")
+    if not fn_ok:
+        rep.gaps.append(fn_gap)
+        rep.suggested_queries.append(fn_query)
 
-    # ── live_quote ──
-    q_ratio = 1.0 if (has_yahoo and getattr(bundle.yahoo, "series_closes", None)) else (0.5 if has_yahoo else 0.0)
+    # Live quote
+    q_ratio = 1.0 if (has_yahoo and getattr(yahoo, "series_closes", None)) else (0.5 if has_yahoo else 0.0)
     rep.dimensions["live_quote"] = {
         "weight": _WEIGHTS["live_quote"],
         "ratio": round(q_ratio, 2),
@@ -168,22 +223,22 @@ def score_research(
     }
     earned += _WEIGHTS["live_quote"] * q_ratio
 
-    # ── press_coverage ──
+    # Press coverage
     news = (bundle.news if bundle else None) or []
     sources = {(n.source or "").strip() for n in news if (n.source or "").strip()}
     pc_ratio = min(1.0, (len(news) / 6.0) * 0.6 + (len(sources) / 4.0) * 0.4)
     rep.dimensions["press_coverage"] = {
         "weight": _WEIGHTS["press_coverage"],
         "ratio": round(pc_ratio, 2),
-        "ok": len(news) >= 4 and len(sources) >= 3,
+        "ok": len(news) >= press_headline_target and len(sources) >= press_outlet_target,
         "detail": f"{len(news)} headlines, {len(sources)} outlets",
     }
     earned += _WEIGHTS["press_coverage"] * pc_ratio
-    if len(news) < 4:
-        rep.gaps.append("Press coverage thin (<4 headlines).")
+    if len(news) < press_headline_target:
+        rep.gaps.append(f"Press coverage thin (<{press_headline_target} headlines).")
         rep.suggested_queries.append(f"{target} latest news earnings analyst")
 
-    # ── community ──
+    # Community
     reddit_n = len((bundle.reddit if bundle else None) or [])
     hn_n = len((bundle.hackernews if bundle else None) or [])
     has_st = bool(bundle and bundle.stocktwits)
@@ -198,41 +253,47 @@ def score_research(
     if reddit_n + hn_n < 4 and not has_st:
         rep.gaps.append("Community signal sparse.")
 
-    # ── web_diversity ──
+    # Web diversity
     domains: set[str] = set()
     for d in docs or []:
         dom = _norm_domain(d.final_url or d.url or "")
         if dom:
             domains.add(dom)
-    wd_ratio = min(1.0, (len(docs or []) / 14.0) * 0.5 + (len(domains) / 8.0) * 0.5)
+    wd_ratio = min(1.0, (len(docs or []) / float(max(doc_target, 10))) * 0.5 + (len(domains) / float(max(domain_target, 6))) * 0.5)
     rep.dimensions["web_diversity"] = {
         "weight": _WEIGHTS["web_diversity"],
         "ratio": round(wd_ratio, 2),
-        "ok": len(docs or []) >= 10 and len(domains) >= 6,
+        "ok": len(docs or []) >= doc_target and len(domains) >= domain_target,
         "detail": f"{len(docs or [])} docs across {len(domains)} domains",
     }
     earned += _WEIGHTS["web_diversity"] * wd_ratio
-    if len(domains) < 6:
-        rep.gaps.append(f"Source diversity low ({len(domains)} unique domains).")
-        rep.suggested_queries.append(f"{target} institutional analyst report")
+    if len(domains) < domain_target:
+        rep.gaps.append(f"Source diversity across {len(domains)} unique domains (target >= {domain_target}).")
+        if not is_us_like:
+            rep.suggested_queries.append(f"{target} moneycontrol screener trendlyne analysis")
+        else:
+            rep.suggested_queries.append(f"{target} institutional analyst report")
 
-    # ── citation_tiering ──
+    # Citation tiering
     cl = getattr(checkpoint, "citation_log", []) if checkpoint else []
     n_primary = sum(1 for c in cl if getattr(c, "kind", "") == "primary")
     n_secondary = sum(1 for c in cl if getattr(c, "kind", "") == "secondary")
-    ct_ratio = min(1.0, (n_primary / 3.0) * 0.5 + (n_secondary / 5.0) * 0.5)
+    ct_ratio = min(1.0, (n_primary / float(max(primary_target + 1, 3))) * 0.5 + (n_secondary / float(max(secondary_target + 1, 5))) * 0.5)
     rep.dimensions["citation_tiering"] = {
         "weight": _WEIGHTS["citation_tiering"],
         "ratio": round(ct_ratio, 2),
-        "ok": n_primary >= 2 and n_secondary >= 4,
+        "ok": n_primary >= primary_target and n_secondary >= secondary_target,
         "detail": f"primary={n_primary} secondary={n_secondary}",
     }
     earned += _WEIGHTS["citation_tiering"] * ct_ratio
-    if n_primary < 2:
+    if n_primary < primary_target:
         rep.gaps.append("Tier-1 (primary) citations under-represented.")
-        rep.suggested_queries.append(f"{target} site:sec.gov 10-K")
+        if is_us_like:
+            rep.suggested_queries.append(f"{target} annual report BSE NSE exchange filing")
+        else:
+            rep.suggested_queries.append(f"{target} investor relations annual report")
 
-    # ── conflicts ── (dimension is "scan ran", not "no conflicts found")
+    # Conflicts
     conf_ran = conflicts is not None
     co_ratio = 1.0 if conf_ran else 0.0
     rep.dimensions["conflicts"] = {
@@ -243,27 +304,27 @@ def score_research(
     }
     earned += _WEIGHTS["conflicts"] * co_ratio
 
-    # ── competitive context ──
+    # Competitive context
     comp_hits = 0
     for d in docs or []:
         text = ((d.title or "") + " " + (d.excerpt or "")).lower()
         if any(h in text for h in _COMPETITOR_HINTS):
             comp_hits += 1
-    comp_ratio = min(1.0, comp_hits / 3.0)
+    comp_ratio = min(1.0, comp_hits / 2.0)
     rep.dimensions["competitive"] = {
         "weight": _WEIGHTS["competitive"],
         "ratio": round(comp_ratio, 2),
-        "ok": comp_hits >= 2,
+        "ok": comp_hits >= 1,
         "detail": f"competitor/peer mentions across {comp_hits} docs",
     }
     earned += _WEIGHTS["competitive"] * comp_ratio
-    if comp_hits < 2:
+    if comp_hits < 1:
         rep.gaps.append("Competitive landscape not yet covered.")
         rep.suggested_queries.append(f"{target} top competitors market share comparison")
 
     total_weight = sum(_WEIGHTS.values())
     rep.score = (earned / total_weight) * 100.0
-    # De-duplicate suggested queries, preserve order
-    seen = set()
+
+    seen: set[str] = set()
     rep.suggested_queries = [q for q in rep.suggested_queries if not (q in seen or seen.add(q))]
     return rep

@@ -50,9 +50,9 @@ class ReflectionResult:
 # Domain-specific operator decoration. We don't want to drown DuckDuckGo
 # with site: operators it sometimes ignores, so we sprinkle them only on
 # the queries that are likely to benefit.
-_PRIMARY_BOOST = " site:sec.gov OR site:investor.gov"
-_TIER2_BOOST = " (Reuters OR Bloomberg OR \"Wall Street Journal\" OR Morningstar)"
-_TIER3_BOOST = " (reddit.com OR seekingalpha.com OR stocktwits.com)"
+_PRIMARY_BOOST = " site:moneycontrol.com OR site:screener.in OR site:trendlyne.com"
+_TIER2_BOOST = " (Reuters OR \"Economic Times\" OR Livemint OR \"Business Standard\" OR NDTV Profit)"
+_TIER3_BOOST = " (reddit.com OR moneycontrol.com OR tickertape.in OR valueresearchonline.com)"
 
 
 def _decorate(query: str, kind: str) -> str:
@@ -68,13 +68,20 @@ def _decorate(query: str, kind: str) -> str:
     return q
 
 
-def _build_round_queries(target: str, report: QualityReport, round_idx: int) -> list[tuple[str, str]]:
+def _build_round_queries(
+    target: str,
+    report: QualityReport,
+    round_idx: int,
+    *,
+    country_code: str = "GLOBAL",
+) -> list[tuple[str, str]]:
     """Convert the gap report into a set of (query, kind) pairs.
 
     The kind is one of "primary" / "tier2" / "tier3" / "general" and
     drives operator decoration above.
     """
     out: list[tuple[str, str]] = []
+    is_us_like = (country_code or "GLOBAL").upper() in {"US", "GLOBAL"}
     # Always pull whatever the scorer already suggested
     for q in report.suggested_queries:
         kind = "primary" if "sec.gov" in q.lower() or "10-k" in q.lower() else "tier2"
@@ -83,8 +90,12 @@ def _build_round_queries(target: str, report: QualityReport, round_idx: int) -> 
     # Per-dimension fill-ins
     dims = report.dimensions
     if not dims.get("filing_narrative", {}).get("ok"):
-        out.append((f"{target} 10-K annual report risk factors MD&A", "primary"))
-        out.append((f"{target} annual report investor relations", "primary"))
+        if is_us_like:
+            out.append((f"{target} 10-K annual report risk factors MD&A", "primary"))
+            out.append((f"{target} annual report investor relations", "primary"))
+        else:
+            out.append((f"{target} annual report risk factors management discussion", "primary"))
+            out.append((f"{target} exchange filing annual report investor relations", "primary"))
     if not dims.get("financials", {}).get("ok"):
         out.append((f"{target} quarterly earnings report Q3 Q4 revenue", "tier2"))
         out.append((f"{target} gross margin operating margin segment breakdown", "tier2"))
@@ -99,7 +110,10 @@ def _build_round_queries(target: str, report: QualityReport, round_idx: int) -> 
         out.append((f"{target} top competitors comparison market share", "tier2"))
         out.append((f"alternatives to {target} peers", "tier2"))
     if not dims.get("citation_tiering", {}).get("ok"):
-        out.append((f"{target} prospectus S-1 8-K filing", "primary"))
+        if is_us_like:
+            out.append((f"{target} prospectus S-1 8-K filing", "primary"))
+        else:
+            out.append((f"{target} annual report PDF exchange filing", "primary"))
 
     # Round-specific deepening — every round adds a different angle so we
     # cover different parts of the surface area on subsequent passes.
@@ -113,7 +127,10 @@ def _build_round_queries(target: str, report: QualityReport, round_idx: int) -> 
             (f"{target} options unusual activity put call", "tier2"),
         ],
         [
-            (f"{target} insider trading SEC form 4 buying selling", "primary"),
+            (
+                f"{target} insider trading SEC form 4 buying selling" if is_us_like else f"{target} promoter shareholding insider trading exchange filing",
+                "primary",
+            ),
             (f"{target} CEO CFO interview podcast", "tier2"),
         ],
         [
@@ -165,6 +182,7 @@ class ReflectionLoop:
         bundle,
         docs: list,
         checkpoint,
+        entity=None,
         conflicts_callable: Callable[[list], list],
         search_callable: Callable[[str, int], Awaitable[list]],
         process_doc_callable: Callable[[Any, int], Awaitable[None]],
@@ -196,6 +214,7 @@ class ReflectionLoop:
             bundle=bundle,
             docs=docs,
             checkpoint=checkpoint,
+            entity=entity,
             conflicts=initial_conflicts,
         )
         _emit("quality_score", phase="initial", **initial_report.to_dict())
@@ -218,7 +237,12 @@ class ReflectionLoop:
 
         for round_idx in range(self.max_rounds):
             rounds_done = round_idx + 1
-            queries = _build_round_queries(self.target, current_report, round_idx)
+            queries = _build_round_queries(
+                self.target,
+                current_report,
+                round_idx,
+                country_code=getattr(entity, "country_code", "GLOBAL"),
+            )
             decorated = [(_decorate(q, k), q, k) for q, k in queries]
             _emit(
                 "reflection",
@@ -271,6 +295,7 @@ class ReflectionLoop:
                 bundle=bundle,
                 docs=docs,
                 checkpoint=checkpoint,
+                entity=entity,
                 conflicts=new_conflicts,
             )
             histories.append(new_report)

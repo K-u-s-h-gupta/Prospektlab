@@ -133,7 +133,7 @@
           <div class="flex items-center justify-between">
             <div>
               <div class="font-medium text-sm">Streaming memo</div>
-              <div class="text-xs text-muted mt-0.5">Token-by-token render while Claude composes.</div>
+              <div class="text-xs text-muted mt-0.5">Token-by-token render while OpenAI composes.</div>
             </div>
             <div id="tgStreaming" class="toggle on"></div>
           </div>
@@ -144,11 +144,11 @@
       <section class="glass rounded-2xl p-6">
         <h2 class="text-base font-semibold mb-5 flex items-center gap-2">
           <span class="material-symbols-outlined text-warn text-[20px]">key</span>
-          Anthropic key (optional)
+          OpenAI key (optional)
         </h2>
-        <p class="text-xs text-muted mb-3">Bring your own Claude key to enable LLM-streamed prose synthesis. Stored only in your browser.</p>
-        <input id="anthropicKey" type="password" placeholder="sk-ant-…" class="w-full bg-card border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:border-primary outline-none" />
-        <div class="text-[11px] text-muted mt-2">Set <code class="label-mono text-primary">ANTHROPIC_API_KEY</code> on the server for production use.</div>
+        <p class="text-xs text-muted mb-3">Bring your own OpenAI key to enable LLM-streamed prose synthesis. Stored only in your browser.</p>
+        <input id="openaiKey" type="password" placeholder="sk-proj-…" class="w-full bg-card border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:border-primary outline-none" />
+        <div class="text-[11px] text-muted mt-2">Set <code class="label-mono text-primary">OPENAI_API_KEY</code> on the server for production use.</div>
       </section>
 
       <!-- Danger zone -->
@@ -184,7 +184,7 @@
       if (p.rounds) $("rounds").value = p.rounds;
       if (p.currency) $("currency").value = p.currency;
       if (p.fxOverride) $("fxOverride").value = p.fxOverride;
-      if (p.anthropicKey) $("anthropicKey").value = p.anthropicKey;
+      if (p.openaiKey) $("openaiKey").value = p.openaiKey;
       TOGGLES.forEach((id) => {
         const key = id.replace("tg", "tg_");
         if (p[key] === false) $(id).classList.remove("on");
@@ -199,7 +199,7 @@
       rounds: parseInt($("rounds").value, 10) || 2,
       currency: $("currency").value,
       fxOverride: $("fxOverride").value || null,
-      anthropicKey: $("anthropicKey").value || null,
+      openaiKey: $("openaiKey").value || null,
     };
     TOGGLES.forEach((id) => { prefs[id.replace("tg", "tg_")] = $(id).classList.contains("on"); });
     localStorage.setItem("prospektlab_prefs", JSON.stringify(prefs));

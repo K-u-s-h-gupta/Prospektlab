@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from finagent.accuracy_validator import Claim
 from finagent.agents.base import AgentTaskResult, BaseSubAgent, Finding, SubAgentContext
+from finagent.tools.data import format_inr
 
 
 def _cagr(values: list[float]) -> float | None:
@@ -27,6 +28,151 @@ def _pct_change(a: float, b: float) -> float | None:
     return (b - a) / abs(a)
 
 
+def _fmt_local_money(value: float | None, currency: str | None, fx_rate: float | None) -> str:
+    if value is None:
+        return "n/a"
+    currency = (currency or "USD").upper()
+    sign = "-" if value < 0 else ""
+    abs_value = abs(value)
+    if currency == "USD" and fx_rate:
+        return f"{sign}${abs_value:,.2f} ({format_inr(abs_value, fx_rate)})"
+    if currency == "INR":
+        return f"{sign}{format_inr(abs_value, 1.0)}"
+    if abs_value >= 1e9:
+        compact = f"{abs_value/1e9:,.2f}B"
+    elif abs_value >= 1e6:
+        compact = f"{abs_value/1e6:,.2f}M"
+    elif abs_value >= 1e3:
+        compact = f"{abs_value/1e3:,.2f}K"
+    else:
+        compact = f"{abs_value:,.2f}"
+    return f"{sign}{currency} {compact}"
+
+
+def _append_yahoo_metric_findings(ctx: SubAgentContext, out: AgentTaskResult) -> None:
+    yahoo = ctx.bundle.yahoo if ctx.bundle else None
+    if not yahoo:
+        return
+    fx_rate = ctx.bundle.fx.rate if ctx.bundle and ctx.bundle.fx else None
+    metrics = dict(yahoo.financial_metrics or {})
+    if not metrics and not yahoo.annual_revenue and not yahoo.annual_net_income:
+        return
+
+    currency = yahoo.currency
+    evidence = [yahoo.source_url]
+    headline_parts: list[str] = []
+    detail_parts: list[str] = []
+    for label, key in (
+        ("Revenue", "total_revenue"),
+        ("EBITDA", "ebitda"),
+        ("Free cash flow", "free_cashflow"),
+        ("Cash", "total_cash"),
+        ("Debt", "total_debt"),
+    ):
+        value = metrics.get(key)
+        if value is None:
+            continue
+        formatted = _fmt_local_money(value, currency, fx_rate)
+        headline_parts.append(f"{label} {formatted}")
+        detail_parts.append(f"{label} is {formatted}")
+
+    margin_bits: list[str] = []
+    for label, key in (
+        ("gross margin", "gross_margins"),
+        ("operating margin", "operating_margins"),
+        ("profit margin", "profit_margins"),
+        ("ROE", "return_on_equity"),
+        ("ROA", "return_on_assets"),
+        ("revenue growth", "revenue_growth"),
+        ("earnings growth", "earnings_growth"),
+    ):
+        value = metrics.get(key)
+        if value is not None:
+            margin_bits.append(f"{label} {value * 100:.1f}%")
+    if metrics.get("debt_to_equity") is not None:
+        margin_bits.append(f"debt/equity {metrics['debt_to_equity']:.2f}x")
+    if metrics.get("current_ratio") is not None:
+        margin_bits.append(f"current ratio {metrics['current_ratio']:.2f}x")
+    if metrics.get("trailing_pe") is not None:
+        margin_bits.append(f"trailing P/E {metrics['trailing_pe']:.2f}x")
+    if metrics.get("forward_pe") is not None:
+        margin_bits.append(f"forward P/E {metrics['forward_pe']:.2f}x")
+    if metrics.get("price_to_book") is not None:
+        margin_bits.append(f"P/B {metrics['price_to_book']:.2f}x")
+    if margin_bits:
+        detail_parts.append("Key ratios include " + ", ".join(margin_bits) + ".")
+
+    if headline_parts or detail_parts:
+        out.findings.append(
+            Finding(
+                agent="financials",
+                kind="financial",
+                headline=f"Yahoo fundamentals for {yahoo.ticker}",
+                detail=". ".join(detail_parts) + ".",
+                confidence="MEDIUM" if margin_bits else "LOW",
+                evidence=evidence,
+                metrics=metrics,
+            )
+        )
+
+    if yahoo.annual_revenue and len(yahoo.annual_revenue) >= 2:
+        rev_values = yahoo.annual_revenue
+        rev_cagr = _cagr(rev_values)
+        rev_yoy = _pct_change(rev_values[-2], rev_values[-1]) if len(rev_values) >= 2 else None
+        first_date = yahoo.annual_revenue_dates[0] if yahoo.annual_revenue_dates else "start"
+        last_date = yahoo.annual_revenue_dates[-1] if yahoo.annual_revenue_dates else "latest"
+        out.findings.append(
+            Finding(
+                agent="financials",
+                kind="financial",
+                headline=f"Revenue history spans {len(rev_values)} annual points",
+                detail=(
+                    f"Revenue moved from {_fmt_local_money(rev_values[0], currency, fx_rate)} in {first_date} "
+                    f"to {_fmt_local_money(rev_values[-1], currency, fx_rate)} in {last_date}"
+                    + (f", a {rev_cagr * 100:+.1f}% CAGR" if rev_cagr is not None else "")
+                    + (f", with latest YoY {rev_yoy * 100:+.1f}%." if rev_yoy is not None else ".")
+                ),
+                confidence="MEDIUM",
+                evidence=evidence,
+                metrics={"revenue_cagr": rev_cagr, "revenue_yoy": rev_yoy, "years": len(rev_values)},
+            )
+        )
+
+    if yahoo.annual_net_income and len(yahoo.annual_net_income) >= 2:
+        ni_values = yahoo.annual_net_income
+        ni_cagr = _cagr(ni_values) if ni_values[0] > 0 and ni_values[-1] > 0 else None
+        ni_yoy = _pct_change(ni_values[-2], ni_values[-1]) if len(ni_values) >= 2 else None
+        first_date = yahoo.annual_net_income_dates[0] if yahoo.annual_net_income_dates else "start"
+        last_date = yahoo.annual_net_income_dates[-1] if yahoo.annual_net_income_dates else "latest"
+        out.findings.append(
+            Finding(
+                agent="financials",
+                kind="financial",
+                headline=f"Net income history spans {len(ni_values)} annual points",
+                detail=(
+                    f"Net income moved from {_fmt_local_money(ni_values[0], currency, fx_rate)} in {first_date} "
+                    f"to {_fmt_local_money(ni_values[-1], currency, fx_rate)} in {last_date}"
+                    + (f", a {ni_cagr * 100:+.1f}% CAGR" if ni_cagr is not None else "")
+                    + (f", with latest YoY {ni_yoy * 100:+.1f}%." if ni_yoy is not None else ".")
+                ),
+                confidence="MEDIUM",
+                evidence=evidence,
+                metrics={"net_income_cagr": ni_cagr, "net_income_yoy": ni_yoy, "years": len(ni_values)},
+            )
+        )
+
+    if metrics:
+        claims: list[str] = []
+        if metrics.get("total_revenue") is not None:
+            claims.append(f"Yahoo Finance reports total revenue of {_fmt_local_money(metrics['total_revenue'], currency, fx_rate)}.")
+        if metrics.get("profit_margins") is not None:
+            claims.append(f"Yahoo Finance reports a profit margin of {metrics['profit_margins'] * 100:.1f}%.")
+        if metrics.get("return_on_equity") is not None:
+            claims.append(f"Yahoo Finance reports ROE of {metrics['return_on_equity'] * 100:.1f}%.")
+        for text in claims[:3]:
+            out.claims.append(Claim(text=text, is_material=True))
+
+
 class FinancialsAgent(BaseSubAgent):
     name = "financials"
     display = "Financial Health"
@@ -34,13 +180,39 @@ class FinancialsAgent(BaseSubAgent):
     dependencies = ()
 
     def precondition(self, ctx: SubAgentContext):
-        return (ctx.bundle and ctx.bundle.sec is not None), "no SEC enrichment"
+        has_bundle = ctx.bundle and (ctx.bundle.sec is not None or ctx.bundle.yahoo is not None)
+        return bool(has_bundle or ctx.seed_docs), "no financial enrichment"
 
     async def execute(self, ctx: SubAgentContext) -> AgentTaskResult:
-        sec = ctx.bundle.sec
+        sec = ctx.bundle.sec if ctx.bundle else None
+        yahoo = ctx.bundle.yahoo if ctx.bundle else None
         out = AgentTaskResult(agent_name=self.name)
-        metrics = sec.metrics or {}
-        hist = sec.history or {}
+        metrics = sec.metrics or {} if sec else {}
+        hist = sec.history or {} if sec else {}
+
+        if not sec and yahoo:
+            detail = f"{yahoo.currency or ''} {yahoo.price:,.2f}" if yahoo.price is not None else "quote unavailable"
+            if yahoo.change_pct is not None:
+                detail += f", {yahoo.change_pct:+.2f}% vs previous close"
+            if yahoo.market_cap:
+                detail += f", market cap {yahoo.market_cap:,.0f}"
+            out.findings.append(
+                Finding(
+                    agent=self.name,
+                    kind="financial",
+                    headline=f"Market snapshot for {yahoo.ticker}",
+                    detail=detail,
+                    confidence="MEDIUM",
+                    evidence=[yahoo.source_url],
+                    metrics={
+                        "price": yahoo.price,
+                        "change_pct": yahoo.change_pct,
+                        "market_cap": yahoo.market_cap,
+                        "exchange": yahoo.exchange,
+                    },
+                )
+            )
+            _append_yahoo_metric_findings(ctx, out)
 
         # Latest-period snapshot finding
         revenue = metrics.get("revenue")
