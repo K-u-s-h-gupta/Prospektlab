@@ -400,6 +400,7 @@ async def _openai_memo(
     *,
     on_token: TokenSink = None,
     synth_model: str | None = None,
+    chat_history: list[dict[str, str]] | None = None,
 ) -> str:
     cfg = resolve_openai_config()
     if cfg is None:
@@ -429,15 +430,17 @@ async def _openai_memo(
 
     chunks: list[str] = []
     model_to_use = synth_model or cfg.model
+    messages = [{"role": "system", "content": system_prompt}]
+    if chat_history:
+        messages.extend(chat_history)
+    messages.append({"role": "user", "content": user_prompt})
+
     stream = await client.chat.completions.create(
         model=model_to_use,
         temperature=0.2,
         max_tokens=4000,
         stream=True,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=messages,
     )
     try:
         async for event in stream:
@@ -1269,6 +1272,7 @@ async def synthesize_memo(
     specialist_findings: list | None = None,
     quality_report=None,
     session_id: str | None = None,
+    chat_history: list[dict[str, str]] | None = None,
 ) -> SynthesisResult:
     digest, used = _build_source_digest(docs)
     conflicts = conflicts or []
@@ -1358,7 +1362,7 @@ async def synthesize_memo(
     if resolve_openai_config() is not None:
         try:
             memo = await asyncio.wait_for(
-                _openai_memo(target, objective, digest, facts, conflicts, on_token=on_token, synth_model=synth_model),
+                _openai_memo(target, objective, digest, facts, conflicts, on_token=on_token, synth_model=synth_model, chat_history=chat_history),
                 timeout=timeout_s,
             )
             return SynthesisResult(memo=memo, via="openai", used_sources=used)

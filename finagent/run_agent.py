@@ -109,6 +109,7 @@ class AgentLoopConfig:
     output_mode: str | None = None
     emit_memo: bool = True
     close_bus_on_finish: bool = True
+    chat_history: list[dict[str, str]] | None = None
 
 
 def _auto_max_steps(objective: str, base: int) -> int:
@@ -1635,6 +1636,7 @@ async def run_research_session(
             entity=entity,
             specialist_findings=orchestration_findings,
             quality_report=final_quality,
+            chat_history=cfg.chat_history,
         )
         memos_dir = finagent_data_path("memos")
         memos_dir.mkdir(parents=True, exist_ok=True)

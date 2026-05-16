@@ -3,30 +3,30 @@
         "Name":  "NSE Market Data",
         "Port":  8001,
         "Module":  "mcp_servers.nse_server",
-        "PID":  30636
+        "PID":  6080
     },
     {
         "Name":  "Fundamentals",
         "Port":  8002,
         "Module":  "mcp_servers.fundamentals_server",
-        "PID":  18100
+        "PID":  8936
     },
     {
         "Name":  "Research \u0026 News",
         "Port":  8003,
         "Module":  "mcp_servers.research_server",
-        "PID":  1300
+        "PID":  21052
     },
     {
         "Name":  "Document Pipeline",
         "Port":  8004,
         "Module":  "mcp_servers.docs_server",
-        "PID":  26040
+        "PID":  4028
     },
     {
         "Name":  "Valuation Engine",
         "Port":  8005,
         "Module":  "mcp_servers.mcp_valuation",
-        "PID":  19772
+        "PID":  27328
     }
 ]

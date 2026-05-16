@@ -23,6 +23,9 @@ from finagent.output.intent_classifier import primary_target_from_query
 from finagent.paths import finagent_data_path, finagent_home
 from finagent.run_agent import AgentLoopConfig, run_research_session
 from finagent.tools.web.http_fetcher import aclose_shared_client
+from finagent.memory.chat_memory import ChatMemoryManager
+
+_MEMORY_MANAGER = ChatMemoryManager()
 
 logger = logging.getLogger("finagent.gateway")
 
@@ -47,14 +50,12 @@ class StartResearchRequest(BaseModel):
     objective: str = Field("")
     # Optional — when absent the agent auto-picks depth from the objective.
     max_steps: int | None = Field(default=None, ge=4, le=10000)
-<<<<<<< HEAD
-    mode: str = Field(default="chat", description="chat, standard, or deep")
-    output_mode: str | None = None
-=======
     max_wall_seconds: float | None = Field(default=None, ge=10, le=24 * 60 * 60)
     heartbeat_interval_s: float = Field(default=20.0, ge=5, le=300)
-    mode: str = Field(default="standard", description="standard or deep")
->>>>>>> f2b7297 (Fix React hydration mismatch, apply scrapling & Yahoo Finance patches, and stabilize backend API)
+    mode: str = Field(default="chat", description="chat, standard, or deep")
+    output_mode: str | None = None
+    user_email: str | None = None
+    session_id: str | None = None
 
 
 class DeepResearchRequest(BaseModel):
@@ -63,6 +64,8 @@ class DeepResearchRequest(BaseModel):
     pass_depth: int = Field(default=40, ge=10, le=200, description="Max steps per pass")
     max_wall_seconds: float | None = Field(default=None, ge=30, le=24 * 60 * 60)
     heartbeat_interval_s: float = Field(default=20.0, ge=5, le=300)
+    user_email: str | None = None
+    session_id: str | None = None
 
 
 class ChatResearchRequest(BaseModel):
@@ -70,6 +73,8 @@ class ChatResearchRequest(BaseModel):
     target: str | None = Field(default=None, min_length=1)
     mode: str = Field(default="standard", description="standard, deep, or marathon")
     max_wall_seconds: float | None = Field(default=None, ge=10, le=24 * 60 * 60)
+    user_email: str | None = None
+    session_id: str | None = None
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -436,7 +441,10 @@ def settings_page() -> HTMLResponse:
 def widget() -> HTMLResponse:
     if not _WIDGET_PATH.is_file():
         return HTMLResponse("<h1>FinAgent</h1><p>widget.html missing</p>", status_code=500)
-    return HTMLResponse(_WIDGET_PATH.read_text(encoding="utf-8"))
+    return HTMLResponse(
+        _WIDGET_PATH.read_text(encoding="utf-8"),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"}
+    )
 
 
 # ── Auth endpoints ──────────────────────────────────────────────────────
@@ -480,18 +488,23 @@ def auth_login(req: LoginRequest):
 
 @app.post("/research/start")
 async def start_research(req: StartResearchRequest):
-    session_id = uuid.uuid4().hex[:12]
+    session_id = req.session_id or uuid.uuid4().hex[:12]
     BUS.open(session_id)
-<<<<<<< HEAD
     raw_query = req.target.strip()
+    
+    # If this is a follow-up query, preserve the original target
+    meta = _load_session_meta(session_id)
+    if req.session_id and meta.get("target_display"):
+        target = meta["target_display"]
+    else:
+        target = primary_target_from_query(raw_query)
+        
     objective = (req.objective or raw_query).strip()
-    target = primary_target_from_query(raw_query)
     mode = (req.mode or "chat").strip().lower()
-    if mode not in {"chat", "standard", "deep"}:
+    if mode not in {"chat", "standard", "deep", "marathon"}:
         mode = "chat"
-=======
-    _session_record(session_id, mode=req.mode or "standard", target=req.target, objective=req.objective)
->>>>>>> f2b7297 (Fix React hydration mismatch, apply scrapling & Yahoo Finance patches, and stabilize backend API)
+    
+    _session_record(session_id, mode=mode, target=target, objective=objective)
 
     async def _runner() -> None:
         try:
@@ -503,6 +516,9 @@ async def start_research(req: StartResearchRequest):
                 base_steps = 56
             else:
                 base_steps = 40
+            
+            chat_history = _MEMORY_MANAGER.get_history(req.user_email, session_id)
+            
             await run_research_session(
                 target,
                 objective,
@@ -510,21 +526,25 @@ async def start_research(req: StartResearchRequest):
                     max_steps=base_steps,
                     session_id=session_id,
                     auto_depth=req.max_steps is None,
-<<<<<<< HEAD
                     response_depth=mode,
-                    output_mode=req.output_mode,
+                    output_mode=(req.output_mode or mode),
+                    synth_model=os.getenv("FINAGENT_SYNTH_MODEL"),
                     breadth_search_timeout=(150.0 if mode == "deep" else 110.0),
                     followup_search_timeout=(70.0 if mode == "deep" else 50.0),
                     reflection_per_query_timeout=(55.0 if mode == "deep" else 38.0),
                     blindspot_per_query_timeout=(45.0 if mode == "deep" else 32.0),
                     news_timeout=(40.0 if mode == "deep" else 30.0),
-=======
-                    max_wall_seconds=req.max_wall_seconds,
-                    heartbeat_interval_s=req.heartbeat_interval_s,
-                    synth_model=os.getenv("FINAGENT_SYNTH_MODEL"),
->>>>>>> f2b7297 (Fix React hydration mismatch, apply scrapling & Yahoo Finance patches, and stabilize backend API)
+                    chat_history=chat_history,
                 ),
             )
+            
+            # Save the final memo to the memory layer
+            memo_path = _MEMOS_DIR / f"{session_id}.md"
+            if memo_path.is_file():
+                final_memo = memo_path.read_text(encoding="utf-8")
+                _MEMORY_MANAGER.append_message(req.user_email, session_id, "user", raw_query)
+                _MEMORY_MANAGER.append_message(req.user_email, session_id, "assistant", final_memo)
+                
         except Exception as exc:
             logger.exception("session %s crashed", session_id)
             BUS.emit(session_id, "error", message=str(exc))
@@ -553,24 +573,17 @@ _DEEP_PASS_OBJECTIVES = [
 
 @app.post("/research/deep")
 async def start_deep_research(req: DeepResearchRequest):
-    """Multi-pass long-chain research that chains sequential sessions,
-    each building on memory from the previous pass. Each pass focuses
-    on a different analytical dimension — fundamentals, competition,
-    risk, macro, synthesis — so the final memo is deeply triangulated.
-    """
-    master_session = uuid.uuid4().hex[:12]
+    master_session = req.session_id or uuid.uuid4().hex[:12]
     BUS.open(master_session)
-<<<<<<< HEAD
     raw_query = req.target.strip()
     target = primary_target_from_query(raw_query)
-=======
-    _session_record(master_session, mode="deep", target=req.target, objective="Multi-pass deep research")
->>>>>>> f2b7297 (Fix React hydration mismatch, apply scrapling & Yahoo Finance patches, and stabilize backend API)
 
     async def _deep_runner() -> None:
         total_passes = req.passes
         completed_passes = 0
         started_at = asyncio.get_running_loop().time()
+        chat_history = _MEMORY_MANAGER.get_history(req.user_email, master_session)
+        
         try:
             for i in range(total_passes):
                 remaining = None
@@ -612,23 +625,17 @@ async def start_deep_research(req: DeepResearchRequest):
                         enable_memory=True,
                         reflection_max_rounds=3,
                         quality_threshold=65.0,
-<<<<<<< HEAD
                         synth_model="gpt-4o",
                         response_depth=("deep" if i == total_passes - 1 else "standard"),
                         output_mode=("deep_research_report" if i == total_passes - 1 else None),
                         emit_memo=(i == total_passes - 1),
                         close_bus_on_finish=False,
+                        chat_history=chat_history if i == 0 else None,
                         breadth_search_timeout=180.0,
                         followup_search_timeout=75.0,
                         reflection_per_query_timeout=60.0,
                         blindspot_per_query_timeout=50.0,
                         news_timeout=45.0,
-=======
-                        synth_model=os.getenv("FINAGENT_SYNTH_MODEL"),
-                        max_wall_seconds=remaining,
-                        heartbeat_interval_s=req.heartbeat_interval_s,
-                        close_bus_on_finish=False,
->>>>>>> f2b7297 (Fix React hydration mismatch, apply scrapling & Yahoo Finance patches, and stabilize backend API)
                     ),
                 )
 
@@ -732,7 +739,11 @@ def get_memo(session_id: str):
     memo_path = _MEMOS_DIR / f"{session_id}.md"
     if not memo_path.is_file():
         raise HTTPException(status_code=404, detail="Memo not ready")
-    return HTMLResponse(memo_path.read_text(encoding="utf-8"), media_type="text/markdown")
+    return HTMLResponse(
+        memo_path.read_text(encoding="utf-8"),
+        media_type="text/markdown",
+        headers={"Cache-Control": "no-store, max-age=0"}
+    )
 
 
 @app.get("/sessions/{session_id}/status")
@@ -751,6 +762,13 @@ def session_events(session_id: str, after: int = 0, limit: int = 250) -> JSONRes
         "next_after": (events[-1]["id"] + 1 if events else after),
         "closed": BUS.is_closed(session_id),
     })
+
+
+@app.get("/chat/history")
+def chat_history(session_id: str, user_email: str | None = None) -> JSONResponse:
+    """Retrieve chat history for a session."""
+    history = _MEMORY_MANAGER.get_history(user_email, session_id)
+    return JSONResponse({"session_id": session_id, "history": history})
 
 
 @app.get("/sessions/{session_id}/result")

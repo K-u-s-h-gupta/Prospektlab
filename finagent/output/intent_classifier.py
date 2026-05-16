@@ -33,6 +33,9 @@ def classify_output_mode(
     depth: ResponseDepth = ResponseDepth.CHAT,
     explicit_mode: str | None = None,
 ) -> OutputMode:
+    if explicit_mode == "chat":
+        return OutputMode.DIRECT_ANSWER
+        
     if explicit_mode:
         try:
             return OutputMode(explicit_mode)

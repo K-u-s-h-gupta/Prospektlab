@@ -425,14 +425,30 @@
   <!-- ═══ TOP BAR ═══════════════════════════════════════════════════ -->
   <header class="h-14 flex items-center justify-between px-5 border-b border-white/[0.07] shrink-0 bg-[#0c0e12]">
     <div class="font-bold text-base text-white tracking-widest uppercase">FIN-OS INTEL</div>
-    <div class="flex items-center gap-5 text-gray-400">
-      <span
-        class="material-symbols-outlined text-[18px] cursor-pointer hover:text-white transition-colors">notifications</span>
-      <span
-        class="material-symbols-outlined text-[18px] cursor-pointer hover:text-white transition-colors">settings</span>
-      <span
-        class="material-symbols-outlined text-[18px] cursor-pointer hover:text-white transition-colors">account_circle</span>
+      <div id="authControls" class="flex items-center gap-4 text-sm">
+        <!-- Injected via JS -->
+      </div>
     </div>
+    <script>
+      (function() {
+        const c = document.getElementById('authControls');
+        try {
+          const userStr = localStorage.getItem('prospektlab_user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            c.innerHTML = `
+              <span class="text-gray-300">Welcome, <strong>${user.name || user.email}</strong></span>
+              <button onclick="localStorage.removeItem('prospektlab_user'); location.reload();" class="text-red-400 hover:text-red-300 transition-colors bg-white/5 px-3 py-1 rounded">Logout</button>
+            `;
+          } else {
+            c.innerHTML = `
+              <a href="/login" class="text-gray-300 hover:text-white transition-colors">Login</a>
+              <a href="/signup" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition-colors">Sign Up</a>
+            `;
+          }
+        } catch(e) { console.error(e); }
+      })();
+    </script>
   </header>
 
   <!-- ═══ MAIN 3-COLUMN LAYOUT ════════════════════════════════════════ -->
@@ -1886,7 +1902,7 @@
       $("resultTitle").textContent = title || "Research memo";
       $("resultBreadcrumb").textContent = "Recent chat";
       if ($("userBubble")) $("userBubble").textContent = title || "Previous research";
-      fetch(`/sessions/${memoId}/memo`)
+      fetch(`/sessions/${memoId}/memo?t=${Date.now()}`)
         .then((r) => r.text())
         .then((md) => {
           if (memoToken !== activeRunToken) return;
@@ -1971,7 +1987,6 @@
       }
       if (eventSource) { eventSource.close(); eventSource = null; }
       const runToken = ++activeRunToken;
-      sessionId = null;
       resetCounters();
       showState("processing");
       $("processingTarget").textContent = target;
@@ -1988,6 +2003,17 @@
         : researchMode === "deep"
         ? { target, passes: 5, pass_depth: 40 }
         : { target, mode: "chat" };
+      
+      try {
+        const userStr = localStorage.getItem('prospektlab_user');
+        if (userStr) {
+          payload.user_email = JSON.parse(userStr).email;
+        }
+      } catch (e) {}
+      if (sessionId) {
+        payload.session_id = sessionId;
+      }
+
       try {
         resp = await fetch(endpoint, {
           method: "POST",
@@ -2007,6 +2033,7 @@
       const { session_id, stream } = await resp.json();
       if (runToken !== activeRunToken) return;
       sessionId = session_id;
+      try { localStorage.setItem('prospektlab_session_id', session_id); } catch(e) {}
       const eventSessionId = session_id;
       pushActivity("play_circle", "Session", `Opened ${session_id}`, "done");
 
@@ -2204,7 +2231,7 @@
         $("memoBody").classList.remove("stream-cursor");
         // Pull the full memo and render as parsed markdown INSIDE the panel.
         try {
-          const full = await fetch(`/sessions/${eventSessionId}/memo`).then((r) => r.text());
+          const full = await fetch(`/sessions/${eventSessionId}/memo?t=${Date.now()}`).then((r) => r.text());
           if (runToken !== activeRunToken) return;
           setMemoMarkdown(cleanMemoText(full));
           window.__lastMemoMd = full;
@@ -2346,7 +2373,7 @@
     $("downloadMdBtn").addEventListener("click", async () => {
       if (!sessionId) return;
       try {
-        const md = window.__lastMemoMd || await fetch(`/sessions/${sessionId}/memo`).then((r) => r.text());
+        const md = window.__lastMemoMd || await fetch(`/sessions/${sessionId}/memo?t=${Date.now()}`).then((r) => r.text());
         const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -2808,6 +2835,6 @@
       }
     } catch (_) { }
   </script>
-</body>
+<script>document.addEventListener(" DOMContentLoaded\, async () => { const userStr = localStorage.getItem(\prospektlab_user\); if (!userStr) return; const user = JSON.parse(userStr); const savedSession = localStorage.getItem(\prospektlab_session_id\); if (!savedSession) return; try { const r = await fetch(/chat/history?session_id=&user_email=); if (r.ok) { const data = await r.json(); if (data.history && data.history.length > 0) { sessionId = savedSession; if (typeof openMemoInThread === \function\) { openMemoInThread(savedSession, \Restored Session\); } } } } catch (e) { console.error(\Failed to restore chat history\, e); } });</script></body>
 
 </html>

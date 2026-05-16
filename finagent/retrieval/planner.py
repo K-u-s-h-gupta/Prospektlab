@@ -61,6 +61,11 @@ def build_breadth_queries(entity: ResolvedEntity, objective: str) -> list[str]:
             f"{base} competitors market share",
         ]
 
+    # If the objective is a specific question or phrase (not just the company name),
+    # prioritize a direct search for it. This is critical for follow-up chat queries.
+    if objective and objective.lower().strip() not in (base.lower(), entity.normalized_name.lower(), ""):
+        queries.insert(0, f"{base} {objective}")
+
     tags = _intent_tags(objective)
     if "risk" in tags:
         queries.append(f"{base} risk factors regulatory issues SEBI annual report")
