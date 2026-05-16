@@ -110,6 +110,9 @@ class Orchestrator:
         )
 
         for wave_idx, wave in enumerate(waves):
+            if getattr(ctx, "budget_exceeded", None) and ctx.budget_exceeded():
+                logger.info("orchestrator stopping wave %s: time budget", wave_idx + 1)
+                break
             self.emit(
                 "orchestrator_wave",
                 wave=wave_idx + 1,

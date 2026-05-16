@@ -112,6 +112,9 @@ class SubAgentContext:
     max_queries: int = 6
     resolved_entity: ResolvedEntity | None = None
     preferred_domains: list[str] = field(default_factory=list)
+    query_cache: dict[str, list[ScrapedDoc]] | None = None
+    # Wall-clock guard shared with the main agent loop (marathon mode).
+    budget_exceeded: Callable[[], bool] | None = None
 
 
 class BaseSubAgent(abc.ABC):
@@ -239,6 +242,7 @@ async def search_and_dedupe(
                     max_results=per_query_limit,
                     preferred_domains=ctx.preferred_domains,
                     entity=ctx.resolved_entity,
+                    query_cache=ctx.query_cache,
                 ),
                 timeout=per_query_timeout,
             )

@@ -598,8 +598,12 @@ async def chat(req: ChatRequest):
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
     logger.info("User query: %s", req.message[:100])
-    reply, agents_used = await _execute_graph(req.message)
-    return ChatResponse(reply=reply, agents_used=agents_used)
+    try:
+        reply, agents_used = await _execute_graph(req.message)
+        return ChatResponse(reply=reply, agents_used=agents_used)
+    except Exception as e:
+        logger.error(f"Top level error in chat: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/chat/stream")
@@ -627,4 +631,4 @@ async def chat_stream(req: ChatRequest):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("api:app", host="0.0.0.0", port=8080, reload=True)

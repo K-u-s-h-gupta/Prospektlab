@@ -10,7 +10,9 @@ ENV/
 
 # Local / agent state
 .finagent/
+finagent/.env
 *.sqlite3
+*.log
 
 # IDE / OS
 .idea/

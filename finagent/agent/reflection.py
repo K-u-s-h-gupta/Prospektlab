@@ -187,6 +187,7 @@ class ReflectionLoop:
         search_callable: Callable[[str, int], Awaitable[list]],
         process_doc_callable: Callable[[Any, int], Awaitable[None]],
         emit_callable: Callable[..., None] | None = None,
+        budget_exceeded: Callable[[], bool] | None = None,
     ) -> ReflectionResult:
         """Run the reflection loop in place.
 
@@ -198,6 +199,7 @@ class ReflectionLoop:
         - `process_doc_callable(doc, step) -> None` — same _process_doc the
           main loop uses, so all source / confidence events still fire
         - `emit_callable(event_type, **payload)` — defaults to no-op
+        - `budget_exceeded()` — optional; return True to stop reflection early (wall-clock budget).
         """
 
         def _emit(event: str, **payload) -> None:
@@ -236,6 +238,8 @@ class ReflectionLoop:
         rounds_done = 0
 
         for round_idx in range(self.max_rounds):
+            if budget_exceeded is not None and budget_exceeded():
+                break
             rounds_done = round_idx + 1
             queries = _build_round_queries(
                 self.target,
@@ -273,7 +277,11 @@ class ReflectionLoop:
             )
             round_new = 0
             for batch in batches:
+                if budget_exceeded is not None and budget_exceeded():
+                    break
                 for doc in batch:
+                    if budget_exceeded is not None and budget_exceeded():
+                        break
                     key = (doc.final_url or doc.url or "").split("#", 1)[0]
                     if not key or key in seen_urls:
                         continue

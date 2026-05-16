@@ -47,14 +47,29 @@ class StartResearchRequest(BaseModel):
     objective: str = Field("")
     # Optional — when absent the agent auto-picks depth from the objective.
     max_steps: int | None = Field(default=None, ge=4, le=10000)
+<<<<<<< HEAD
     mode: str = Field(default="chat", description="chat, standard, or deep")
     output_mode: str | None = None
+=======
+    max_wall_seconds: float | None = Field(default=None, ge=10, le=24 * 60 * 60)
+    heartbeat_interval_s: float = Field(default=20.0, ge=5, le=300)
+    mode: str = Field(default="standard", description="standard or deep")
+>>>>>>> f2b7297 (Fix React hydration mismatch, apply scrapling & Yahoo Finance patches, and stabilize backend API)
 
 
 class DeepResearchRequest(BaseModel):
     target: str = Field(..., min_length=1)
     passes: int = Field(default=5, ge=2, le=20, description="Number of chained research passes")
     pass_depth: int = Field(default=40, ge=10, le=200, description="Max steps per pass")
+    max_wall_seconds: float | None = Field(default=None, ge=30, le=24 * 60 * 60)
+    heartbeat_interval_s: float = Field(default=20.0, ge=5, le=300)
+
+
+class ChatResearchRequest(BaseModel):
+    message: str = Field(..., min_length=1)
+    target: str | None = Field(default=None, min_length=1)
+    mode: str = Field(default="standard", description="standard, deep, or marathon")
+    max_wall_seconds: float | None = Field(default=None, ge=10, le=24 * 60 * 60)
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -90,6 +105,95 @@ class LoginRequest(BaseModel):
 
 
 _TASKS: dict[str, asyncio.Task[Any]] = {}
+_SESSION_META: dict[str, dict[str, Any]] = {}
+
+
+def _session_record(session_id: str, *, mode: str, target: str, objective: str = "") -> None:
+    record = {
+        "session_id": session_id,
+        "mode": mode,
+        "target": target,
+        "objective": objective,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "status": "running",
+    }
+    _SESSION_META[session_id] = record
+    _session_meta_path(session_id).write_text(json.dumps(record, indent=2), encoding="utf-8")
+
+
+def _session_meta_path(session_id: str) -> Path:
+    path = finagent_data_path("sessions", session_id, "meta.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _load_session_meta(session_id: str) -> dict[str, Any]:
+    if session_id in _SESSION_META:
+        return dict(_SESSION_META[session_id])
+    path = _session_meta_path(session_id)
+    if not path.is_file():
+        return {"session_id": session_id}
+    try:
+        meta = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(meta, dict):
+            _SESSION_META[session_id] = meta
+            return dict(meta)
+    except Exception:
+        pass
+    return {"session_id": session_id}
+
+
+def _save_session_meta(session_id: str, meta: dict[str, Any]) -> None:
+    _SESSION_META[session_id] = dict(meta)
+    try:
+        _session_meta_path(session_id).write_text(json.dumps(meta, indent=2, default=str), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _event_payload(idx: int, event) -> dict[str, Any]:
+    return {"id": idx, "type": event.type, "timestamp": event.timestamp, **event.payload}
+
+
+def _latest_event(session_id: str, event_type: str) -> dict[str, Any] | None:
+    for idx, event in reversed(BUS.history(session_id, limit=5000)):
+        if event.type == event_type:
+            return _event_payload(idx, event)
+    return None
+
+
+def _session_status(session_id: str) -> dict[str, Any]:
+    if not BUS.known(session_id) and session_id not in _SESSION_META:
+        raise HTTPException(status_code=404, detail="Unknown session")
+    meta = _load_session_meta(session_id)
+    task = _TASKS.get(session_id)
+    error_event = _latest_event(session_id, "error")
+    final_event = _latest_event(session_id, "final")
+    memo_event = _latest_event(session_id, "memo")
+    if error_event:
+        status = "error"
+    elif BUS.is_closed(session_id) or (task is not None and task.done()) or final_event:
+        status = "done"
+    else:
+        status = "running"
+    meta.update(
+        {
+            "status": status,
+            "closed": BUS.is_closed(session_id),
+            "active": task is not None and not task.done(),
+            "event_count": len(BUS.history(session_id, limit=5000)),
+            "latest_phase": _latest_event(session_id, "phase"),
+            "final": final_event,
+            "memo": memo_event,
+            "error": error_event,
+            "stream": f"/sessions/{session_id}/stream",
+            "events": f"/sessions/{session_id}/events",
+            "result": f"/sessions/{session_id}/result",
+        }
+    )
+    meta["status"] = status
+    _save_session_meta(session_id, meta)
+    return meta
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -126,6 +230,61 @@ def health():
         "finagent_home": str(finagent_home()),
         "version": app.version,
     }
+
+
+@app.get("/capabilities")
+def capabilities():
+    return {
+        "agent": "FinAgent",
+        "cloud_chat_ready": True,
+        "interfaces": {
+            "chat_research": "/chat/research",
+            "start": "/research/start",
+            "deep_start": "/research/deep",
+            "status": "/sessions/{session_id}/status",
+            "events": "/sessions/{session_id}/events?after=0",
+            "result": "/sessions/{session_id}/result",
+            "sse": "/sessions/{session_id}/stream",
+        },
+        "capabilities": {
+            "long_chain_research": {
+                "max_passes": 20,
+                "max_pass_depth": 200,
+                "wall_clock_budget": True,
+                "heartbeat_events": True,
+            },
+            "search": {
+                "backends": ["duckduckgo", "bing", "searxng_optional"],
+                "per_session_query_cache": True,
+                "domain_pinned_queries": os.getenv("FINAGENT_DOMAIN_PINNED_QUERIES", "1") not in {"0", "false", "no"},
+                "preferred_domain_rerank": True,
+            },
+            "browser": {
+                "playwright_installed": _has_module("playwright"),
+                "pooled_chromium": True,
+                "fallback_enabled": os.getenv("FINAGENT_BROWSER_FALLBACK") == "1",
+                "http_fallback_enabled": os.getenv("FINAGENT_BROWSER_FALLBACK_HTTP") == "1",
+                "extract_tool": True,
+                "screenshot_tool": True,
+            },
+            "self_generated_skills": {
+                "enabled": True,
+                "path": str(finagent_home() / "skills" / "auto"),
+                "prompt_keyword_loading": True,
+            },
+            "memo_rich_output": {
+                "markdown": True,
+                "finchart_blocks": True,
+                "mermaid_blocks": True,
+            },
+        },
+    }
+
+
+def _has_module(name: str) -> bool:
+    import importlib.util
+
+    return importlib.util.find_spec(name) is not None
 
 
 @app.get("/config")
@@ -323,12 +482,16 @@ def auth_login(req: LoginRequest):
 async def start_research(req: StartResearchRequest):
     session_id = uuid.uuid4().hex[:12]
     BUS.open(session_id)
+<<<<<<< HEAD
     raw_query = req.target.strip()
     objective = (req.objective or raw_query).strip()
     target = primary_target_from_query(raw_query)
     mode = (req.mode or "chat").strip().lower()
     if mode not in {"chat", "standard", "deep"}:
         mode = "chat"
+=======
+    _session_record(session_id, mode=req.mode or "standard", target=req.target, objective=req.objective)
+>>>>>>> f2b7297 (Fix React hydration mismatch, apply scrapling & Yahoo Finance patches, and stabilize backend API)
 
     async def _runner() -> None:
         try:
@@ -347,6 +510,7 @@ async def start_research(req: StartResearchRequest):
                     max_steps=base_steps,
                     session_id=session_id,
                     auto_depth=req.max_steps is None,
+<<<<<<< HEAD
                     response_depth=mode,
                     output_mode=req.output_mode,
                     breadth_search_timeout=(150.0 if mode == "deep" else 110.0),
@@ -354,6 +518,11 @@ async def start_research(req: StartResearchRequest):
                     reflection_per_query_timeout=(55.0 if mode == "deep" else 38.0),
                     blindspot_per_query_timeout=(45.0 if mode == "deep" else 32.0),
                     news_timeout=(40.0 if mode == "deep" else 30.0),
+=======
+                    max_wall_seconds=req.max_wall_seconds,
+                    heartbeat_interval_s=req.heartbeat_interval_s,
+                    synth_model=os.getenv("FINAGENT_SYNTH_MODEL"),
+>>>>>>> f2b7297 (Fix React hydration mismatch, apply scrapling & Yahoo Finance patches, and stabilize backend API)
                 ),
             )
         except Exception as exc:
@@ -362,7 +531,13 @@ async def start_research(req: StartResearchRequest):
             BUS.close(session_id)
 
     _TASKS[session_id] = asyncio.create_task(_runner())
-    return JSONResponse({"session_id": session_id, "stream": f"/sessions/{session_id}/stream"})
+    return JSONResponse({
+        "session_id": session_id,
+        "stream": f"/sessions/{session_id}/stream",
+        "status": f"/sessions/{session_id}/status",
+        "events": f"/sessions/{session_id}/events",
+        "result": f"/sessions/{session_id}/result",
+    })
 
 
 # ── Deep Research: multi-pass long-chain reasoning ──────────────────────
@@ -385,13 +560,31 @@ async def start_deep_research(req: DeepResearchRequest):
     """
     master_session = uuid.uuid4().hex[:12]
     BUS.open(master_session)
+<<<<<<< HEAD
     raw_query = req.target.strip()
     target = primary_target_from_query(raw_query)
+=======
+    _session_record(master_session, mode="deep", target=req.target, objective="Multi-pass deep research")
+>>>>>>> f2b7297 (Fix React hydration mismatch, apply scrapling & Yahoo Finance patches, and stabilize backend API)
 
     async def _deep_runner() -> None:
-        total_passes = min(req.passes, len(_DEEP_PASS_OBJECTIVES))
+        total_passes = req.passes
+        completed_passes = 0
+        started_at = asyncio.get_running_loop().time()
         try:
             for i in range(total_passes):
+                remaining = None
+                if req.max_wall_seconds is not None:
+                    remaining = req.max_wall_seconds - (asyncio.get_running_loop().time() - started_at)
+                    if remaining <= 0:
+                        BUS.emit(
+                            master_session,
+                            "phase",
+                            phase="stopped",
+                            reason="time_budget",
+                            note="Deep research wall-clock budget reached.",
+                        )
+                        break
                 objective = _DEEP_PASS_OBJECTIVES[i % len(_DEEP_PASS_OBJECTIVES)]
                 pass_label = f"Pass {i+1}/{total_passes}"
                 BUS.emit(
@@ -419,6 +612,7 @@ async def start_deep_research(req: DeepResearchRequest):
                         enable_memory=True,
                         reflection_max_rounds=3,
                         quality_threshold=65.0,
+<<<<<<< HEAD
                         synth_model="gpt-4o",
                         response_depth=("deep" if i == total_passes - 1 else "standard"),
                         output_mode=("deep_research_report" if i == total_passes - 1 else None),
@@ -429,6 +623,12 @@ async def start_deep_research(req: DeepResearchRequest):
                         reflection_per_query_timeout=60.0,
                         blindspot_per_query_timeout=50.0,
                         news_timeout=45.0,
+=======
+                        synth_model=os.getenv("FINAGENT_SYNTH_MODEL"),
+                        max_wall_seconds=remaining,
+                        heartbeat_interval_s=req.heartbeat_interval_s,
+                        close_bus_on_finish=False,
+>>>>>>> f2b7297 (Fix React hydration mismatch, apply scrapling & Yahoo Finance patches, and stabilize backend API)
                     ),
                 )
 
@@ -439,12 +639,13 @@ async def start_deep_research(req: DeepResearchRequest):
                     objective=objective,
                     status="done",
                 )
+                completed_passes += 1
 
                 # Brief pause between passes to let memory persist
                 if i < total_passes - 1:
                     await asyncio.sleep(2)
 
-            BUS.emit(master_session, "deep_complete", passes=total_passes)
+            BUS.emit(master_session, "deep_complete", passes=completed_passes, requested_passes=total_passes)
         except Exception as exc:
             logger.exception("deep research %s crashed on pass", master_session)
             BUS.emit(master_session, "error", message=f"Deep research failed: {exc}")
@@ -455,9 +656,53 @@ async def start_deep_research(req: DeepResearchRequest):
     return JSONResponse({
         "session_id": master_session,
         "stream": f"/sessions/{master_session}/stream",
+        "status": f"/sessions/{master_session}/status",
+        "events": f"/sessions/{master_session}/events",
+        "result": f"/sessions/{master_session}/result",
         "mode": "deep",
-        "passes": min(req.passes, len(_DEEP_PASS_OBJECTIVES)),
+        "passes": req.passes,
     })
+
+
+@app.post("/chat/research")
+async def chat_research(req: ChatResearchRequest):
+    """Chat-interface friendly entrypoint.
+
+    Starts a background research job and returns polling/SSE/result URLs.
+    A chat backend can call this, periodically poll `/status` or `/events`,
+    then fetch `/result` when done.
+    """
+    target = (req.target or req.message).strip()
+    mode = (req.mode or "standard").strip().lower()
+    if mode == "marathon":
+        return await start_deep_research(
+            DeepResearchRequest(
+                target=target,
+                passes=12,
+                pass_depth=120,
+                max_wall_seconds=req.max_wall_seconds or 4 * 60 * 60,
+                heartbeat_interval_s=20,
+            )
+        )
+    if mode == "deep":
+        return await start_deep_research(
+            DeepResearchRequest(
+                target=target,
+                passes=5,
+                pass_depth=40,
+                max_wall_seconds=req.max_wall_seconds,
+                heartbeat_interval_s=20,
+            )
+        )
+    return await start_research(
+        StartResearchRequest(
+            target=target,
+            objective=req.message,
+            max_wall_seconds=req.max_wall_seconds,
+            heartbeat_interval_s=20,
+            mode="standard",
+        )
+    )
 
 
 @app.get("/memos")
@@ -490,22 +735,64 @@ def get_memo(session_id: str):
     return HTMLResponse(memo_path.read_text(encoding="utf-8"), media_type="text/markdown")
 
 
+@app.get("/sessions/{session_id}/status")
+def session_status(session_id: str) -> JSONResponse:
+    return JSONResponse(_session_status(session_id))
+
+
+@app.get("/sessions/{session_id}/events")
+def session_events(session_id: str, after: int = 0, limit: int = 250) -> JSONResponse:
+    if not BUS.known(session_id):
+        raise HTTPException(status_code=404, detail="Unknown session")
+    events = [_event_payload(idx, event) for idx, event in BUS.history(session_id, after=after, limit=limit)]
+    return JSONResponse({
+        "session_id": session_id,
+        "events": events,
+        "next_after": (events[-1]["id"] + 1 if events else after),
+        "closed": BUS.is_closed(session_id),
+    })
+
+
+@app.get("/sessions/{session_id}/result")
+def session_result(session_id: str) -> JSONResponse:
+    status = _session_status(session_id)
+    memo_path = _MEMOS_DIR / f"{session_id}.md"
+    memo_text = memo_path.read_text(encoding="utf-8") if memo_path.is_file() else None
+    return JSONResponse({
+        "session_id": session_id,
+        "status": status["status"],
+        "target": status.get("target"),
+        "mode": status.get("mode"),
+        "final": status.get("final"),
+        "memo": memo_text,
+        "memo_event": status.get("memo"),
+        "error": status.get("error"),
+    })
+
+
 @app.get("/sessions/{session_id}/stream")
 async def stream_session(session_id: str):
     q = BUS.get(session_id)
-    if q is None:
+    if q is None and not BUS.is_closed(session_id):
         raise HTTPException(status_code=404, detail="Unknown session")
 
     async def gen():
         yield f"event: open\ndata: {json.dumps({'session_id': session_id})}\n\n"
+        if q is None and BUS.is_closed(session_id):
+            for idx, event in BUS.history(session_id, limit=5000):
+                payload = _event_payload(idx, event)
+                yield f"id: {idx}\nevent: {event.type}\ndata: {json.dumps(payload, default=str)}\n\n"
+            yield "event: done\ndata: {}\n\n"
+            return
         try:
             while True:
                 event = await q.get()
                 if event is None:
                     yield "event: done\ndata: {}\n\n"
                     return
-                payload = {"type": event.type, "timestamp": event.timestamp, **event.payload}
-                yield f"event: {event.type}\ndata: {json.dumps(payload, default=str)}\n\n"
+                idx = event.seq
+                payload = {"id": idx, "type": event.type, "timestamp": event.timestamp, **event.payload}
+                yield f"id: {idx}\nevent: {event.type}\ndata: {json.dumps(payload, default=str)}\n\n"
         finally:
             BUS.remove(session_id)
             _TASKS.pop(session_id, None)

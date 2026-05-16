@@ -29,7 +29,7 @@ type StreamEvent = {
   domain?: string;
 };
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "http://localhost:8080";
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
@@ -405,11 +405,13 @@ export default function Home() {
                   placeholder="Ask ORACLE to analyze a stock, compare peers, or fetch news..."
                   className="flex-1 bg-transparent px-6 py-4 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-0 text-[15px]"
                   disabled={isLoading}
+                  suppressHydrationWarning
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || isLoading}
                   className="mr-2 p-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors"
+                  suppressHydrationWarning
                 >
                   {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
                 </button>

@@ -168,6 +168,24 @@
       background: rgba(255, 255, 255, 0.02);
     }
 
+    .memo-prose pre {
+      margin: 12px 0;
+      padding: 12px;
+      overflow-x: auto;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 12px;
+    }
+
+    .finchart-legend i {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      margin-right: 6px;
+    }
+
     .stream-cursor::after {
       content: "▍";
       color: #8b949e;
@@ -532,6 +550,10 @@
               <button id="modeDeep"
                 class="mode-toggle ml-2 text-[9px] uppercase font-mono px-2 py-1 border border-white/[0.09] rounded hover:text-white hover:border-white/20 transition-colors tracking-widest">
                 Deep Mode
+              </button>
+              <button id="modeMarathon"
+                class="mode-toggle text-[9px] uppercase font-mono px-2 py-1 border border-white/[0.09] rounded hover:text-white hover:border-white/20 transition-colors tracking-widest">
+                Marathon
               </button>
             </div>
             <button id="executeBtn"
@@ -1699,6 +1721,75 @@
       const c = ({ HIGH: "conf-high", MEDIUM: "conf-medium", LOW: "conf-low", DERIVED: "conf-derived" })[level] || "conf-derived";
       return `<span class="conf-pill ${c}">${level}</span>`;
     }
+    function renderFinChartFence(raw) {
+      let cfg;
+      try { cfg = JSON.parse(raw); } catch (_) {
+        return `<pre><code>${escapeHtmlMd(raw)}</code></pre>`;
+      }
+      const labels = Array.isArray(cfg.labels) ? cfg.labels.map((x) => String(x).slice(0, 32)) : [];
+      const series = Array.isArray(cfg.series) ? cfg.series.slice(0, 4).map((s) => ({
+        name: String(s.name || "Series").slice(0, 40),
+        values: Array.isArray(s.values) ? s.values.map((v) => Number(v)).filter((v) => Number.isFinite(v)) : [],
+      })).filter((s) => s.values.length) : [];
+      if (!labels.length || !series.length) return `<pre><code>${escapeHtmlMd(raw)}</code></pre>`;
+      const W = 720, H = 260, PL = 64, PR = 20, PT = 32, PB = 46;
+      const iw = W - PL - PR, ih = H - PT - PB;
+      const vals = series.flatMap((s) => s.values);
+      const maxV = Math.max(...vals, 0), minV = Math.min(...vals, 0);
+      const range = maxV - minV || 1;
+      const yAt = (v) => PT + ih - ((v - minV) / range) * ih;
+      const xAt = (i) => PL + (labels.length === 1 ? iw / 2 : (i / (labels.length - 1)) * iw);
+      const palette = ["#6ee7b7", "#93c5fd", "#fbbf24", "#f0abfc"];
+      const fmt = (v) => {
+        const a = Math.abs(v);
+        if (a >= 1e12) return (v / 1e12).toFixed(1) + "T";
+        if (a >= 1e9) return (v / 1e9).toFixed(1) + "B";
+        if (a >= 1e6) return (v / 1e6).toFixed(1) + "M";
+        if (a >= 1e3) return (v / 1e3).toFixed(1) + "K";
+        return String(Math.round(v * 100) / 100);
+      };
+      const yTicks = [0, 1, 2, 3, 4].map((t) => minV + (range * t) / 4).map((v) => {
+        const y = yAt(v);
+        return `<line x1="${PL}" y1="${y}" x2="${W - PR}" y2="${y}" stroke="rgba(255,255,255,.08)"/><text x="${PL - 8}" y="${y + 4}" text-anchor="end" fill="#94a0c2" style="font:10px monospace">${escapeHtmlMd(fmt(v))}</text>`;
+      }).join("");
+      const xLabels = labels.map((l, i) => `<text x="${xAt(i)}" y="${H - 14}" text-anchor="middle" fill="#94a0c2" style="font:10px monospace">${escapeHtmlMd(String(l).slice(0, 8))}</text>`).join("");
+      const type = String(cfg.type || "line").toLowerCase();
+      let marks = "";
+      if (type === "bar") {
+        const groupW = iw / Math.max(labels.length, 1);
+        const barW = Math.max(6, Math.min(28, (groupW * 0.7) / series.length));
+        const zero = yAt(0);
+        marks = series.map((s, si) => s.values.slice(0, labels.length).map((v, i) => {
+          const x = PL + i * groupW + (groupW - barW * series.length) / 2 + si * barW;
+          const y = Math.min(yAt(v), zero), h = Math.max(1, Math.abs(zero - yAt(v)));
+          return `<rect x="${x}" y="${y}" width="${barW - 2}" height="${h}" rx="3" fill="${palette[si % palette.length]}" fill-opacity=".86"><title>${escapeHtmlMd(s.name)}: ${escapeHtmlMd(fmt(v))}</title></rect>`;
+        }).join("")).join("");
+      } else {
+        marks = series.map((s, si) => {
+          const pts = s.values.slice(0, labels.length).map((v, i) => `${xAt(i)},${yAt(v)}`).join(" ");
+          return `<polyline points="${pts}" fill="none" stroke="${palette[si % palette.length]}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+        }).join("");
+      }
+      const legend = series.map((s, i) => `<span><i style="background:${palette[i % palette.length]}"></i>${escapeHtmlMd(s.name)}</span>`).join("");
+      return `<div class="my-5 rounded-lg border border-white/[0.08] bg-black/15 p-3 overflow-x-auto"><div class="text-[12px] text-on-surface mb-2">${escapeHtmlMd(cfg.title || "Chart")}</div><svg viewBox="0 0 ${W} ${H}" class="w-full min-w-[520px] h-[260px]">${yTicks}${xLabels}${marks}</svg><div class="label-mono text-[10px] text-on-surface-variant flex flex-wrap gap-3 finchart-legend">${legend}</div></div>`;
+    }
+    async function hydrateMermaidBlocks() {
+      const blocks = document.querySelectorAll("#memoBody .mermaid[data-raw]");
+      if (!blocks.length) return;
+      try {
+        if (!window.mermaid) {
+          const mod = await import("https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs");
+          window.mermaid = mod.default;
+          window.mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict" });
+        }
+        for (const el of blocks) {
+          el.textContent = el.dataset.raw || "";
+        }
+        await window.mermaid.run({ nodes: Array.from(blocks) });
+      } catch (_) {
+        blocks.forEach((el) => { el.outerHTML = `<pre><code>${escapeHtmlMd(el.dataset.raw || "")}</code></pre>`; });
+      }
+    }
     function renderMarkdown(src) {
       if (!src) return "";
       const lines = src.replace(/\r\n/g, "\n").split("\n");
@@ -1710,6 +1801,25 @@
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const stripped = line.trim();
+        if (stripped.startsWith("```")) {
+          closeList(); closeTable();
+          const lang = stripped.slice(3).trim().toLowerCase();
+          const block = [];
+          i += 1;
+          while (i < lines.length && !lines[i].trim().startsWith("```")) {
+            block.push(lines[i]);
+            i += 1;
+          }
+          const raw = block.join("\n");
+          if (lang === "finchart" || lang === "finchartjson") {
+            out.push(renderFinChartFence(raw));
+          } else if (lang === "mermaid") {
+            out.push(`<div class="my-5 rounded-lg border border-white/[0.08] bg-black/15 p-3 overflow-x-auto"><div class="mermaid" data-raw="${escapeHtmlMd(raw)}">${escapeHtmlMd(raw)}</div></div>`);
+          } else {
+            out.push(`<pre><code>${escapeHtmlMd(raw)}</code></pre>`);
+          }
+          continue;
+        }
         if (!stripped) { closeList(); closeTable(); continue; }
         // Heading
         let m = stripped.match(/^(#{1,4})\s+(.*?)(\s*\[CONFIDENCE:\s*(HIGH|MEDIUM|LOW|DERIVED)\])?$/i);
@@ -1763,6 +1873,7 @@
     function setMemoMarkdown(text) {
       const el = $("memoBody");
       el.innerHTML = renderMarkdown(text);
+      hydrateMermaidBlocks();
     }
 
     function openMemoInThread(memoId, title) {
@@ -1871,8 +1982,10 @@
       tickHandle = setInterval(tickElapsed, 250);
 
       let resp;
-      const endpoint = researchMode === "deep" ? "/research/deep" : "/research/start";
-      const payload = researchMode === "deep"
+      const endpoint = (researchMode === "deep" || researchMode === "marathon") ? "/research/deep" : "/research/start";
+      const payload = researchMode === "marathon"
+        ? { target, passes: 12, pass_depth: 120, max_wall_seconds: 4 * 60 * 60, heartbeat_interval_s: 20 }
+        : researchMode === "deep"
         ? { target, passes: 5, pass_depth: 40 }
         : { target, mode: "chat" };
       try {
@@ -2009,6 +2122,15 @@
       eventSource.addEventListener("playbook_promoted", (e) => {
         const d = JSON.parse(e.data);
         pushActivity("inventory_2", "Playbook", `Promoted ${d.name} for ${d.geography}`, "done");
+      });
+      eventSource.addEventListener("skill_generated", (e) => {
+        const d = JSON.parse(e.data);
+        pushActivity("school", "Skill", `Generated ${d.title}`, "done", d.path || "");
+      });
+      eventSource.addEventListener("heartbeat", (e) => {
+        const d = JSON.parse(e.data);
+        const secs = Math.round((d.elapsed_ms || 0) / 1000);
+        pushActivity("monitor_heart", "Heartbeat", `Still running at ${secs}s`, "running");
       });
       eventSource.addEventListener("finding", (e) => {
         const d = JSON.parse(e.data);
@@ -2169,10 +2291,11 @@
         b.classList.add("bg-surface-container-low/50", "text-on-surface-variant", "border-outline-variant/20");
       });
       const isDeep = btn.id === "modeDeep";
-      researchMode = isDeep ? "deep" : "standard";
-      if (isDeep) {
+      const isMarathon = btn.id === "modeMarathon";
+      researchMode = isMarathon ? "marathon" : (isDeep ? "deep" : "standard");
+      if (isDeep || isMarathon) {
         btn.classList.remove("bg-surface-container-low/50", "text-on-surface-variant", "border-outline-variant/20");
-        btn.classList.add("bg-warn/10", "text-warn", "border-warn/30");
+        btn.classList.add(isMarathon ? "bg-primary/10" : "bg-warn/10", isMarathon ? "text-primary" : "text-warn", isMarathon ? "border-primary/30" : "border-warn/30");
       } else {
         btn.classList.remove("bg-surface-container-low/50", "text-on-surface-variant", "border-outline-variant/20");
         btn.classList.add("bg-primary/10", "text-primary", "border-primary/30");
