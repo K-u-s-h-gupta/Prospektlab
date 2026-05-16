@@ -6,8 +6,15 @@ Python only the package is importable if both exist, so the long-running harness
 """
 
 from dotenv import load_dotenv
+import os
+from pathlib import Path
 
-load_dotenv()
+# Load from the finagent directory's .env file
+env_path = Path(__file__).parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    load_dotenv()
 
 from finagent.settings import FinAgentSettings, load_settings
 

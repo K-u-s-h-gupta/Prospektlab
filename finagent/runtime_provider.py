@@ -10,7 +10,8 @@ from typing import Protocol
 @dataclass
 class OpenAIConfig:
     api_key: str
-    model: str = "qwen/qwen3.5-plus-20260420"
+    model: str = "gpt-4o-mini"
+    base_url: str | None = None
 
 
 class ChatCompleter(Protocol):
@@ -18,8 +19,9 @@ class ChatCompleter(Protocol):
 
 
 def resolve_openai_config() -> OpenAIConfig | None:
-    key = os.getenv("OPENROUTER_API_KEY")
-    if not key:
-        return None
-    model = os.getenv("FINAGENT_OPENAI_MODEL", "qwen/qwen3.5-plus-20260420")
-    return OpenAIConfig(api_key=key, model=model)
+    
+    key = os.getenv("OPENAI_API_KEY")
+    if key:
+        model = os.getenv("FINAGENT_OPENAI_MODEL", "gpt-4o-mini")
+        return OpenAIConfig(api_key=key, model=model)
+    return None

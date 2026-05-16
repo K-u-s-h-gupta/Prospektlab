@@ -48,11 +48,7 @@ INDIA-SPECIFIC METHODOLOGY:
 - For governance: check promoter pledge %, board composition, SEBI insider trading disclosures.
 - Valuation multiples: use P/E, EV/EBITDA, P/B — reference Nifty 50 sector peers for context.
 
-OUTPUT: research memo with executive summary (INR-first), company overview, financial profile
-(with INR figures), market position, live market picture (NSE price + 52-week range),
-community/retail sentiment, key risks (SEBI/RBI angle), bull and bear thesis, data quality table,
-citation log. Use inline markers: [SOURCE], [AS-OF], [ESTIMATE], [CONFLICT], [CHECKPOINT],
-[GATE], [WARNING], [ERROR].
+OUTPUT: Provide a comprehensive, context-aware conversational response. Answer the user's specific objective directly. If they ask for a comparison, provide a structured comparison. If they ask for an earnings estimate, provide an earnings estimate. Format the output using rich Markdown (headers, bullet points, bold text). Use tables for comparisons or financial data series. Use inline markers: [SOURCE], [AS-OF], [ESTIMATE], [CONFLICT]. Ensure the tone is professional, insightful, and directly addresses the query without unnecessary boilerplate.
 
 NEVER: invent numbers; cite unread sources; present estimates as facts; export without confirmation;
 silently resolve conflicts; end long runs without checkpoint; skip pre-flight; give buy/sell advice

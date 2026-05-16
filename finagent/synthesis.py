@@ -409,24 +409,19 @@ async def _openai_memo(
     except ImportError as exc:
         raise RuntimeError("openai package not installed") from exc
 
-    client = AsyncOpenAI(api_key=cfg.api_key)
+    client = AsyncOpenAI(api_key=cfg.api_key, base_url=cfg.base_url)
     system_prompt = default_system_prompt() + "\n" + _LLM_STYLE_GUIDE
     user_prompt = (
         f"Target: {target}\n"
         f"Objective: {objective}\n\n"
-        "Compose a research memo with these sections, in this order, "
-        "each as natural prose paragraphs:\n"
-        "  1. Executive Summary — three to four sentences, the headline.\n"
-        "  2. Company Overview — what they do, where they sit, scale.\n"
-        "  3. Financial Profile — revenue, profitability, balance sheet, "
-        "     valuation. Cite specific figures with INR equivalents.\n"
-        "  4. Market & Competitive Position — who they compete with, share.\n"
-        "  5. Live Market Picture — price, 52-week context, sentiment.\n"
-        "  6. Community & Retail Sentiment — Reddit / HN / StockTwits signal.\n"
-        "  7. Key Risks — pull from the Annual Report / SEBI filing risk disclosures, then add macro/sector.\n"
-        "  8. Bull and Bear Thesis — two paragraphs, each a coherent case.\n"
-        "  9. Data Quality & Conflicts — list any cross-source conflicts.\n"
-        " 10. Citations — numbered list of sources used.\n\n"
+        "You are an expert financial advisor. Provide a comprehensive, structured response "
+        "addressing the user's objective directly.\n"
+        "- Format your answer beautifully using Markdown (bold text, bullet points, headers).\n"
+        "- Use tables to present comparative data or key financial metrics clearly.\n"
+        "- If the user asks for a comparison, structure it as a comparison.\n"
+        "- If they ask for an estimate or analysis, structure it accordingly.\n"
+        "- Cite your sources using the numbered citations provided in the sources list.\n"
+        "- Never hallucinate numbers. Use the provided facts and sources exclusively.\n\n"
         f"=== FACTS ===\n{facts}\n\n"
         f"=== SOURCES ===\n{digest}\n\n"
         f"{_conflict_block(conflicts)}"
@@ -459,7 +454,7 @@ async def _openai_memo(
                 continue
             chunks.append(text)
             await _emit_token(on_token, text)
-        full = _scrub_prose("".join(chunks).strip())
+        full = "".join(chunks).strip()
         if full:
             return full
         resp = await client.chat.completions.create(
@@ -477,7 +472,7 @@ async def _openai_memo(
                 part.get("text", "") if isinstance(part, dict) else getattr(part, "text", "")
                 for part in final
             )
-        final = _scrub_prose(str(final).strip())
+        final = str(final).strip()
         if final:
             await _emit_token(on_token, final)
         return final
@@ -1287,85 +1282,80 @@ async def synthesize_memo(
         explicit_mode=output_mode,
     )
 
-    if output_mode or depth != ResponseDepth.STANDARD:
-        peer_quotes = await _load_peer_quotes(objective, target, entity, bundle, mode)
-        artifact = build_answer_artifact(
-            target=target,
-            objective=objective,
-            mode=mode,
-            depth=depth,
-            bundle=bundle,
-            docs=docs,
-            checkpoint=checkpoint,
-            conflicts=conflicts,
-            entity=entity,
-            specialist_findings=specialist_findings or [],
-            peer_quotes=peer_quotes,
-            quality_report=quality_report,
+    peer_quotes = await _load_peer_quotes(objective, target, entity, bundle, mode)
+    artifact = build_answer_artifact(
+        target=target,
+        objective=objective,
+        mode=mode,
+        depth=depth,
+        bundle=bundle,
+        docs=docs,
+        checkpoint=checkpoint,
+        conflicts=conflicts,
+        entity=entity,
+        specialist_findings=specialist_findings or [],
+        peer_quotes=peer_quotes,
+        quality_report=quality_report,
+    )
+    
+    # Emit visual data event if session_id provided
+    if session_id:
+        from finagent.events import BUS
+        BUS.emit(
+            session_id,
+            "visual_data_ready",
+            metric_cards=[
+                {
+                    "label": card.label,
+                    "value": card.value,
+                    "change": card.change,
+                    "change_type": card.change_type,
+                    "icon": card.icon,
+                    "sparkline_svg": card.sparkline_svg,
+                    "is_partial": card.is_partial,
+                }
+                for card in artifact.metric_cards
+            ] if artifact.metric_cards else [],
+            charts=[
+                {
+                    "id": chart.id,
+                    "title": chart.title,
+                    "subtitle": chart.subtitle,
+                    "chart_type": chart.chart_type,
+                    "svg_data": chart.svg_data,
+                    "png_data": chart.png_data.decode('latin-1') if chart.png_data else "",
+                    "width": chart.dimensions.get("width", 600) if hasattr(chart, 'dimensions') else 600,
+                    "height": chart.dimensions.get("height", 300) if hasattr(chart, 'dimensions') else 300,
+                    "is_partial": chart.is_partial,
+                }
+                for chart in artifact.charts
+            ] if artifact.charts else [],
+            comparison_results=[
+                {
+                    "metric": r.metric,
+                    "primary_value": r.primary_value,
+                    "secondary_value": r.secondary_value,
+                    "winner": r.winner,
+                    "delta": r.delta,
+                    "primary_entity": r.primary_entity,
+                    "secondary_entity": r.secondary_entity,
+                }
+                for r in artifact.comparison_results
+            ] if artifact.comparison_results else None,
+            visual_sections=[
+                {
+                    "type": vs.section_type,
+                    "title": vs.title,
+                    "columns": vs.columns,
+                    "order": vs.order,
+                    "is_partial": vs.is_partial,
+                }
+                for vs in artifact.visual_sections
+            ] if artifact.visual_sections else [],
         )
-        
-        # Emit visual data event if session_id provided
-        if session_id:
-            from finagent.events import BUS
-            BUS.emit(
-                session_id,
-                "visual_data_ready",
-                metric_cards=[
-                    {
-                        "label": card.label,
-                        "value": card.value,
-                        "change": card.change,
-                        "change_type": card.change_type,
-                        "icon": card.icon,
-                        "sparkline_svg": card.sparkline_svg,
-                        "is_partial": card.is_partial,
-                    }
-                    for card in artifact.metric_cards
-                ] if artifact.metric_cards else [],
-                charts=[
-                    {
-                        "id": chart.id,
-                        "title": chart.title,
-                        "subtitle": chart.subtitle,
-                        "chart_type": chart.chart_type,
-                        "svg_data": chart.svg_data,
-                        "png_data": chart.png_data.decode('latin-1') if chart.png_data else "",
-                        "width": chart.dimensions.get("width", 600) if hasattr(chart, 'dimensions') else 600,
-                        "height": chart.dimensions.get("height", 300) if hasattr(chart, 'dimensions') else 300,
-                        "is_partial": chart.is_partial,
-                    }
-                    for chart in artifact.charts
-                ] if artifact.charts else [],
-                comparison_results=[
-                    {
-                        "metric": r.metric,
-                        "primary_value": r.primary_value,
-                        "secondary_value": r.secondary_value,
-                        "winner": r.winner,
-                        "delta": r.delta,
-                        "primary_entity": r.primary_entity,
-                        "secondary_entity": r.secondary_entity,
-                    }
-                    for r in artifact.comparison_results
-                ] if artifact.comparison_results else None,
-                visual_sections=[
-                    {
-                        "type": vs.section_type,
-                        "title": vs.title,
-                        "columns": vs.columns,
-                        "order": vs.order,
-                        "is_partial": vs.is_partial,
-                    }
-                    for vs in artifact.visual_sections
-                ] if artifact.visual_sections else [],
-            )
-        
-        memo = render_markdown(artifact)
-        await _emit_token(on_token, memo)
-        return SynthesisResult(memo=memo, via=f"artifact:{mode.value}", used_sources=used)
 
     facts = _build_facts_block(bundle)
-    if os.getenv("OPENAI_API_KEY"):
+    if resolve_openai_config() is not None:
         try:
             memo = await asyncio.wait_for(
                 _openai_memo(target, objective, digest, facts, conflicts, on_token=on_token, synth_model=synth_model),
@@ -1374,8 +1364,11 @@ async def synthesize_memo(
             return SynthesisResult(memo=memo, via="openai", used_sources=used)
         except Exception as exc:
             logger.warning("OpenAI synthesis failed (%s); using structured prose builder", exc)
-    memo = _structured_memo(target, list(checkpoint.citation_log), docs, conflicts, bundle)
-    return SynthesisResult(memo=memo, via="structured", used_sources=used)
+            
+    # Fallback to the python-generated structured text if LLM fails
+    memo = render_markdown(artifact)
+    await _emit_token(on_token, memo)
+    return SynthesisResult(memo=memo, via=f"artifact:{mode.value}", used_sources=used)
 
 
 async def _load_peer_quotes(

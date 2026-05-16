@@ -12,6 +12,7 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" />
   <link rel="stylesheet"
     href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     tailwind.config = {
       darkMode: "class",
@@ -267,61 +268,52 @@
       display: block;
     }
 
-    /* ═══ VISUAL OUTPUT STYLES ═══════════════════════════════════════ */
+    /* ═══ NEW CLAUDE-LIKE VISUAL OUTPUT STYLES ═══════════════════════════════════════ */
     
+    .claude-card {
+      background: #0f1117;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    .claude-header {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #8b949e;
+      margin-bottom: 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
     /* Metric Cards Grid */
     .metric-cards-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 1rem;
-      margin-bottom: 2rem;
-    }
-    
-    @media (min-width: 1024px) {
-      .metric-cards-grid {
-        grid-template-columns: repeat(4, 1fr);
-      }
-    }
-    
-    @media (min-width: 768px) and (max-width: 1023px) {
-      .metric-cards-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
+      margin-bottom: 1.5rem;
     }
     
     .metric-card {
-      background: linear-gradient(135deg, #1a1c23 0%, #13141a 100%);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: #161b22;
+      border: 1px solid rgba(255, 255, 255, 0.05);
       border-radius: 12px;
       padding: 1.25rem;
-      transition: transform 0.2s, box-shadow 0.2s;
+      transition: border-color 0.2s;
     }
-    
+
     .metric-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-    
-    .metric-card.positive {
-      border-left: 4px solid #10b981;
-    }
-    
-    .metric-card.negative {
-      border-left: 4px solid #ef4444;
-    }
-    
-    .metric-card.neutral {
-      border-left: 4px solid #6b7280;
-    }
-    
-    .metric-card.partial {
-      background: linear-gradient(135deg, #2d2415 0%, #1f1a12 100%);
-      border-color: #f59e0b;
+      border-color: rgba(255, 255, 255, 0.15);
     }
     
     .metric-label {
       font-size: 0.75rem;
-      color: #9ca3af;
+      color: #8b949e;
       margin-bottom: 0.5rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
@@ -329,150 +321,83 @@
     
     .metric-value {
       font-size: 1.5rem;
-      font-weight: 700;
-      color: #f3f4f6;
+      font-weight: 600;
+      color: #e6edf3;
       margin-bottom: 0.25rem;
     }
     
-    .metric-change {
-      font-size: 0.875rem;
-      font-weight: 500;
-    }
-    
-    .metric-change.positive {
-      color: #10b981;
-    }
-    
-    .metric-change.negative {
-      color: #ef4444;
-    }
-    
-    .metric-change.neutral {
-      color: #6b7280;
-    }
-    
-    /* Charts Grid */
-    .charts-grid {
+    /* Comparison Hero Grid */
+    .comparison-hero-grid {
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 1.5rem;
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
     }
-    
-    @media (min-width: 1024px) {
-      .charts-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-    
-    .chart-container {
-      background: #1a1c23;
+
+    .hero-card {
+      background: #161b22;
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 12px;
-      padding: 1.5rem;
+      padding: 1.25rem;
     }
-    
-    .chart-container h4 {
-      color: #f3f4f6;
-      font-size: 1rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-    }
-    
-    .chart-container img,
-    .chart-container svg {
-      width: 100%;
-      height: auto;
-      border-radius: 8px;
-    }
-    
-    /* Comparison Section */
-    .comparison-section {
-      background: #1a1c23;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 2rem;
-    }
-    
-    .comparison-section h3 {
-      color: #f3f4f6;
-      font-size: 1.125rem;
-      font-weight: 600;
+
+    .hero-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #e6edf3;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
       margin-bottom: 1rem;
     }
-    
-    .comparison-table {
+
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    /* Head to Head Table */
+    .head-to-head-table {
       width: 100%;
       border-collapse: collapse;
-      background: #13141a;
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    
-    .comparison-table th {
-      background: #1f2937;
-      padding: 0.75rem 1rem;
-      text-align: left;
-      font-weight: 600;
-      color: #d1d5db;
       font-size: 0.875rem;
     }
-    
-    .comparison-table td {
+
+    .head-to-head-table th {
+      text-align: left;
       padding: 0.75rem 1rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      color: #e5e7eb;
-    }
-    
-    .comparison-table .winner {
-      background: rgba(16, 185, 129, 0.1);
-      color: #10b981;
+      color: #8b949e;
       font-weight: 600;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
-    
-    .comparison-table .loser {
-      background: rgba(239, 68, 68, 0.1);
-      color: #ef4444;
+
+    .head-to-head-table td {
+      padding: 0.875rem 1rem;
+      color: #c9d1d9;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     }
-    
-    /* Partial Data Badge */
-    .partial-data-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-      background: rgba(245, 158, 11, 0.2);
-      color: #fbbf24;
-      padding: 0.25rem 0.5rem;
-      border-radius: 4px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      margin-top: 0.5rem;
+
+    .head-to-head-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
     }
+
+    .text-success { color: #3fb950; }
+    .text-danger { color: #f85149; }
+    .text-muted { color: #8b949e; }
     
-    /* Sparkline */
-    .sparkline {
-      margin-top: 0.5rem;
-      height: 30px;
-    }
-    
-    .sparkline svg {
+    .chart-container-native {
+      position: relative;
+      height: 300px;
       width: 100%;
-      height: 100%;
+      margin-top: 1rem;
     }
     
-    /* Visual Dashboard Container */
     .visual-dashboard {
       padding: 1rem 0;
-    }
-    
-    .visual-dashboard h4 {
-      color: #f3f4f6;
-      font-size: 1.125rem;
-      font-weight: 600;
-      margin-bottom: 1rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
     }
   </style>
 </head>
@@ -2333,7 +2258,6 @@
       const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
       if (!container) return;
       
-      // Create or get the visual dashboard container
       let dashboard = document.getElementById("visualDashboard");
       if (!dashboard) {
         dashboard = document.createElement("div");
@@ -2342,27 +2266,24 @@
         container.insertBefore(dashboard, container.firstChild);
       }
       
-      let html = '<div class="metric-cards-grid">';
+      let html = '<div class="claude-card"><div class="claude-header"><span>Metric Snapshot</span></div><div class="metric-cards-grid">';
       
       cards.forEach(card => {
         const changeClass = card.change_type || "neutral";
         const partialClass = card.is_partial ? "partial" : "";
-        const changeHtml = card.change ? `<div class="metric-change ${changeClass}">${card.change}</div>` : "";
-        const sparklineHtml = card.sparkline_svg ? `<div class="sparkline">${atob(card.sparkline_svg)}</div>` : "";
-        const partialBadge = card.is_partial ? '<span class="partial-data-badge">⚠ Partial Data</span>' : "";
+        const changeColor = changeClass === "positive" ? "text-success" : (changeClass === "negative" ? "text-danger" : "text-muted");
+        const changeHtml = card.change ? `<div class="metric-change ${changeColor} mt-1 text-xs font-semibold">${card.change}</div>` : "";
         
         html += `
-          <div class="metric-card ${changeClass} ${partialClass}">
+          <div class="metric-card ${partialClass}">
             <div class="metric-label">${card.label}</div>
             <div class="metric-value">${card.value}</div>
             ${changeHtml}
-            ${sparklineHtml}
-            ${partialBadge}
           </div>
         `;
       });
       
-      html += "</div>";
+      html += "</div></div>";
       dashboard.insertAdjacentHTML("beforeend", html);
     }
     
@@ -2378,25 +2299,74 @@
         container.insertBefore(dashboard, container.firstChild);
       }
       
-      let html = '<h4>Charts & Trends</h4><div class="charts-grid">';
-      
-      charts.forEach(chart => {
-        const imageData = chart.svg_data || chart.png_data;
-        const imageSrc = imageData ? `data:image/svg+xml;base64,${imageData}` : "";
-        const partialBadge = chart.is_partial ? '<span class="partial-data-badge">⚠ Partial Data</span>' : "";
+      charts.forEach((chart, index) => {
+        const chartId = `chartCanvas_${Date.now()}_${index}`;
         
-        html += `
-          <div class="chart-container">
-            <h4>${chart.title}</h4>
-            ${chart.subtitle ? `<p style="color: #9ca3af; font-size: 0.875rem; margin-bottom: 0.5rem;">${chart.subtitle}</p>` : ""}
-            ${imageSrc ? `<img src="${imageSrc}" alt="${chart.title}" style="width: 100%; height: auto;" />` : '<p style="color: #6b7280;">Chart unavailable</p>'}
-            ${partialBadge}
+        let html = `
+          <div class="claude-card">
+            <div class="claude-header">
+              <span>${chart.title}</span>
+              ${chart.subtitle ? `<span style="text-transform:none; font-size: 0.7rem; color: #6b7280;">${chart.subtitle}</span>` : ""}
+            </div>
+            <div class="chart-container-native">
+              <canvas id="${chartId}"></canvas>
+            </div>
           </div>
         `;
+        dashboard.insertAdjacentHTML("beforeend", html);
+        
+        // Render Chart.js
+        setTimeout(() => {
+          const ctx = document.getElementById(chartId);
+          if (!ctx) return;
+          
+          const isLine = chart.chart_type === "line";
+          const datasets = (chart.series || []).map(s => {
+            const dataValues = s.data ? s.data.map(d => d.value) : [];
+            const color = s.color || (isLine ? "#3fb950" : "#3b82f6");
+            return {
+              label: s.name,
+              data: dataValues,
+              borderColor: color,
+              backgroundColor: isLine ? 
+                (() => {
+                  let ctx2d = ctx.getContext("2d");
+                  let grad = ctx2d.createLinearGradient(0, 0, 0, 300);
+                  grad.addColorStop(0, color + '66'); // 40% opacity
+                  grad.addColorStop(1, color + '00'); // 0% opacity
+                  return grad;
+                })() : color,
+              fill: isLine,
+              tension: 0.3,
+              borderWidth: 2,
+              pointRadius: isLine ? 0 : 3,
+              pointHoverRadius: 5,
+              borderRadius: isLine ? 0 : 4,
+            };
+          });
+          
+          new Chart(ctx, {
+            type: isLine ? 'line' : 'bar',
+            data: {
+              labels: chart.labels || [],
+              datasets: datasets
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: datasets.length > 1, labels: { color: '#8b949e', font: { family: 'Inter', size: 11 } } },
+                tooltip: { backgroundColor: '#161b22', titleColor: '#c9d1d9', bodyColor: '#c9d1d9', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
+              },
+              scales: {
+                x: { grid: { display: false, color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b949e', font: { family: 'Inter', size: 10 } } },
+                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b949e', font: { family: 'Inter', size: 10 } }, beginAtZero: !isLine }
+              },
+              interaction: { mode: 'index', intersect: false }
+            }
+          });
+        }, 100);
       });
-      
-      html += "</div>";
-      dashboard.insertAdjacentHTML("beforeend", html);
     }
     
     function renderComparison(results) {
@@ -2422,20 +2392,30 @@
         else if (r.winner === "secondary") secondaryWins++;
       });
       
-      let verdict = "";
-      if (primaryWins > secondaryWins) {
-        verdict = `${entity1} leads in ${primaryWins} of ${results.length} key metrics.`;
-      } else if (secondaryWins > primaryWins) {
-        verdict = `${entity2} leads in ${secondaryWins} of ${results.length} key metrics.`;
-      } else {
-        verdict = `Both companies are evenly matched across the metrics analyzed.`;
-      }
-      
       let html = `
-        <div class="comparison-section">
-          <h3>Comparison: ${entity1} vs ${entity2}</h3>
-          <p style="color: #d1d5db; margin-bottom: 1rem; font-size: 0.875rem;">${verdict}</p>
-          <table class="comparison-table">
+        <div class="claude-card">
+          <div class="claude-header">
+            <span>Head-to-head comparison</span>
+          </div>
+          
+          <div class="comparison-hero-grid">
+            <div class="hero-card">
+              <div class="hero-title">
+                <span class="material-symbols-outlined text-primary text-[24px]">corporate_fare</span>
+                ${entity1}
+              </div>
+              <div class="text-xs text-muted mb-4 uppercase tracking-widest">${primaryWins > secondaryWins ? "Leading metrics" : "Competitor"}</div>
+            </div>
+            <div class="hero-card">
+              <div class="hero-title">
+                <span class="material-symbols-outlined text-secondary text-[24px]">corporate_fare</span>
+                ${entity2}
+              </div>
+              <div class="text-xs text-muted mb-4 uppercase tracking-widest">${secondaryWins > primaryWins ? "Leading metrics" : "Competitor"}</div>
+            </div>
+          </div>
+          
+          <table class="head-to-head-table mt-4">
             <thead>
               <tr>
                 <th>Metric</th>
@@ -2448,16 +2428,23 @@
       `;
       
       results.forEach(result => {
-        const primaryClass = result.winner === "primary" ? "winner" : (result.winner === "secondary" ? "loser" : "");
-        const secondaryClass = result.winner === "secondary" ? "winner" : (result.winner === "primary" ? "loser" : "");
-        const delta = result.delta || "-";
+        const primaryIsWinner = result.winner === "primary";
+        const secondaryIsWinner = result.winner === "secondary";
+        
+        const primaryColor = primaryIsWinner ? "color: #3fb950;" : (secondaryIsWinner ? "color: #8b949e;" : "");
+        const secondaryColor = secondaryIsWinner ? "color: #3fb950;" : (primaryIsWinner ? "color: #8b949e;" : "");
+        
+        let advantageText = "-";
+        if (primaryIsWinner) advantageText = `<span class="text-success">${entity1}</span>`;
+        else if (secondaryIsWinner) advantageText = `<span class="text-success">${entity2}</span>`;
+        else advantageText = `<span class="text-muted">Tie</span>`;
         
         html += `
           <tr>
             <td>${result.metric}</td>
-            <td class="${primaryClass}">${result.primary_value}</td>
-            <td class="${secondaryClass}">${result.secondary_value}</td>
-            <td style="color: ${result.winner === 'primary' ? '#10b981' : result.winner === 'secondary' ? '#ef4444' : '#6b7280'};">${delta}</td>
+            <td style="font-weight: 500; ${primaryColor}">${result.primary_value}</td>
+            <td style="font-weight: 500; ${secondaryColor}">${result.secondary_value}</td>
+            <td>${advantageText}</td>
           </tr>
         `;
       });
