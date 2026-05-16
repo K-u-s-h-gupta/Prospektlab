@@ -7,3 +7,5 @@ httpx>=0.27.0
 beautifulsoup4>=4.12.0
 pdfplumber>=0.11.0
 # playwright>=1.49.0  # optional: pip install playwright && playwright install
+
+matplotlib

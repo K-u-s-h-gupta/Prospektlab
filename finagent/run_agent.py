@@ -42,6 +42,7 @@ from finagent.prompt_builder import default_system_prompt
 from finagent.retrieval import build_retrieval_plan
 from finagent.research_planner import ResearchPlan, build_default_plan
 from finagent.router import route_objective
+from finagent.output.intent_classifier import classify_output_mode, normalize_depth
 from finagent.state.checkpoint import Checkpoint, StepResult, empty_checkpoint
 from finagent.state.citation_log import Citation
 from finagent.synthesis import EnrichmentBundle, synthesize_memo
@@ -92,6 +93,9 @@ class AgentLoopConfig:
     reflection_per_query_limit: int = 6
     reflection_per_query_timeout: float = 25.0
     reflection_max_new_docs: int = 80
+    breadth_search_timeout: float = 90.0
+    followup_search_timeout: float = 45.0
+    news_timeout: float = 25.0
     # ── Multi-agent orchestration ──
     enable_multi_agent: bool = True
     agent_deadline_ms: int = 45_000
@@ -101,6 +105,10 @@ class AgentLoopConfig:
     blindspot_per_query_timeout: float = 18.0
     # ── Synthesis ──
     synth_model: str | None = None
+    response_depth: str = "chat"
+    output_mode: str | None = None
+    emit_memo: bool = True
+    close_bus_on_finish: bool = True
 
 
 def _auto_max_steps(objective: str, base: int) -> int:
@@ -114,8 +122,10 @@ def _auto_max_steps(objective: str, base: int) -> int:
         complexity += 0.3
     if any(k in obj for k in ("compare", "vs", "peer", "competitor")):
         complexity += 0.3
-    # Always honour at least 40 steps so the deep-dive rounds have room.
-    return max(40, int(base * complexity))
+    # Chat-mode callers pass a smaller base; keep those runs responsive while
+    # preserving the larger floor for standard/deep research sessions.
+    floor = 24 if base < 40 else 40
+    return max(floor, int(base * complexity))
 
 
 def _tier_to_kind(tier: int) -> str:
@@ -149,6 +159,7 @@ async def _run_enrichment(
     session_id: str,
     *,
     entity,
+    news_timeout: float = 25.0,
 ) -> EnrichmentBundle:
     """Fan-out to SEC, Yahoo, Wikipedia. None failures are non-fatal."""
     BUS.emit(session_id, "phase", phase="enrichment", note="Pulling authoritative APIs (NSE/BSE, Yahoo Finance, Moneycontrol)")
@@ -521,10 +532,10 @@ async def _run_enrichment(
                     gl=entity.profile.news_gl,
                     ceid=entity.profile.news_ceid,
                 ),
-                timeout=15.0,
+                timeout=news_timeout,
             )
         except asyncio.TimeoutError:
-            BUS.emit(session_id, "agent_task", task="News headlines", status="warning", note="Timed out (>15s)")
+            BUS.emit(session_id, "agent_task", task="News headlines", status="warning", note=f"Timed out (>{news_timeout:.0f}s)")
             return []
         except Exception as exc:
             logger.warning("news fetch failed: %s", exc)
@@ -1123,12 +1134,27 @@ async def run_research_session(
         entity,
         playbook_agents=(playbook.selected_agents if playbook else None),
     )
+    response_depth = normalize_depth(cfg.response_depth)
+    output_mode = classify_output_mode(
+        query=objective,
+        target=target,
+        entity=entity,
+        depth=response_depth,
+        explicit_mode=cfg.output_mode,
+    )
     if routing.deep_research:
         cfg.max_steps = max(cfg.max_steps, 80)
         cfg.reflection_max_rounds = max(cfg.reflection_max_rounds, 6)
         cfg.blindspot_max_queries = max(cfg.blindspot_max_queries, 10)
 
     BUS.emit(session_id, "session_started", target=target, objective=objective, plan=pl.to_prompt_block())
+    BUS.emit(
+        session_id,
+        "output_plan",
+        mode=output_mode.value,
+        depth=response_depth.value,
+        title=f"{output_mode.value.replace('_', ' ').title()}",
+    )
     BUS.emit(session_id, "entity_resolved", **entity.to_event_payload())
     if playbook is not None:
         BUS.emit(
@@ -1199,7 +1225,7 @@ async def run_research_session(
 
     bundle = EnrichmentBundle()
     if cfg.enable_enrichment:
-        bundle = await _run_enrichment(target, session_id, entity=entity)
+        bundle = await _run_enrichment(target, session_id, entity=entity, news_timeout=cfg.news_timeout)
 
     # ── Phase 3: breadth survey ───────────────────────────────────────────
     canonical_label = bundle.sec.name if bundle.sec else (bundle.yahoo.name if bundle.yahoo and bundle.yahoo.name else entity.canonical_name or target)
@@ -1218,11 +1244,11 @@ async def run_research_session(
                     preferred_domains=preferred_domains,
                     entity=entity,
                 ),
-                timeout=45.0,
+                timeout=cfg.breadth_search_timeout,
             )
         except asyncio.TimeoutError:
             logger.warning("search_layered timed out")
-            BUS.emit(session_id, "warning", message="breadth-survey timed out after 45s")
+            BUS.emit(session_id, "warning", message=f"breadth-survey timed out after {cfg.breadth_search_timeout:.0f}s")
             docs = []
         except Exception as exc:
             logger.warning("search_layered failed: %s", exc)
@@ -1264,7 +1290,7 @@ async def run_research_session(
                         preferred_domains=preferred_domains,
                         entity=entity,
                     ),
-                    timeout=25.0,
+                    timeout=cfg.followup_search_timeout,
                 )
                 _on_query(q, "done", len(results))
                 return results
@@ -1573,38 +1599,6 @@ async def run_research_session(
         )
 
     # ── Phase 6: synthesis ────────────────────────────────────────────────
-    BUS.emit(session_id, "phase", phase="synthesis", note="Composing memo")
-
-    def _on_memo_token(chunk: str) -> None:
-        BUS.emit(session_id, "memo_token", chunk=chunk)
-
-    synthesis = await synthesize_memo(
-        target,
-        objective,
-        docs,
-        cp,
-        conflicts=conflicts,
-        on_token=_on_memo_token,
-        enrichment=bundle,
-        synth_model=loop_config.synth_model,
-    )
-    memos_dir = finagent_data_path("memos")
-    memos_dir.mkdir(parents=True, exist_ok=True)
-    memo_path = memos_dir / f"{session_id}.md"
-    memo_path.write_text(synthesis.memo, encoding="utf-8")
-
-    elapsed_ms = int((time.perf_counter() - t0) * 1000)
-
-    BUS.emit(
-        session_id,
-        "memo",
-        via=synthesis.via,
-        used_sources=synthesis.used_sources,
-        chars=len(synthesis.memo),
-        path=str(memo_path),
-        preview=synthesis.memo[:2400],
-    )
-    # ── Persist learnings to long-term memory ─────────────────────────────
     final_quality = score_research(
         target=canonical_label,
         bundle=bundle,
@@ -1613,6 +1607,59 @@ async def run_research_session(
         entity=entity,
         conflicts=conflicts,
     )
+
+    synthesis = None
+    memo_path = None
+    if cfg.emit_memo:
+        BUS.emit(
+            session_id,
+            "phase",
+            phase="synthesis",
+            note=f"Composing {output_mode.value.replace('_', ' ')} answer",
+        )
+
+        def _on_memo_token(chunk: str) -> None:
+            BUS.emit(session_id, "memo_token", chunk=chunk)
+
+        synthesis = await synthesize_memo(
+            target,
+            objective,
+            docs,
+            cp,
+            conflicts=conflicts,
+            on_token=_on_memo_token,
+            enrichment=bundle,
+            synth_model=cfg.synth_model,
+            output_mode=output_mode.value,
+            response_depth=response_depth.value,
+            entity=entity,
+            specialist_findings=orchestration_findings,
+            quality_report=final_quality,
+        )
+        memos_dir = finagent_data_path("memos")
+        memos_dir.mkdir(parents=True, exist_ok=True)
+        memo_path = memos_dir / f"{session_id}.md"
+        memo_path.write_text(synthesis.memo, encoding="utf-8")
+
+        BUS.emit(
+            session_id,
+            "memo",
+            via=synthesis.via,
+            used_sources=synthesis.used_sources,
+            chars=len(synthesis.memo),
+            path=str(memo_path),
+            preview=synthesis.memo[:2400],
+        )
+    else:
+        BUS.emit(
+            session_id,
+            "phase",
+            phase="synthesis",
+            note="Skipping memo for intermediate deep-research pass",
+        )
+
+    elapsed_ms = int((time.perf_counter() - t0) * 1000)
+    # ── Persist learnings to long-term memory ─────────────────────────────
     if memory_store is not None:
         try:
             _persist_session_memory(
@@ -1660,8 +1707,10 @@ async def run_research_session(
         primary_citations=primary_count,
         confidence_summary=cp.confidence_summary,
         compressed_at=last_compression_step,
-        memo_path=str(memo_path),
-        memo_via=synthesis.via,
+        memo_path=str(memo_path) if memo_path else "",
+        memo_via=synthesis.via if synthesis else "suppressed",
+        output_mode=output_mode.value,
+        response_depth=response_depth.value,
         conflicts=len(conflicts),
         has_sec=bundle.sec is not None,
         has_yahoo=bundle.yahoo is not None,
@@ -1676,12 +1725,13 @@ async def run_research_session(
         blindspot=blindspot_payload,
         resolved_entity=entity.to_event_payload(),
     )
-    BUS.close(session_id)
+    if cfg.close_bus_on_finish:
+        BUS.close(session_id)
 
     logger.info(
         "Session finished at step %s with %d citations; memo via %s",
         cp.step,
         len(cp.citation_log),
-        synthesis.via,
+        synthesis.via if synthesis else "suppressed",
     )
     return pl, cp

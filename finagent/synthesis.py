@@ -21,7 +21,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from finagent.analysis.conflicts import ConflictReport
+from finagent.output.artifact_builder import build_answer_artifact
+from finagent.output.contracts import OutputMode, ResponseDepth
+from finagent.output.intent_classifier import classify_output_mode, extract_finance_entities, normalize_depth
 from finagent.output.memo_formatter import MemoSection, format_memo
+from finagent.output.renderer import render_markdown
 from finagent.prompt_builder import default_system_prompt
 from finagent.runtime_provider import resolve_openai_config
 from finagent.state.checkpoint import Checkpoint
@@ -38,6 +42,7 @@ from finagent.tools.data import (
     YahooQuote,
     format_dual,
     format_inr,
+    fetch_yahoo_quote,
 )
 from finagent.tools.web.scraper import ScrapedDoc
 
@@ -1263,10 +1268,102 @@ async def synthesize_memo(
     on_token: TokenSink = None,
     enrichment: EnrichmentBundle | None = None,
     synth_model: str | None = None,
+    output_mode: str | None = None,
+    response_depth: str | None = None,
+    entity=None,
+    specialist_findings: list | None = None,
+    quality_report=None,
+    session_id: str | None = None,
 ) -> SynthesisResult:
     digest, used = _build_source_digest(docs)
     conflicts = conflicts or []
     bundle = enrichment or EnrichmentBundle()
+    depth = normalize_depth(response_depth)
+    mode = classify_output_mode(
+        query=objective,
+        target=target,
+        entity=entity,
+        depth=depth,
+        explicit_mode=output_mode,
+    )
+
+    if output_mode or depth != ResponseDepth.STANDARD:
+        peer_quotes = await _load_peer_quotes(objective, target, entity, bundle, mode)
+        artifact = build_answer_artifact(
+            target=target,
+            objective=objective,
+            mode=mode,
+            depth=depth,
+            bundle=bundle,
+            docs=docs,
+            checkpoint=checkpoint,
+            conflicts=conflicts,
+            entity=entity,
+            specialist_findings=specialist_findings or [],
+            peer_quotes=peer_quotes,
+            quality_report=quality_report,
+        )
+        
+        # Emit visual data event if session_id provided
+        if session_id:
+            from finagent.events import BUS
+            BUS.emit(
+                session_id,
+                "visual_data_ready",
+                metric_cards=[
+                    {
+                        "label": card.label,
+                        "value": card.value,
+                        "change": card.change,
+                        "change_type": card.change_type,
+                        "icon": card.icon,
+                        "sparkline_svg": card.sparkline_svg,
+                        "is_partial": card.is_partial,
+                    }
+                    for card in artifact.metric_cards
+                ] if artifact.metric_cards else [],
+                charts=[
+                    {
+                        "id": chart.id,
+                        "title": chart.title,
+                        "subtitle": chart.subtitle,
+                        "chart_type": chart.chart_type,
+                        "svg_data": chart.svg_data,
+                        "png_data": chart.png_data.decode('latin-1') if chart.png_data else "",
+                        "width": chart.dimensions.get("width", 600) if hasattr(chart, 'dimensions') else 600,
+                        "height": chart.dimensions.get("height", 300) if hasattr(chart, 'dimensions') else 300,
+                        "is_partial": chart.is_partial,
+                    }
+                    for chart in artifact.charts
+                ] if artifact.charts else [],
+                comparison_results=[
+                    {
+                        "metric": r.metric,
+                        "primary_value": r.primary_value,
+                        "secondary_value": r.secondary_value,
+                        "winner": r.winner,
+                        "delta": r.delta,
+                        "primary_entity": r.primary_entity,
+                        "secondary_entity": r.secondary_entity,
+                    }
+                    for r in artifact.comparison_results
+                ] if artifact.comparison_results else None,
+                visual_sections=[
+                    {
+                        "type": vs.section_type,
+                        "title": vs.title,
+                        "columns": vs.columns,
+                        "order": vs.order,
+                        "is_partial": vs.is_partial,
+                    }
+                    for vs in artifact.visual_sections
+                ] if artifact.visual_sections else [],
+            )
+        
+        memo = render_markdown(artifact)
+        await _emit_token(on_token, memo)
+        return SynthesisResult(memo=memo, via=f"artifact:{mode.value}", used_sources=used)
+
     facts = _build_facts_block(bundle)
     if os.getenv("OPENAI_API_KEY"):
         try:
@@ -1279,3 +1376,29 @@ async def synthesize_memo(
             logger.warning("OpenAI synthesis failed (%s); using structured prose builder", exc)
     memo = _structured_memo(target, list(checkpoint.citation_log), docs, conflicts, bundle)
     return SynthesisResult(memo=memo, via="structured", used_sources=used)
+
+
+async def _load_peer_quotes(
+    objective: str,
+    target: str,
+    entity,
+    bundle: EnrichmentBundle,
+    mode: OutputMode,
+) -> dict[str, YahooQuote]:
+    if mode != OutputMode.COMPANY_COMPARISON:
+        return {}
+    peers: dict[str, YahooQuote] = {}
+    primary_key = getattr(entity, "yahoo_ticker", None) or getattr(entity, "normalized_name", None)
+    for peer in extract_finance_entities(objective or target, limit=4):
+        key = peer.yahoo_ticker or peer.normalized_name
+        if not key or key == primary_key:
+            continue
+        if not peer.yahoo_ticker:
+            continue
+        try:
+            quote = await asyncio.wait_for(fetch_yahoo_quote(peer.yahoo_ticker), timeout=12.0)
+        except Exception:
+            quote = None
+        if quote is not None:
+            peers[peer.canonical_name or peer.ticker_label or peer.yahoo_ticker] = quote
+    return peers

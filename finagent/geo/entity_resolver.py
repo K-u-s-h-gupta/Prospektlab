@@ -19,6 +19,27 @@ _JAPAN_HINTS = ("japan", "tokyo stock exchange", "tse")
 _EU_HINTS = ("europe", "germany", "france", "london", "xetra", "euronext", "lse")
 _US_SUFFIXES = (" inc", " inc.", " corporation", " corp", " corp.", " holdings")
 _INDIA_SUFFIXES = (" limited", " ltd", " ltd.", " pvt", " private limited")
+_US_TICKER_OVERRIDES = {
+    "AAPL",
+    "MSFT",
+    "GOOG",
+    "GOOGL",
+    "AMZN",
+    "META",
+    "TSLA",
+    "NVDA",
+    "NFLX",
+    "AMD",
+    "JPM",
+    "BAC",
+    "V",
+    "MA",
+    "UNH",
+    "LLY",
+    "XOM",
+    "CVX",
+    "WMT",
+}
 _KNOWN_COUNTRIES = {
     "tcs": "IN",
     "tata consultancy services": "IN",
@@ -277,6 +298,9 @@ def _normalize_name(query: str) -> str:
 
 def _guess_country(query: str) -> str:
     q = (query or "").strip().lower()
+    raw = (query or "").strip().upper()
+    if raw in _US_TICKER_OVERRIDES:
+        return "US"
     if q in _KNOWN_COUNTRIES:
         return _KNOWN_COUNTRIES[q]
     if any(h in q for h in _INDIA_HINTS):

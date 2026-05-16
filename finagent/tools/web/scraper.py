@@ -210,7 +210,11 @@ def _unwrap_ddg_redirector(href: str) -> str:
 
 async def _search_ddg(query: str, *, max_results: int) -> list[tuple[str, str]]:
     url = DUCKDUCKGO_HTML.format(q=quote_plus(query))
-    res = await fetch(url, respect_robots=False)
+    try:
+        res = await fetch(url, respect_robots=False, timeout_s=25.0)
+    except Exception as exc:
+        logger.info("ddg search fetch failed: %s", exc)
+        return []
     if not res.text:
         return []
     out: list[tuple[str, str]] = []
@@ -238,7 +242,7 @@ async def _search_bing(query: str, *, max_results: int) -> list[tuple[str, str]]
     rewrites the response (e.g. an interstitial)."""
     url = _BING_URL.format(q=quote_plus(query))
     try:
-        res = await fetch(url, respect_robots=False, timeout_s=12.0)
+        res = await fetch(url, respect_robots=False, timeout_s=20.0)
     except Exception as exc:
         logger.info("bing search fetch failed: %s", exc)
         return []
@@ -273,9 +277,9 @@ async def search_web(
     raw_target = max(max_results * 3, 12)
     ddg_task = asyncio.create_task(_search_ddg(query, max_results=raw_target))
     bing_task = asyncio.create_task(_search_bing(query, max_results=raw_target))
-    ddg_results, bing_results = await asyncio.gather(
-        ddg_task, bing_task, return_exceptions=False
-    )
+    ddg_raw, bing_raw = await asyncio.gather(ddg_task, bing_task, return_exceptions=True)
+    ddg_results = [] if isinstance(ddg_raw, Exception) else ddg_raw
+    bing_results = [] if isinstance(bing_raw, Exception) else bing_raw
 
     merged: list[tuple[str, str]] = []
     seen: set[str] = set()

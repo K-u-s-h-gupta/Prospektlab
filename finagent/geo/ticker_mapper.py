@@ -190,7 +190,9 @@ def infer_yahoo_ticker(query: str, profile: JurisdictionProfile) -> str | None:
     if "." in upper and re.search(r"\.[A-Z]{1,4}$", upper):
         return upper
 
-    ticker_match = re.fullmatch(r"[A-Z]{2,12}", upper)
+    ticker_match = re.fullmatch(r"[A-Z]{1,12}", upper)
+    if ticker_match and profile.country_code in {"US", "GLOBAL"}:
+        return upper
     if ticker_match and profile.yahoo_suffixes:
         return upper + profile.yahoo_suffixes[0]
 

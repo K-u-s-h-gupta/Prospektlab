@@ -106,6 +106,16 @@
       padding-bottom: 6px;
     }
 
+    .memo-prose h3,
+    .memo-prose h4 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #f8fafc;
+      margin: 22px 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
     .memo-prose p {
       margin: 12px 0;
       font-size: 14px;
@@ -136,6 +146,10 @@
       border-collapse: collapse;
       font-size: 12.5px;
       margin: 12px 0;
+      overflow: hidden;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.025);
     }
 
     .memo-prose th,
@@ -174,6 +188,291 @@
 
     .hidden {
       display: none !important;
+    }
+
+    .chat-thread {
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .chat-row {
+      display: flex;
+      width: 100%;
+    }
+
+    .chat-row.user {
+      justify-content: flex-end;
+    }
+
+    .chat-row.assistant {
+      justify-content: flex-start;
+      gap: 12px;
+    }
+
+    .user-bubble {
+      max-width: min(560px, 78%);
+      background: #07080b;
+      color: #f8fafc;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.35);
+    }
+
+    .assistant-card {
+      width: min(760px, 100%);
+      background: #20211f;
+      color: #f5f5f4;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+    }
+
+    .analysis-panel {
+      background: linear-gradient(135deg, rgba(18, 41, 48, 0.9), rgba(26, 28, 35, 0.92));
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
+    .chart-box {
+      min-height: 190px;
+      background: rgba(0, 0, 0, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 12px;
+      position: relative;
+    }
+
+    .chart-tooltip {
+      position: absolute;
+      pointer-events: none;
+      display: none;
+      background: #05070a;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #f8fafc;
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: 11px;
+      z-index: 10;
+    }
+
+    .chart-tooltip.visible {
+      display: block;
+    }
+
+    /* ═══ VISUAL OUTPUT STYLES ═══════════════════════════════════════ */
+    
+    /* Metric Cards Grid */
+    .metric-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    @media (min-width: 1024px) {
+      .metric-cards-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+    
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .metric-cards-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    
+    .metric-card {
+      background: linear-gradient(135deg, #1a1c23 0%, #13141a 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 1.25rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .metric-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    
+    .metric-card.positive {
+      border-left: 4px solid #10b981;
+    }
+    
+    .metric-card.negative {
+      border-left: 4px solid #ef4444;
+    }
+    
+    .metric-card.neutral {
+      border-left: 4px solid #6b7280;
+    }
+    
+    .metric-card.partial {
+      background: linear-gradient(135deg, #2d2415 0%, #1f1a12 100%);
+      border-color: #f59e0b;
+    }
+    
+    .metric-label {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .metric-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #f3f4f6;
+      margin-bottom: 0.25rem;
+    }
+    
+    .metric-change {
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    
+    .metric-change.positive {
+      color: #10b981;
+    }
+    
+    .metric-change.negative {
+      color: #ef4444;
+    }
+    
+    .metric-change.neutral {
+      color: #6b7280;
+    }
+    
+    /* Charts Grid */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    @media (min-width: 1024px) {
+      .charts-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    
+    .chart-container {
+      background: #1a1c23;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    
+    .chart-container h4 {
+      color: #f3f4f6;
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    
+    .chart-container img,
+    .chart-container svg {
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+    }
+    
+    /* Comparison Section */
+    .comparison-section {
+      background: #1a1c23;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .comparison-section h3 {
+      color: #f3f4f6;
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #13141a;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    .comparison-table th {
+      background: #1f2937;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      color: #d1d5db;
+      font-size: 0.875rem;
+    }
+    
+    .comparison-table td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: #e5e7eb;
+    }
+    
+    .comparison-table .winner {
+      background: rgba(16, 185, 129, 0.1);
+      color: #10b981;
+      font-weight: 600;
+    }
+    
+    .comparison-table .loser {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+    }
+    
+    /* Partial Data Badge */
+    .partial-data-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      margin-top: 0.5rem;
+    }
+    
+    /* Sparkline */
+    .sparkline {
+      margin-top: 0.5rem;
+      height: 30px;
+    }
+    
+    .sparkline svg {
+      width: 100%;
+      height: 100%;
+    }
+    
+    /* Visual Dashboard Container */
+    .visual-dashboard {
+      padding: 1rem 0;
+    }
+    
+    .visual-dashboard h4 {
+      color: #f3f4f6;
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
   </style>
 </head>
@@ -241,18 +540,48 @@
         </div>
 
         <!-- STATE: RESULT (Memo output) -->
-        <div id="stateResult" class="hidden flex-col p-6">
+        <div id="stateResult" class="hidden flex-col p-6 pb-32">
           <div class="max-w-3xl mx-auto w-full">
             <h1 id="resultTitle" class="text-2xl font-bold text-white mb-1"></h1>
             <p id="resultBreadcrumb" class="text-xs text-gray-500 mb-6"></p>
 
-            <div class="flex gap-3">
-              <div class="shrink-0 mt-0.5">
-                <div class="w-7 h-7 rounded bg-[#1e2129] flex items-center justify-center border border-white/[0.07]">
-                  <span class="material-symbols-outlined text-[13px] text-gray-400">graphic_eq</span>
+            <div id="chatThread" class="chat-thread">
+              <div class="chat-row user">
+                <div id="userBubble" class="user-bubble"></div>
+              </div>
+              <div class="chat-row assistant">
+                <div class="shrink-0 mt-1">
+                  <div class="w-8 h-8 rounded-lg bg-[#1e2129] flex items-center justify-center border border-white/[0.09]">
+                    <span class="material-symbols-outlined text-[15px] text-gray-300">graphic_eq</span>
+                  </div>
+                </div>
+                <div class="assistant-card">
+                  <div id="visualDashboard" class="hidden">
+                    <div id="chartPanel" class="analysis-panel hidden">
+                      <div class="flex items-center justify-between mb-2">
+                        <div class="label-mono text-[10px] text-gray-400">Price trend</div>
+                        <div id="chartMeta" class="text-[11px] text-gray-400"></div>
+                      </div>
+                      <div id="chartHost" class="chart-box"></div>
+                    </div>
+                    <div id="historyPanel" class="analysis-panel hidden">
+                      <div class="flex items-center justify-between mb-2">
+                        <div>
+                          <div class="label-mono text-[10px] text-gray-400">Financial history</div>
+                          <div id="historyMeta" class="text-[11px] text-gray-400 mt-1"></div>
+                        </div>
+                        <div id="historyPill" class="label-mono text-[9px] px-2 py-1 rounded bg-white/5 text-gray-300"></div>
+                      </div>
+                      <div class="flex gap-2 mb-2">
+                        <button class="hist-tab label-mono text-[9px] px-2 py-1 rounded border border-white/10" data-hist="revenue">Revenue</button>
+                        <button class="hist-tab label-mono text-[9px] px-2 py-1 rounded border border-white/10" data-hist="net_income">Net income</button>
+                      </div>
+                      <div id="historyHost" class="chart-box"></div>
+                    </div>
+                  </div>
+                  <div class="flex-1 memo-prose break-words overflow-x-auto max-w-full min-w-0" id="memoBody"></div>
                 </div>
               </div>
-              <div class="flex-1 memo-prose break-words overflow-x-auto max-w-full min-w-0" id="memoBody"></div>
             </div>
           </div>
         </div>
@@ -441,6 +770,7 @@
     let fxRate = null;
     let memoStreamBuf = "";
     let memoStreaming = false;
+    let activeRunToken = 0;
 
     const PHASE_PROGRESS = {
       enrichment: 18,
@@ -615,6 +945,10 @@
       $("livesSourcesCount").textContent = "0";
       $("memoBody").textContent = "";
       $("memoBody").classList.remove("stream-cursor");
+      if ($("userBubble")) $("userBubble").textContent = "";
+      if ($("visualDashboard")) $("visualDashboard").classList.add("hidden");
+      window.__lastMemoMd = "";
+      window.__lastIntel = {};
       $("conflictsList").innerHTML = "";
       $("conflictsPanel").classList.add("hidden");
       $("financialPanel").classList.add("hidden");
@@ -1076,6 +1410,10 @@
         $("newsPanel").classList.remove("hidden");
         renderNewsList(intel.news);
       }
+      if ($("visualDashboard")) {
+        const hasVisuals = !$("chartPanel").classList.contains("hidden") || !$("historyPanel").classList.contains("hidden");
+        $("visualDashboard").classList.toggle("hidden", !hasVisuals);
+      }
     }
 
     function renderInteractivePriceChart(yahoo) {
@@ -1449,7 +1787,7 @@
         const stripped = line.trim();
         if (!stripped) { closeList(); closeTable(); continue; }
         // Heading
-        let m = stripped.match(/^(#{1,3})\s+(.*?)(\s*\[CONFIDENCE:\s*(HIGH|MEDIUM|LOW|DERIVED)\])?$/i);
+        let m = stripped.match(/^(#{1,4})\s+(.*?)(\s*\[CONFIDENCE:\s*(HIGH|MEDIUM|LOW|DERIVED)\])?$/i);
         if (m) {
           closeList(); closeTable();
           const lvl = m[1].length;
@@ -1502,6 +1840,29 @@
       el.innerHTML = renderMarkdown(text);
     }
 
+    function openMemoInThread(memoId, title) {
+      if (eventSource) { eventSource.close(); eventSource = null; }
+      activeRunToken += 1;
+      const memoToken = activeRunToken;
+      sessionId = memoId;
+      resetCounters();
+      showState("result");
+      $("resultTitle").textContent = title || "Research memo";
+      $("resultBreadcrumb").textContent = "Recent chat";
+      if ($("userBubble")) $("userBubble").textContent = title || "Previous research";
+      fetch(`/sessions/${memoId}/memo`)
+        .then((r) => r.text())
+        .then((md) => {
+          if (memoToken !== activeRunToken) return;
+          window.__lastMemoMd = md;
+          setMemoMarkdown(cleanMemoText(md));
+        })
+        .catch(() => {
+          if (memoToken !== activeRunToken) return;
+          setMemoMarkdown("Unable to load this memo.");
+        });
+    }
+
     // ────────────────────────────────────────────────────────────────────
     // Memo library
     // ────────────────────────────────────────────────────────────────────
@@ -1511,11 +1872,14 @@
         if (!r.ok) return;
         const { memos } = await r.json();
         const grid = $("memoLibraryGrid");
+        const sidebar = $("recentThreadsList");
         if (!memos.length) {
           grid.innerHTML = '<div class="text-outline-variant text-sm italic">Run your first research to populate this list.</div>';
+          if (sidebar) sidebar.innerHTML = '<div class="text-[11px] text-gray-600 italic px-1 py-2">No recent chats yet.</div>';
           return;
         }
         grid.innerHTML = "";
+        if (sidebar) sidebar.innerHTML = "";
         for (const m of memos.slice(0, 6)) {
           const a = document.createElement("a");
           a.href = `/sessions/${m.session_id}/memo`;
@@ -1530,6 +1894,17 @@
           <span class="material-symbols-outlined text-[18px] text-on-surface-variant group-hover:text-primary transition-colors">open_in_new</span>
         `;
           grid.appendChild(a);
+        }
+        if (sidebar) {
+          for (const m of memos.slice(0, 14)) {
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = "w-full text-left px-2.5 py-2 rounded-md text-[11px] text-gray-300 hover:bg-white/[0.06] hover:text-white truncate transition-colors";
+            item.title = m.title || "Memo";
+            item.textContent = m.title || "Memo";
+            item.addEventListener("click", () => openMemoInThread(m.session_id, m.title || "Memo"));
+            sidebar.appendChild(item);
+          }
         }
       } catch (_) { }
     }
@@ -1559,10 +1934,13 @@
         hero.classList.add("brand-exit");
       }
       if (eventSource) { eventSource.close(); eventSource = null; }
+      const runToken = ++activeRunToken;
+      sessionId = null;
       resetCounters();
       showState("processing");
       $("processingTarget").textContent = target;
       $("processingTitle").textContent = target;
+      if ($("userBubble")) $("userBubble").textContent = target;
       startedAt = Date.now();
       if (tickHandle) clearInterval(tickHandle);
       tickHandle = setInterval(tickElapsed, 250);
@@ -1571,7 +1949,7 @@
       const endpoint = researchMode === "deep" ? "/research/deep" : "/research/start";
       const payload = researchMode === "deep"
         ? { target, passes: 5, pass_depth: 40 }
-        : { target };
+        : { target, mode: "chat" };
       try {
         resp = await fetch(endpoint, {
           method: "POST",
@@ -1579,15 +1957,19 @@
           body: JSON.stringify(payload),
         });
       } catch (e) {
+        if (runToken !== activeRunToken) return;
         pushActivity("error", "Gateway", "Could not reach /research/start: " + e.message, "error");
         return;
       }
       if (!resp.ok) {
+        if (runToken !== activeRunToken) return;
         pushActivity("error", "Gateway", "Failed to start: HTTP " + resp.status, "error");
         return;
       }
       const { session_id, stream } = await resp.json();
+      if (runToken !== activeRunToken) return;
       sessionId = session_id;
+      const eventSessionId = session_id;
       pushActivity("play_circle", "Session", `Opened ${session_id}`, "done");
 
       eventSource = new EventSource(stream);
@@ -1595,6 +1977,10 @@
       eventSource.addEventListener("session_started", (e) => {
         const d = JSON.parse(e.data);
         pushActivity("compass_calibration", "Planner", `Plan built for ${d.target}`, "done");
+      });
+      eventSource.addEventListener("output_plan", (e) => {
+        const d = JSON.parse(e.data);
+        pushActivity("article", "Output", `${d.title || d.mode} · ${d.depth}`, "done");
       });
       eventSource.addEventListener("entity_resolved", (e) => {
         const d = JSON.parse(e.data);
@@ -1741,6 +2127,7 @@
         pushActivity("warning", "Validator", `[CONFLICT] ${d.metric} ${d.spread_pct}% spread`, "warning");
       });
       eventSource.addEventListener("memo_token", (e) => {
+        if (runToken !== activeRunToken) return;
         const d = JSON.parse(e.data);
         if (!memoStreaming) {
           memoStreaming = true;
@@ -1758,6 +2145,7 @@
         $("memoBody").textContent = cleanMemoText(memoStreamBuf);
       });
       eventSource.addEventListener("memo", async (e) => {
+        if (runToken !== activeRunToken) return;
         const d = JSON.parse(e.data);
         showState("result");
         renderIntel(window.__lastIntel || {});
@@ -1769,15 +2157,40 @@
         $("memoBody").classList.remove("stream-cursor");
         // Pull the full memo and render as parsed markdown INSIDE the panel.
         try {
-          const full = await fetch(`/sessions/${sessionId}/memo`).then((r) => r.text());
+          const full = await fetch(`/sessions/${eventSessionId}/memo`).then((r) => r.text());
+          if (runToken !== activeRunToken) return;
           setMemoMarkdown(cleanMemoText(full));
           window.__lastMemoMd = full;
         } catch (_) {
+          if (runToken !== activeRunToken) return;
           setMemoMarkdown(cleanMemoText(d.preview || ""));
         }
         pushActivity("auto_awesome", "Synthesizer", `Memo synthesized via ${d.via} (${d.chars} chars)`, "done");
       });
+      
+      // Visual data event handler
+      eventSource.addEventListener("visual_data_ready", (e) => {
+        if (runToken !== activeRunToken) return;
+        const d = JSON.parse(e.data);
+        
+        // Render metric cards
+        if (d.metric_cards && d.metric_cards.length > 0) {
+          renderMetricCards(d.metric_cards);
+        }
+        
+        // Render charts
+        if (d.charts && d.charts.length > 0) {
+          renderCharts(d.charts);
+        }
+        
+        // Render comparison if present
+        if (d.comparison_results && d.comparison_results.length > 0) {
+          renderComparison(d.comparison_results);
+        }
+      });
+      
       eventSource.addEventListener("final", (e) => {
+        if (runToken !== activeRunToken) return;
         const d = JSON.parse(e.data);
         $("processingBar").style.width = "100%";
         $("processingPercent").textContent = "100%";
@@ -1805,9 +2218,11 @@
         pushActivity("neurology", "Deep Research", `All ${d.passes} passes complete — final memo ready`, "done");
       });
       eventSource.addEventListener("done", () => {
+        if (runToken !== activeRunToken) return;
         if (eventSource) { eventSource.close(); eventSource = null; }
       });
       eventSource.onerror = () => {
+        if (runToken !== activeRunToken) return;
         pushActivity("link_off", "Stream", "Connection lost", "error");
       };
     }
@@ -1908,6 +2323,148 @@
 
     loadMemoLibrary();
     showState("command");
+
+    // ════════════════════════════════════════════════════════════════════
+    // Visual Output Rendering Functions
+    // Render metric cards, charts, and comparison data from SSE events
+    // ════════════════════════════════════════════════════════════════════
+    
+    function renderMetricCards(cards) {
+      const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
+      if (!container) return;
+      
+      // Create or get the visual dashboard container
+      let dashboard = document.getElementById("visualDashboard");
+      if (!dashboard) {
+        dashboard = document.createElement("div");
+        dashboard.id = "visualDashboard";
+        dashboard.className = "visual-dashboard";
+        container.insertBefore(dashboard, container.firstChild);
+      }
+      
+      let html = '<div class="metric-cards-grid">';
+      
+      cards.forEach(card => {
+        const changeClass = card.change_type || "neutral";
+        const partialClass = card.is_partial ? "partial" : "";
+        const changeHtml = card.change ? `<div class="metric-change ${changeClass}">${card.change}</div>` : "";
+        const sparklineHtml = card.sparkline_svg ? `<div class="sparkline">${atob(card.sparkline_svg)}</div>` : "";
+        const partialBadge = card.is_partial ? '<span class="partial-data-badge">⚠ Partial Data</span>' : "";
+        
+        html += `
+          <div class="metric-card ${changeClass} ${partialClass}">
+            <div class="metric-label">${card.label}</div>
+            <div class="metric-value">${card.value}</div>
+            ${changeHtml}
+            ${sparklineHtml}
+            ${partialBadge}
+          </div>
+        `;
+      });
+      
+      html += "</div>";
+      dashboard.insertAdjacentHTML("beforeend", html);
+    }
+    
+    function renderCharts(charts) {
+      const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
+      if (!container) return;
+      
+      let dashboard = document.getElementById("visualDashboard");
+      if (!dashboard) {
+        dashboard = document.createElement("div");
+        dashboard.id = "visualDashboard";
+        dashboard.className = "visual-dashboard";
+        container.insertBefore(dashboard, container.firstChild);
+      }
+      
+      let html = '<h4>Charts & Trends</h4><div class="charts-grid">';
+      
+      charts.forEach(chart => {
+        const imageData = chart.svg_data || chart.png_data;
+        const imageSrc = imageData ? `data:image/svg+xml;base64,${imageData}` : "";
+        const partialBadge = chart.is_partial ? '<span class="partial-data-badge">⚠ Partial Data</span>' : "";
+        
+        html += `
+          <div class="chart-container">
+            <h4>${chart.title}</h4>
+            ${chart.subtitle ? `<p style="color: #9ca3af; font-size: 0.875rem; margin-bottom: 0.5rem;">${chart.subtitle}</p>` : ""}
+            ${imageSrc ? `<img src="${imageSrc}" alt="${chart.title}" style="width: 100%; height: auto;" />` : '<p style="color: #6b7280;">Chart unavailable</p>'}
+            ${partialBadge}
+          </div>
+        `;
+      });
+      
+      html += "</div>";
+      dashboard.insertAdjacentHTML("beforeend", html);
+    }
+    
+    function renderComparison(results) {
+      const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
+      if (!container || !results.length) return;
+      
+      let dashboard = document.getElementById("visualDashboard");
+      if (!dashboard) {
+        dashboard = document.createElement("div");
+        dashboard.id = "visualDashboard";
+        dashboard.className = "visual-dashboard";
+        container.insertBefore(dashboard, container.firstChild);
+      }
+      
+      const entity1 = results[0].primary_entity;
+      const entity2 = results[0].secondary_entity;
+      
+      // Calculate verdict
+      let primaryWins = 0;
+      let secondaryWins = 0;
+      results.forEach(r => {
+        if (r.winner === "primary") primaryWins++;
+        else if (r.winner === "secondary") secondaryWins++;
+      });
+      
+      let verdict = "";
+      if (primaryWins > secondaryWins) {
+        verdict = `${entity1} leads in ${primaryWins} of ${results.length} key metrics.`;
+      } else if (secondaryWins > primaryWins) {
+        verdict = `${entity2} leads in ${secondaryWins} of ${results.length} key metrics.`;
+      } else {
+        verdict = `Both companies are evenly matched across the metrics analyzed.`;
+      }
+      
+      let html = `
+        <div class="comparison-section">
+          <h3>Comparison: ${entity1} vs ${entity2}</h3>
+          <p style="color: #d1d5db; margin-bottom: 1rem; font-size: 0.875rem;">${verdict}</p>
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>${entity1}</th>
+                <th>${entity2}</th>
+                <th>Advantage</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+      
+      results.forEach(result => {
+        const primaryClass = result.winner === "primary" ? "winner" : (result.winner === "secondary" ? "loser" : "");
+        const secondaryClass = result.winner === "secondary" ? "winner" : (result.winner === "primary" ? "loser" : "");
+        const delta = result.delta || "-";
+        
+        html += `
+          <tr>
+            <td>${result.metric}</td>
+            <td class="${primaryClass}">${result.primary_value}</td>
+            <td class="${secondaryClass}">${result.secondary_value}</td>
+            <td style="color: ${result.winner === 'primary' ? '#10b981' : result.winner === 'secondary' ? '#ef4444' : '#6b7280'};">${delta}</td>
+          </tr>
+        `;
+      });
+      
+      html += `</tbody></table></div>`;
+      dashboard.insertAdjacentHTML("beforeend", html);
+    }
 
     // ════════════════════════════════════════════════════════════════════
     // First-time-user tutorial — spotlight coachmarks over key UI areas.

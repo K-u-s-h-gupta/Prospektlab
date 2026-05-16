@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 from pydantic import BaseModel, Field, field_validator
 
 from finagent.events import BUS
+from finagent.output.intent_classifier import primary_target_from_query
 from finagent.paths import finagent_data_path, finagent_home
 from finagent.run_agent import AgentLoopConfig, run_research_session
 from finagent.tools.web.http_fetcher import aclose_shared_client
@@ -43,10 +44,11 @@ _USERS_DIR.mkdir(parents=True, exist_ok=True)
 
 class StartResearchRequest(BaseModel):
     target: str = Field(..., min_length=1)
-    objective: str = Field("Deep research memo")
+    objective: str = Field("")
     # Optional — when absent the agent auto-picks depth from the objective.
     max_steps: int | None = Field(default=None, ge=4, le=10000)
-    mode: str = Field(default="standard", description="standard or deep")
+    mode: str = Field(default="chat", description="chat, standard, or deep")
+    output_mode: str | None = None
 
 
 class DeepResearchRequest(BaseModel):
@@ -321,17 +323,37 @@ def auth_login(req: LoginRequest):
 async def start_research(req: StartResearchRequest):
     session_id = uuid.uuid4().hex[:12]
     BUS.open(session_id)
+    raw_query = req.target.strip()
+    objective = (req.objective or raw_query).strip()
+    target = primary_target_from_query(raw_query)
+    mode = (req.mode or "chat").strip().lower()
+    if mode not in {"chat", "standard", "deep"}:
+        mode = "chat"
 
     async def _runner() -> None:
         try:
-            base_steps = req.max_steps if req.max_steps is not None else 40
+            if req.max_steps is not None:
+                base_steps = req.max_steps
+            elif mode == "deep":
+                base_steps = 80
+            elif mode == "standard":
+                base_steps = 56
+            else:
+                base_steps = 40
             await run_research_session(
-                req.target,
-                req.objective,
+                target,
+                objective,
                 loop_config=AgentLoopConfig(
                     max_steps=base_steps,
                     session_id=session_id,
                     auto_depth=req.max_steps is None,
+                    response_depth=mode,
+                    output_mode=req.output_mode,
+                    breadth_search_timeout=(150.0 if mode == "deep" else 110.0),
+                    followup_search_timeout=(70.0 if mode == "deep" else 50.0),
+                    reflection_per_query_timeout=(55.0 if mode == "deep" else 38.0),
+                    blindspot_per_query_timeout=(45.0 if mode == "deep" else 32.0),
+                    news_timeout=(40.0 if mode == "deep" else 30.0),
                 ),
             )
         except Exception as exc:
@@ -363,6 +385,8 @@ async def start_deep_research(req: DeepResearchRequest):
     """
     master_session = uuid.uuid4().hex[:12]
     BUS.open(master_session)
+    raw_query = req.target.strip()
+    target = primary_target_from_query(raw_query)
 
     async def _deep_runner() -> None:
         total_passes = min(req.passes, len(_DEEP_PASS_OBJECTIVES))
@@ -384,9 +408,9 @@ async def start_deep_research(req: DeepResearchRequest):
                 )
 
                 # Each pass is a full research session that reads+writes memory
-                pass_objective = f"{pass_label} — {objective}"
+                pass_objective = f"{raw_query}\n\n{pass_label} - {objective}"
                 await run_research_session(
-                    req.target,
+                    target,
                     pass_objective,
                     loop_config=AgentLoopConfig(
                         max_steps=req.pass_depth,
@@ -396,6 +420,15 @@ async def start_deep_research(req: DeepResearchRequest):
                         reflection_max_rounds=3,
                         quality_threshold=65.0,
                         synth_model="gpt-4o",
+                        response_depth=("deep" if i == total_passes - 1 else "standard"),
+                        output_mode=("deep_research_report" if i == total_passes - 1 else None),
+                        emit_memo=(i == total_passes - 1),
+                        close_bus_on_finish=False,
+                        breadth_search_timeout=180.0,
+                        followup_search_timeout=75.0,
+                        reflection_per_query_timeout=60.0,
+                        blindspot_per_query_timeout=50.0,
+                        news_timeout=45.0,
                     ),
                 )
 
