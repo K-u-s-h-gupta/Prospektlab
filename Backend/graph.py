@@ -119,6 +119,8 @@ async def build_oracle_graph():
                         "You fetch live stock quotes, historical OHLCV data, option chains with PCR/max pain, "
                         "live index data, shareholding patterns, and corporate actions. "
                         "Always return structured numbers and format rupee values clearly. "
+                        "When calling tools, prefer to return the raw JSON output from the tool. "
+                        "Do not summarize or paraphrase the tool output into prose; the frontend will render the structured data. "
                         f"{LIVE_DATA_GUARDRAIL}"
                     ),
                 )
@@ -136,6 +138,8 @@ async def build_oracle_graph():
                         "You analyze income statements, balance sheets, cash flows, key ratios, "
                         "quarterly results, shareholding patterns, and dividend history. "
                         "Highlight key strengths, red flags, and trends. "
+                        "When calling tools, prefer to return the raw JSON output from the tool. "
+                        "Do not summarize or paraphrase the tool output into prose; the frontend will render the structured data. "
                         f"{LIVE_DATA_GUARDRAIL}"
                     ),
                 )
@@ -154,6 +158,8 @@ async def build_oracle_graph():
                         "Use compare_stocks first for direct peer comparison and keep the tool plan minimal. "
                         "Present data in clean tabular format with PE, PB, ROE, margins, and growth rates. "
                         "Highlight which stock is better valued and why. "
+                        "When calling tools, prefer to return the raw JSON output from the tool. "
+                        "Do not summarize or paraphrase the tool output into prose; the frontend will render the structured data. "
                         f"{LIVE_DATA_GUARDRAIL}"
                     ),
                 )
@@ -173,6 +179,8 @@ async def build_oracle_graph():
                         "get_latest_company_news first because it has built-in fallback and is more reliable "
                         "than chaining multiple separate news searches. "
                         "Always cite sources with URLs and mention publication dates when available. "
+                        "When calling tools, prefer to return the raw JSON output from the tool. "
+                        "Do not summarize or paraphrase the tool output into prose; the frontend will render the structured data. "
                         f"{LIVE_DATA_GUARDRAIL}"
                     ),
                 )
@@ -200,6 +208,8 @@ async def build_oracle_graph():
                         "with rows such as risk factors, business overview, objects of issue, financials, "
                         "capital structure, management disclosures, and any newly added or removed sections. "
                         "Quote exact passages when possible and cite source URLs. "
+                        "When calling tools, prefer to return the raw JSON output from the tool. "
+                        "Do not summarize or paraphrase the tool output into prose; the frontend will render the structured data. "
                         f"{LIVE_DATA_GUARDRAIL}"
                     ),
                 )
@@ -221,6 +231,8 @@ async def build_oracle_graph():
                         "For comprehensive stock valuation, prefer run_full_valuation first. "
                         "Always state assumptions, clearly label the model used, and summarize whether "
                         "the stock appears undervalued, fairly valued, or overvalued when the tools provide enough data. "
+                        "When calling tools, prefer to return the raw JSON output from the tool. "
+                        "Do not summarize or paraphrase the tool output into prose; the frontend will render the structured data. "
                         f"{LIVE_DATA_GUARDRAIL}"
                     ),
                 )
@@ -261,7 +273,10 @@ async def build_oracle_graph():
                 "Never answer with a vague statement that agents are unavailable. "
                 "If one specialist is unavailable, continue with the available specialists, "
                 "state exactly which server or specialist is missing, and still provide the best partial analysis you can.\n"
-                "Synthesize a final answer with key numbers, keep it concise and actionable."
+                "Synthesize a final answer with key numbers, keep it concise and actionable.\n"
+                "\n**STRUCTURED-FRIENDLY MODE**: The frontend will render rich structured visuals (charts, metric cards, comparison tables) above your narrative text. "
+                "Assume those visuals already exist. Do not duplicate them in markdown. Instead, refer to 'the chart above', 'the table above', etc. "
+                "Your narrative should explain, contextualize, and add nuance beyond what the visuals show."
             ),
         )
 

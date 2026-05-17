@@ -13,8 +13,10 @@ import re
 import time
 import warnings
 from collections.abc import AsyncIterator
+from typing import Any
 from urllib.parse import urlparse
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +24,15 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 from openai import APIConnectionError, APITimeoutError, AuthenticationError, RateLimitError
 from pydantic import BaseModel, Field
+
+import rich_builder
+from intent import (
+    AGENT_SERVER_DEPENDENCIES as _INTENT_AGENT_DEPS,
+    is_comparison_query as _intent_is_comparison_query,
+    is_calculation_valuation_query as _intent_is_calculation_valuation_query,
+    planned_agents_for_message as _intent_planned_agents,
+)
+from mcp_config import MCP_SERVERS
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(name)s | %(levelname)s | %(message)s")
@@ -53,65 +64,9 @@ SYSTEM_NODE_NAMES = {"__start__", "__end__"}
 IGNORED_NODE_NAMES = {"supervisor"}
 IGNORED_MESSAGE_CONTENT = {"Transferring back to supervisor"}
 URL_PATTERN = re.compile(r"https?://[^\s\"'<>]+")
-VALUATION_TRIGGER_TERMS = {
-    "valuation",
-    "valued",
-    "overvalued",
-    "undervalued",
-    "fair value",
-    "intrinsic value",
-    "dcf",
-    "discounted cash flow",
-    "wacc",
-    "cagr",
-    "graham",
-    "piotroski",
-    "altman",
-    "z-score",
-    "ev/ebitda",
-    "dividend discount",
-    "ddm",
-    "dupont",
-    "ratio scorecard",
-}
-CALCULATION_HINT_TERMS = {"calculate", "calculation", "model", "valuation model"}
-VALUATION_CONTEXT_TERMS = {"stock", "share", "company", "equity", "ticker", "price", "return", "financial"}
-COMPARISON_TRIGGER_TERMS = {"compare", "comparison", " vs ", " versus ", "against"}
-NEWS_TRIGGER_TERMS = {"recent news", "latest news", "fetch news", "news", "headlines", "updates"}
-OFFER_DOCUMENT_TRIGGER_TERMS = {"drhp", "draft red herring prospectus", "rhp", "prospectus", "ipo", "offer document"}
-FUNDAMENTAL_TRIGGER_TERMS = {
-    "financials",
-    "fundamentals",
-    "income statement",
-    "balance sheet",
-    "cash flow",
-    "quarterly results",
-    "shareholding",
-    "dividend history",
-    "roe",
-    "margin",
-    "margins",
-}
-DOCUMENT_ANALYSIS_TRIGGER_TERMS = {
-    "risk",
-    "risk factors",
-    "business fundamentals",
-    "business overview",
-    "objects of the issue",
-    "financial summary",
-    "red flags",
-}
-MARKET_DATA_TRIGGER_TERMS = {"price", "quote", "market cap", "traded", "52-week"}
-FULL_ANALYSIS_TRIGGER_TERMS = {"full analysis", "complete analysis", "detailed analysis"}
-FORECAST_TRIGGER_TERMS = {"forecast", "forcast", "future", "outlook", "guidance", "target price"}
-AGENT_SERVER_DEPENDENCIES = {
-    "market_data_agent": ["nse_india"],
-    "fundamental_analysis_agent": ["fundamentals"],
-    "comparison_agent": ["fundamentals"],
-    "news_and_research_agent": ["research_news"],
-    "document_retrieval_agent": ["docs_pipeline", "research_news"],
-    "valuation_agent": ["valuation_engine"],
-}
+# Keyword sets and agent dependencies are owned by intent.py so that
+# rich_builder.py classifies the same way the supervisor planner does.
+AGENT_SERVER_DEPENDENCIES = _INTENT_AGENT_DEPS
 
 
 class ChatRequest(BaseModel):
@@ -121,6 +76,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     agents_used: list[str] = Field(default_factory=list)
+    rich: dict[str, Any] | None = None
 
 
 def _raise_provider_http_error(exc: Exception) -> None:
@@ -299,56 +255,12 @@ def _augment_query_for_routing(graph: object, message: str) -> tuple[str, list[s
 
 
 def _is_calculation_valuation_query(lower: str) -> bool:
-    if any(term in lower for term in VALUATION_TRIGGER_TERMS):
-        return True
-    if re.search(r"\bp/?e\b", lower):
-        return True
-    return any(term in lower for term in CALCULATION_HINT_TERMS) and any(
-        term in lower for term in VALUATION_CONTEXT_TERMS
-    )
+    # Thin wrapper for backwards-compatibility callers in this module.
+    return _intent_is_calculation_valuation_query(lower)
 
 
 def _planned_agents_for_message(message: str) -> list[str]:
-    lower = message.lower()
-    required_agents: list[str] = []
-    is_offer_document_query = any(term in lower for term in OFFER_DOCUMENT_TRIGGER_TERMS)
-    asks_for_news = any(term in lower for term in NEWS_TRIGGER_TERMS)
-    asks_for_fundamentals = any(term in lower for term in FUNDAMENTAL_TRIGGER_TERMS)
-    asks_for_document_analysis = any(term in lower for term in DOCUMENT_ANALYSIS_TRIGGER_TERMS)
-    asks_for_full_analysis = any(term in lower for term in FULL_ANALYSIS_TRIGGER_TERMS)
-    asks_for_forecast = any(term in lower for term in FORECAST_TRIGGER_TERMS)
-
-    if any(term in lower for term in COMPARISON_TRIGGER_TERMS) and not is_offer_document_query:
-        required_agents.append("comparison_agent")
-    if _is_calculation_valuation_query(lower):
-        required_agents.append("valuation_agent")
-    if asks_for_forecast:
-        required_agents.extend(["valuation_agent", "news_and_research_agent"])
-    if asks_for_news:
-        required_agents.append("news_and_research_agent")
-    if is_offer_document_query:
-        required_agents.append("document_retrieval_agent")
-        if asks_for_document_analysis:
-            required_agents.append("fundamental_analysis_agent")
-    if asks_for_full_analysis:
-        required_agents.extend(
-            ["market_data_agent", "fundamental_analysis_agent", "news_and_research_agent"]
-        )
-    elif asks_for_fundamentals:
-        required_agents.append("fundamental_analysis_agent")
-    if asks_for_document_analysis:
-        required_agents.append("document_retrieval_agent")
-    if any(term in lower for term in MARKET_DATA_TRIGGER_TERMS):
-        required_agents.append("market_data_agent")
-
-    deduped_agents: list[str] = []
-    seen = set()
-    for agent in required_agents:
-        if agent not in seen:
-            seen.add(agent)
-            deduped_agents.append(agent)
-
-    return deduped_agents
+    return _intent_planned_agents(message)
 
 
 def _iter_graph_entries(raw_event: object):
@@ -397,6 +309,70 @@ def _extract_message_content(payload: object) -> tuple[str, bool, bool]:
     return content, is_final_text, True
 
 
+def _collect_tool_outputs(node_name: str | None, payload: object, sink: list[rich_builder.ToolOutput]) -> None:
+    """Inspect a LangGraph node payload and persist any ToolMessage content.
+
+    LangGraph emits a `tools` payload after a sub-agent's ReAct tool node fires.
+    The payload's last `ToolMessage` carries `name`, the tool's JSON-text output,
+    and (sometimes) the args. We capture all of them so rich_builder can later
+    rebuild structured visuals without re-calling MCP tools.
+    """
+    if not isinstance(payload, dict):
+        return
+    messages = payload.get("messages")
+    if not isinstance(messages, list):
+        return
+    for msg in messages:
+        # langchain ToolMessage exposes: name, content, tool_call_id, status
+        name = getattr(msg, "name", None)
+        if not name:
+            # `tool_calls` on AIMessage carries name + args; capture as a stub so
+            # rich_builder.extract_symbols can read the requested symbol.
+            tool_calls = getattr(msg, "tool_calls", None) or []
+            for tc in tool_calls:
+                if isinstance(tc, dict):
+                    tc_name = tc.get("name")
+                    tc_args = tc.get("args") or tc.get("arguments") or {}
+                    if isinstance(tc_args, str):
+                        try:
+                            tc_args = json.loads(tc_args)
+                        except Exception:
+                            tc_args = {"raw": tc_args}
+                    if tc_name:
+                        sink.append(rich_builder.ToolOutput(
+                            agent=node_name,
+                            name=tc_name,
+                            args=tc_args if isinstance(tc_args, dict) else {},
+                            content=None,
+                        ))
+            continue
+        content = getattr(msg, "content", None)
+        # Tool args are usually not on the ToolMessage; look back through earlier
+        # AIMessages in the same payload for the matching tool_call_id.
+        args: dict[str, Any] = {}
+        tool_call_id = getattr(msg, "tool_call_id", None)
+        if tool_call_id:
+            for prev in messages:
+                tool_calls = getattr(prev, "tool_calls", None) or []
+                for tc in tool_calls:
+                    if isinstance(tc, dict) and tc.get("id") == tool_call_id:
+                        raw_args = tc.get("args") or tc.get("arguments") or {}
+                        if isinstance(raw_args, str):
+                            try:
+                                raw_args = json.loads(raw_args)
+                            except Exception:
+                                raw_args = {"raw": raw_args}
+                        if isinstance(raw_args, dict):
+                            args = raw_args
+                        break
+        sink.append(rich_builder.ToolOutput(
+            agent=node_name,
+            name=name,
+            args=args,
+            content=content,
+        ))
+
+
 async def _iter_graph_events_with_timeouts(graph: object, routed_message: str):
     """Iterate graph events with separate total-run and idle-event timeouts."""
     event_iter = graph.astream({"messages": [HumanMessage(content=routed_message)]}, subgraphs=True).__aiter__()
@@ -410,13 +386,14 @@ async def _iter_graph_events_with_timeouts(graph: object, routed_message: str):
             yield raw_event
 
 
-async def _execute_graph(message: str) -> tuple[str, list[str]]:
-    """Run the graph and return the final reply plus the sub-agents used."""
+async def _execute_graph(message: str) -> tuple[str, list[str], rich_builder.RichResponse | None]:
+    """Run the graph and return the final reply, sub-agents used, and rich payload."""
     graph = await _get_graph()
     routed_message, planned_agents, missing_agents = _augment_query_for_routing(graph, message)
     started_at = time.perf_counter()
     agents_used: list[str] = []
     seen_agents: set[str] = set()
+    tool_outputs: list[rich_builder.ToolOutput] = []
     final_content = ""
     last_nonempty_content = ""
 
@@ -427,11 +404,14 @@ async def _execute_graph(message: str) -> tuple[str, list[str]]:
             missing_agents,
         )
         async for raw_event in _iter_graph_events_with_timeouts(graph, routed_message):
-            for _, node_name, _, payload in _iter_graph_entries(raw_event):
+            for _, node_name, payload_key, payload in _iter_graph_entries(raw_event):
                 if node_name and node_name not in IGNORED_NODE_NAMES and node_name not in seen_agents:
                     seen_agents.add(node_name)
                     agents_used.append(node_name)
                     logger.info("Graph execute agent_seen | agent=%s", node_name)
+
+                if payload_key == "tools" and node_name not in IGNORED_NODE_NAMES:
+                    _collect_tool_outputs(node_name, payload, tool_outputs)
 
                 content, is_final_text, has_messages = _extract_message_content(payload)
                 if has_messages and content:
@@ -439,9 +419,10 @@ async def _execute_graph(message: str) -> tuple[str, list[str]]:
                 if node_name == "supervisor" and is_final_text:
                     final_content = content
         logger.info(
-            "Graph execute done | elapsed=%.2fs | agents_used=%s",
+            "Graph execute done | elapsed=%.2fs | agents_used=%s | tool_outputs=%d",
             time.perf_counter() - started_at,
             agents_used,
+            len(tool_outputs),
         )
     except Exception as exc:
         logger.error(
@@ -453,7 +434,8 @@ async def _execute_graph(message: str) -> tuple[str, list[str]]:
         _raise_provider_http_error(exc)
 
     reply = final_content or last_nonempty_content or "I couldn't generate a response."
-    return reply, agents_used
+    rich = rich_builder.build(message, tool_outputs, agents_used, reply)
+    return reply, agents_used, rich
 
 
 async def _stream_graph_run(message: str) -> AsyncIterator[dict]:
@@ -466,6 +448,7 @@ async def _stream_graph_run(message: str) -> AsyncIterator[dict]:
     started_agents: set[str] = set()
     completed_agents: set[str] = set()
     seen_source_domains: set[str] = set()
+    tool_outputs: list[rich_builder.ToolOutput] = []
     final_content = ""
     last_nonempty_content = ""
 
@@ -521,6 +504,7 @@ async def _stream_graph_run(message: str) -> AsyncIterator[dict]:
                         "agent": node_name,
                         "label": f"{_humanize_agent_name(node_name)} is calling tools",
                     }
+                    _collect_tool_outputs(node_name, payload, tool_outputs)
                     for domain in _extract_source_domains_from_tool_payload(payload):
                         if domain not in seen_source_domains:
                             seen_source_domains.add(domain)
@@ -559,26 +543,39 @@ async def _stream_graph_run(message: str) -> AsyncIterator[dict]:
             exc,
             exc_info=True,
         )
+        # Reset cached graph so the next request rebuilds cleanly when an MCP
+        # server has gone down mid-run.
+        global _graph
+        _graph = None
         if isinstance(exc, AuthenticationError):
-            message = "OpenAI authentication failed. Check the backend API key."
+            error_message = "OpenAI authentication failed. Check the backend API key."
         elif isinstance(exc, RateLimitError):
-            message = "OpenAI rate limit reached. Please wait a moment and try again."
+            error_message = "OpenAI rate limit reached. Please wait a moment and try again."
         elif isinstance(exc, (APIConnectionError, APITimeoutError)):
-            message = "OpenAI connection failed. Please check internet access or try again shortly."
+            error_message = "OpenAI connection failed. Please check internet access or try again shortly."
         elif isinstance(exc, TimeoutError):
-            message = "The analysis stalled for too long and timed out. Please retry the query."
+            error_message = "The analysis stalled for too long and timed out. Please retry the query."
         else:
-            message = f"Agent error: {str(exc)}"
-        yield {"type": "error", "message": message}
+            error_message = f"Agent error: {str(exc)}"
+        yield {"type": "error", "message": error_message}
         return
 
     reply = final_content or last_nonempty_content or "I couldn't generate a response."
+    rich = rich_builder.build(message, tool_outputs, agents_used, reply)
+    rich_payload = rich.model_dump(mode="json") if rich is not None else None
     logger.info(
-        "Graph stream done | elapsed=%.2fs | agents_used=%s",
+        "Graph stream done | elapsed=%.2fs | agents_used=%s | tool_outputs=%d | rich_mode=%s",
         time.perf_counter() - started_at,
         agents_used,
+        len(tool_outputs),
+        rich.mode if rich else None,
     )
-    yield {"type": "final", "reply": reply, "agents_used": agents_used}
+    yield {
+        "type": "final",
+        "reply": reply,
+        "agents_used": agents_used,
+        "rich": rich_payload,
+    }
 
 
 def _to_sse(event: dict) -> str:
@@ -599,11 +596,57 @@ async def chat(req: ChatRequest):
 
     logger.info("User query: %s", req.message[:100])
     try:
-        reply, agents_used = await _execute_graph(req.message)
-        return ChatResponse(reply=reply, agents_used=agents_used)
+        reply, agents_used, rich = await _execute_graph(req.message)
+        return ChatResponse(
+            reply=reply,
+            agents_used=agents_used,
+            rich=rich.model_dump(mode="json") if rich is not None else None,
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Top level error in chat: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/health/mcp")
+async def mcp_health() -> dict[str, Any]:
+    """Probe each configured MCP server and report up/down.
+
+    The frontend uses this on page load to display a banner when one or more
+    MCP servers are offline so the user knows why visuals may be missing.
+    """
+    results: dict[str, dict[str, Any]] = {}
+
+    async def _check(name: str, cfg: dict[str, Any]) -> None:
+        url = cfg.get("url", "")
+        # FastMCP exposes /mcp; an OPTIONS or HEAD usually returns 200/405.
+        check_url = url.rsplit("/mcp", 1)[0] if url.endswith("/mcp") else url
+        start = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(timeout=2.5) as client:
+                try:
+                    r = await client.get(check_url + "/health")
+                    ok = 200 <= r.status_code < 500
+                except Exception:
+                    # Fall back to bare connect on the /mcp endpoint
+                    r = await client.get(url)
+                    ok = 200 <= r.status_code < 500
+            results[name] = {
+                "ok": ok,
+                "latency_ms": round((time.perf_counter() - start) * 1000, 1),
+                "url": url,
+            }
+        except Exception as exc:
+            results[name] = {
+                "ok": False,
+                "error": str(exc),
+                "url": url,
+            }
+
+    await asyncio.gather(*(_check(name, cfg) for name, cfg in MCP_SERVERS.items()))
+    all_ok = all(v.get("ok") for v in results.values())
+    return {"all_ok": all_ok, "servers": results}
 
 
 @app.post("/api/chat/stream")

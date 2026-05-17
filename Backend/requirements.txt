@@ -22,7 +22,6 @@ langgraph>=1.0.0
 langgraph-supervisor>=0.0.30
 langchain-mcp-adapters>=0.2.0
 langchain-openai>=1.0.0
-langchain-google-genai>=4.0.0
 langchain_core
 # SSL cert fix for non-ASCII paths on Windows
 certifi
