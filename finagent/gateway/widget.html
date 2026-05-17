@@ -215,6 +215,12 @@
       gap: 22px;
     }
 
+    .chat-turn {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
     .chat-row {
       display: flex;
       width: 100%;
@@ -287,7 +293,7 @@
     }
 
     /* ═══ NEW CLAUDE-LIKE VISUAL OUTPUT STYLES ═══════════════════════════════════════ */
-    
+
     .claude-card {
       background: #0f1117;
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -316,7 +322,7 @@
       gap: 1rem;
       margin-bottom: 1.5rem;
     }
-    
+
     .metric-card {
       background: #161b22;
       border: 1px solid rgba(255, 255, 255, 0.05);
@@ -328,7 +334,7 @@
     .metric-card:hover {
       border-color: rgba(255, 255, 255, 0.15);
     }
-    
+
     .metric-label {
       font-size: 0.75rem;
       color: #8b949e;
@@ -336,14 +342,14 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
-    
+
     .metric-value {
       font-size: 1.5rem;
       font-weight: 600;
       color: #e6edf3;
       margin-bottom: 0.25rem;
     }
-    
+
     /* Comparison Hero Grid */
     .comparison-hero-grid {
       display: grid;
@@ -400,17 +406,25 @@
       background: rgba(255, 255, 255, 0.02);
     }
 
-    .text-success { color: #3fb950; }
-    .text-danger { color: #f85149; }
-    .text-muted { color: #8b949e; }
-    
+    .text-success {
+      color: #3fb950;
+    }
+
+    .text-danger {
+      color: #f85149;
+    }
+
+    .text-muted {
+      color: #8b949e;
+    }
+
     .chart-container-native {
       position: relative;
       height: 300px;
       width: 100%;
       margin-top: 1rem;
     }
-    
+
     .visual-dashboard {
       padding: 1rem 0;
       display: flex;
@@ -425,12 +439,12 @@
   <!-- ═══ TOP BAR ═══════════════════════════════════════════════════ -->
   <header class="h-14 flex items-center justify-between px-5 border-b border-white/[0.07] shrink-0 bg-[#0c0e12]">
     <div class="font-bold text-base text-white tracking-widest uppercase">FIN-OS INTEL</div>
-      <div id="authControls" class="flex items-center gap-4 text-sm">
-        <!-- Injected via JS -->
-      </div>
+    <div id="authControls" class="flex items-center gap-4 text-sm">
+      <!-- Injected via JS -->
+    </div>
     </div>
     <script>
-      (function() {
+      (function () {
         const c = document.getElementById('authControls');
         try {
           const userStr = localStorage.getItem('prospektlab_user');
@@ -446,7 +460,7 @@
               <a href="/signup" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition-colors">Sign Up</a>
             `;
           }
-        } catch(e) { console.error(e); }
+        } catch (e) { console.error(e); }
       })();
     </script>
   </header>
@@ -475,7 +489,7 @@
 
       <!-- Unified Scrollable Area -->
       <div class="flex-1 overflow-y-auto overflow-x-hidden scroll-thin pb-32">
-        
+
         <!-- STATE: COMMAND (Initial empty state) -->
         <div id="stateCommand" class="min-h-full flex flex-col items-center justify-center p-6 bg-[#0c0e12]">
           <div class="text-center px-8">
@@ -490,7 +504,8 @@
             <div class="text-xl font-bold text-white mb-1">Analyzing <span id="processingTarget"></span></div>
             <div class="text-xs text-gray-500 mb-5">Synthesizing intelligence streams…</div>
             <div id="processingTitle" class="hidden"></div>
-            <div id="processingPhaseLabel" class="text-[11px] text-gray-400 uppercase tracking-widest mb-2">Connecting…</div>
+            <div id="processingPhaseLabel" class="text-[11px] text-gray-400 uppercase tracking-widest mb-2">Connecting…
+            </div>
             <div class="h-0.5 bg-[#1e2129] rounded overflow-hidden mb-1">
               <div id="processingBar" class="h-full bg-gray-500 w-0 transition-all duration-500 rounded"></div>
             </div>
@@ -510,7 +525,8 @@
               </div>
               <div class="chat-row assistant">
                 <div class="shrink-0 mt-1">
-                  <div class="w-8 h-8 rounded-lg bg-[#1e2129] flex items-center justify-center border border-white/[0.09]">
+                  <div
+                    class="w-8 h-8 rounded-lg bg-[#1e2129] flex items-center justify-center border border-white/[0.09]">
                     <span class="material-symbols-outlined text-[15px] text-gray-300">graphic_eq</span>
                   </div>
                 </div>
@@ -529,11 +545,14 @@
                           <div class="label-mono text-[10px] text-gray-400">Financial history</div>
                           <div id="historyMeta" class="text-[11px] text-gray-400 mt-1"></div>
                         </div>
-                        <div id="historyPill" class="label-mono text-[9px] px-2 py-1 rounded bg-white/5 text-gray-300"></div>
+                        <div id="historyPill" class="label-mono text-[9px] px-2 py-1 rounded bg-white/5 text-gray-300">
+                        </div>
                       </div>
                       <div class="flex gap-2 mb-2">
-                        <button class="hist-tab label-mono text-[9px] px-2 py-1 rounded border border-white/10" data-hist="revenue">Revenue</button>
-                        <button class="hist-tab label-mono text-[9px] px-2 py-1 rounded border border-white/10" data-hist="net_income">Net income</button>
+                        <button class="hist-tab label-mono text-[9px] px-2 py-1 rounded border border-white/10"
+                          data-hist="revenue">Revenue</button>
+                        <button class="hist-tab label-mono text-[9px] px-2 py-1 rounded border border-white/10"
+                          data-hist="net_income">Net income</button>
                       </div>
                       <div id="historyHost" class="chart-box"></div>
                     </div>
@@ -734,6 +753,8 @@
     let memoStreamBuf = "";
     let memoStreaming = false;
     let activeRunToken = 0;
+    let conversationTurns = [];
+    let activeTurnId = null;
 
     const PHASE_PROGRESS = {
       enrichment: 18,
@@ -906,8 +927,10 @@
       $("queryGrid").innerHTML = "";
       $("liveSourcesList").innerHTML = '<div class="text-outline-variant text-xs italic">Sources will appear as the agent fetches them.</div>';
       $("livesSourcesCount").textContent = "0";
-      $("memoBody").textContent = "";
-      $("memoBody").classList.remove("stream-cursor");
+      if ($("memoBody")) {
+        $("memoBody").textContent = "";
+        $("memoBody").classList.remove("stream-cursor");
+      }
       if ($("userBubble")) $("userBubble").textContent = "";
       if ($("visualDashboard")) $("visualDashboard").classList.add("hidden");
       window.__lastMemoMd = "";
@@ -1039,6 +1062,174 @@
           gapList.appendChild(li);
         });
       }
+    }
+
+    function resetRunPanels() {
+      counters = { sources: 0, primary: 0 };
+      fxRate = null;
+      memoStreamBuf = "";
+      memoStreaming = false;
+      $("ctrSources").textContent = "0";
+      $("ctrPrimary").textContent = "0";
+      $("ctrElapsed").textContent = "0s";
+      $("processingBar").style.width = "0%";
+      $("processingPercent").textContent = "0%";
+      $("processingPhaseLabel").textContent = "Starting...";
+      $("activityStream").innerHTML = '<div class="__empty px-6 py-6 text-outline-variant text-sm italic">Waiting for the agent to come online...</div>';
+      $("queryGrid").innerHTML = "";
+      $("liveSourcesList").innerHTML = '<div class="text-outline-variant text-xs italic">Sources will appear as the agent fetches them.</div>';
+      $("livesSourcesCount").textContent = "0";
+      window.__lastIntel = {};
+    }
+
+    function ensureChatThreadReady() {
+      const thread = $("chatThread");
+      if (!thread) return null;
+      if (!thread.dataset.dynamic) {
+        thread.innerHTML = "";
+        thread.dataset.dynamic = "1";
+      }
+      return thread;
+    }
+
+    function appendConversationTurn(query) {
+      const thread = ensureChatThreadReady();
+      if (!thread) return null;
+      const turnId = `turn_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const wrapper = document.createElement("div");
+      wrapper.className = "chat-turn";
+      wrapper.dataset.turnId = turnId;
+      wrapper.innerHTML = `
+        <div class="chat-row user">
+          <div class="user-bubble"></div>
+        </div>
+        <div class="chat-row assistant">
+          <div class="shrink-0 mt-1">
+            <div class="w-8 h-8 rounded-lg bg-[#1e2129] flex items-center justify-center border border-white/[0.09]">
+              <span class="material-symbols-outlined text-[15px] text-gray-300">graphic_eq</span>
+            </div>
+          </div>
+          <div class="assistant-card">
+            <div class="turn-visual-dashboard hidden"></div>
+            <div class="turn-memo memo-prose break-words overflow-x-auto max-w-full min-w-0"></div>
+          </div>
+        </div>
+      `;
+      const queryEl = wrapper.querySelector(".user-bubble");
+      const memoEl = wrapper.querySelector(".turn-memo");
+      const visualEl = wrapper.querySelector(".turn-visual-dashboard");
+      queryEl.textContent = query;
+      thread.appendChild(wrapper);
+      const turn = {
+        turnId,
+        query,
+        sessionId: null,
+        outputMode: null,
+        memoBuffer: "",
+        intel: {},
+        root: wrapper,
+        queryEl,
+        memoEl,
+        visualEl,
+      };
+      conversationTurns.push(turn);
+      activeTurnId = turnId;
+      showState("result");
+      $("resultTitle").textContent = "Research chat";
+      $("resultBreadcrumb").textContent = "Conversation";
+      setTimeout(() => wrapper.scrollIntoView({ behavior: "smooth", block: "end" }), 0);
+      return turn;
+    }
+
+    function clearConversation() {
+      const thread = ensureChatThreadReady();
+      if (thread) thread.innerHTML = "";
+      conversationTurns = [];
+      activeTurnId = null;
+    }
+
+    function getTurn(turnId = activeTurnId) {
+      return conversationTurns.find((t) => t.turnId === turnId) || null;
+    }
+
+    function shouldShowVisuals(query, outputMode) {
+      const q = (query || "").toLowerCase();
+      const explicitVisual = /\b(stats|statistics|financials?|chart|graph|historical|history|trend|comparison|compare|valuation|revenue|profit|margin|market cap|shareholding|performance|pe ratio|p\/e)\b/.test(q);
+      const simpleText = /\b(news|latest|headline|full form|define|meaning|in one line|one-line|what is|stands for)\b/.test(q);
+      const visualModes = new Set(["company_snapshot", "company_comparison", "valuation_model", "investment_view", "deep_research_report"]);
+      const hiddenModes = new Set(["news_brief", "direct_answer"]);
+      if (explicitVisual) return true;
+      if (hiddenModes.has(outputMode) || simpleText) return false;
+      return visualModes.has(outputMode);
+    }
+
+    function currentUserEmail() {
+      try {
+        const userStr = localStorage.getItem("prospektlab_user");
+        return userStr ? JSON.parse(userStr).email || "" : "";
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function renderTurnMemo(turnId, text, { streaming = false } = {}) {
+      const turn = getTurn(turnId);
+      if (!turn) return;
+      turn.memoEl.classList.toggle("stream-cursor", streaming);
+      if (streaming) {
+        turn.memoEl.textContent = cleanMemoText(text || "");
+      } else {
+        turn.memoEl.innerHTML = renderMarkdown(cleanMemoText(text || ""));
+        hydrateMermaidBlocks();
+      }
+    }
+
+    function renderTurnVisuals(turnId) {
+      const turn = getTurn(turnId);
+      if (!turn || !shouldShowVisuals(turn.query, turn.outputMode)) {
+        if (turn?.visualEl) turn.visualEl.classList.add("hidden");
+        return;
+      }
+      const intel = turn.intel || {};
+      const yahoo = intel.yahoo || {};
+      const cards = [];
+      if (yahoo.price != null) cards.push(["Price", `${yahoo.currency || ""} ${Number(yahoo.price).toLocaleString()}`.trim()]);
+      if (yahoo.market_cap) cards.push(["Market cap", fmtMoney(yahoo.market_cap, yahoo.currency || "USD")]);
+      const metrics = yahoo.financial_metrics || {};
+      if (metrics.total_revenue) cards.push(["Revenue", fmtMoney(metrics.total_revenue, yahoo.currency || "USD")]);
+      if (metrics.profit_margins != null) cards.push(["Net margin", `${(metrics.profit_margins * 100).toFixed(1)}%`]);
+      if (!cards.length && !(yahoo.series_closes?.length >= 2) && !(yahoo.annual_revenue?.length >= 2)) {
+        turn.visualEl.classList.add("hidden");
+        return;
+      }
+      const cardHtml = cards.length ? `
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+          ${cards.map(([label, value]) => `<div class="bg-black/20 border border-white/10 rounded-lg p-3"><div class="label-mono text-[9px] text-gray-500">${escapeHtml(label)}</div><div class="text-sm font-semibold text-white mt-1">${escapeHtml(value)}</div></div>`).join("")}
+        </div>` : "";
+      const priceChart = yahoo.series_closes?.length >= 2 ? buildSimpleLineChart(yahoo.series_closes, yahoo.series_dates || [], "Price trend") : "";
+      const revenueChart = yahoo.annual_revenue?.length >= 2 ? buildSimpleBarChart(yahoo.annual_revenue, yahoo.annual_revenue_dates || [], "Annual revenue") : "";
+      turn.visualEl.innerHTML = `<div class="analysis-panel">${cardHtml}${priceChart}${revenueChart}</div>`;
+      turn.visualEl.classList.remove("hidden");
+    }
+
+    function buildSimpleLineChart(values, labels, title) {
+      const data = values.map(Number).filter((v) => Number.isFinite(v));
+      if (data.length < 2) return "";
+      const W = 620, H = 180, P = 18;
+      const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
+      const x = (i) => P + (i / (data.length - 1)) * (W - P * 2);
+      const y = (v) => H - P - ((v - min) / range) * (H - P * 2);
+      const pts = data.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+      const up = data[data.length - 1] >= data[0];
+      const color = up ? "#6ee7b7" : "#ffb4ab";
+      return `<div class="chart-box mb-3"><div class="label-mono text-[10px] text-gray-400 mb-2">${escapeHtml(title)}</div><svg viewBox="0 0 ${W} ${H}" class="w-full h-44"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="${P}" y="${H - 4}" fill="#94a3b8" font-size="10">${escapeHtml((labels[0] || "").slice(0, 10))}</text><text x="${W - P}" y="${H - 4}" text-anchor="end" fill="#94a3b8" font-size="10">${escapeHtml((labels[labels.length - 1] || "").slice(0, 10))}</text></svg></div>`;
+    }
+
+    function buildSimpleBarChart(values, labels, title) {
+      const data = values.map(Number).filter((v) => Number.isFinite(v));
+      if (data.length < 2) return "";
+      const max = Math.max(...data.map((v) => Math.abs(v))) || 1;
+      return `<div class="chart-box"><div class="label-mono text-[10px] text-gray-400 mb-3">${escapeHtml(title)}</div><div class="flex items-end gap-2 h-40">${data.map((v, i) => `<div class="flex-1 flex flex-col items-center gap-1"><div class="w-full rounded-t bg-[#22c55e]" style="height:${Math.max(4, Math.abs(v) / max * 130)}px"></div><div class="text-[9px] text-gray-500">${escapeHtml(((labels[i] || `FY${i + 1}`).toString()).slice(0, 4))}</div></div>`).join("")}</div></div>`;
     }
 
     // ── Multi-agent grid ──────────────────────────────────────────────────
@@ -1790,7 +1981,7 @@
       return `<div class="my-5 rounded-lg border border-white/[0.08] bg-black/15 p-3 overflow-x-auto"><div class="text-[12px] text-on-surface mb-2">${escapeHtmlMd(cfg.title || "Chart")}</div><svg viewBox="0 0 ${W} ${H}" class="w-full min-w-[520px] h-[260px]">${yTicks}${xLabels}${marks}</svg><div class="label-mono text-[10px] text-on-surface-variant flex flex-wrap gap-3 finchart-legend">${legend}</div></div>`;
     }
     async function hydrateMermaidBlocks() {
-      const blocks = document.querySelectorAll("#memoBody .mermaid[data-raw]");
+      const blocks = document.querySelectorAll(".memo-prose .mermaid[data-raw]");
       if (!blocks.length) return;
       try {
         if (!window.mermaid) {
@@ -1888,31 +2079,51 @@
 
     function setMemoMarkdown(text) {
       const el = $("memoBody");
+      if (!el) return;
       el.innerHTML = renderMarkdown(text);
       hydrateMermaidBlocks();
     }
 
     function openMemoInThread(memoId, title) {
+      const continueSessionId = eventSource ? null : sessionId;
       if (eventSource) { eventSource.close(); eventSource = null; }
       activeRunToken += 1;
       const memoToken = activeRunToken;
       sessionId = memoId;
-      resetCounters();
+      resetRunPanels();
+      clearConversation();
       showState("result");
       $("resultTitle").textContent = title || "Research memo";
       $("resultBreadcrumb").textContent = "Recent chat";
-      if ($("userBubble")) $("userBubble").textContent = title || "Previous research";
-      fetch(`/sessions/${memoId}/memo?t=${Date.now()}`)
+      const renderMemoFallback = () => fetch(`/sessions/${memoId}/memo?t=${Date.now()}`)
         .then((r) => r.text())
         .then((md) => {
           if (memoToken !== activeRunToken) return;
           window.__lastMemoMd = md;
-          setMemoMarkdown(cleanMemoText(md));
+          const loadedTurn = appendConversationTurn(title || "Previous research");
+          if (loadedTurn) renderTurnMemo(loadedTurn.turnId, md);
         })
         .catch(() => {
           if (memoToken !== activeRunToken) return;
-          setMemoMarkdown("Unable to load this memo.");
+          const loadedTurn = appendConversationTurn(title || "Previous research");
+          if (loadedTurn) renderTurnMemo(loadedTurn.turnId, "Unable to load this memo.");
         });
+      const email = currentUserEmail();
+      const historyUrl = `/chat/history?session_id=${encodeURIComponent(memoId)}${email ? `&user_email=${encodeURIComponent(email)}` : ""}`;
+      fetch(historyUrl)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (memoToken !== activeRunToken) return;
+          const history = data?.history || [];
+          if (!history.length) return renderMemoFallback();
+          for (let i = 0; i < history.length; i += 2) {
+            const userMsg = history[i]?.role === "user" ? history[i] : null;
+            const assistantMsg = history[i + 1]?.role === "assistant" ? history[i + 1] : null;
+            const loadedTurn = appendConversationTurn(userMsg?.content || title || "Previous research");
+            if (loadedTurn && assistantMsg?.content) renderTurnMemo(loadedTurn.turnId, assistantMsg.content);
+          }
+        })
+        .catch(renderMemoFallback);
     }
 
     // ────────────────────────────────────────────────────────────────────
@@ -1947,17 +2158,6 @@
         `;
           grid.appendChild(a);
         }
-        if (sidebar) {
-          for (const m of memos.slice(0, 14)) {
-            const item = document.createElement("button");
-            item.type = "button";
-            item.className = "w-full text-left px-2.5 py-2 rounded-md text-[11px] text-gray-300 hover:bg-white/[0.06] hover:text-white truncate transition-colors";
-            item.title = m.title || "Memo";
-            item.textContent = m.title || "Memo";
-            item.addEventListener("click", () => openMemoInThread(m.session_id, m.title || "Memo"));
-            sidebar.appendChild(item);
-          }
-        }
       } catch (_) { }
     }
 
@@ -1967,492 +2167,497 @@
     let researchMode = "standard";
 
     async function startRun() {
-      // Read from hero input OR header input
-      const heroVal = $("heroSearchInput") ? $("heroSearchInput").value.trim() : "";
-      const activeVal = $("activeInput") ? $("activeInput").value.trim() : "";
-      const headerVal = $("targetInput").value.trim();
-      const target = activeVal || heroVal || headerVal;
+      // Read directly from the unified bottom input
+      const target = $("targetInput").value.trim();
+
       if (!target) {
-        ($("heroSearchInput") || $("targetInput")).focus();
+        $("targetInput").focus();
         return;
       }
-      // Sync both inputs
+      
+      // Sync the input
       $("targetInput").value = target;
-      if ($("heroSearchInput")) $("heroSearchInput").value = target;
-      if ($("activeInput")) $("activeInput").value = "";
-      // Animate the hero title out
-      const hero = $("heroTitle");
-      if (hero && !hero.classList.contains("brand-exit")) {
-        hero.classList.add("brand-exit");
-      }
-      if (eventSource) { eventSource.close(); eventSource = null; }
-      const runToken = ++activeRunToken;
-      resetCounters();
-      showState("processing");
-      $("processingTarget").textContent = target;
-      $("processingTitle").textContent = target;
-      if ($("userBubble")) $("userBubble").textContent = target;
-      startedAt = Date.now();
-      if (tickHandle) clearInterval(tickHandle);
-      tickHandle = setInterval(tickElapsed, 250);
+            if ($("heroSearchInput")) $("heroSearchInput").value = target;
+            if ($("activeInput")) $("activeInput").value = "";
+            // Animate the hero title out
+            const hero = $("heroTitle");
+            if (hero && !hero.classList.contains("brand-exit")) {
+              hero.classList.add("brand-exit");
+            }
+            if (eventSource) { eventSource.close(); eventSource = null; }
+            const runToken = ++activeRunToken;
+            resetRunPanels();
+            const turn = appendConversationTurn(target);
+            showState("processing");
+            $("processingTarget").textContent = target;
+            $("processingTitle").textContent = target;
+            startedAt = Date.now();
+            if (tickHandle) clearInterval(tickHandle);
+            tickHandle = setInterval(tickElapsed, 250);
 
-      let resp;
-      const endpoint = (researchMode === "deep" || researchMode === "marathon") ? "/research/deep" : "/research/start";
-      const payload = researchMode === "marathon"
-        ? { target, passes: 12, pass_depth: 120, max_wall_seconds: 4 * 60 * 60, heartbeat_interval_s: 20 }
-        : researchMode === "deep"
-        ? { target, passes: 5, pass_depth: 40 }
-        : { target, mode: "chat" };
-      
-      try {
-        const userStr = localStorage.getItem('prospektlab_user');
-        if (userStr) {
-          payload.user_email = JSON.parse(userStr).email;
-        }
-      } catch (e) {}
-      if (sessionId) {
-        payload.session_id = sessionId;
-      }
+            let resp;
+            const endpoint = (researchMode === "deep" || researchMode === "marathon") ? "/research/deep" : "/research/start";
+            const payload = researchMode === "marathon"
+              ? { target, passes: 12, pass_depth: 120, max_wall_seconds: 4 * 60 * 60, heartbeat_interval_s: 20 }
+              : researchMode === "deep"
+                ? { target, passes: 5, pass_depth: 40 }
+                : { target, mode: "chat" };
 
-      try {
-        resp = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      } catch (e) {
-        if (runToken !== activeRunToken) return;
-        pushActivity("error", "Gateway", "Could not reach /research/start: " + e.message, "error");
-        return;
-      }
-      if (!resp.ok) {
-        if (runToken !== activeRunToken) return;
-        pushActivity("error", "Gateway", "Failed to start: HTTP " + resp.status, "error");
-        return;
-      }
-      const { session_id, stream } = await resp.json();
-      if (runToken !== activeRunToken) return;
-      sessionId = session_id;
-      try { localStorage.setItem('prospektlab_session_id', session_id); } catch(e) {}
-      const eventSessionId = session_id;
-      pushActivity("play_circle", "Session", `Opened ${session_id}`, "done");
+            try {
+              const email = currentUserEmail();
+              if (email) payload.user_email = email;
+            } catch (e) { }
+            if (sessionId) {
+              payload.session_id = sessionId;
+            }
 
-      eventSource = new EventSource(stream);
+            try {
+              resp = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              });
+            } catch (e) {
+              if (runToken !== activeRunToken) return;
+              pushActivity("error", "Gateway", "Could not reach /research/start: " + e.message, "error");
+              return;
+            }
+            if (!resp.ok) {
+              if (runToken !== activeRunToken) return;
+              pushActivity("error", "Gateway", "Failed to start: HTTP " + resp.status, "error");
+              return;
+            }
+            const { session_id, stream } = await resp.json();
+            if (runToken !== activeRunToken) return;
+            sessionId = session_id;
+            if (turn) turn.sessionId = session_id;
+            try { localStorage.setItem('prospektlab_session_id', session_id); } catch (e) { }
+            const eventSessionId = session_id;
+            pushActivity("play_circle", "Session", `Opened ${session_id}`, "done");
 
-      eventSource.addEventListener("session_started", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("compass_calibration", "Planner", `Plan built for ${d.target}`, "done");
-      });
-      eventSource.addEventListener("output_plan", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("article", "Output", `${d.title || d.mode} · ${d.depth}`, "done");
-      });
-      eventSource.addEventListener("entity_resolved", (e) => {
-        const d = JSON.parse(e.data);
-        const bits = [d.country_name, d.primary_exchange, d.yahoo_ticker].filter(Boolean).join(" · ");
-        pushActivity("public", "Entity", `${d.canonical_name || d.query}${bits ? ` -> ${bits}` : ""}`, "done");
-      });
-      eventSource.addEventListener("playbook_loaded", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("library_books", "Playbook", `Loaded ${d.name} (${(d.selected_agents || []).length} agent hint(s))`, "done");
-      });
-      eventSource.addEventListener("routing", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("route", "Router", `${(d.selected_agents || []).join(", ")}${d.country_code ? ` · ${d.country_code}` : ""}`, "done");
-      });
-      eventSource.addEventListener("phase", (e) => {
-        const d = JSON.parse(e.data);
-        setPhase(d.phase, d.note);
-        pushActivity("hourglass_top", "Phase", PHASE_LABEL[d.phase] || d.phase, "running", d.note || "");
-      });
-      eventSource.addEventListener("memory_recall", (e) => {
-        const d = JSON.parse(e.data);
-        renderMemoryRecall(d);
-        pushActivity("neurology", "Memory", d.fact_count > 0 ? `Recalled ${d.fact_count} prior facts about ${d.target}` : `No prior memory for ${d.target} yet`, d.fact_count > 0 ? "done" : "info");
-      });
-      eventSource.addEventListener("quality_score", (e) => {
-        const d = JSON.parse(e.data);
-        renderQualityScore(d);
-        const phaseLabel = (d.phase || "").replace("reflection_round_", "round ");
-        pushActivity("verified", "Quality", `Score ${d.score}/100${d.phase ? ` (${phaseLabel})` : ""}`, d.score >= 75 ? "done" : "running", (d.gaps || []).slice(0, 2).join(" · "));
-      });
-      eventSource.addEventListener("reflection", (e) => {
-        const d = JSON.parse(e.data);
-        renderReflectionRound(d);
-        pushActivity("psychology", "Reflection", `Round ${d.round}: ${(d.gaps || []).length} gaps, ${(d.planned_queries || []).length} follow-up queries`, "running", (d.gaps || [])[0] || "");
-      });
-      eventSource.addEventListener("reflection_done", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("psychology", "Reflection", `Done after ${d.rounds_run} rounds · score ${d.initial_score} → ${d.final_score} (+${d.delta || 0})`, d.final_score >= 75 ? "done" : "warning", `${d.new_docs_total} new docs`);
-      });
-      eventSource.addEventListener("warning", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("warning", "Warning", d.message || "", "warning");
-      });
+            eventSource = new EventSource(stream);
 
-      // ── Multi-agent orchestration events ─────────────────────────────
-      eventSource.addEventListener("orchestrator_started", (e) => {
-        const d = JSON.parse(e.data);
-        initAgentGrid(d.agents || []);
-        pushActivity("hub", "Orchestrator", `Dispatching ${(d.agents || []).length} specialist agents across ${(d.waves || []).length} wave(s)`, "running");
-      });
-      eventSource.addEventListener("orchestrator_wave", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("hub", "Orchestrator", `Wave ${d.wave}/${d.wave_total}: ${(d.agents || []).join(", ")}`, "running");
-      });
-      eventSource.addEventListener("subagent_started", (e) => {
-        const d = JSON.parse(e.data);
-        updateAgentTile(d.agent, { status: "running", display: d.display });
-      });
-      eventSource.addEventListener("subagent_skipped", (e) => {
-        const d = JSON.parse(e.data);
-        updateAgentTile(d.agent, { status: "skipped", display: d.display, reason: d.reason });
-      });
-      eventSource.addEventListener("subagent_done", (e) => {
-        const d = JSON.parse(e.data);
-        updateAgentTile(d.agent, {
-          status: d.status,
-          display: d.display,
-          findings: d.findings_count,
-          new_docs: d.new_docs_count,
-          elapsed_ms: d.elapsed_ms,
-          error: d.error,
-        });
-        const verb = d.status === "ok" ? "delivered" : d.status === "partial" ? "returned partial" : d.status === "skipped" ? "skipped" : "failed";
-        pushActivity("hub", d.display || d.agent, `${verb}: ${d.findings_count || 0} findings, ${d.new_docs_count || 0} new docs (${d.elapsed_ms || 0}ms)`, d.status === "ok" ? "done" : d.status === "partial" ? "warning" : "warning");
-      });
-      eventSource.addEventListener("orchestrator_done", (e) => {
-        const d = JSON.parse(e.data);
-        $("agentGridPill").textContent = `${d.agents_total} agents · ${d.findings_total} findings`;
-        pushActivity("hub", "Orchestrator", `Done: ${d.findings_total} findings, ${d.new_docs_total} new docs across ${d.waves} waves (${d.elapsed_ms}ms)`, "done");
-      });
-      eventSource.addEventListener("verifier_started", (e) => {
-        const d = JSON.parse(e.data);
-        $("verifierPanel").classList.remove("hidden");
-        $("verifierBody").innerHTML = `<div class="text-on-surface-variant"><span class="material-symbols-outlined text-[14px] align-middle">hourglass_top</span> Cross-checking ${d.findings} finding(s) against ${d.docs} sources…</div>`;
-      });
-      eventSource.addEventListener("verifier_done", (e) => {
-        const d = JSON.parse(e.data);
-        renderVerifier(d);
-        pushActivity("shield_person", "Verifier", `${d.promoted} promoted · ${d.demoted} demoted · ${d.conflicts} conflict(s) · tier-1 coverage ${d.tier1_coverage_pct}%`, "done");
-      });
-      eventSource.addEventListener("blindspot", (e) => {
-        const d = JSON.parse(e.data);
-        renderBlindspots(d.blindspots || []);
-        const top = (d.blindspots || []).slice(0, 3).map((s) => s.topic).join(", ");
-        pushActivity("visibility_off", "Blind spots", `${d.blindspot_count || 0} detected${top ? ` · top: ${top}` : ""}`, d.blindspot_count > 0 ? "warning" : "done");
-      });
-      eventSource.addEventListener("blindspot_dispatched", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("travel_explore", "Blind spots", `Auto-dispatched ${d.queries} follow-up queries · ${d.new_docs} new doc(s)`, "done");
-      });
-      eventSource.addEventListener("playbook_promoted", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("inventory_2", "Playbook", `Promoted ${d.name} for ${d.geography}`, "done");
-      });
-      eventSource.addEventListener("skill_generated", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("school", "Skill", `Generated ${d.title}`, "done", d.path || "");
-      });
-      eventSource.addEventListener("heartbeat", (e) => {
-        const d = JSON.parse(e.data);
-        const secs = Math.round((d.elapsed_ms || 0) / 1000);
-        pushActivity("monitor_heart", "Heartbeat", `Still running at ${secs}s`, "running");
-      });
-      eventSource.addEventListener("finding", (e) => {
-        const d = JSON.parse(e.data);
-        const icon = { financial: "monitoring", risk: "warning", technical: "show_chart", news: "newspaper", sentiment: "groups", competitor: "swap_horiz", macro: "public", governance: "gavel" }[d.kind] || "label";
-        pushActivity(icon, d.agent, `[${d.confidence}] ${d.headline}`, d.confidence === "HIGH" ? "done" : d.confidence === "MEDIUM" ? "running" : "info", (d.detail || "").slice(0, 120));
-      });
-      eventSource.addEventListener("agent_task", (e) => {
-        const d = JSON.parse(e.data);
-        const icon = d.task.includes("SEC") ? "account_balance" : d.task.includes("Yahoo") ? "show_chart" : d.task.includes("Wikipedia") ? "menu_book" : "memory";
-        pushActivity(icon, d.task, d.note || "", d.status);
-      });
-      eventSource.addEventListener("query", (e) => {
-        const d = JSON.parse(e.data);
-        upsertQuery(d.query, d.status, d.count || 0);
-        if (d.status === "done") {
-          pushActivity("search", "Search", `"${d.query}" → ${d.count} results`, "done");
-        } else if (d.status === "timeout" || d.status === "error") {
-          pushActivity("search_off", "Search", `"${d.query}" → ${d.status}`, "error");
-        }
-      });
-      eventSource.addEventListener("intel", (e) => {
-        const intel = JSON.parse(e.data);
-        window.__lastIntel = intel;
-      });
-      eventSource.addEventListener("source", (e) => {
-        const d = JSON.parse(e.data);
-        counters.sources += 1;
-        if (d.kind === "primary" || d.tier <= 2) counters.primary += 1;
-        $("ctrSources").textContent = String(counters.sources);
-        $("ctrPrimary").textContent = String(counters.primary);
-        pushLiveSource(d);
-        pushActivity("description", `tier ${d.tier}`, `${d.domain}${d.blocked ? " (blocked)" : ""}`, d.blocked ? "warning" : "done", d.title || "");
-      });
-      eventSource.addEventListener("compression", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("compress", "Harness", `Context compressed at step ${d.step}`, "done");
-      });
-      eventSource.addEventListener("conflict", (e) => {
-        const d = JSON.parse(e.data);
-        renderConflicts(d);
-        pushActivity("warning", "Validator", `[CONFLICT] ${d.metric} ${d.spread_pct}% spread`, "warning");
-      });
-      eventSource.addEventListener("memo_token", (e) => {
-        if (runToken !== activeRunToken) return;
-        const d = JSON.parse(e.data);
-        if (!memoStreaming) {
-          memoStreaming = true;
-          showState("result");
-          renderIntel(window.__lastIntel || {});
-          $("resultBreadcrumb").textContent = $("processingTarget").textContent;
-          $("resultTitle").textContent = $("processingTarget").textContent;
-          $("memoViaPill").textContent = "streaming";
-          $("memoBody").innerHTML = "";
-          $("memoBody").classList.add("stream-cursor");
-        }
-        memoStreamBuf += d.chunk || "";
-        // While streaming we render as plain text so a half-token doesn't
-        // produce broken HTML. The final 'memo' event re-renders as markdown.
-        $("memoBody").textContent = cleanMemoText(memoStreamBuf);
-      });
-      eventSource.addEventListener("memo", async (e) => {
-        if (runToken !== activeRunToken) return;
-        const d = JSON.parse(e.data);
-        showState("result");
-        renderIntel(window.__lastIntel || {});
-        $("resultBreadcrumb").textContent = $("processingTarget").textContent;
-        $("resultTitle").textContent = $("processingTarget").textContent;
-        const viaLabel = d.via === "openai" ? "OpenAI" : "structured prose";
-        $("memoViaPill").textContent = viaLabel;
-        $("memoViaPill").className = `label-mono text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md border ${d.via === "openai" ? "bg-success/15 text-success border-success/25" : "bg-primary/15 text-primary border-primary/25"}`;
-        $("memoBody").classList.remove("stream-cursor");
-        // Pull the full memo and render as parsed markdown INSIDE the panel.
-        try {
-          const full = await fetch(`/sessions/${eventSessionId}/memo?t=${Date.now()}`).then((r) => r.text());
-          if (runToken !== activeRunToken) return;
-          setMemoMarkdown(cleanMemoText(full));
-          window.__lastMemoMd = full;
-        } catch (_) {
-          if (runToken !== activeRunToken) return;
-          setMemoMarkdown(cleanMemoText(d.preview || ""));
-        }
-        pushActivity("auto_awesome", "Synthesizer", `Memo synthesized via ${d.via} (${d.chars} chars)`, "done");
-      });
-      
-      // Visual data event handler
-      eventSource.addEventListener("visual_data_ready", (e) => {
-        if (runToken !== activeRunToken) return;
-        const d = JSON.parse(e.data);
-        
-        // Render metric cards
-        if (d.metric_cards && d.metric_cards.length > 0) {
-          renderMetricCards(d.metric_cards);
-        }
-        
-        // Render charts
-        if (d.charts && d.charts.length > 0) {
-          renderCharts(d.charts);
-        }
-        
-        // Render comparison if present
-        if (d.comparison_results && d.comparison_results.length > 0) {
-          renderComparison(d.comparison_results);
-        }
-      });
-      
-      eventSource.addEventListener("final", (e) => {
-        if (runToken !== activeRunToken) return;
-        const d = JSON.parse(e.data);
-        $("processingBar").style.width = "100%";
-        $("processingPercent").textContent = "100%";
-        $("processingPhaseLabel").textContent = "Done";
-        pushActivity("flag", "Final", `${d.steps} steps · ${d.citations} citations · ${d.primary_citations} primary · ${(d.elapsed_ms / 1000).toFixed(1)}s`, "done", d.canonical || "");
-        if (tickHandle) clearInterval(tickHandle);
-        tickHandle = null;
-        loadMemoLibrary();
-      });
-      eventSource.addEventListener("warning", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("warning", "Notice", d.message || "", "warning");
-      });
-      eventSource.addEventListener("deep_pass", (e) => {
-        const d = JSON.parse(e.data);
-        const icon = d.status === "done" ? "check_circle" : "hourglass_top";
-        const statusCls = d.status === "done" ? "done" : "running";
-        pushActivity(icon, `Deep Pass ${d.pass_number}/${d.total_passes}`, d.objective, statusCls);
-        if (d.status === "running") {
-          setPhase("deep_research", `Pass ${d.pass_number}/${d.total_passes}: ${d.objective}`);
-        }
-      });
-      eventSource.addEventListener("deep_complete", (e) => {
-        const d = JSON.parse(e.data);
-        pushActivity("neurology", "Deep Research", `All ${d.passes} passes complete — final memo ready`, "done");
-      });
-      eventSource.addEventListener("done", () => {
-        if (runToken !== activeRunToken) return;
-        if (eventSource) { eventSource.close(); eventSource = null; }
-      });
-      eventSource.onerror = () => {
-        if (runToken !== activeRunToken) return;
-        pushActivity("link_off", "Stream", "Connection lost", "error");
-      };
-    }
+            eventSource.addEventListener("session_started", (e) => {
+              const d = JSON.parse(e.data);
+              pushActivity("compass_calibration", "Planner", `Plan built for ${d.target}`, "done");
+            });
+            eventSource.addEventListener("output_plan", (e) => {
+              const d = JSON.parse(e.data);
+              if (turn) turn.outputMode = d.mode || turn.outputMode;
+              pushActivity("article", "Output", `${d.title || d.mode} · ${d.depth}`, "done");
+            });
+            eventSource.addEventListener("entity_resolved", (e) => {
+              const d = JSON.parse(e.data);
+              const bits = [d.country_name, d.primary_exchange, d.yahoo_ticker].filter(Boolean).join(" · ");
+              pushActivity("public", "Entity", `${d.canonical_name || d.query}${bits ? ` -> ${bits}` : ""}`, "done");
+            });
+            eventSource.addEventListener("playbook_loaded", (e) => {
+              const d = JSON.parse(e.data);
+              pushActivity("library_books", "Playbook", `Loaded ${d.name} (${(d.selected_agents || []).length} agent hint(s))`, "done");
+            });
+            eventSource.addEventListener("routing", (e) => {
+              const d = JSON.parse(e.data);
+              pushActivity("route", "Router", `${(d.selected_agents || []).join(", ")}${d.country_code ? ` · ${d.country_code}` : ""}`, "done");
+            });
+            eventSource.addEventListener("phase", (e) => {
+              const d = JSON.parse(e.data);
+              setPhase(d.phase, d.note);
+              pushActivity("hourglass_top", "Phase", PHASE_LABEL[d.phase] || d.phase, "running", d.note || "");
+            });
+            eventSource.addEventListener("memory_recall", (e) => {
+              const d = JSON.parse(e.data);
+              renderMemoryRecall(d);
+              pushActivity("neurology", "Memory", d.fact_count > 0 ? `Recalled ${d.fact_count} prior facts about ${d.target}` : `No prior memory for ${d.target} yet`, d.fact_count > 0 ? "done" : "info");
+            });
+            eventSource.addEventListener("quality_score", (e) => {
+              const d = JSON.parse(e.data);
+              renderQualityScore(d);
+              const phaseLabel = (d.phase || "").replace("reflection_round_", "round ");
+              pushActivity("verified", "Quality", `Score ${d.score}/100${d.phase ? ` (${phaseLabel})` : ""}`, d.score >= 75 ? "done" : "running", (d.gaps || []).slice(0, 2).join(" · "));
+            });
+            eventSource.addEventListener("reflection", (e) => {
+              const d = JSON.parse(e.data);
+              renderReflectionRound(d);
+              pushActivity("psychology", "Reflection", `Round ${d.round}: ${(d.gaps || []).length} gaps, ${(d.planned_queries || []).length} follow-up queries`, "running", (d.gaps || [])[0] || "");
+            });
+            eventSource.addEventListener("reflection_done", (e) => {
+              const d = JSON.parse(e.data);
+              pushActivity("psychology", "Reflection", `Done after ${d.rounds_run} rounds · score ${d.initial_score} → ${d.final_score} (+${d.delta || 0})`, d.final_score >= 75 ? "done" : "warning", `${d.new_docs_total} new docs`);
+            });
+            eventSource.addEventListener("warning", (e) => {
+              const d = JSON.parse(e.data);
+              pushActivity("warning", "Warning", d.message || "", "warning");
+            });
 
-    // ────────────────────────────────────────────────────────────────────
-    // Wire UI
-    // ────────────────────────────────────────────────────────────────────
-    document.querySelectorAll(".suggest-chip, .workflow-card").forEach((c) => c.addEventListener("click", () => {
-      const q = c.dataset.q;
-      $("targetInput").value = q;
-      if ($("heroSearchInput")) $("heroSearchInput").value = q;
-      startRun();
-    }));
+            // ── Multi-agent orchestration events ─────────────────────────────
+            eventSource.addEventListener("orchestrator_started", (e) => {
+              const d = JSON.parse(e.data);
+              initAgentGrid(d.agents || []);
+              pushActivity("hub", "Orchestrator", `Dispatching ${(d.agents || []).length} specialist agents across ${(d.waves || []).length} wave(s)`, "running");
+            });
+            eventSource.addEventListener("orchestrator_wave", (e) => {
+              const d = JSON.parse(e.data);
+              pushActivity("hub", "Orchestrator", `Wave ${d.wave}/${d.wave_total}: ${(d.agents || []).join(", ")}`, "running");
+            });
+            eventSource.addEventListener("subagent_started", (e) => {
+              const d = JSON.parse(e.data);
+              updateAgentTile(d.agent, { status: "running", display: d.display });
+            });
+            eventSource.addEventListener("subagent_skipped", (e) => {
+              const d = JSON.parse(e.data);
+              updateAgentTile(d.agent, { status: "skipped", display: d.display, reason: d.reason });
+            });
+            eventSource.addEventListener("subagent_done", (e) => {
+              const d = JSON.parse(e.data);
+              updateAgentTile(d.agent, {
+                status: d.status,
+                display: d.display,
+                findings: d.findings_count,
+                new_docs: d.new_docs_count,
+                elapsed_ms: d.elapsed_ms,
+                error: d.error,
+              });
+              const verb = d.status === "ok" ? "delivered" : d.status === "partial" ? "returned partial" : d.status === "skipped" ? "skipped" : "failed";
+              pushActivity("hub", d.display || d.agent, `${verb}: ${d.findings_count || 0} findings, ${d.new_docs_count || 0} new docs (${d.elapsed_ms || 0}ms)`, d.status === "ok" ? "done" : d.status === "partial" ? "warning" : "warning");
+            });
+            eventSource.addEventListener("orchestrator_done", (e) => {
+              const d = JSON.parse(e.data);
+              $("agentGridPill").textContent = `${d.agents_total} agents · ${d.findings_total} findings`;
+              pushActivity("hub", "Orchestrator", `Done: ${d.findings_total} findings, ${d.new_docs_total} new docs across ${d.waves} waves (${d.elapsed_ms}ms)`, "done");
+            });
+            eventSource.addEventListener("verifier_started", (e) => {
+              const d = JSON.parse(e.data);
+              $("verifierPanel").classList.remove("hidden");
+              $("verifierBody").innerHTML = `<div class="text-on-surface-variant"><span class="material-symbols-outlined text-[14px] align-middle">hourglass_top</span> Cross-checking ${d.findings} finding(s) against ${d.docs} sources…</div>`;
+            });
+            eventSource.addEventListener("verifier_done", (e) => {
+              const d = JSON.parse(e.data);
+              renderVerifier(d);
+              pushActivity("shield_person", "Verifier", `${d.promoted} promoted · ${d.demoted} demoted · ${d.conflicts} conflict(s) · tier-1 coverage ${d.tier1_coverage_pct}%`, "done");
+            });
+            eventSource.addEventListener("blindspot", (e) => {
+              const d = JSON.parse(e.data);
+              renderBlindspots(d.blindspots || []);
+              const top = (d.blindspots || []).slice(0, 3).map((s) => s.topic).join(", ");
+              pushActivity("visibility_off", "Blind spots", `${d.blindspot_count || 0} detected${top ? ` · top: ${top}` : ""}`, d.blindspot_count > 0 ? "warning" : "done");
+            });
+            eventSource.addEventListener("blindspot_dispatched", (e) => {
+              const d = JSON.parse(e.data);
+              pushActivity("travel_explore", "Blind spots", `Auto-dispatched ${d.queries} follow-up queries · ${d.new_docs} new doc(s)`, "done");
+            });
+            eventSource.addEventListener("playbook_promoted", (e) => {
+              const d = JSON.parse(e.data);
+              pushActivity("inventory_2", "Playbook", `Promoted ${d.name} for ${d.geography}`, "done");
+            });
+            eventSource.addEventListener("skill_generated", (e) => {
+              const d = JSON.parse(e.data);
+              pushActivity("school", "Skill", `Generated ${d.title}`, "done", d.path || "");
+            });
+            eventSource.addEventListener("heartbeat", (e) => {
+              const d = JSON.parse(e.data);
+              const secs = Math.round((d.elapsed_ms || 0) / 1000);
+              pushActivity("monitor_heart", "Heartbeat", `Still running at ${secs}s`, "running");
+            });
+            eventSource.addEventListener("finding", (e) => {
+              const d = JSON.parse(e.data);
+              const icon = { financial: "monitoring", risk: "warning", technical: "show_chart", news: "newspaper", sentiment: "groups", competitor: "swap_horiz", macro: "public", governance: "gavel" }[d.kind] || "label";
+              pushActivity(icon, d.agent, `[${d.confidence}] ${d.headline}`, d.confidence === "HIGH" ? "done" : d.confidence === "MEDIUM" ? "running" : "info", (d.detail || "").slice(0, 120));
+            });
+            eventSource.addEventListener("agent_task", (e) => {
+              const d = JSON.parse(e.data);
+              const icon = d.task.includes("SEC") ? "account_balance" : d.task.includes("Yahoo") ? "show_chart" : d.task.includes("Wikipedia") ? "menu_book" : "memory";
+              pushActivity(icon, d.task, d.note || "", d.status);
+            });
+            eventSource.addEventListener("query", (e) => {
+              const d = JSON.parse(e.data);
+              upsertQuery(d.query, d.status, d.count || 0);
+              if (d.status === "done") {
+                pushActivity("search", "Search", `"${d.query}" → ${d.count} results`, "done");
+              } else if (d.status === "timeout" || d.status === "error") {
+                pushActivity("search_off", "Search", `"${d.query}" → ${d.status}`, "error");
+              }
+            });
+            eventSource.addEventListener("intel", (e) => {
+              const intel = JSON.parse(e.data);
+              window.__lastIntel = intel;
+              if (turn) turn.intel = intel;
+            });
+            eventSource.addEventListener("source", (e) => {
+              const d = JSON.parse(e.data);
+              counters.sources += 1;
+              if (d.kind === "primary" || d.tier <= 2) counters.primary += 1;
+              $("ctrSources").textContent = String(counters.sources);
+              $("ctrPrimary").textContent = String(counters.primary);
+              pushLiveSource(d);
+              pushActivity("description", `tier ${d.tier}`, `${d.domain}${d.blocked ? " (blocked)" : ""}`, d.blocked ? "warning" : "done", d.title || "");
+            });
+            eventSource.addEventListener("compression", (e) => {
+              const d = JSON.parse(e.data);
+              pushActivity("compress", "Harness", `Context compressed at step ${d.step}`, "done");
+            });
+            eventSource.addEventListener("conflict", (e) => {
+              const d = JSON.parse(e.data);
+              renderConflicts(d);
+              pushActivity("warning", "Validator", `[CONFLICT] ${d.metric} ${d.spread_pct}% spread`, "warning");
+            });
+            eventSource.addEventListener("memo_token", (e) => {
+              if (runToken !== activeRunToken) return;
+              const d = JSON.parse(e.data);
+              if (!memoStreaming) {
+                memoStreaming = true;
+                showState("result");
+                $("resultBreadcrumb").textContent = $("processingTarget").textContent;
+                $("resultTitle").textContent = $("processingTarget").textContent;
+                $("memoViaPill").textContent = "streaming";
+              }
+              memoStreamBuf += d.chunk || "";
+              if (turn) {
+                turn.memoBuffer = memoStreamBuf;
+                renderTurnMemo(turn.turnId, turn.memoBuffer, { streaming: true });
+              }
+            });
+            eventSource.addEventListener("memo", async (e) => {
+              if (runToken !== activeRunToken) return;
+              const d = JSON.parse(e.data);
+              if (turn) turn.outputMode = d.output_mode || d.mode || turn.outputMode;
+              showState("result");
+              $("resultBreadcrumb").textContent = $("processingTarget").textContent;
+              $("resultTitle").textContent = $("processingTarget").textContent;
+              const viaLabel = d.via === "openai" ? "OpenAI" : "structured prose";
+              $("memoViaPill").textContent = viaLabel;
+              $("memoViaPill").className = `label-mono text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md border ${d.via === "openai" ? "bg-success/15 text-success border-success/25" : "bg-primary/15 text-primary border-primary/25"}`;
+              // Pull the full memo and render as parsed markdown INSIDE the panel.
+              try {
+                const full = await fetch(`/sessions/${eventSessionId}/memo?t=${Date.now()}`).then((r) => r.text());
+                if (runToken !== activeRunToken) return;
+                if (turn) {
+                  turn.memoBuffer = full;
+                  renderTurnMemo(turn.turnId, full);
+                  renderTurnVisuals(turn.turnId);
+                }
+                window.__lastMemoMd = full;
+              } catch (_) {
+                if (runToken !== activeRunToken) return;
+                if (turn) {
+                  turn.memoBuffer = d.preview || "";
+                  renderTurnMemo(turn.turnId, d.preview || "");
+                  renderTurnVisuals(turn.turnId);
+                }
+              }
+              pushActivity("auto_awesome", "Synthesizer", `Memo synthesized via ${d.via} (${d.chars} chars)`, "done");
+            });
 
-    // Mode toggle: Standard vs Deep Research
-    document.querySelectorAll(".mode-toggle").forEach((btn) => btn.addEventListener("click", () => {
-      document.querySelectorAll(".mode-toggle").forEach((b) => {
-        b.classList.remove("bg-primary/10", "text-primary", "border-primary/30", "bg-warn/10", "text-warn", "border-warn/30");
-        b.classList.add("bg-surface-container-low/50", "text-on-surface-variant", "border-outline-variant/20");
-      });
-      const isDeep = btn.id === "modeDeep";
-      const isMarathon = btn.id === "modeMarathon";
-      researchMode = isMarathon ? "marathon" : (isDeep ? "deep" : "standard");
-      if (isDeep || isMarathon) {
-        btn.classList.remove("bg-surface-container-low/50", "text-on-surface-variant", "border-outline-variant/20");
-        btn.classList.add(isMarathon ? "bg-primary/10" : "bg-warn/10", isMarathon ? "text-primary" : "text-warn", isMarathon ? "border-primary/30" : "border-warn/30");
-      } else {
-        btn.classList.remove("bg-surface-container-low/50", "text-on-surface-variant", "border-outline-variant/20");
-        btn.classList.add("bg-primary/10", "text-primary", "border-primary/30");
-      }
-    }));
-    $("executeBtn").addEventListener("click", startRun);
-    $("targetInput").addEventListener("keydown", (e) => { if (e.key === "Enter") startRun(); });
-    // Hero search input (Perplexity-style centered)
-    if ($("heroExecuteBtn")) {
-      $("heroExecuteBtn").addEventListener("click", startRun);
-    }
-    if ($("heroSearchInput")) {
-      $("heroSearchInput").addEventListener("keydown", (e) => { if (e.key === "Enter") startRun(); });
-    }
-    // Active inline input bar (shown during/after research)
-    if ($("activeExecuteBtn")) {
-      $("activeExecuteBtn").addEventListener("click", startRun);
-    }
-    if ($("activeInput")) {
-      $("activeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") startRun(); });
-    }
-    // Back to landing
-    if ($("backToLanding")) {
-      $("backToLanding").addEventListener("click", () => {
-        showState("command");
-        if ($("heroSearchInput")) $("heroSearchInput").value = "";
-        $("targetInput").value = "";
-        const hero = $("heroTitle");
-        if (hero) hero.classList.remove("brand-exit");
-        ($("heroSearchInput") || $("targetInput")).focus();
-      });
-    }
-    $("newRunBtn").addEventListener("click", () => {
-      showState("command");
-      if ($("heroSearchInput")) $("heroSearchInput").value = "";
-      $("targetInput").value = "";
-      const hero = $("heroTitle");
-      if (hero) hero.classList.remove("brand-exit");
-      ($("heroSearchInput") || $("targetInput")).focus();
-    });
-    document.querySelectorAll(".hist-tab").forEach((b) => {
-      b.addEventListener("click", () => renderHistoryBars(b.dataset.hist));
-    });
-    $("copyMemoBtn").addEventListener("click", async () => {
-      const txt = window.__lastMemoMd || $("memoBody").innerText;
-      try { await navigator.clipboard.writeText(txt); } catch (_) { }
-    });
-    $("downloadMdBtn").addEventListener("click", async () => {
-      if (!sessionId) return;
-      try {
-        const md = window.__lastMemoMd || await fetch(`/sessions/${sessionId}/memo?t=${Date.now()}`).then((r) => r.text());
-        const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${($("resultTitle").textContent || "memo").toLowerCase().replace(/[^a-z0-9]+/g, "_")}.md`;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      } catch (_) { }
-    });
-    document.querySelectorAll(".nav-btn").forEach((n) => n.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (n.dataset.nav === "command") { showState("command"); }
-      if (n.dataset.nav === "library") { showState("command"); document.getElementById("memoLibraryGrid").scrollIntoView({ behavior: "smooth", block: "start" }); }
-    }));
+            // Visual data event handler
+            eventSource.addEventListener("visual_data_ready", (e) => {
+              if (runToken !== activeRunToken) return;
+              const d = JSON.parse(e.data);
+              if (!turn || !shouldShowVisuals(turn.query, turn.outputMode)) return;
+              turn.visualEl.classList.remove("hidden");
+              const cards = (d.metric_cards || []).map((c) => [c.label || "", c.value || ""]);
+              if (cards.length) {
+                turn.visualEl.innerHTML = `<div class="analysis-panel"><div class="grid grid-cols-2 md:grid-cols-4 gap-2">${cards.map(([label, value]) => `<div class="bg-black/20 border border-white/10 rounded-lg p-3"><div class="label-mono text-[9px] text-gray-500">${escapeHtml(label)}</div><div class="text-sm font-semibold text-white mt-1">${escapeHtml(value)}</div></div>`).join("")}</div></div>`;
+              }
+            });
 
-    // Check OpenAI availability
-    fetch("/config").then(r => r.ok ? r.json() : null).then(cfg => {
-      if (cfg?.openai) {
-        $("openaiState").innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(110,231,183,0.7)]"></span><span class="label-mono text-[10px] uppercase tracking-wider text-success">live</span>';
-      }
-    }).catch(() => { });
+            eventSource.addEventListener("final", (e) => {
+              if (runToken !== activeRunToken) return;
+              const d = JSON.parse(e.data);
+              if (turn) {
+                turn.outputMode = d.output_mode || turn.outputMode;
+                renderTurnVisuals(turn.turnId);
+              }
+              $("processingBar").style.width = "100%";
+              $("processingPercent").textContent = "100%";
+              $("processingPhaseLabel").textContent = "Done";
+              pushActivity("flag", "Final", `${d.steps} steps · ${d.citations} citations · ${d.primary_citations} primary · ${(d.elapsed_ms / 1000).toFixed(1)}s`, "done", d.canonical || "");
+              if (tickHandle) clearInterval(tickHandle);
+              tickHandle = null;
+              loadMemoLibrary();
+            });
+            eventSource.addEventListener("warning", (e) => {
+              const d = JSON.parse(e.data);
+              pushActivity("warning", "Notice", d.message || "", "warning");
+            });
+            eventSource.addEventListener("deep_pass", (e) => {
+              const d = JSON.parse(e.data);
+              const icon = d.status === "done" ? "check_circle" : "hourglass_top";
+              const statusCls = d.status === "done" ? "done" : "running";
+              pushActivity(icon, `Deep Pass ${d.pass_number}/${d.total_passes}`, d.objective, statusCls);
+              if (d.status === "running") {
+                setPhase("deep_research", `Pass ${d.pass_number}/${d.total_passes}: ${d.objective}`);
+              }
+            });
+            eventSource.addEventListener("deep_complete", (e) => {
+              const d = JSON.parse(e.data);
+              pushActivity("neurology", "Deep Research", `All ${d.passes} passes complete — final memo ready`, "done");
+            });
+            eventSource.addEventListener("done", () => {
+              if (runToken !== activeRunToken) return;
+              if (eventSource) { eventSource.close(); eventSource = null; }
+            });
+            eventSource.onerror = () => {
+              if (runToken !== activeRunToken) return;
+              pushActivity("link_off", "Stream", "Connection lost", "error");
+            };
+          }
 
-    loadMemoLibrary();
-    showState("command");
+          // ────────────────────────────────────────────────────────────────────
+          // Wire UI
+          // ────────────────────────────────────────────────────────────────────
+          document.querySelectorAll(".suggest-chip, .workflow-card").forEach((c) => c.addEventListener("click", () => {
+            const q = c.dataset.q;
+            $("targetInput").value = q;
+            if ($("heroSearchInput")) $("heroSearchInput").value = q;
+            startRun();
+          }));
 
-    // ════════════════════════════════════════════════════════════════════
-    // Visual Output Rendering Functions
-    // Render metric cards, charts, and comparison data from SSE events
-    // ════════════════════════════════════════════════════════════════════
-    
-    function renderMetricCards(cards) {
-      const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
-      if (!container) return;
-      
-      let dashboard = document.getElementById("visualDashboard");
-      if (!dashboard) {
-        dashboard = document.createElement("div");
-        dashboard.id = "visualDashboard";
-        dashboard.className = "visual-dashboard";
-        container.insertBefore(dashboard, container.firstChild);
-      }
-      
-      let html = '<div class="claude-card"><div class="claude-header"><span>Metric Snapshot</span></div><div class="metric-cards-grid">';
-      
-      cards.forEach(card => {
-        const changeClass = card.change_type || "neutral";
-        const partialClass = card.is_partial ? "partial" : "";
-        const changeColor = changeClass === "positive" ? "text-success" : (changeClass === "negative" ? "text-danger" : "text-muted");
-        const changeHtml = card.change ? `<div class="metric-change ${changeColor} mt-1 text-xs font-semibold">${card.change}</div>` : "";
-        
-        html += `
+          // Mode toggle: Standard vs Deep Research
+          document.querySelectorAll(".mode-toggle").forEach((btn) => btn.addEventListener("click", () => {
+            document.querySelectorAll(".mode-toggle").forEach((b) => {
+              b.classList.remove("bg-primary/10", "text-primary", "border-primary/30", "bg-warn/10", "text-warn", "border-warn/30");
+              b.classList.add("bg-surface-container-low/50", "text-on-surface-variant", "border-outline-variant/20");
+            });
+            const isDeep = btn.id === "modeDeep";
+            const isMarathon = btn.id === "modeMarathon";
+            researchMode = isMarathon ? "marathon" : (isDeep ? "deep" : "standard");
+            if (isDeep || isMarathon) {
+              btn.classList.remove("bg-surface-container-low/50", "text-on-surface-variant", "border-outline-variant/20");
+              btn.classList.add(isMarathon ? "bg-primary/10" : "bg-warn/10", isMarathon ? "text-primary" : "text-warn", isMarathon ? "border-primary/30" : "border-warn/30");
+            } else {
+              btn.classList.remove("bg-surface-container-low/50", "text-on-surface-variant", "border-outline-variant/20");
+              btn.classList.add("bg-primary/10", "text-primary", "border-primary/30");
+            }
+          }));
+          $("executeBtn").addEventListener("click", startRun);
+          $("targetInput").addEventListener("keydown", (e) => { if (e.key === "Enter") startRun(); });
+          // Hero search input (Perplexity-style centered)
+          if ($("heroExecuteBtn")) {
+            $("heroExecuteBtn").addEventListener("click", startRun);
+          }
+          if ($("heroSearchInput")) {
+            $("heroSearchInput").addEventListener("keydown", (e) => { if (e.key === "Enter") startRun(); });
+          }
+          // Active inline input bar (shown during/after research)
+          if ($("activeExecuteBtn")) {
+            $("activeExecuteBtn").addEventListener("click", startRun);
+          }
+          if ($("activeInput")) {
+            $("activeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") startRun(); });
+          }
+          // Back to landing
+          if ($("backToLanding")) {
+            $("backToLanding").addEventListener("click", () => {
+              showState("command");
+              clearConversation();
+              sessionId = null;
+              if ($("heroSearchInput")) $("heroSearchInput").value = "";
+              $("targetInput").value = "";
+              const hero = $("heroTitle");
+              if (hero) hero.classList.remove("brand-exit");
+              ($("heroSearchInput") || $("targetInput")).focus();
+            });
+          }
+          $("newRunBtn").addEventListener("click", () => {
+            showState("command");
+            clearConversation();
+            sessionId = null;
+            if ($("heroSearchInput")) $("heroSearchInput").value = "";
+            $("targetInput").value = "";
+            const hero = $("heroTitle");
+            if (hero) hero.classList.remove("brand-exit");
+            ($("heroSearchInput") || $("targetInput")).focus();
+          });
+          document.querySelectorAll(".hist-tab").forEach((b) => {
+            b.addEventListener("click", () => renderHistoryBars(b.dataset.hist));
+          });
+          $("copyMemoBtn").addEventListener("click", async () => {
+            const activeTurn = getTurn();
+            const txt = window.__lastMemoMd || activeTurn?.memoEl?.innerText || $("memoBody")?.innerText || "";
+            try { await navigator.clipboard.writeText(txt); } catch (_) { }
+          });
+          $("downloadMdBtn").addEventListener("click", async () => {
+            if (!sessionId) return;
+            try {
+              const md = window.__lastMemoMd || await fetch(`/sessions/${sessionId}/memo?t=${Date.now()}`).then((r) => r.text());
+              const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `${($("resultTitle").textContent || "memo").toLowerCase().replace(/[^a-z0-9]+/g, "_")}.md`;
+              document.body.appendChild(a); a.click(); a.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (_) { }
+          });
+          document.querySelectorAll(".nav-btn").forEach((n) => n.addEventListener("click", (e) => {
+            e.preventDefault();
+            if (n.dataset.nav === "command") { showState("command"); }
+            if (n.dataset.nav === "library") { showState("command"); document.getElementById("memoLibraryGrid").scrollIntoView({ behavior: "smooth", block: "start" }); }
+          }));
+
+          // Check OpenAI availability
+          fetch("/config").then(r => r.ok ? r.json() : null).then(cfg => {
+            if (cfg?.openai) {
+              $("openaiState").innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(110,231,183,0.7)]"></span><span class="label-mono text-[10px] uppercase tracking-wider text-success">live</span>';
+            }
+          }).catch(() => { });
+
+          loadMemoLibrary();
+          showState("command");
+
+          // ════════════════════════════════════════════════════════════════════
+          // Visual Output Rendering Functions
+          // Render metric cards, charts, and comparison data from SSE events
+          // ════════════════════════════════════════════════════════════════════
+
+          function renderMetricCards(cards) {
+            const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
+            if (!container) return;
+
+            let dashboard = document.getElementById("visualDashboard");
+            if (!dashboard) {
+              dashboard = document.createElement("div");
+              dashboard.id = "visualDashboard";
+              dashboard.className = "visual-dashboard";
+              container.insertBefore(dashboard, container.firstChild);
+            }
+
+            let html = '<div class="claude-card"><div class="claude-header"><span>Metric Snapshot</span></div><div class="metric-cards-grid">';
+
+            cards.forEach(card => {
+              const changeClass = card.change_type || "neutral";
+              const partialClass = card.is_partial ? "partial" : "";
+              const changeColor = changeClass === "positive" ? "text-success" : (changeClass === "negative" ? "text-danger" : "text-muted");
+              const changeHtml = card.change ? `<div class="metric-change ${changeColor} mt-1 text-xs font-semibold">${card.change}</div>` : "";
+
+              html += `
           <div class="metric-card ${partialClass}">
             <div class="metric-label">${card.label}</div>
             <div class="metric-value">${card.value}</div>
             ${changeHtml}
           </div>
         `;
-      });
-      
-      html += "</div></div>";
-      dashboard.insertAdjacentHTML("beforeend", html);
-    }
-    
-    function renderCharts(charts) {
-      const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
-      if (!container) return;
-      
-      let dashboard = document.getElementById("visualDashboard");
-      if (!dashboard) {
-        dashboard = document.createElement("div");
-        dashboard.id = "visualDashboard";
-        dashboard.className = "visual-dashboard";
-        container.insertBefore(dashboard, container.firstChild);
-      }
-      
-      charts.forEach((chart, index) => {
-        const chartId = `chartCanvas_${Date.now()}_${index}`;
-        
-        let html = `
+            });
+
+            html += "</div></div>";
+            dashboard.insertAdjacentHTML("beforeend", html);
+          }
+
+          function renderCharts(charts) {
+            const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
+            if (!container) return;
+
+            let dashboard = document.getElementById("visualDashboard");
+            if (!dashboard) {
+              dashboard = document.createElement("div");
+              dashboard.id = "visualDashboard";
+              dashboard.className = "visual-dashboard";
+              container.insertBefore(dashboard, container.firstChild);
+            }
+
+            charts.forEach((chart, index) => {
+              const chartId = `chartCanvas_${Date.now()}_${index}`;
+
+              let html = `
           <div class="claude-card">
             <div class="claude-header">
               <span>${chart.title}</span>
@@ -2463,86 +2668,86 @@
             </div>
           </div>
         `;
-        dashboard.insertAdjacentHTML("beforeend", html);
-        
-        // Render Chart.js
-        setTimeout(() => {
-          const ctx = document.getElementById(chartId);
-          if (!ctx) return;
-          
-          const isLine = chart.chart_type === "line";
-          const datasets = (chart.series || []).map(s => {
-            const dataValues = s.data ? s.data.map(d => d.value) : [];
-            const color = s.color || (isLine ? "#3fb950" : "#3b82f6");
-            return {
-              label: s.name,
-              data: dataValues,
-              borderColor: color,
-              backgroundColor: isLine ? 
-                (() => {
-                  let ctx2d = ctx.getContext("2d");
-                  let grad = ctx2d.createLinearGradient(0, 0, 0, 300);
-                  grad.addColorStop(0, color + '66'); // 40% opacity
-                  grad.addColorStop(1, color + '00'); // 0% opacity
-                  return grad;
-                })() : color,
-              fill: isLine,
-              tension: 0.3,
-              borderWidth: 2,
-              pointRadius: isLine ? 0 : 3,
-              pointHoverRadius: 5,
-              borderRadius: isLine ? 0 : 4,
-            };
-          });
-          
-          new Chart(ctx, {
-            type: isLine ? 'line' : 'bar',
-            data: {
-              labels: chart.labels || [],
-              datasets: datasets
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { display: datasets.length > 1, labels: { color: '#8b949e', font: { family: 'Inter', size: 11 } } },
-                tooltip: { backgroundColor: '#161b22', titleColor: '#c9d1d9', bodyColor: '#c9d1d9', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
-              },
-              scales: {
-                x: { grid: { display: false, color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b949e', font: { family: 'Inter', size: 10 } } },
-                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b949e', font: { family: 'Inter', size: 10 } }, beginAtZero: !isLine }
-              },
-              interaction: { mode: 'index', intersect: false }
+              dashboard.insertAdjacentHTML("beforeend", html);
+
+              // Render Chart.js
+              setTimeout(() => {
+                const ctx = document.getElementById(chartId);
+                if (!ctx) return;
+
+                const isLine = chart.chart_type === "line";
+                const datasets = (chart.series || []).map(s => {
+                  const dataValues = s.data ? s.data.map(d => d.value) : [];
+                  const color = s.color || (isLine ? "#3fb950" : "#3b82f6");
+                  return {
+                    label: s.name,
+                    data: dataValues,
+                    borderColor: color,
+                    backgroundColor: isLine ?
+                      (() => {
+                        let ctx2d = ctx.getContext("2d");
+                        let grad = ctx2d.createLinearGradient(0, 0, 0, 300);
+                        grad.addColorStop(0, color + '66'); // 40% opacity
+                        grad.addColorStop(1, color + '00'); // 0% opacity
+                        return grad;
+                      })() : color,
+                    fill: isLine,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: isLine ? 0 : 3,
+                    pointHoverRadius: 5,
+                    borderRadius: isLine ? 0 : 4,
+                  };
+                });
+
+                new Chart(ctx, {
+                  type: isLine ? 'line' : 'bar',
+                  data: {
+                    labels: chart.labels || [],
+                    datasets: datasets
+                  },
+                  options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: datasets.length > 1, labels: { color: '#8b949e', font: { family: 'Inter', size: 11 } } },
+                      tooltip: { backgroundColor: '#161b22', titleColor: '#c9d1d9', bodyColor: '#c9d1d9', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
+                    },
+                    scales: {
+                      x: { grid: { display: false, color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b949e', font: { family: 'Inter', size: 10 } } },
+                      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8b949e', font: { family: 'Inter', size: 10 } }, beginAtZero: !isLine }
+                    },
+                    interaction: { mode: 'index', intersect: false }
+                  }
+                });
+              }, 100);
+            });
+          }
+
+          function renderComparison(results) {
+            const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
+            if (!container || !results.length) return;
+
+            let dashboard = document.getElementById("visualDashboard");
+            if (!dashboard) {
+              dashboard = document.createElement("div");
+              dashboard.id = "visualDashboard";
+              dashboard.className = "visual-dashboard";
+              container.insertBefore(dashboard, container.firstChild);
             }
-          });
-        }, 100);
-      });
-    }
-    
-    function renderComparison(results) {
-      const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
-      if (!container || !results.length) return;
-      
-      let dashboard = document.getElementById("visualDashboard");
-      if (!dashboard) {
-        dashboard = document.createElement("div");
-        dashboard.id = "visualDashboard";
-        dashboard.className = "visual-dashboard";
-        container.insertBefore(dashboard, container.firstChild);
-      }
-      
-      const entity1 = results[0].primary_entity;
-      const entity2 = results[0].secondary_entity;
-      
-      // Calculate verdict
-      let primaryWins = 0;
-      let secondaryWins = 0;
-      results.forEach(r => {
-        if (r.winner === "primary") primaryWins++;
-        else if (r.winner === "secondary") secondaryWins++;
-      });
-      
-      let html = `
+
+            const entity1 = results[0].primary_entity;
+            const entity2 = results[0].secondary_entity;
+
+            // Calculate verdict
+            let primaryWins = 0;
+            let secondaryWins = 0;
+            results.forEach(r => {
+              if (r.winner === "primary") primaryWins++;
+              else if (r.winner === "secondary") secondaryWins++;
+            });
+
+            let html = `
         <div class="claude-card">
           <div class="claude-header">
             <span>Head-to-head comparison</span>
@@ -2576,20 +2781,20 @@
             </thead>
             <tbody>
       `;
-      
-      results.forEach(result => {
-        const primaryIsWinner = result.winner === "primary";
-        const secondaryIsWinner = result.winner === "secondary";
-        
-        const primaryColor = primaryIsWinner ? "color: #3fb950;" : (secondaryIsWinner ? "color: #8b949e;" : "");
-        const secondaryColor = secondaryIsWinner ? "color: #3fb950;" : (primaryIsWinner ? "color: #8b949e;" : "");
-        
-        let advantageText = "-";
-        if (primaryIsWinner) advantageText = `<span class="text-success">${entity1}</span>`;
-        else if (secondaryIsWinner) advantageText = `<span class="text-success">${entity2}</span>`;
-        else advantageText = `<span class="text-muted">Tie</span>`;
-        
-        html += `
+
+            results.forEach(result => {
+              const primaryIsWinner = result.winner === "primary";
+              const secondaryIsWinner = result.winner === "secondary";
+
+              const primaryColor = primaryIsWinner ? "color: #3fb950;" : (secondaryIsWinner ? "color: #8b949e;" : "");
+              const secondaryColor = secondaryIsWinner ? "color: #3fb950;" : (primaryIsWinner ? "color: #8b949e;" : "");
+
+              let advantageText = "-";
+              if (primaryIsWinner) advantageText = `<span class="text-success">${entity1}</span>`;
+              else if (secondaryIsWinner) advantageText = `<span class="text-success">${entity2}</span>`;
+              else advantageText = `<span class="text-muted">Tie</span>`;
+
+              html += `
           <tr>
             <td>${result.metric}</td>
             <td style="font-weight: 500; ${primaryColor}">${result.primary_value}</td>
@@ -2597,67 +2802,67 @@
             <td>${advantageText}</td>
           </tr>
         `;
-      });
-      
-      html += `</tbody></table></div>`;
-      dashboard.insertAdjacentHTML("beforeend", html);
-    }
+            });
 
-    // ════════════════════════════════════════════════════════════════════
-    // First-time-user tutorial — spotlight coachmarks over key UI areas.
-    // Auto-shows once (gated on localStorage). Re-launchable from the
-    // sidebar "Tutorial" button. Keyboard: Esc closes, ←/→ navigates.
-    // ════════════════════════════════════════════════════════════════════
-    const TOUR_STEPS = [
-      {
-        title: "Welcome to ProspektLab",
-        body: "Your autonomous research analyst. We pull NSE/BSE data, Yahoo Finance, Moneycontrol, Reddit, Google News and more in parallel, then write you a memo in INR with open citations — usually in under 30 seconds.",
-        placement: "center",
-      },
-      {
-        selector: 'input[data-tour="search"]',
-        title: "Step 1 · Type a ticker",
-        body: "AAPL, NVDA, TSLA, MSFT — anything publicly listed. The agent resolves it to a SEC CIK first, so it always works on the right company.",
-        placement: "bottom",
-      },
-      {
-        selector: '[data-tour="chips"]',
-        title: "Step 2 · Or pick a category",
-        body: "Curated quick-picks across AI / Semis, Big Tech, EV, Crypto-adj. and Meme & retail. One click runs the full pipeline.",
-        placement: "bottom",
-      },
-      {
-        selector: '[data-tour="workflows"]',
-        title: "Step 3 · Try a sample workflow",
-        body: "Pre-canned research objectives — earnings preview, hype-check, Annual Reporting — that show off different parts of the pipeline.",
-        placement: "top",
-      },
-      {
-        selector: '[data-tour="library"]',
-        title: "Step 4 · Recent memos",
-        body: "Every run is saved here as Markdown. Click any memo to reopen it — your research history is yours.",
-        placement: "top",
-      },
-      {
-        selector: '[data-tour="pipeline"]',
-        title: "Step 5 · The pipeline, explained",
-        body: "While the agent runs you'll see each phase tick through here. Identify → Enrich → Survey → Deep-dive → Synthesise. Watch the receipts come in.",
-        placement: "left",
-      },
-      {
-        title: "You're ready",
-        body: "Press Enter to run your first memo, or click any chip / sample workflow above. You can replay this tour anytime from the Tutorial button in the sidebar.",
-        placement: "center",
-        cta: "Run my first memo",
-        action: () => { document.querySelector('input[data-tour="search"]').focus(); }
-      },
-    ];
+            html += `</tbody></table></div>`;
+            dashboard.insertAdjacentHTML("beforeend", html);
+          }
 
-    function injectTourStyles() {
-      if (document.getElementById("tourStyles")) return;
-      const s = document.createElement("style");
-      s.id = "tourStyles";
-      s.textContent = `
+          // ════════════════════════════════════════════════════════════════════
+          // First-time-user tutorial — spotlight coachmarks over key UI areas.
+          // Auto-shows once (gated on localStorage). Re-launchable from the
+          // sidebar "Tutorial" button. Keyboard: Esc closes, ←/→ navigates.
+          // ════════════════════════════════════════════════════════════════════
+          const TOUR_STEPS = [
+            {
+              title: "Welcome to ProspektLab",
+              body: "Your autonomous research analyst. We pull NSE/BSE data, Yahoo Finance, Moneycontrol, Reddit, Google News and more in parallel, then write you a memo in INR with open citations — usually in under 30 seconds.",
+              placement: "center",
+            },
+            {
+              selector: 'input[data-tour="search"]',
+              title: "Step 1 · Type a ticker",
+              body: "AAPL, NVDA, TSLA, MSFT — anything publicly listed. The agent resolves it to a SEC CIK first, so it always works on the right company.",
+              placement: "bottom",
+            },
+            {
+              selector: '[data-tour="chips"]',
+              title: "Step 2 · Or pick a category",
+              body: "Curated quick-picks across AI / Semis, Big Tech, EV, Crypto-adj. and Meme & retail. One click runs the full pipeline.",
+              placement: "bottom",
+            },
+            {
+              selector: '[data-tour="workflows"]',
+              title: "Step 3 · Try a sample workflow",
+              body: "Pre-canned research objectives — earnings preview, hype-check, Annual Reporting — that show off different parts of the pipeline.",
+              placement: "top",
+            },
+            {
+              selector: '[data-tour="library"]',
+              title: "Step 4 · Recent memos",
+              body: "Every run is saved here as Markdown. Click any memo to reopen it — your research history is yours.",
+              placement: "top",
+            },
+            {
+              selector: '[data-tour="pipeline"]',
+              title: "Step 5 · The pipeline, explained",
+              body: "While the agent runs you'll see each phase tick through here. Identify → Enrich → Survey → Deep-dive → Synthesise. Watch the receipts come in.",
+              placement: "left",
+            },
+            {
+              title: "You're ready",
+              body: "Press Enter to run your first memo, or click any chip / sample workflow above. You can replay this tour anytime from the Tutorial button in the sidebar.",
+              placement: "center",
+              cta: "Run my first memo",
+              action: () => { document.querySelector('input[data-tour="search"]').focus(); }
+            },
+          ];
+
+          function injectTourStyles() {
+            if (document.getElementById("tourStyles")) return;
+            const s = document.createElement("style");
+            s.id = "tourStyles";
+            s.textContent = `
       .tour-backdrop { position: fixed; inset: 0; z-index: 100; pointer-events: auto; }
       .tour-mask { position: fixed; inset: 0; background: rgba(5,8,18,0.78); transition: opacity 0.2s; }
       .tour-spotlight { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(5,8,18,0.78), 0 0 0 3px rgba(173,198,255,0.6), 0 0 30px 6px rgba(173,198,255,0.35); transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none; z-index: 101; }
@@ -2678,18 +2883,18 @@
       .tour-skip { position: absolute; top: 12px; right: 14px; color: rgba(255,255,255,0.3); cursor: pointer; font-size: 18px; }
       .tour-skip:hover { color: rgba(255,255,255,0.6); }
     `;
-      document.head.appendChild(s);
-    }
+            document.head.appendChild(s);
+          }
 
-    let tourIdx = 0;
-    let tourEls = null;
+          let tourIdx = 0;
+          let tourEls = null;
 
-    function buildTour() {
-      injectTourStyles();
-      const root = document.createElement("div");
-      root.className = "tour-backdrop";
-      root.id = "tourRoot";
-      root.innerHTML = `
+          function buildTour() {
+            injectTourStyles();
+            const root = document.createElement("div");
+            root.className = "tour-backdrop";
+            root.id = "tourRoot";
+            root.innerHTML = `
       <div class="tour-mask" id="tourMask"></div>
       <div class="tour-spotlight" id="tourSpot" style="display:none;"></div>
       <div class="tour-card" id="tourCard">
@@ -2706,135 +2911,135 @@
         </div>
       </div>
     `;
-      document.body.appendChild(root);
-      tourEls = {
-        root,
-        mask: root.querySelector("#tourMask"),
-        spot: root.querySelector("#tourSpot"),
-        card: root.querySelector("#tourCard"),
-        stepPill: root.querySelector("#tourStepPill"),
-        title: root.querySelector("#tourTitle"),
-        body: root.querySelector("#tourBody"),
-        dots: root.querySelector("#tourDots"),
-        prev: root.querySelector("#tourPrev"),
-        next: root.querySelector("#tourNext"),
-        skip: root.querySelector("#tourSkip"),
-      };
-      tourEls.dots.innerHTML = TOUR_STEPS.map((_, i) => `<div class="tour-dot${i === 0 ? " active" : ""}"></div>`).join("");
-      tourEls.skip.addEventListener("click", endTour);
-      tourEls.mask.addEventListener("click", endTour);
-      tourEls.prev.addEventListener("click", () => goTour(tourIdx - 1));
-      tourEls.next.addEventListener("click", () => {
-        const step = TOUR_STEPS[tourIdx];
-        if (tourIdx === TOUR_STEPS.length - 1) {
-          if (step.action) step.action();
-          endTour();
-          return;
-        }
-        goTour(tourIdx + 1);
-      });
-      document.addEventListener("keydown", tourKeyHandler);
-    }
+            document.body.appendChild(root);
+            tourEls = {
+              root,
+              mask: root.querySelector("#tourMask"),
+              spot: root.querySelector("#tourSpot"),
+              card: root.querySelector("#tourCard"),
+              stepPill: root.querySelector("#tourStepPill"),
+              title: root.querySelector("#tourTitle"),
+              body: root.querySelector("#tourBody"),
+              dots: root.querySelector("#tourDots"),
+              prev: root.querySelector("#tourPrev"),
+              next: root.querySelector("#tourNext"),
+              skip: root.querySelector("#tourSkip"),
+            };
+            tourEls.dots.innerHTML = TOUR_STEPS.map((_, i) => `<div class="tour-dot${i === 0 ? " active" : ""}"></div>`).join("");
+            tourEls.skip.addEventListener("click", endTour);
+            tourEls.mask.addEventListener("click", endTour);
+            tourEls.prev.addEventListener("click", () => goTour(tourIdx - 1));
+            tourEls.next.addEventListener("click", () => {
+              const step = TOUR_STEPS[tourIdx];
+              if (tourIdx === TOUR_STEPS.length - 1) {
+                if (step.action) step.action();
+                endTour();
+                return;
+              }
+              goTour(tourIdx + 1);
+            });
+            document.addEventListener("keydown", tourKeyHandler);
+          }
 
-    function tourKeyHandler(e) {
-      if (!tourEls || !document.getElementById("tourRoot")) return;
-      if (e.key === "Escape") endTour();
-      else if (e.key === "ArrowRight") tourEls.next.click();
-      else if (e.key === "ArrowLeft") tourEls.prev.click();
-    }
+          function tourKeyHandler(e) {
+            if (!tourEls || !document.getElementById("tourRoot")) return;
+            if (e.key === "Escape") endTour();
+            else if (e.key === "ArrowRight") tourEls.next.click();
+            else if (e.key === "ArrowLeft") tourEls.prev.click();
+          }
 
-    function goTour(idx) {
-      tourIdx = Math.max(0, Math.min(TOUR_STEPS.length - 1, idx));
-      const step = TOUR_STEPS[tourIdx];
-      tourEls.stepPill.textContent = `Step ${tourIdx + 1} of ${TOUR_STEPS.length}`;
-      tourEls.title.textContent = step.title;
-      tourEls.body.textContent = step.body;
-      tourEls.prev.style.visibility = tourIdx === 0 ? "hidden" : "visible";
-      tourEls.next.textContent = tourIdx === TOUR_STEPS.length - 1 ? (step.cta || "Finish") : "Next →";
-      tourEls.dots.querySelectorAll(".tour-dot").forEach((d, i) => d.classList.toggle("active", i === tourIdx));
+          function goTour(idx) {
+            tourIdx = Math.max(0, Math.min(TOUR_STEPS.length - 1, idx));
+            const step = TOUR_STEPS[tourIdx];
+            tourEls.stepPill.textContent = `Step ${tourIdx + 1} of ${TOUR_STEPS.length}`;
+            tourEls.title.textContent = step.title;
+            tourEls.body.textContent = step.body;
+            tourEls.prev.style.visibility = tourIdx === 0 ? "hidden" : "visible";
+            tourEls.next.textContent = tourIdx === TOUR_STEPS.length - 1 ? (step.cta || "Finish") : "Next →";
+            tourEls.dots.querySelectorAll(".tour-dot").forEach((d, i) => d.classList.toggle("active", i === tourIdx));
 
-      // Position spotlight + card
-      if (step.placement === "center" || !step.selector) {
-        tourEls.spot.style.display = "none";
-        tourEls.card.classList.add("center");
-        tourEls.card.style.left = "";
-        tourEls.card.style.top = "";
-      } else {
-        const target = document.querySelector(step.selector);
-        if (!target) {
-          tourEls.spot.style.display = "none";
-          tourEls.card.classList.add("center");
-          return;
-        }
-        target.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-        // Wait a tick for scroll, then measure
-        setTimeout(() => positionSpot(target, step.placement), 320);
-      }
-    }
+            // Position spotlight + card
+            if (step.placement === "center" || !step.selector) {
+              tourEls.spot.style.display = "none";
+              tourEls.card.classList.add("center");
+              tourEls.card.style.left = "";
+              tourEls.card.style.top = "";
+            } else {
+              const target = document.querySelector(step.selector);
+              if (!target) {
+                tourEls.spot.style.display = "none";
+                tourEls.card.classList.add("center");
+                return;
+              }
+              target.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+              // Wait a tick for scroll, then measure
+              setTimeout(() => positionSpot(target, step.placement), 320);
+            }
+          }
 
-    function positionSpot(target, placement) {
-      const r = target.getBoundingClientRect();
-      const pad = 10;
-      const spot = tourEls.spot;
-      spot.style.display = "block";
-      spot.style.left = (r.left - pad) + "px";
-      spot.style.top = (r.top - pad) + "px";
-      spot.style.width = (r.width + pad * 2) + "px";
-      spot.style.height = (r.height + pad * 2) + "px";
-      // Position card relative to spotlight
-      const card = tourEls.card;
-      card.classList.remove("center");
-      const cardW = 380, cardH = card.offsetHeight || 200, gap = 18;
-      let left, top;
-      switch (placement) {
-        case "top":
-          left = Math.min(window.innerWidth - cardW - 20, Math.max(20, r.left + r.width / 2 - cardW / 2));
-          top = Math.max(20, r.top - cardH - gap);
-          break;
-        case "left":
-          left = Math.max(20, r.left - cardW - gap);
-          top = Math.min(window.innerHeight - cardH - 20, Math.max(20, r.top + r.height / 2 - cardH / 2));
-          break;
-        case "right":
-          left = Math.min(window.innerWidth - cardW - 20, r.right + gap);
-          top = Math.min(window.innerHeight - cardH - 20, Math.max(20, r.top + r.height / 2 - cardH / 2));
-          break;
-        case "bottom":
-        default:
-          left = Math.min(window.innerWidth - cardW - 20, Math.max(20, r.left + r.width / 2 - cardW / 2));
-          top = Math.min(window.innerHeight - cardH - 20, r.bottom + gap);
-          break;
-      }
-      card.style.left = left + "px";
-      card.style.top = top + "px";
-    }
+          function positionSpot(target, placement) {
+            const r = target.getBoundingClientRect();
+            const pad = 10;
+            const spot = tourEls.spot;
+            spot.style.display = "block";
+            spot.style.left = (r.left - pad) + "px";
+            spot.style.top = (r.top - pad) + "px";
+            spot.style.width = (r.width + pad * 2) + "px";
+            spot.style.height = (r.height + pad * 2) + "px";
+            // Position card relative to spotlight
+            const card = tourEls.card;
+            card.classList.remove("center");
+            const cardW = 380, cardH = card.offsetHeight || 200, gap = 18;
+            let left, top;
+            switch (placement) {
+              case "top":
+                left = Math.min(window.innerWidth - cardW - 20, Math.max(20, r.left + r.width / 2 - cardW / 2));
+                top = Math.max(20, r.top - cardH - gap);
+                break;
+              case "left":
+                left = Math.max(20, r.left - cardW - gap);
+                top = Math.min(window.innerHeight - cardH - 20, Math.max(20, r.top + r.height / 2 - cardH / 2));
+                break;
+              case "right":
+                left = Math.min(window.innerWidth - cardW - 20, r.right + gap);
+                top = Math.min(window.innerHeight - cardH - 20, Math.max(20, r.top + r.height / 2 - cardH / 2));
+                break;
+              case "bottom":
+              default:
+                left = Math.min(window.innerWidth - cardW - 20, Math.max(20, r.left + r.width / 2 - cardW / 2));
+                top = Math.min(window.innerHeight - cardH - 20, r.bottom + gap);
+                break;
+            }
+            card.style.left = left + "px";
+            card.style.top = top + "px";
+          }
 
-    function startTour() {
-      if (document.getElementById("tourRoot")) endTour();
-      tourIdx = 0;
-      buildTour();
-      goTour(0);
-    }
+          function startTour() {
+            if (document.getElementById("tourRoot")) endTour();
+            tourIdx = 0;
+            buildTour();
+            goTour(0);
+          }
 
-    function endTour() {
-      document.removeEventListener("keydown", tourKeyHandler);
-      const root = document.getElementById("tourRoot");
-      if (root) root.remove();
-      try { localStorage.setItem("prospektlab_tour_seen", "1"); } catch (_) { }
-    }
+          function endTour() {
+            document.removeEventListener("keydown", tourKeyHandler);
+            const root = document.getElementById("tourRoot");
+            if (root) root.remove();
+            try { localStorage.setItem("prospektlab_tour_seen", "1"); } catch (_) { }
+          }
 
-    $("tourReplayBtn").addEventListener("click", startTour);
+          $("tourReplayBtn").addEventListener("click", startTour);
 
-    // Auto-launch on first visit (or right after signup which sets the new-user flag).
-    try {
-      const isNew = localStorage.getItem("prospektlab_new_user") === "1";
-      const seen = localStorage.getItem("prospektlab_tour_seen") === "1";
-      if (isNew || !seen) {
-        localStorage.removeItem("prospektlab_new_user");
-        setTimeout(startTour, 700);
-      }
-    } catch (_) { }
+          // Auto-launch on first visit (or right after signup which sets the new-user flag).
+          try {
+            const isNew = localStorage.getItem("prospektlab_new_user") === "1";
+            const seen = localStorage.getItem("prospektlab_tour_seen") === "1";
+            if (isNew || !seen) {
+              localStorage.removeItem("prospektlab_new_user");
+              setTimeout(startTour, 700);
+            }
+          } catch (_) { }
   </script>
-<script>document.addEventListener(" DOMContentLoaded\, async () => { const userStr = localStorage.getItem(\prospektlab_user\); if (!userStr) return; const user = JSON.parse(userStr); const savedSession = localStorage.getItem(\prospektlab_session_id\); if (!savedSession) return; try { const r = await fetch(/chat/history?session_id=&user_email=); if (r.ok) { const data = await r.json(); if (data.history && data.history.length > 0) { sessionId = savedSession; if (typeof openMemoInThread === \function\) { openMemoInThread(savedSession, \Restored Session\); } } } } catch (e) { console.error(\Failed to restore chat history\, e); } });</script></body>
+</body>
 
 </html>

@@ -213,7 +213,12 @@ async def _search_ddg(query: str, *, max_results: int) -> list[tuple[str, str]]:
     try:
         res = await fetch(url, respect_robots=False, timeout_s=25.0)
     except Exception as exc:
-        logger.info("ddg search fetch failed: %s", exc)
+        logger.warning("ddg search fetch failed: %s", exc)
+        try:
+            from finagent.events import BUS
+            BUS.emit("global", "agent_task", task=f"ddg search {query}", status="error", error=str(exc))
+        except Exception:
+            pass
         return []
     if not res.text:
         return []
@@ -244,7 +249,12 @@ async def _search_bing(query: str, *, max_results: int) -> list[tuple[str, str]]
     try:
         res = await fetch(url, respect_robots=False, timeout_s=20.0)
     except Exception as exc:
-        logger.info("bing search fetch failed: %s", exc)
+        logger.warning("bing search fetch failed: %s", exc)
+        try:
+            from finagent.events import BUS
+            BUS.emit("global", "agent_task", task=f"bing search {query}", status="error", error=str(exc))
+        except Exception:
+            pass
         return []
     if not res.text or res.status != 200:
         return []

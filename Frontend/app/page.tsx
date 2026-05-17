@@ -3,11 +3,58 @@
 import { useEffect, useRef, useState } from "react";
 import { Activity, Briefcase, CheckCircle2, Globe, Loader2, Search, Send, Sparkles, Terminal, TrendingUp } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { RichResponseComponent } from "./_components/RichResponse";
+
+// --- Rich Response Types (mirrors Backend/rich_builder.py Pydantic schema) ---
+type RichMetricCard = {
+  label: string;
+  value: string;
+  sub_value?: string;
+  change?: string;
+  change_type?: "positive" | "negative" | "neutral";
+  is_partial?: boolean;
+};
+type RichStrengthsRisks = {
+  entity_label: string;
+  strengths: string[];
+  risks: string[];
+};
+type RichNewsHeadline = {
+  title: string;
+  url?: string;
+  source?: string;
+  published?: string;
+  snippet?: string;
+};
+type RichComparisonRow = {
+  metric: string;
+  primary_value: string;
+  secondary_value: string;
+  winner?: "primary" | "secondary" | "tie";
+};
+type RichEntity = { label: string; ticker?: string };
+type RichPayload = {
+  mode: string;
+  title?: string;
+  subtitle?: string;
+  primary_entity?: RichEntity;
+  secondary_entity?: RichEntity;
+  metric_cards: RichMetricCard[];
+  comparison_rows: RichComparisonRow[];
+  strengths_risks: RichStrengthsRisks[];
+  headlines: RichNewsHeadline[];
+  disclaimer?: string;
+};
+
+// --- MCP Health Types ---
+type McpServerStatus = { ok: boolean; latency_ms?: number; url?: string; error?: string };
+type McpHealthStatus = { all_ok: boolean; servers: Record<string, McpServerStatus> };
 
 type Message = {
   role: "user" | "oracle";
   content: string;
   agents_used?: string[];
+  rich?: RichPayload;
 };
 
 type ProcessStatus = "info" | "running" | "completed" | "error";
@@ -27,9 +74,10 @@ type StreamEvent = {
   reply?: string;
   agents_used?: string[];
   domain?: string;
+  rich?: RichPayload;
 };
 
-const API_BASE_URL = "http://localhost:8080";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
@@ -42,15 +90,33 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [processSteps, setProcessSteps] = useState<ProcessStep[]>([]);
   const [sourceDomains, setSourceDomains] = useState<string[]>([]);
+  const [mcpHealth, setMcpHealth] = useState<McpHealthStatus | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageScrollRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (force = false) => {
+    const container = messageScrollRef.current;
+    if (!container) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+    if (force || nearBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages, processSteps, sourceDomains, isLoading]);
+
+  // Probe MCP servers on mount so we can show the offline banner early.
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/health/mcp`)
+      .then((r) => r.json())
+      .then((data: McpHealthStatus) => setMcpHealth(data))
+      .catch(() => setMcpHealth({ all_ok: false, servers: {} }));
+  }, []);
 
   const upsertProcessStep = (event: StreamEvent) => {
     if (event.type === "status" && event.label) {
@@ -143,6 +209,7 @@ export default function Home() {
         role: "oracle",
         content: data.reply,
         agents_used: data.agents_used,
+        rich: data.rich ?? undefined,
       },
     ]);
   };
@@ -250,6 +317,7 @@ export default function Home() {
           role: "oracle",
           content: finalPayload.reply || "I couldn't generate a response.",
           agents_used: finalPayload.agents_used || [],
+          rich: finalPayload.rich ?? undefined,
         },
       ]);
     } catch (error) {
@@ -316,10 +384,44 @@ export default function Home() {
         <div className="mt-auto">
           <div className="glass-panel p-4 rounded-xl">
             <div className="flex items-center gap-2 mb-2">
-              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-xs font-medium text-slate-300">System Online</span>
+              <div
+                className={`h-2 w-2 rounded-full flex-shrink-0 ${
+                  mcpHealth === null
+                    ? "bg-slate-500"
+                    : mcpHealth.all_ok
+                      ? "bg-emerald-500 animate-pulse"
+                      : "bg-amber-500 animate-pulse"
+                }`}
+              />
+              <span className="text-xs font-medium text-slate-300">
+                {mcpHealth === null
+                  ? "Checking systems..."
+                  : mcpHealth.all_ok
+                    ? "All Systems Online"
+                    : "Some Servers Offline"}
+              </span>
             </div>
-            <p className="text-xs text-slate-500">Connected to local LangGraph + MCP endpoints.</p>
+            {mcpHealth && !mcpHealth.all_ok && Object.keys(mcpHealth.servers).length > 0 && (
+              <div className="mb-2 space-y-1">
+                {Object.entries(mcpHealth.servers)
+                  .filter(([, s]) => !s.ok)
+                  .map(([name, s]) => (
+                    <div key={name} className="flex items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-rose-500 flex-shrink-0" />
+                      <span className="text-[11px] text-rose-400 truncate" title={s.error}>
+                        {name.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
+            <p className="text-xs text-slate-500">
+              {mcpHealth?.all_ok
+                ? "Connected to local LangGraph + MCP endpoints."
+                : mcpHealth
+                  ? "Start missing MCP servers for full analysis."
+                  : "Probing local MCP endpoints..."}
+            </p>
           </div>
         </div>
       </div>
@@ -329,7 +431,22 @@ export default function Home() {
           <h2 className="font-medium text-slate-200">Terminal</h2>
         </header>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth">
+        {/* MCP offline banner — visible on all screen sizes */}
+        {mcpHealth && !mcpHealth.all_ok && (
+          <div className="flex-shrink-0 bg-amber-900/30 border-b border-amber-700/40 px-6 py-2 flex items-center gap-2.5">
+            <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />
+            <p className="text-xs text-amber-300">
+              <span className="font-semibold">MCP servers offline: </span>
+              {Object.entries(mcpHealth.servers)
+                .filter(([, s]) => !s.ok)
+                .map(([n]) => n.replace(/_/g, " "))
+                .join(", ")}
+              {" — "}structured visuals may be unavailable.
+            </p>
+          </div>
+        )}
+
+        <div ref={messageScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth">
           {messages.map((m, idx) => (
             <div key={idx} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"} max-w-4xl mx-auto w-full`}>
               <div className={`flex gap-4 max-w-[85%] ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
@@ -351,6 +468,7 @@ export default function Home() {
                         : "glass-panel text-slate-200 rounded-tl-sm"
                     }`}
                   >
+                    {m.role === "oracle" && m.rich && <RichResponseComponent data={m.rich as unknown as import("./_components/lib/types").RichResponse} />}
                     <div className="prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-800">
                       <ReactMarkdown>{m.content}</ReactMarkdown>
                     </div>

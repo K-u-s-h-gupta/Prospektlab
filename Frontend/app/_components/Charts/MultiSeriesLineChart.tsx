@@ -1,0 +1,36 @@
+"use client";
+
+import { Chart as ChartType } from "../lib/types";
+
+
+interface MultiSeriesLineChartProps {
+  chart: ChartType;
+}
+
+export function MultiSeriesLineChart({ chart }: MultiSeriesLineChartProps) {
+  if (!chart.series || chart.series.length === 0) return <div className="h-32 flex items-center justify-center text-gray-400">No data available</div>;
+  const series = chart.series;
+
+  return (
+    <div className="w-full rounded-lg border border-gray-200 bg-white p-4">
+      <div className="mb-4">
+        <h3 className="text-sm font-semibold text-gray-900">{chart.title}</h3>
+        {chart.subtitle && <p className="text-xs text-gray-500">{chart.subtitle}</p>}
+      </div>
+      <div className="space-y-2">
+        {(chart.x_labels || []).map((label, idx) => (
+          <div key={label} className="grid grid-cols-[80px_1fr] gap-3 items-center text-xs">
+            <span className="text-gray-500">{label}</span>
+            <div className="flex gap-2 flex-wrap">
+              {series.map((s) => (
+                <span key={s.name} className="px-2 py-1 rounded bg-slate-100 text-slate-700">
+                  {s.name}: {String(s.values?.[idx] ?? "n/a")}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

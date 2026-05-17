@@ -29,6 +29,8 @@ from intent import (
     RICH_MODE_SNAPSHOT,
     RICH_MODE_VALUATION,
     classify_rich_mode,
+    detect_primary_intent,
+    PRIMARY_INTENT_EVENT_EXPLAINER,
 )
 
 logger = logging.getLogger("oracle.rich_builder")
@@ -1445,6 +1447,8 @@ def _assemble_doc_compare(message: str, outputs: list[ToolOutput], markdown_body
 def build(message: str, outputs: list[ToolOutput], agents_used: list[str], final_markdown: str) -> Optional[RichResponse]:
     """Pick the right assembler based on the user query and the observed
     tool outputs. Returns None when there isn't enough structured data."""
+    if detect_primary_intent(message) == PRIMARY_INTENT_EVENT_EXPLAINER:
+        return None
     mode = classify_rich_mode(message)
     try:
         if mode == RICH_MODE_COMPARISON:

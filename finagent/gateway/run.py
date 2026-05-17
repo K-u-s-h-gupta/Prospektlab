@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 from pydantic import BaseModel, Field, field_validator
 
 from finagent.events import BUS
-from finagent.output.intent_classifier import primary_target_from_query
+from finagent.output.intent_classifier import extract_finance_entities, primary_target_from_query
 from finagent.paths import finagent_data_path, finagent_home
 from finagent.run_agent import AgentLoopConfig, run_research_session
 from finagent.tools.web.http_fetcher import aclose_shared_client
@@ -30,6 +30,19 @@ _MEMORY_MANAGER = ChatMemoryManager()
 logger = logging.getLogger("finagent.gateway")
 
 app = FastAPI(title="ProspektLab Intelligence Gateway", version="0.5.0")
+
+
+def _is_ambiguous_followup(query: str) -> bool:
+    text = (query or "").strip().lower()
+    if not text:
+        return False
+    pronoun_ref = re.search(r"\b(it|its|they|their|them|that company|this company|same company)\b", text)
+    explicit_entities = extract_finance_entities(query, limit=2)
+    if explicit_entities:
+        if len(explicit_entities) == 1 and re.search(r"\b(compare|vs|versus)\s+(with|against|to)?\b", text):
+            return True
+        return False
+    return bool(pronoun_ref) or len(text.split()) <= 5
 
 _GATEWAY_DIR = Path(__file__).resolve().parent
 _WIDGET_PATH = _GATEWAY_DIR / "widget.html"
@@ -492,10 +505,12 @@ async def start_research(req: StartResearchRequest):
     BUS.open(session_id)
     raw_query = req.target.strip()
     
-    # If this is a follow-up query, preserve the original target
+    # Preserve the prior target only for truly ambiguous follow-ups. If the
+    # user names a new company/ticker, resolve the current query normally.
     meta = _load_session_meta(session_id)
-    if req.session_id and meta.get("target_display"):
-        target = meta["target_display"]
+    prior_target = meta.get("target_display") or meta.get("target")
+    if req.session_id and prior_target and _is_ambiguous_followup(raw_query):
+        target = prior_target
     else:
         target = primary_target_from_query(raw_query)
         
@@ -527,7 +542,7 @@ async def start_research(req: StartResearchRequest):
                     session_id=session_id,
                     auto_depth=req.max_steps is None,
                     response_depth=mode,
-                    output_mode=(req.output_mode or mode),
+                    output_mode=req.output_mode,
                     synth_model=os.getenv("FINAGENT_SYNTH_MODEL"),
                     breadth_search_timeout=(150.0 if mode == "deep" else 110.0),
                     followup_search_timeout=(70.0 if mode == "deep" else 50.0),

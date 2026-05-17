@@ -77,7 +77,7 @@ class AnswerChart:
     labels: list[str] = field(default_factory=list)
     dimensions: dict[str, int] = field(default_factory=lambda: {"width": 600, "height": 300})
     svg_data: str = ""
-    png_data: bytes = field(default_factory=bytes)
+    png_data: str = ""
     is_partial: bool = False
 
 

@@ -42,6 +42,26 @@ VALUATION_CONTEXT_TERMS = {"stock", "share", "company", "equity", "ticker", "pri
 
 NEWS_TRIGGER_TERMS = {"recent news", "latest news", "fetch news", "news", "headlines", "updates"}
 
+EVENT_EXPLAINER_TRIGGER_TERMS = {
+    "explain",
+    "what happened",
+    "case",
+    "issue",
+    "controversy",
+    "lawsuit",
+    "legal",
+    "investigation",
+    "fraud",
+    "allegation",
+    "hearing",
+    "judgment",
+    "order",
+    "dispute",
+    "scam",
+    "why did",
+    "reason for",
+}
+
 OFFER_DOCUMENT_TRIGGER_TERMS = {
     "drhp",
     "draft red herring prospectus",
@@ -76,6 +96,7 @@ DOCUMENT_ANALYSIS_TRIGGER_TERMS = {
 }
 
 MARKET_DATA_TRIGGER_TERMS = {"price", "quote", "market cap", "traded", "52-week"}
+VISUAL_TRIGGER_TERMS = {"historical", "history", "trend", "chart", "graph", "visual", "show data", "show historical"}
 
 FULL_ANALYSIS_TRIGGER_TERMS = {"full analysis", "complete analysis", "detailed analysis", "proper analysis"}
 
@@ -178,11 +199,41 @@ RICH_MODE_NEWS = "news"
 RICH_MODE_FILING = "filing"
 RICH_MODE_DOC_COMPARE = "doc_compare"
 RICH_MODE_CHAT = "chat"
+PRIMARY_INTENT_COMPARISON = "comparison"
+PRIMARY_INTENT_VALUATION = "valuation"
+PRIMARY_INTENT_EVENT_EXPLAINER = "event_explainer"
+PRIMARY_INTENT_NEWS = "news"
+PRIMARY_INTENT_FILING = "filing"
+PRIMARY_INTENT_SNAPSHOT = "snapshot"
+PRIMARY_INTENT_VISUAL_ANALYSIS = "visual_analysis"
+PRIMARY_INTENT_CHAT = "chat"
+
+
+def detect_primary_intent(message: str) -> str:
+    lower = (message or "").lower().strip()
+    is_offer_document_query = any(term in lower for term in OFFER_DOCUMENT_TRIGGER_TERMS)
+
+    if is_offer_document_query:
+        return PRIMARY_INTENT_FILING
+    if is_comparison_query(message):
+        return PRIMARY_INTENT_COMPARISON
+    if is_calculation_valuation_query(message):
+        return PRIMARY_INTENT_VALUATION
+    if any(term in lower for term in EVENT_EXPLAINER_TRIGGER_TERMS):
+        return PRIMARY_INTENT_EVENT_EXPLAINER
+    if any(term in lower for term in NEWS_TRIGGER_TERMS) and not any(term in lower for term in FULL_ANALYSIS_TRIGGER_TERMS):
+        return PRIMARY_INTENT_NEWS
+    if any(term in lower for term in VISUAL_TRIGGER_TERMS):
+        return PRIMARY_INTENT_VISUAL_ANALYSIS
+    if any(term in lower for term in FULL_ANALYSIS_TRIGGER_TERMS) or any(term in lower for term in FUNDAMENTAL_TRIGGER_TERMS) or any(term in lower for term in MARKET_DATA_TRIGGER_TERMS):
+        return PRIMARY_INTENT_SNAPSHOT
+    return PRIMARY_INTENT_CHAT
 
 
 def classify_rich_mode(message: str) -> str:
     """Pick which RichResponse variant to assemble."""
     lower = (message or "").lower()
+    primary_intent = detect_primary_intent(message)
     is_offer_document_query = any(term in lower for term in OFFER_DOCUMENT_TRIGGER_TERMS)
     if is_offer_document_query:
         # Document version comparison (DRHP vs RHP vs prospectus)
@@ -191,24 +242,19 @@ def classify_rich_mode(message: str) -> str:
             return RICH_MODE_DOC_COMPARE
         return RICH_MODE_FILING
 
-    if is_comparison_query(message):
+    if primary_intent == PRIMARY_INTENT_COMPARISON:
         return RICH_MODE_COMPARISON
 
-    if is_calculation_valuation_query(message):
+    if primary_intent == PRIMARY_INTENT_VALUATION:
         return RICH_MODE_VALUATION
 
-    if any(term in lower for term in NEWS_TRIGGER_TERMS) and not any(
-        term in lower for term in FULL_ANALYSIS_TRIGGER_TERMS
-    ):
-        # Pure news asks. "Full analysis" still gets snapshot even if it mentions news.
+    if primary_intent == PRIMARY_INTENT_EVENT_EXPLAINER:
+        return RICH_MODE_CHAT
+
+    if primary_intent == PRIMARY_INTENT_NEWS:
         return RICH_MODE_NEWS
 
-    if (
-        any(term in lower for term in FULL_ANALYSIS_TRIGGER_TERMS)
-        or any(term in lower for term in FUNDAMENTAL_TRIGGER_TERMS)
-        or any(term in lower for term in MARKET_DATA_TRIGGER_TERMS)
-        or _looks_like_bare_company(message)
-    ):
+    if primary_intent in {PRIMARY_INTENT_SNAPSHOT, PRIMARY_INTENT_VISUAL_ANALYSIS}:
         return RICH_MODE_SNAPSHOT
 
     return RICH_MODE_CHAT
@@ -218,8 +264,8 @@ def _looks_like_bare_company(value: str) -> bool:
     text = (value or "").strip()
     if not text:
         return False
-    if len(text.split()) <= 6 and not re.search(
-        r"\b(what|why|how|when|where|tell|explain)\b", text, re.IGNORECASE
+    if len(text.split()) <= 4 and not re.search(
+        r"\b(what|why|how|when|where|tell|explain|case|issue|news|compare|valuation|dcf|chart|graph|historical)\b", text, re.IGNORECASE
     ):
         return True
     return False
@@ -231,10 +277,12 @@ __all__ = [
     "CALCULATION_HINT_TERMS",
     "VALUATION_CONTEXT_TERMS",
     "NEWS_TRIGGER_TERMS",
+    "EVENT_EXPLAINER_TRIGGER_TERMS",
     "OFFER_DOCUMENT_TRIGGER_TERMS",
     "FUNDAMENTAL_TRIGGER_TERMS",
     "DOCUMENT_ANALYSIS_TRIGGER_TERMS",
     "MARKET_DATA_TRIGGER_TERMS",
+    "VISUAL_TRIGGER_TERMS",
     "FULL_ANALYSIS_TRIGGER_TERMS",
     "FORECAST_TRIGGER_TERMS",
     "RICH_MODE_COMPARISON",
@@ -244,8 +292,17 @@ __all__ = [
     "RICH_MODE_FILING",
     "RICH_MODE_DOC_COMPARE",
     "RICH_MODE_CHAT",
+    "PRIMARY_INTENT_COMPARISON",
+    "PRIMARY_INTENT_VALUATION",
+    "PRIMARY_INTENT_EVENT_EXPLAINER",
+    "PRIMARY_INTENT_NEWS",
+    "PRIMARY_INTENT_FILING",
+    "PRIMARY_INTENT_SNAPSHOT",
+    "PRIMARY_INTENT_VISUAL_ANALYSIS",
+    "PRIMARY_INTENT_CHAT",
     "is_comparison_query",
     "is_calculation_valuation_query",
+    "detect_primary_intent",
     "planned_agents_for_message",
     "classify_rich_mode",
 ]

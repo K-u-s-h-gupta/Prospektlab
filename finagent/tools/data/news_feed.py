@@ -65,14 +65,24 @@ async def fetch_news(
     try:
         res = await fetch(url, respect_robots=False, timeout_s=12.0)
     except Exception as exc:
-        logger.info("news rss fetch failed: %s", exc)
+        logger.warning("news rss fetch failed: %s", exc)
+        try:
+            from finagent.events import BUS
+            BUS.emit("global", "agent_task", agent="news_feed", status="error", error=str(exc))
+        except Exception:
+            pass
         return []
     if res.status != 200 or not res.text:
         return []
     try:
         root = ET.fromstring(res.text)
     except ET.ParseError as exc:
-        logger.info("news rss parse failed: %s", exc)
+        logger.warning("news rss parse failed: %s", exc)
+        try:
+            from finagent.events import BUS
+            BUS.emit("global", "agent_task", agent="news_feed", status="error", error=str(exc))
+        except Exception:
+            pass
         return []
     channel = root.find("channel")
     if channel is None:

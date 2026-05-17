@@ -97,6 +97,11 @@ def _build_price_chart(bundle) -> AnswerChart | None:
     
     # Try to get historical data from bundle
     history = getattr(bundle, "price_history", None) or getattr(y, "history", None)
+    if not history:
+        annual_rev = getattr(y, "annual_revenue", None)
+        annual_dates = getattr(y, "annual_revenue_dates", None)
+        if annual_rev and annual_dates and len(annual_rev) == len(annual_dates):
+            history = [{"date": str(d), "close": float(v)} for d, v in zip(annual_dates, annual_rev)]
     if not history or not isinstance(history, (list, dict)):
         return None
     
@@ -149,6 +154,14 @@ def _build_revenue_chart(bundle) -> AnswerChart | None:
     
     metrics = getattr(y, "financial_metrics", {}) or {}
     revenue_data = getattr(bundle, "revenue_history", None)
+    if not revenue_data:
+        annual_rev = getattr(y, "annual_revenue", None)
+        annual_dates = getattr(y, "annual_revenue_dates", None)
+        if annual_rev and annual_dates and len(annual_rev) == len(annual_dates):
+            revenue_data = [
+                {"period": str(period), "revenue": float(value)}
+                for period, value in zip(annual_dates, annual_rev)
+            ]
     
     if not revenue_data:
         return None

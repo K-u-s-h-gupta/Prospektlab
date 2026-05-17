@@ -561,14 +561,15 @@ async def _stream_graph_run(message: str) -> AsyncIterator[dict]:
         return
 
     reply = final_content or last_nonempty_content or "I couldn't generate a response."
-    rich = rich_builder.build(message, tool_outputs, agents_used, reply)
-    rich_payload = rich.model_dump(mode="json") if rich is not None else None
+    
+    # Visuals explicitly disabled per user request
+    rich_payload = None
+
     logger.info(
-        "Graph stream done | elapsed=%.2fs | agents_used=%s | tool_outputs=%d | rich_mode=%s",
+        "Graph stream done | elapsed=%.2fs | agents_used=%s | tool_outputs=%d | rich_mode=disabled",
         time.perf_counter() - started_at,
         agents_used,
         len(tool_outputs),
-        rich.mode if rich else None,
     )
     yield {
         "type": "final",

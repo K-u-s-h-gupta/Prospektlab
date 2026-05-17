@@ -248,8 +248,12 @@ async def search_and_dedupe(
             )
         except asyncio.TimeoutError:
             return []
-        except Exception:
+        except Exception as exc:
+            logger.warning("search_and_dedupe query failed for %s: %s", localized, exc)
+            if ctx.emit:
+                ctx.emit("agent_task", task=f"search {localized}", status="error", error=str(exc))
             return []
+
 
     batches = await asyncio.gather(*(_one(q) for q in queries[: ctx.max_queries]))
     for q, batch in zip(queries, batches):

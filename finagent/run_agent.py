@@ -1651,6 +1651,8 @@ async def run_research_session(
             chars=len(synthesis.memo),
             path=str(memo_path),
             preview=synthesis.memo[:2400],
+            output_mode=output_mode.value,
+            response_depth=response_depth.value,
         )
     else:
         BUS.emit(

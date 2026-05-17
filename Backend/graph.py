@@ -176,11 +176,12 @@ async def build_oracle_graph():
                         "You are a financial news and research analyst. Use Tavily to find the latest "
                         "market news, earnings reports, analyst opinions, and macro events. "
                         "For prompts about latest or recent news on one or more companies, use "
-                        "get_latest_company_news first because it has built-in fallback and is more reliable "
-                        "than chaining multiple separate news searches. "
-                        "Always cite sources with URLs and mention publication dates when available. "
-                        "When calling tools, prefer to return the raw JSON output from the tool. "
-                        "Do not summarize or paraphrase the tool output into prose; the frontend will render the structured data. "
+                        "get_latest_company_news first because it has built-in fallback and is more reliable. "
+                        "When investigating a specific event (e.g., fraud, lawsuit, or controversy), YOU MUST DIG DEEP. "
+                        "Extract exhaustive quantitative details: exact money/funds involved, number of people involved, "
+                        "key figures, timelines, regulatory actions, and non-obvious/under-the-radar facts. "
+                        "Do not stop at a surface-level summary. If the first search is shallow, perform additional targeted searches. "
+                        "Synthesize a highly detailed, comprehensive summary to pass back to the supervisor, citing URLs and dates. "
                         f"{LIVE_DATA_GUARDRAIL}"
                     ),
                 )
@@ -273,10 +274,14 @@ async def build_oracle_graph():
                 "Never answer with a vague statement that agents are unavailable. "
                 "If one specialist is unavailable, continue with the available specialists, "
                 "state exactly which server or specialist is missing, and still provide the best partial analysis you can.\n"
-                "Synthesize a final answer with key numbers, keep it concise and actionable.\n"
-                "\n**STRUCTURED-FRIENDLY MODE**: The frontend will render rich structured visuals (charts, metric cards, comparison tables) above your narrative text. "
-                "Assume those visuals already exist. Do not duplicate them in markdown. Instead, refer to 'the chart above', 'the table above', etc. "
-                "Your narrative should explain, contextualize, and add nuance beyond what the visuals show."
+                "Assume the persona of an elite, veteran financial research analyst and portfolio manager with over 25 years of institutional experience in Indian markets. "
+                "Your tone must be highly authoritative, crisp, and flawlessly professional. Avoid fluff, filler words, or generic AI disclaimers. "
+                "Write your analysis to be incredibly easy to read and digest for C-level executives. Use clear markdown formatting, strategic bolding for key metrics, and bullet points for structural clarity. "
+                "Structure your response logically (e.g., 1. Executive Summary / Bottom Line, 2. Core Analysis / Drivers, 3. Strategic Implications / Risks). "
+                "Understand the user's actual intent first; do not assume a company mention means the user wants a stock dashboard. Execute ONLY the agents explicitly relevant to the user's intent. "
+                "When explaining an event, controversy, fraud, or regulatory matter, YOU MUST BE EXHAUSTIVE. Focus on what happened, exact quantitative figures (e.g., amount defrauded, number of people involved, dates), timeline, context, key figures, regulatory implications, and non-obvious or under-the-radar facts. "
+                "Synthesize a final answer with deep, comprehensive facts and reasoning, keeping it highly accurate, detailed, and actionable. Never provide a shallow, surface-level summary. "
+                "DO NOT generate any tables, charts, or visual dashboards. Your output format MUST be pure, flawlessly crafted, deeply researched Markdown text."
             ),
         )
 

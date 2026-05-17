@@ -1,0 +1,88 @@
+"use client";
+
+import { RichResponse } from "../lib/types";
+import { ComparisonHero } from "../ComparisonHero";
+import { MetricCardGrid } from "../MetricCardGrid";
+import { ComparisonTable } from "../ComparisonTable";
+import { StrengthsRisksDual } from "../StrengthsRisksDual";
+import { GuidanceFooter } from "../GuidanceFooter";
+import dynamic from "next/dynamic";
+
+const MultiSeriesBarChart = dynamic(
+  () => import("../Charts/MultiSeriesBarChart").then((m) => m.MultiSeriesBarChart),
+  { ssr: false, loading: () => <div className="h-64 bg-gray-100 rounded animate-pulse" /> }
+);
+
+const MultiSeriesLineChart = dynamic(
+  () => import("../Charts/MultiSeriesLineChart").then((m) => m.MultiSeriesLineChart),
+  { ssr: false, loading: () => <div className="h-64 bg-gray-100 rounded animate-pulse" /> }
+);
+
+interface ComparisonViewProps {
+  data: RichResponse;
+}
+
+export function ComparisonView({ data }: ComparisonViewProps) {
+  return (
+    <div className="space-y-6 pb-4">
+      {/* Title */}
+      {data.title && (
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">{data.title}</h2>
+          {data.subtitle && <p className="text-gray-600 mt-1">{data.subtitle}</p>}
+        </div>
+      )}
+
+      {/* Comparison Hero: two entity headers side-by-side */}
+      {data.primary_entity && data.secondary_entity && (
+        <ComparisonHero primary={data.primary_entity} secondary={data.secondary_entity} />
+      )}
+
+      {/* Metric Cards (hero cards for key metrics) */}
+      {data.metric_cards && data.metric_cards.length > 0 && <MetricCardGrid cards={data.metric_cards} columns={4} />}
+
+      {/* Charts: Revenue and Operating Margin */}
+      {data.charts && data.charts.length > 0 && (
+        <div className="space-y-6">
+          {data.charts.map((chart) => {
+            if (chart.kind === "multi_bar") {
+              return <MultiSeriesBarChart key={chart.id} chart={chart} />;
+            }
+            if (chart.kind === "multi_line") {
+              return <MultiSeriesLineChart key={chart.id} chart={chart} />;
+            }
+            return null;
+          })}
+        </div>
+      )}
+
+      {/* Comparison Table: head-to-head metrics */}
+      {data.comparison_rows && data.comparison_rows.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Head-to-Head Comparison</h3>
+          <ComparisonTable
+            rows={data.comparison_rows}
+            primaryLabel={data.primary_entity?.label}
+            secondaryLabel={data.secondary_entity?.label}
+          />
+        </div>
+      )}
+
+      {/* Strengths & Risks: dual panels */}
+      {data.strengths_risks && data.strengths_risks.length > 0 && (
+        <StrengthsRisksDual blocks={data.strengths_risks} />
+      )}
+
+      {/* Guidance Footer */}
+      {(data.primary_entity || data.secondary_entity) && (
+        <GuidanceFooter
+          entities={[data.primary_entity, data.secondary_entity].filter((v): v is NonNullable<typeof v> => Boolean(v))}
+          dataSources={data.data_sources}
+        />
+      )}
+
+      {/* Disclaimer */}
+      {data.disclaimer && <div className="text-xs text-gray-500 mt-4 italic">{data.disclaimer}</div>}
+    </div>
+  );
+}

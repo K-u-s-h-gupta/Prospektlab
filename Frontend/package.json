@@ -13,11 +13,12 @@
     "ai": "^6.0.177",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
-    "lucide-react": "^1.14.0",
+    "lucide-react": "^0.474.0",
     "next": "16.2.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
+    "recharts": "^2.12.7",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
