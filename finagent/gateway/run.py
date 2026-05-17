@@ -686,6 +686,38 @@ async def start_deep_research(req: DeepResearchRequest):
     })
 
 
+# ── Stop / cancel a running session ─────────────────────────────────────
+
+@app.post("/sessions/{session_id}/stop")
+async def stop_session(session_id: str):
+    """Cancel a running research session mid-flight."""
+    task = _TASKS.get(session_id)
+    if task is None or task.done():
+        raise HTTPException(status_code=404, detail="No active task for this session.")
+    task.cancel()
+    BUS.emit(session_id, "phase", phase="stopped", reason="user_cancelled", note="Research stopped by user.")
+    BUS.emit(session_id, "error", message="Research cancelled by user.")
+    BUS.close(session_id)
+    logger.info("Session %s cancelled by user", session_id)
+    return {"session_id": session_id, "status": "cancelled"}
+
+
+# ── Mode instruction helper (from teammate's Backend/api.py) ────────────
+
+def _mode_instruction(mode: str) -> str:
+    """Return system-level instruction text based on analysis depth mode."""
+    if mode == "marathon":
+        return (
+            "User selected Marathon mode. Produce a full-scale research report: executive summary, "
+            "historical performance, moat analysis, management quality, valuation models, SEBI/regulatory "
+            "context, competition landscape, investor-grade risk assessment. Completeness over brevity."
+        )
+    return (
+        "User selected Deep mode. Provide an in-depth but concise analysis covering ratios, sector context, "
+        "risks, recent events/news, and forward-looking insights. Structured sections, comprehensive but focused."
+    )
+
+
 @app.post("/chat/research")
 async def chat_research(req: ChatResearchRequest):
     """Chat-interface friendly entrypoint.

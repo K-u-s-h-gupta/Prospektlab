@@ -622,24 +622,31 @@
           <input type="text" id="heroSearchInput" class="hidden">
 
           <div class="flex items-center justify-between mt-2 px-1">
-            <div class="flex items-center gap-3 text-gray-500">
-              <span
-                class="material-symbols-outlined text-[14px] cursor-pointer hover:text-gray-300 transition-colors">attach_file</span>
-              <span
-                class="material-symbols-outlined text-[14px] cursor-pointer hover:text-gray-300 transition-colors">code</span>
+            <div class="flex items-center gap-2 text-gray-500">
               <button id="modeDeep"
-                class="mode-toggle ml-2 text-[9px] uppercase font-mono px-2 py-1 border border-white/[0.09] rounded hover:text-white hover:border-white/20 transition-colors tracking-widest">
+                class="mode-toggle text-[9px] uppercase font-mono px-2.5 py-1 border rounded transition-all tracking-widest bg-blue-500/15 text-blue-400 border-blue-500/30"
+                title="Fast in-depth analysis with ratios, risks, and sector context">
                 Deep Mode
               </button>
               <button id="modeMarathon"
-                class="mode-toggle text-[9px] uppercase font-mono px-2 py-1 border border-white/[0.09] rounded hover:text-white hover:border-white/20 transition-colors tracking-widest">
+                class="mode-toggle text-[9px] uppercase font-mono px-2.5 py-1 border border-white/[0.09] rounded hover:text-white hover:border-white/20 transition-all tracking-widest"
+                title="Exhaustive multi-pass research with export to PDF/Word/Excel">
                 Marathon
               </button>
             </div>
-            <button id="executeBtn"
-              class="flex items-center gap-1 bg-[#272b34] hover:bg-[#323742] text-[11px] font-mono text-gray-300 px-3 py-1.5 rounded border border-white/[0.09] transition-colors">
-              Execute <span class="material-symbols-outlined text-[12px]">play_arrow</span>
-            </button>
+            <div class="flex items-center gap-2">
+              <!-- Stop Button (hidden by default, shown during processing) -->
+              <button id="stopBtn"
+                class="hidden items-center gap-1 bg-red-600/80 hover:bg-red-500 text-[11px] font-mono text-white px-3 py-1.5 rounded border border-red-500/30 transition-colors"
+                title="Stop the current research">
+                <span class="material-symbols-outlined text-[12px]">stop_circle</span> Stop
+              </button>
+              <!-- Execute Button -->
+              <button id="executeBtn"
+                class="flex items-center gap-1 bg-[#272b34] hover:bg-[#323742] text-[11px] font-mono text-gray-300 px-3 py-1.5 rounded border border-white/[0.09] transition-colors">
+                Execute <span class="material-symbols-outlined text-[12px]">play_arrow</span>
+              </button>
+            </div>
             <!-- Hidden buttons required by JS -->
             <button id="activeExecuteBtn" class="hidden"></button>
             <button id="heroExecuteBtn" class="hidden"></button>
@@ -2049,7 +2056,7 @@
       let inList = false, inTable = false;
       let tableHeader = null;
       const closeList = () => { if (inList) { out.push("</ul>"); inList = false; } };
-      const closeTable = () => { if (inTable) { out.push("</tbody></table>"); inTable = false; tableHeader = null; } };
+      const closeTable = () => { if (inTable) { out.push("</tbody></table></div>"); inTable = false; tableHeader = null; } };
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const stripped = line.trim();
@@ -2083,13 +2090,12 @@
           out.push(`<h${lvl}>${title}${pill}</h${lvl}>`);
           continue;
         }
-        // Table separator
         if (/^\|?\s*[-:]+\s*(\|\s*[-:]+\s*)+\|?\s*$/.test(stripped)) {
           if (tableHeader) {
             const cells = tableHeader.split("|").map((c) => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1 || arr.length === tableHeader.split("|").length);
             // Simpler split: drop empty edges
             const headerCells = tableHeader.split("|").map((c) => c.trim()).filter((c, idx, arr) => !(idx === 0 && !c) && !(idx === arr.length - 1 && !c));
-            out.push("<table><thead><tr>" + headerCells.map((c) => `<th>${inlineMd(c)}</th>`).join("") + "</tr></thead><tbody>");
+            out.push("<div class=\"metric-card overflow-x-auto my-4\"><table class=\"min-w-full divide-y divide-white/[0.08]\"><thead><tr>" + headerCells.map((c) => `<th class=\"px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider\">${inlineMd(c)}</th>`).join("") + "</tr></thead><tbody class=\"divide-y divide-white/[0.08]\">");
             inTable = true;
             tableHeader = null;
           }
@@ -2103,7 +2109,7 @@
           }
           if (inTable) {
             const cells = stripped.split("|").map((c) => c.trim()).filter((c, idx, arr) => !(idx === 0 && !c) && !(idx === arr.length - 1 && !c));
-            out.push("<tr>" + cells.map((c) => `<td>${inlineMd(c)}</td>`).join("") + "</tr>");
+            out.push("<tr class=\"hover:bg-white/[0.02] transition-colors\">" + cells.map((c) => `<td class=\"px-4 py-3 whitespace-nowrap text-sm text-slate-200\">${inlineMd(c)}</td>`).join("") + "</tr>");
             continue;
           }
         }
@@ -2209,7 +2215,7 @@
     // ────────────────────────────────────────────────────────────────────
     // Run flow
     // ────────────────────────────────────────────────────────────────────
-    let researchMode = "standard";
+    let researchMode = "deep";
 
     async function startRun() {
       // Read directly from the unified bottom input
@@ -2236,14 +2242,22 @@
             showState("processing");
             $("processingTarget").textContent = target;
             $("processingTitle").textContent = target;
+            // Show stop button, hide execute during processing
+            $("stopBtn").classList.remove("hidden");
+            $("stopBtn").classList.add("flex");
+            $("executeBtn").classList.add("hidden");
             
             if (researchMode === "marathon") {
-              $("processingPhaseLabel").innerHTML = `<span class="text-indigo-400 font-medium">Marathon research in progress...</span>`;
+              $("processingPhaseLabel").innerHTML = `<span class="text-purple-400 font-medium">🏃 Marathon research in progress...</span>`;
               $("processingBar").classList.remove("bg-gray-500");
-              $("processingBar").classList.add("bg-indigo-500");
+              $("processingBar").classList.add("bg-purple-500");
+            } else if (researchMode === "deep") {
+              $("processingPhaseLabel").innerHTML = `<span class="text-blue-400 font-medium">🔬 Deep analysis in progress...</span>`;
+              $("processingBar").classList.remove("bg-gray-500");
+              $("processingBar").classList.add("bg-blue-500");
             } else {
               $("processingPhaseLabel").textContent = "Starting...";
-              $("processingBar").classList.remove("bg-indigo-500");
+              $("processingBar").classList.remove("bg-purple-500", "bg-blue-500");
               $("processingBar").classList.add("bg-gray-500");
             }
 
@@ -2542,6 +2556,10 @@
               $("processingBar").style.width = "100%";
               $("processingPercent").textContent = "100%";
               $("processingPhaseLabel").textContent = "Done";
+              // Restore execute button, hide stop
+              $("stopBtn").classList.add("hidden");
+              $("stopBtn").classList.remove("flex");
+              $("executeBtn").classList.remove("hidden");
               pushActivity("flag", "Final", `${d.steps} steps · ${d.citations} citations · ${d.primary_citations} primary · ${(d.elapsed_ms / 1000).toFixed(1)}s`, "done", d.canonical || "");
               if (tickHandle) clearInterval(tickHandle);
               tickHandle = null;
@@ -2571,6 +2589,10 @@
             eventSource.onerror = () => {
               if (runToken !== activeRunToken) return;
               pushActivity("link_off", "Stream", "Connection lost", "error");
+              // Restore buttons on error
+              $("stopBtn").classList.add("hidden");
+              $("stopBtn").classList.remove("flex");
+              $("executeBtn").classList.remove("hidden");
             };
           }
 
@@ -2584,23 +2606,41 @@
             startRun();
           }));
 
-          // Mode toggle: Standard vs Deep Research
+          // Mode toggle: Deep vs Marathon
           document.querySelectorAll(".mode-toggle").forEach((btn) => btn.addEventListener("click", () => {
+            // Reset all toggles to inactive
             document.querySelectorAll(".mode-toggle").forEach((b) => {
-              b.classList.remove("bg-primary/10", "text-primary", "border-primary/30", "bg-warn/10", "text-warn", "border-warn/30");
-              b.classList.add("bg-surface-container-low/50", "text-on-surface-variant", "border-outline-variant/20");
+              b.className = "mode-toggle text-[9px] uppercase font-mono px-2.5 py-1 border border-white/[0.09] rounded hover:text-white hover:border-white/20 transition-all tracking-widest text-gray-500";
             });
             const isDeep = btn.id === "modeDeep";
             const isMarathon = btn.id === "modeMarathon";
-            researchMode = isMarathon ? "marathon" : (isDeep ? "deep" : "standard");
-            if (isDeep || isMarathon) {
-              btn.classList.remove("bg-surface-container-low/50", "text-on-surface-variant", "border-outline-variant/20");
-              btn.classList.add(isMarathon ? "bg-primary/10" : "bg-warn/10", isMarathon ? "text-primary" : "text-warn", isMarathon ? "border-primary/30" : "border-warn/30");
+            researchMode = isMarathon ? "marathon" : "deep";
+            // Highlight active button
+            if (isMarathon) {
+              btn.className = "mode-toggle text-[9px] uppercase font-mono px-2.5 py-1 border rounded transition-all tracking-widest bg-purple-500/15 text-purple-400 border-purple-500/30";
             } else {
-              btn.classList.remove("bg-surface-container-low/50", "text-on-surface-variant", "border-outline-variant/20");
-              btn.classList.add("bg-primary/10", "text-primary", "border-primary/30");
+              btn.className = "mode-toggle text-[9px] uppercase font-mono px-2.5 py-1 border rounded transition-all tracking-widest bg-blue-500/15 text-blue-400 border-blue-500/30";
             }
           }));
+
+          // ── Stop button handler ──
+          async function stopRun() {
+            if (!sessionId) return;
+            try {
+              await fetch(`/sessions/${sessionId}/stop`, { method: "POST" });
+            } catch (e) { console.warn("Stop request failed:", e); }
+            if (eventSource) { eventSource.close(); eventSource = null; }
+            if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
+            $("processingPhaseLabel").innerHTML = `<span class="text-red-400 font-medium">⏹ Research stopped by user</span>`;
+            $("processingBar").style.width = $("processingBar").style.width; // freeze
+            // Restore buttons
+            $("stopBtn").classList.add("hidden");
+            $("stopBtn").classList.remove("flex");
+            $("executeBtn").classList.remove("hidden");
+            pushActivity("stop_circle", "User", "Research cancelled", "warning");
+          }
+          $("stopBtn").addEventListener("click", stopRun);
+
           $("executeBtn").addEventListener("click", startRun);
           $("targetInput").addEventListener("keydown", (e) => { if (e.key === "Enter") startRun(); });
           // Hero search input (Perplexity-style centered)
