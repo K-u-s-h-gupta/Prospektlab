@@ -10,12 +10,12 @@ import dynamic from "next/dynamic";
 
 const MultiSeriesBarChart = dynamic(
   () => import("../Charts/MultiSeriesBarChart").then((m) => m.MultiSeriesBarChart),
-  { ssr: false, loading: () => <div className="h-64 bg-gray-100 rounded animate-pulse" /> }
+  { ssr: false, loading: () => <div className="h-64 rounded-2xl border border-white/10 bg-white/[0.035] animate-pulse" /> }
 );
 
 const MultiSeriesLineChart = dynamic(
   () => import("../Charts/MultiSeriesLineChart").then((m) => m.MultiSeriesLineChart),
-  { ssr: false, loading: () => <div className="h-64 bg-gray-100 rounded animate-pulse" /> }
+  { ssr: false, loading: () => <div className="h-64 rounded-2xl border border-white/10 bg-white/[0.035] animate-pulse" /> }
 );
 
 interface ComparisonViewProps {
@@ -28,8 +28,8 @@ export function ComparisonView({ data }: ComparisonViewProps) {
       {/* Title */}
       {data.title && (
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">{data.title}</h2>
-          {data.subtitle && <p className="text-gray-600 mt-1">{data.subtitle}</p>}
+          <h2 className="text-2xl font-semibold text-white">{data.title}</h2>
+          {data.subtitle && <p className="mt-1 text-slate-500">{data.subtitle}</p>}
         </div>
       )}
 
@@ -59,7 +59,7 @@ export function ComparisonView({ data }: ComparisonViewProps) {
       {/* Comparison Table: head-to-head metrics */}
       {data.comparison_rows && data.comparison_rows.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Head-to-Head Comparison</h3>
+          <h3 className="mb-4 text-lg font-semibold text-white">Head-to-Head Comparison</h3>
           <ComparisonTable
             rows={data.comparison_rows}
             primaryLabel={data.primary_entity?.label}
@@ -82,7 +82,7 @@ export function ComparisonView({ data }: ComparisonViewProps) {
       )}
 
       {/* Disclaimer */}
-      {data.disclaimer && <div className="text-xs text-gray-500 mt-4 italic">{data.disclaimer}</div>}
+      {data.disclaimer && <div className="mt-4 text-xs italic text-slate-500">{data.disclaimer}</div>}
     </div>
   );
 }

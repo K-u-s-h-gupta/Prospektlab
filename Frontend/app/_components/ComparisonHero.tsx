@@ -1,7 +1,7 @@
 "use client";
 
-import { Entity } from "./lib/types";
 import { EntityHeader } from "./EntityHeader";
+import { Entity } from "./lib/types";
 
 interface ComparisonHeroProps {
   primary?: Entity;
@@ -9,23 +9,21 @@ interface ComparisonHeroProps {
 }
 
 export function ComparisonHero({ primary, secondary }: ComparisonHeroProps) {
-  if (!primary || !secondary) {
-    return null;
-  }
+  if (!primary || !secondary) return null;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
+    <div className="grid grid-cols-1 gap-3 pb-2 md:grid-cols-2">
       <div className="space-y-2">
-        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Primary</div>
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <EntityHeader entity={primary} showPrice={true} compact={false} />
+        <div className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Primary</div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+          <EntityHeader entity={primary} showPrice compact={false} />
         </div>
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Secondary</div>
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <EntityHeader entity={secondary} showPrice={true} compact={false} />
+        <div className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Secondary</div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+          <EntityHeader entity={secondary} showPrice compact={false} />
         </div>
       </div>
     </div>

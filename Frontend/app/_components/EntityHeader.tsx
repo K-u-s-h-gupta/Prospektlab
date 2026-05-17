@@ -1,7 +1,7 @@
 "use client";
 
+import { TrendingDown, TrendingUp } from "lucide-react";
 import { Entity } from "./lib/types";
-import { TrendingUp, TrendingDown } from "lucide-react";
 
 interface EntityHeaderProps {
   entity: Entity;
@@ -9,32 +9,33 @@ interface EntityHeaderProps {
   compact?: boolean;
 }
 
+function formatPrice(value?: number, currency = "INR") {
+  if (typeof value !== "number") return "";
+  return `${currency} ${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
 export function EntityHeader({ entity, showPrice = true, compact = false }: EntityHeaderProps) {
-  const changeIsPositive = entity.change_pct && entity.change_pct > 0;
-  const changeIsNegative = entity.change_pct && entity.change_pct < 0;
+  const changeIsPositive = typeof entity.change_pct === "number" && entity.change_pct > 0;
+  const changeIsNegative = typeof entity.change_pct === "number" && entity.change_pct < 0;
 
   if (compact) {
     return (
-      <div className="flex items-center justify-between py-2">
-        <div>
-          <div className="font-semibold text-gray-900">{entity.label}</div>
+      <div className="flex items-center justify-between gap-4 py-2">
+        <div className="min-w-0">
+          <div className="truncate font-semibold text-white">{entity.label}</div>
           {entity.ticker && (
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-slate-500">
               {entity.ticker}
-              {entity.exchange && ` · ${entity.exchange}`}
+              {entity.exchange && ` / ${entity.exchange}`}
             </div>
           )}
         </div>
         {showPrice && entity.current_price && (
           <div className="text-right">
-            <div className="font-semibold text-gray-900">₹{entity.current_price.toLocaleString()}</div>
+            <div className="font-semibold text-white">{formatPrice(entity.current_price, entity.currency)}</div>
             {changeIsPositive || changeIsNegative ? (
-              <div
-                className={`flex items-center justify-end gap-1 text-xs font-medium ${
-                  changeIsPositive ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                {changeIsPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+              <div className={`flex items-center justify-end gap-1 text-xs font-medium ${changeIsPositive ? "text-lime-200" : "text-rose-200"}`}>
+                {changeIsPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                 {Math.abs(entity.change_pct ?? 0).toFixed(2)}%
               </div>
             ) : null}
@@ -45,43 +46,33 @@ export function EntityHeader({ entity, showPrice = true, compact = false }: Enti
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div>
-        <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-bold text-gray-900">{entity.label}</h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-2xl font-semibold text-white">{entity.label}</h2>
           {entity.exchange && (
-            <span className="px-2.5 py-1 rounded-full bg-blue-50 text-xs font-medium text-blue-700">
+            <span className="rounded-full border border-cyan-200/20 bg-cyan-200/10 px-2.5 py-1 text-xs font-medium text-cyan-100">
               {entity.exchange}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
           {entity.ticker && <span>{entity.ticker}</span>}
-          {entity.sector && (
-            <>
-              <span>·</span>
-              <span>{entity.sector}</span>
-            </>
-          )}
-          {entity.industry && (
-            <>
-              <span>·</span>
-              <span>{entity.industry}</span>
-            </>
-          )}
+          {entity.sector && <span>/ {entity.sector}</span>}
+          {entity.industry && <span>/ {entity.industry}</span>}
         </div>
       </div>
 
       {showPrice && entity.current_price && (
-        <div className="flex items-baseline gap-2">
-          <div className="text-3xl font-bold text-gray-900">₹{entity.current_price.toLocaleString()}</div>
+        <div className="flex flex-wrap items-baseline gap-3">
+          <div className="text-3xl font-semibold text-white">{formatPrice(entity.current_price, entity.currency)}</div>
           {changeIsPositive || changeIsNegative ? (
             <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
-                changeIsPositive ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${
+                changeIsPositive ? "border-lime-200/20 bg-lime-200/10 text-lime-100" : "border-rose-200/20 bg-rose-200/10 text-rose-100"
               }`}
             >
-              {changeIsPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+              {changeIsPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
               <span className="text-sm font-semibold">
                 {changeIsPositive ? "+" : ""}
                 {entity.change_pct?.toFixed(2)}%
@@ -91,7 +82,7 @@ export function EntityHeader({ entity, showPrice = true, compact = false }: Enti
         </div>
       )}
 
-      {entity.description && <p className="text-sm text-gray-600 leading-relaxed">{entity.description}</p>}
+      {entity.description && <p className="text-sm leading-6 text-slate-400">{entity.description}</p>}
     </div>
   );
 }

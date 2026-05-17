@@ -8,7 +8,7 @@ import dynamic from "next/dynamic";
 
 const GaugeChart = dynamic(() => import("../Charts/GaugeChart").then((m) => m.GaugeChart), {
   ssr: false,
-  loading: () => <div className="h-64 bg-gray-100 rounded animate-pulse" />,
+  loading: () => <div className="h-64 rounded-2xl border border-white/10 bg-white/[0.035] animate-pulse" />,
 });
 
 interface ValuationViewProps {
@@ -21,8 +21,8 @@ export function ValuationView({ data }: ValuationViewProps) {
       {/* Title */}
       {data.title && (
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">{data.title}</h2>
-          {data.subtitle && <p className="text-gray-600 mt-1">{data.subtitle}</p>}
+          <h2 className="text-2xl font-semibold text-white">{data.title}</h2>
+          {data.subtitle && <p className="mt-1 text-slate-500">{data.subtitle}</p>}
         </div>
       )}
 
@@ -39,7 +39,7 @@ export function ValuationView({ data }: ValuationViewProps) {
           if (chart.kind === "gauge") {
             return (
               <div key={chart.id}>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">{chart.title}</h3>
+                <h3 className="mb-4 text-lg font-semibold text-white">{chart.title}</h3>
                 <GaugeChart chart={chart} />
               </div>
             );
@@ -49,13 +49,13 @@ export function ValuationView({ data }: ValuationViewProps) {
 
       {/* Valuation Summary */}
       {data.valuation_summary && (
-        <div className="rounded-lg border border-gray-200 bg-white p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Valuation Summary</h3>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-6">
+          <h3 className="mb-4 text-lg font-semibold text-white">Valuation Summary</h3>
           <div className="space-y-3">
             {Object.entries(data.valuation_summary).map(([key, value]) => (
               <div key={key} className="flex justify-between text-sm">
-                <span className="text-gray-600 capitalize">{key.replace(/_/g, " ")}</span>
-                <span className="font-medium text-gray-900">{String(value)}</span>
+                <span className="capitalize text-slate-500">{key.replace(/_/g, " ")}</span>
+                <span className="font-medium text-white">{String(value)}</span>
               </div>
             ))}
           </div>
@@ -66,7 +66,7 @@ export function ValuationView({ data }: ValuationViewProps) {
       {data.primary_entity && <GuidanceFooter entities={[data.primary_entity]} dataSources={data.data_sources} />}
 
       {/* Disclaimer */}
-      {data.disclaimer && <div className="text-xs text-gray-500 mt-4 italic">{data.disclaimer}</div>}
+      {data.disclaimer && <div className="mt-4 text-xs italic text-slate-500">{data.disclaimer}</div>}
     </div>
   );
 }

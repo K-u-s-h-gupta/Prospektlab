@@ -9,17 +9,17 @@ import dynamic from "next/dynamic";
 
 const BarChart = dynamic(() => import("../Charts/BarChart").then((m) => m.BarChart), {
   ssr: false,
-  loading: () => <div className="h-64 bg-gray-100 rounded animate-pulse" />,
+  loading: () => <div className="h-64 rounded-2xl border border-white/10 bg-white/[0.035] animate-pulse" />,
 });
 
 const DonutChart = dynamic(() => import("../Charts/DonutChart").then((m) => m.DonutChart), {
   ssr: false,
-  loading: () => <div className="h-64 bg-gray-100 rounded animate-pulse" />,
+  loading: () => <div className="h-64 rounded-2xl border border-white/10 bg-white/[0.035] animate-pulse" />,
 });
 
 const AreaChart = dynamic(() => import("../Charts/AreaChart").then((m) => m.AreaChart), {
   ssr: false,
-  loading: () => <div className="h-64 bg-gray-100 rounded animate-pulse" />,
+  loading: () => <div className="h-64 rounded-2xl border border-white/10 bg-white/[0.035] animate-pulse" />,
 });
 
 interface SnapshotViewProps {
@@ -32,8 +32,8 @@ export function SnapshotView({ data }: SnapshotViewProps) {
       {/* Title */}
       {data.title && (
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">{data.title}</h2>
-          {data.subtitle && <p className="text-gray-600 mt-1">{data.subtitle}</p>}
+          <h2 className="text-2xl font-semibold text-white">{data.title}</h2>
+          {data.subtitle && <p className="mt-1 text-slate-500">{data.subtitle}</p>}
         </div>
       )}
 
@@ -50,7 +50,7 @@ export function SnapshotView({ data }: SnapshotViewProps) {
             if (chart.kind === "bar") {
               return (
                 <div key={chart.id}>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">{chart.title}</h3>
+                  <h3 className="mb-4 text-lg font-semibold text-white">{chart.title}</h3>
                   <BarChart chart={chart} />
                 </div>
               );
@@ -58,7 +58,7 @@ export function SnapshotView({ data }: SnapshotViewProps) {
             if (chart.kind === "donut") {
               return (
                 <div key={chart.id}>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">{chart.title}</h3>
+                  <h3 className="mb-4 text-lg font-semibold text-white">{chart.title}</h3>
                   <DonutChart chart={chart} />
                 </div>
               );
@@ -66,7 +66,7 @@ export function SnapshotView({ data }: SnapshotViewProps) {
             if (chart.kind === "area") {
               return (
                 <div key={chart.id} className="md:col-span-2">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">{chart.title}</h3>
+                  <h3 className="mb-4 text-lg font-semibold text-white">{chart.title}</h3>
                   <AreaChart chart={chart} />
                 </div>
               );
@@ -83,7 +83,7 @@ export function SnapshotView({ data }: SnapshotViewProps) {
       {data.primary_entity && <GuidanceFooter entities={[data.primary_entity]} dataSources={data.data_sources} />}
 
       {/* Disclaimer */}
-      {data.disclaimer && <div className="text-xs text-gray-500 mt-4 italic">{data.disclaimer}</div>}
+      {data.disclaimer && <div className="mt-4 text-xs italic text-slate-500">{data.disclaimer}</div>}
     </div>
   );
 }

@@ -12,8 +12,8 @@ export function FilingView({ data }: FilingViewProps) {
       {/* Title */}
       {data.title && (
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">{data.title}</h2>
-          {data.subtitle && <p className="text-gray-600 mt-1">{data.subtitle}</p>}
+          <h2 className="text-2xl font-semibold text-white">{data.title}</h2>
+          {data.subtitle && <p className="mt-1 text-slate-500">{data.subtitle}</p>}
         </div>
       )}
 
@@ -21,11 +21,11 @@ export function FilingView({ data }: FilingViewProps) {
       {data.filing_sections && data.filing_sections.length > 0 && (
         <div className="space-y-4">
           {data.filing_sections.map((section, idx) => (
-            <div key={idx} className="rounded-lg border border-gray-200 bg-white p-6">
+            <div key={idx} className="rounded-2xl border border-white/10 bg-white/[0.035] p-6">
               {String((section as Record<string, unknown>).name || "") && (
-                <h3 className="font-semibold text-gray-900 mb-3">{String((section as Record<string, unknown>).name || "")}</h3>
+                <h3 className="mb-3 font-semibold text-white">{String((section as Record<string, unknown>).name || "")}</h3>
               )}
-              <div className="text-sm text-gray-700 whitespace-pre-wrap break-words">
+              <div className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-400">
                 {String((section as Record<string, unknown>).excerpt || (section as Record<string, unknown>).text || JSON.stringify(section, null, 2))}
               </div>
             </div>
@@ -34,7 +34,7 @@ export function FilingView({ data }: FilingViewProps) {
       )}
 
       {/* Disclaimer */}
-      {data.disclaimer && <div className="text-xs text-gray-500 mt-4 italic">{data.disclaimer}</div>}
+      {data.disclaimer && <div className="mt-4 text-xs italic text-slate-500">{data.disclaimer}</div>}
     </div>
   );
 }

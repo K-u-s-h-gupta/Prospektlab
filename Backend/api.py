@@ -71,6 +71,7 @@ AGENT_SERVER_DEPENDENCIES = _INTENT_AGENT_DEPS
 
 class ChatRequest(BaseModel):
     message: str
+    mode: str = Field(default="research", pattern="^(research|marathon)$")
 
 
 class ChatResponse(BaseModel):
@@ -231,14 +232,27 @@ def _missing_agent_details(graph: object, missing_agents: list[str]) -> list[str
     return details
 
 
-def _augment_query_for_routing(graph: object, message: str) -> tuple[str, list[str], list[str]]:
+def _mode_instruction(mode: str) -> str:
+    if mode == "marathon":
+        return (
+            "User selected Marathon mode. Produce a full-scale research report: executive summary, "
+            "key evidence matrix, risks and counterpoints, structured sections with headings, "
+            "clear sources, and a verdict paragraph. Use broad specialist agent coverage. "
+            "Generate structured charts and comparison visuals when the tool outputs support them. "
+            "Tailor tone to analytical authority."
+        )
+    return (
+        "User selected Research mode. Answer the specific query directly in 3-5 concise points. "
+        "Keep scope tight; stay focused. Use a chart or mini-visual only when the query "
+        "explicitly asks for numbers or trends and the data is available. Otherwise answer in text."
+    )
+
+
+def _augment_query_for_routing(graph: object, message: str, mode: str = "research") -> tuple[str, list[str], list[str]]:
     """Add deterministic routing hints using only agents that actually exist in this graph."""
     runnable_agents, missing_agents = _available_and_missing_agents(graph, message)
 
-    if not runnable_agents and not missing_agents:
-        return message, [], []
-
-    hints: list[str] = []
+    hints: list[str] = [_mode_instruction(mode)]
     if runnable_agents:
         hints.append(
             "Runtime routing instruction for supervisor: "
@@ -386,10 +400,10 @@ async def _iter_graph_events_with_timeouts(graph: object, routed_message: str):
             yield raw_event
 
 
-async def _execute_graph(message: str) -> tuple[str, list[str], rich_builder.RichResponse | None]:
+async def _execute_graph(message: str, mode: str = "research") -> tuple[str, list[str], rich_builder.RichResponse | None]:
     """Run the graph and return the final reply, sub-agents used, and rich payload."""
     graph = await _get_graph()
-    routed_message, planned_agents, missing_agents = _augment_query_for_routing(graph, message)
+    routed_message, planned_agents, missing_agents = _augment_query_for_routing(graph, message, mode)
     started_at = time.perf_counter()
     agents_used: list[str] = []
     seen_agents: set[str] = set()
@@ -438,10 +452,10 @@ async def _execute_graph(message: str) -> tuple[str, list[str], rich_builder.Ric
     return reply, agents_used, rich
 
 
-async def _stream_graph_run(message: str) -> AsyncIterator[dict]:
+async def _stream_graph_run(message: str, mode: str = "research") -> AsyncIterator[dict]:
     """Yield progress events followed by the final response payload."""
     graph = await _get_graph()
-    routed_message, planned_agents, missing_agents = _augment_query_for_routing(graph, message)
+    routed_message, planned_agents, missing_agents = _augment_query_for_routing(graph, message, mode)
     started_at = time.perf_counter()
     agents_used: list[str] = []
     seen_agents: set[str] = set()
@@ -562,14 +576,15 @@ async def _stream_graph_run(message: str) -> AsyncIterator[dict]:
 
     reply = final_content or last_nonempty_content or "I couldn't generate a response."
     
-    # Visuals explicitly disabled per user request
-    rich_payload = None
+    rich = rich_builder.build(message, tool_outputs, agents_used, reply)
+    rich_payload = rich.model_dump(mode="json") if rich is not None else None
 
     logger.info(
-        "Graph stream done | elapsed=%.2fs | agents_used=%s | tool_outputs=%d | rich_mode=disabled",
+        "Graph stream done | elapsed=%.2fs | agents_used=%s | tool_outputs=%d | rich_mode=%s",
         time.perf_counter() - started_at,
         agents_used,
         len(tool_outputs),
+        rich.mode if rich is not None else "markdown_only",
     )
     yield {
         "type": "final",
@@ -597,7 +612,7 @@ async def chat(req: ChatRequest):
 
     logger.info("User query: %s", req.message[:100])
     try:
-        reply, agents_used, rich = await _execute_graph(req.message)
+        reply, agents_used, rich = await _execute_graph(req.message, req.mode)
         return ChatResponse(
             reply=reply,
             agents_used=agents_used,
@@ -659,7 +674,7 @@ async def chat_stream(req: ChatRequest):
     logger.info("Streaming user query: %s", req.message[:100])
 
     async def event_stream():
-        async for event in _stream_graph_run(req.message):
+        async for event in _stream_graph_run(req.message, req.mode):
             yield _to_sse(event)
 
     return StreamingResponse(

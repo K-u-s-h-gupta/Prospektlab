@@ -1,99 +1,48 @@
 "use client";
 
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { StrengthsRisksBlock } from "./lib/types";
-import { CheckCircle2, AlertCircle } from "lucide-react";
 
 interface StrengthsRisksDualProps {
   blocks: StrengthsRisksBlock[];
 }
 
+function PointList({ items, tone }: { items: string[]; tone: "good" | "risk" }) {
+  return (
+    <ul className="space-y-2">
+      {items.map((item, idx) => (
+        <li key={`${item}-${idx}`} className={`flex items-start gap-2 text-sm ${tone === "good" ? "text-lime-50" : "text-rose-50"}`}>
+          <span className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${tone === "good" ? "bg-lime-200" : "bg-rose-200"}`} />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function StrengthsRisksDual({ blocks }: StrengthsRisksDualProps) {
-  if (!blocks || blocks.length === 0) {
-    return null;
-  }
+  if (!blocks || blocks.length === 0) return null;
 
-  if (blocks.length === 1) {
-    // Single entity: side-by-side strengths and risks
-    const block = blocks[0];
-    return (
-      <div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Strengths & Risks</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Strengths */}
-          <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <CheckCircle2 className="w-5 h-5 text-green-600" />
-              <h4 className="font-semibold text-green-900">Strengths</h4>
-            </div>
-            <ul className="space-y-2">
-              {(block.strengths || []).map((strength, idx) => (
-                <li key={idx} className="text-sm text-green-800 flex items-start gap-2">
-                  <span className="text-green-600 mt-0.5">•</span>
-                  <span>{strength}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Risks */}
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertCircle className="w-5 h-5 text-red-600" />
-              <h4 className="font-semibold text-red-900">Risks</h4>
-            </div>
-            <ul className="space-y-2">
-              {(block.risks || []).map((risk, idx) => (
-                <li key={idx} className="text-sm text-red-800 flex items-start gap-2">
-                  <span className="text-red-600 mt-0.5">•</span>
-                  <span>{risk}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Multiple entities: side-by-side comparison panels
   return (
     <div>
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Strengths & Risks</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <h3 className="mb-3 text-lg font-semibold text-white">Strengths & Risks</h3>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {blocks.map((block, idx) => (
-          <div key={idx} className="space-y-4">
-            <h4 className="font-semibold text-gray-900">{block.entity_label}</h4>
-
-            {/* Strengths */}
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <CheckCircle2 className="w-4 h-4 text-green-600" />
-                <h5 className="font-medium text-green-900 text-sm">Strengths</h5>
+          <div key={`${block.entity_label}-${idx}`} className="space-y-3">
+            {blocks.length > 1 && <h4 className="font-semibold text-slate-200">{block.entity_label}</h4>}
+            <div className="rounded-2xl border border-lime-200/15 bg-lime-200/8 p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-lime-200" />
+                <h5 className="text-sm font-semibold text-lime-100">Strengths</h5>
               </div>
-              <ul className="space-y-1.5">
-                {(block.strengths || []).map((strength, sidx) => (
-                  <li key={sidx} className="text-xs text-green-800 flex items-start gap-2">
-                    <span className="text-green-600 mt-0.5">•</span>
-                    <span>{strength}</span>
-                  </li>
-                ))}
-              </ul>
+              <PointList items={block.strengths || []} tone="good" />
             </div>
-
-            {/* Risks */}
-            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <AlertCircle className="w-4 h-4 text-red-600" />
-                <h5 className="font-medium text-red-900 text-sm">Risks</h5>
+            <div className="rounded-2xl border border-rose-200/15 bg-rose-200/8 p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-rose-200" />
+                <h5 className="text-sm font-semibold text-rose-100">Risks</h5>
               </div>
-              <ul className="space-y-1.5">
-                {(block.risks || []).map((risk, ridx) => (
-                  <li key={ridx} className="text-xs text-red-800 flex items-start gap-2">
-                    <span className="text-red-600 mt-0.5">•</span>
-                    <span>{risk}</span>
-                  </li>
-                ))}
-              </ul>
+              <PointList items={block.risks || []} tone="risk" />
             </div>
           </div>
         ))}

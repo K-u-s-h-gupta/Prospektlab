@@ -1,60 +1,44 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Activity, Briefcase, CheckCircle2, Globe, Loader2, Search, Send, Sparkles, Terminal, TrendingUp } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Activity,
+  Bot,
+  BrainCircuit,
+  CheckCircle2,
+  CircleStop,
+  Clock3,
+  FileText,
+  Globe,
+  Loader2,
+  Search,
+  Send,
+  Terminal,
+  UserRound,
+  Zap,
+  Sparkles,
+  Command,
+  ArrowUp,
+  Square,
+  MoreHorizontal,
+  Layers
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { RichResponseComponent } from "./_components/RichResponse";
+import type { RichResponse } from "./_components/lib/types";
 
-// --- Rich Response Types (mirrors Backend/rich_builder.py Pydantic schema) ---
-type RichMetricCard = {
-  label: string;
-  value: string;
-  sub_value?: string;
-  change?: string;
-  change_type?: "positive" | "negative" | "neutral";
-  is_partial?: boolean;
-};
-type RichStrengthsRisks = {
-  entity_label: string;
-  strengths: string[];
-  risks: string[];
-};
-type RichNewsHeadline = {
-  title: string;
-  url?: string;
-  source?: string;
-  published?: string;
-  snippet?: string;
-};
-type RichComparisonRow = {
-  metric: string;
-  primary_value: string;
-  secondary_value: string;
-  winner?: "primary" | "secondary" | "tie";
-};
-type RichEntity = { label: string; ticker?: string };
-type RichPayload = {
-  mode: string;
-  title?: string;
-  subtitle?: string;
-  primary_entity?: RichEntity;
-  secondary_entity?: RichEntity;
-  metric_cards: RichMetricCard[];
-  comparison_rows: RichComparisonRow[];
-  strengths_risks: RichStrengthsRisks[];
-  headlines: RichNewsHeadline[];
-  disclaimer?: string;
-};
-
-// --- MCP Health Types ---
 type McpServerStatus = { ok: boolean; latency_ms?: number; url?: string; error?: string };
 type McpHealthStatus = { all_ok: boolean; servers: Record<string, McpServerStatus> };
+
+type QueryMode = "research" | "marathon";
 
 type Message = {
   role: "user" | "oracle";
   content: string;
   agents_used?: string[];
-  rich?: RichPayload;
+  rich?: RichResponse;
+  mode?: QueryMode;
 };
 
 type ProcessStatus = "info" | "running" | "completed" | "error";
@@ -74,25 +58,113 @@ type StreamEvent = {
   reply?: string;
   agents_used?: string[];
   domain?: string;
-  rich?: RichPayload;
+  rich?: RichResponse;
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+
+const modes: Array<{
+  id: QueryMode;
+  label: string;
+  caption: string;
+  icon: typeof Search;
+}> = [
+  {
+    id: "research",
+    label: "Research",
+    caption: "Specific",
+    icon: Zap,
+  },
+  {
+    id: "marathon",
+    label: "Marathon",
+    caption: "Deep Dive",
+    icon: Layers,
+  },
+];
+
+const loadingCopy: Record<QueryMode, string[]> = {
+  research: ["Synthesizing signals...", "Consulting sources...", "Formulating insight..."],
+  marathon: ["Mapping topography...", "Deploying agent swarm...", "Constructing intelligence report..."],
+};
+
+function classNames(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function CreativeLoader({ mode, steps }: { mode: QueryMode; steps: ProcessStep[] }) {
+  const latest = steps.at(-1)?.label ?? loadingCopy[mode][0];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20, filter: "blur(8px)" }}
+      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+      exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+      className="mx-auto flex w-full max-w-3xl justify-start my-6"
+    >
+      <div className="flex gap-5 items-center">
+        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black border border-white/10 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+           <div className="absolute inset-0 rounded-full border border-white/20 animate-[spin_3s_linear_infinite]" />
+           <div className="absolute inset-1.5 rounded-full border border-zinc-500/30 animate-[spin_2s_linear_infinite_reverse]" />
+           <Sparkles size={14} className="text-zinc-300 animate-pulse" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <motion.p 
+            key={latest}
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-[13px] font-medium tracking-wide text-zinc-300"
+          >
+            {latest}
+          </motion.p>
+          <div className="flex gap-2 items-center">
+             <div className="flex gap-1">
+               <span className="h-1 w-1 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+               <span className="h-1 w-1 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+               <span className="h-1 w-1 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+             </div>
+             <span className="text-[10px] text-zinc-600 uppercase tracking-widest font-semibold ml-1">
+               {mode} mode active
+             </span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "oracle",
-      content: "Welcome to **ORACLE Financial Intelligence OS**. How can I assist you with your market research today?",
+      mode: "research",
+      content:
+        "Welcome to **Prospektlab Intelligence**. How can I assist you today?",
     },
   ]);
   const [input, setInput] = useState("");
+  const [mode, setMode] = useState<QueryMode>("research");
   const [isLoading, setIsLoading] = useState(false);
   const [processSteps, setProcessSteps] = useState<ProcessStep[]>([]);
   const [sourceDomains, setSourceDomains] = useState<string[]>([]);
   const [mcpHealth, setMcpHealth] = useState<McpHealthStatus | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageScrollRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const activeMode = modes.find((item) => item.id === mode) ?? modes[0];
+
+  const agentStateMap = useMemo(() => {
+    const map = new Map<string, ProcessStep>();
+    for (const step of processSteps) {
+      if (step.agent && !step.id.startsWith("source-")) {
+        map.set(step.agent, step);
+      }
+    }
+    return map;
+  }, [processSteps]);
+  const agentSteps = Array.from(agentStateMap.values());
+  const recentSteps = processSteps.slice(-3);
 
   const scrollToBottom = (force = false) => {
     const container = messageScrollRef.current;
@@ -100,7 +172,7 @@ export default function Home() {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       return;
     }
-    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 160;
     if (force || nearBottom) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
@@ -110,7 +182,6 @@ export default function Home() {
     scrollToBottom();
   }, [messages, processSteps, sourceDomains, isLoading]);
 
-  // Probe MCP servers on mount so we can show the offline banner early.
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/health/mcp`)
       .then((r) => r.json())
@@ -120,25 +191,16 @@ export default function Home() {
 
   const upsertProcessStep = (event: StreamEvent) => {
     if (event.type === "status" && event.label) {
-      const label = event.label;
-      setProcessSteps((prev) => [
-        ...prev,
-        {
-          id: `status-${prev.length + 1}`,
-          label,
-          status: "info",
-        },
-      ]);
+      setProcessSteps((prev) => [...prev, { id: `status-${prev.length + 1}`, label: event.label as string, status: "info" }]);
       return;
     }
 
     if (event.type === "error") {
-      const label = event.message || "Something went wrong during execution.";
       setProcessSteps((prev) => [
         ...prev,
         {
           id: `error-${prev.length + 1}`,
-          label,
+          label: event.message || "Something went wrong.",
           status: "error",
         },
       ]);
@@ -148,12 +210,11 @@ export default function Home() {
     if (event.type === "source" && event.domain) {
       setSourceDomains((prev) => (prev.includes(event.domain as string) ? prev : [...prev, event.domain as string]));
       if (event.label) {
-        const label = event.label;
         setProcessSteps((prev) => [
           ...prev,
           {
             id: `source-${event.domain}-${prev.length + 1}`,
-            label,
+            label: event.label as string,
             status: "info",
             agent: event.agent,
           },
@@ -163,36 +224,35 @@ export default function Home() {
     }
 
     if (!event.agent || !event.label) return;
-    const agent = event.agent;
-    const label = event.label;
 
     setProcessSteps((prev) => [
       ...prev,
       {
-        id: `${agent}-${prev.length + 1}`,
-        agent,
-        label,
+        id: `${event.agent}-${prev.length + 1}`,
+        agent: event.agent,
+        label: event.label as string,
         status:
           event.type === "agent_completed"
             ? "completed"
             : event.type === "agent_unavailable"
               ? "error"
-            : event.type === "agent_planned"
-              ? "info"
-              : "running",
+              : event.type === "agent_planned"
+                ? "info"
+                : "running",
       },
     ]);
   };
 
-  const fallbackToJsonChat = async (userMsg: string) => {
+  const fallbackToJsonChat = async (userMsg: string, queryMode: QueryMode, signal: AbortSignal) => {
     const res = await fetch(`${API_BASE_URL}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: userMsg }),
+      body: JSON.stringify({ message: userMsg, mode: queryMode }),
+      signal,
     });
 
     if (!res.ok) {
-      let detail = "Network response was not ok";
+      let detail = "Network error";
       try {
         const errorData = await res.json();
         detail = errorData.detail || detail;
@@ -207,6 +267,7 @@ export default function Home() {
       ...prev,
       {
         role: "oracle",
+        mode: queryMode,
         content: data.reply,
         agents_used: data.agents_used,
         rich: data.rich ?? undefined,
@@ -214,13 +275,22 @@ export default function Home() {
     ]);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleStop = () => {
+    if (!abortControllerRef.current) return;
+    abortControllerRef.current.abort();
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
     const userMsg = input.trim();
+    const queryMode = mode;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
+    setMessages((prev) => [...prev, { role: "user", mode: queryMode, content: userMsg }]);
     setProcessSteps([]);
     setSourceDomains([]);
     setIsLoading(true);
@@ -229,11 +299,12 @@ export default function Home() {
       const res = await fetch(`${API_BASE_URL}/api/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg }),
+        body: JSON.stringify({ message: userMsg, mode: queryMode }),
+        signal: controller.signal,
       });
 
       if (!res.ok) {
-        let detail = "The backend returned an error.";
+        let detail = "Backend error";
         try {
           const errorData = await res.json();
           detail = errorData.detail || detail;
@@ -244,7 +315,7 @@ export default function Home() {
       }
 
       if (!res.body) {
-        await fallbackToJsonChat(userMsg);
+        await fallbackToJsonChat(userMsg, queryMode, controller.signal);
         return;
       }
 
@@ -268,12 +339,8 @@ export default function Home() {
           let dataLine = "";
 
           for (const line of lines) {
-            if (line.startsWith("event:")) {
-              eventType = line.slice(6).trim();
-            }
-            if (line.startsWith("data:")) {
-              dataLine += line.slice(5).trim();
-            }
+            if (line.startsWith("event:")) eventType = line.slice(6).trim();
+            if (line.startsWith("data:")) dataLine += line.slice(5).trim();
           }
 
           if (!dataLine) continue;
@@ -287,7 +354,7 @@ export default function Home() {
           }
 
           if (normalizedEvent.type === "error") {
-            streamErrorMessage = normalizedEvent.message || "The backend reported an error while generating the answer.";
+            streamErrorMessage = normalizedEvent.message || "Error generating answer.";
             upsertProcessStep(normalizedEvent);
             break;
           }
@@ -308,317 +375,229 @@ export default function Home() {
       }
 
       if (!finalPayload) {
-        throw new Error("The streaming response ended before a final answer was received.");
+        throw new Error("Stream ended early.");
       }
 
       setMessages((prev) => [
         ...prev,
         {
           role: "oracle",
-          content: finalPayload.reply || "I couldn't generate a response.",
+          mode: queryMode,
+          content: finalPayload.reply || "No response generated.",
           agents_used: finalPayload.agents_used || [],
           rich: finalPayload.rich ?? undefined,
         },
       ]);
     } catch (error) {
-      console.error(error);
-      const message = error instanceof Error ? error.message : "Connection error while contacting the ORACLE backend.";
-      setProcessSteps([
-        {
-          id: "connection-error",
-          label: message,
-          status: "error",
-        },
-      ]);
-      setMessages((prev) => [
-        ...prev,
-        { role: "oracle", content: message },
-      ]);
+      if (controller.signal.aborted) {
+        setProcessSteps((prev) => [...prev, { id: `abort-${Date.now()}`, label: "Run stopped", status: "error" }]);
+        setMessages((prev) => [...prev, { role: "oracle", mode: queryMode, content: "Query aborted." }]);
+      } else {
+        console.error(error);
+        const message = error instanceof Error ? error.message : "Connection error.";
+        setProcessSteps([{ id: "connection-error", label: message, status: "error" }]);
+        setMessages((prev) => [...prev, { role: "oracle", mode: queryMode, content: message }]);
+      }
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setIsLoading(false);
     }
   };
 
-  const agentStateMap = new Map<string, ProcessStep>();
-  for (const step of processSteps) {
-    if (step.agent && !step.id.startsWith("source-")) {
-      agentStateMap.set(step.agent, step);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (input.trim() && !isLoading) {
+        const synthEvent = { preventDefault: () => {} } as FormEvent;
+        handleSubmit(synthEvent);
+      }
     }
-  }
-  const agentSteps = Array.from(agentStateMap.values());
-  const recentSteps = processSteps.slice(-8);
+  };
 
   return (
-    <div className="flex h-screen w-full bg-slate-950 text-slate-50 font-sans selection:bg-blue-500/30">
-      <div className="hidden md:flex flex-col w-72 border-r border-slate-800 bg-slate-900/50 p-6">
-        <div className="flex items-center gap-3 mb-10">
-          <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 shadow-lg shadow-blue-500/20">
-            <Sparkles size={18} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white">ORACLE</h1>
-            <p className="text-xs font-medium text-slate-400 tracking-wider">FINANCIAL OS</p>
-          </div>
-        </div>
-
-        <div className="space-y-6 flex-1">
-          <div>
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Live Intelligence</h3>
-            <ul className="space-y-2 text-sm text-slate-300">
-              <li className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-800 transition-colors">
-                <Activity size={16} className="text-emerald-400" /> Market Data Node
-              </li>
-              <li className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-800 transition-colors">
-                <Briefcase size={16} className="text-blue-400" /> Fundamentals Engine
-              </li>
-              <li className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-800 transition-colors">
-                <Search size={16} className="text-cyan-400" /> Research Pipeline
-              </li>
-              <li className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-800 transition-colors">
-                <TrendingUp size={16} className="text-amber-400" /> Valuation Models
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="mt-auto">
-          <div className="glass-panel p-4 rounded-xl">
-            <div className="flex items-center gap-2 mb-2">
-              <div
-                className={`h-2 w-2 rounded-full flex-shrink-0 ${
-                  mcpHealth === null
-                    ? "bg-slate-500"
-                    : mcpHealth.all_ok
-                      ? "bg-emerald-500 animate-pulse"
-                      : "bg-amber-500 animate-pulse"
-                }`}
-              />
-              <span className="text-xs font-medium text-slate-300">
-                {mcpHealth === null
-                  ? "Checking systems..."
-                  : mcpHealth.all_ok
-                    ? "All Systems Online"
-                    : "Some Servers Offline"}
-              </span>
-            </div>
-            {mcpHealth && !mcpHealth.all_ok && Object.keys(mcpHealth.servers).length > 0 && (
-              <div className="mb-2 space-y-1">
-                {Object.entries(mcpHealth.servers)
-                  .filter(([, s]) => !s.ok)
-                  .map(([name, s]) => (
-                    <div key={name} className="flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-rose-500 flex-shrink-0" />
-                      <span className="text-[11px] text-rose-400 truncate" title={s.error}>
-                        {name.replace(/_/g, " ")}
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            )}
-            <p className="text-xs text-slate-500">
-              {mcpHealth?.all_ok
-                ? "Connected to local LangGraph + MCP endpoints."
-                : mcpHealth
-                  ? "Start missing MCP servers for full analysis."
-                  : "Probing local MCP endpoints..."}
-            </p>
-          </div>
-        </div>
+    <main className="relative flex h-dvh w-full flex-col overflow-hidden bg-[#0a0a0a] text-zinc-100 font-sans selection:bg-zinc-800">
+      {/* Abstract dark creative background */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.03)_0%,rgba(0,0,0,1)_80%)]" />
+        <div className="absolute inset-0 opacity-[0.015] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
       </div>
 
-      <div className="flex-1 flex flex-col min-h-0">
-        <header className="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md z-10 flex-shrink-0">
-          <h2 className="font-medium text-slate-200">Terminal</h2>
-        </header>
-
-        {/* MCP offline banner — visible on all screen sizes */}
-        {mcpHealth && !mcpHealth.all_ok && (
-          <div className="flex-shrink-0 bg-amber-900/30 border-b border-amber-700/40 px-6 py-2 flex items-center gap-2.5">
-            <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />
-            <p className="text-xs text-amber-300">
-              <span className="font-semibold">MCP servers offline: </span>
-              {Object.entries(mcpHealth.servers)
-                .filter(([, s]) => !s.ok)
-                .map(([n]) => n.replace(/_/g, " "))
-                .join(", ")}
-              {" — "}structured visuals may be unavailable.
-            </p>
-          </div>
-        )}
-
-        <div ref={messageScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth">
-          {messages.map((m, idx) => (
-            <div key={idx} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"} max-w-4xl mx-auto w-full`}>
-              <div className={`flex gap-4 max-w-[85%] ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                <div
-                  className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center border ${
-                    m.role === "user"
-                      ? "bg-slate-800 border-slate-700"
-                      : "bg-blue-600/10 border-blue-500/30 text-blue-400"
-                  }`}
-                >
-                  {m.role === "user" ? <Terminal size={18} /> : <Sparkles size={18} />}
-                </div>
-
-                <div className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
-                  <div
-                    className={`px-5 py-4 rounded-2xl text-[15px] leading-relaxed shadow-sm ${
-                      m.role === "user"
-                        ? "bg-blue-600 text-white rounded-tr-sm"
-                        : "glass-panel text-slate-200 rounded-tl-sm"
-                    }`}
-                  >
-                    {m.role === "oracle" && m.rich && <RichResponseComponent data={m.rich as unknown as import("./_components/lib/types").RichResponse} />}
-                    <div className="prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-800">
-                      <ReactMarkdown>{m.content}</ReactMarkdown>
-                    </div>
-                  </div>
-
-                  {m.agents_used && m.agents_used.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3 pl-2">
-                      <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold pt-1">Agents used:</span>
-                      {m.agents_used.map((agent) => (
-                        <span key={agent} className="px-2 py-1 bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md shadow-sm">
-                          {agent.replace(/_/g, " ")}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {isLoading && (
-            <div className="flex justify-start max-w-4xl mx-auto w-full">
-              <div className="flex gap-4">
-                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-600/10 border border-blue-500/30 text-blue-400 flex items-center justify-center">
-                  <Loader2 size={18} className="animate-spin" />
-                </div>
-                <div className="px-5 py-4 rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 text-sm flex items-center gap-3">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
-                  </span>
-                  ORACLE is analyzing...
-                </div>
-              </div>
+      {/* Minimal Header */}
+      <header className="relative z-10 flex h-14 shrink-0 items-center justify-between px-6 md:px-10">
+        <div className="flex items-center gap-3 opacity-80 hover:opacity-100 transition-opacity">
+          <Sparkles size={16} className="text-zinc-400" />
+          <h1 className="text-sm font-semibold tracking-wide text-zinc-200">Prospektlab</h1>
+        </div>
+        <div className="flex items-center gap-3">
+          {mcpHealth && (
+            <div className="flex items-center gap-2 text-[10px] tracking-widest uppercase font-medium text-zinc-500">
+               <span className={classNames("h-1.5 w-1.5 rounded-full", mcpHealth.all_ok ? "bg-emerald-500" : "bg-amber-500")} />
+               {mcpHealth.all_ok ? "Systems Nominal" : "Degraded"}
             </div>
           )}
-          <div ref={messagesEndRef} />
         </div>
+      </header>
 
-        <div className="flex-shrink-0 border-t border-slate-800 bg-slate-950/95 backdrop-blur-md px-4 py-4 md:px-8 md:py-5">
-          <div className="max-w-3xl mx-auto">
-            <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-teal-500 rounded-2xl blur opacity-25 group-focus-within:opacity-50 transition duration-500"></div>
-              <form
-                onSubmit={handleSubmit}
-                className="relative flex items-center bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden"
+      {/* Chat Area */}
+      <div ref={messageScrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 md:px-10 pt-4 pb-32">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+          <AnimatePresence initial={false}>
+            {messages.map((m, idx) => (
+              <motion.div
+                key={`${idx}-${m.role}`}
+                initial={{ opacity: 0, y: 15, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                className={classNames("flex w-full", m.role === "user" ? "justify-end" : "justify-start")}
               >
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask ORACLE to analyze a stock, compare peers, or fetch news..."
-                  className="flex-1 bg-transparent px-6 py-4 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-0 text-[15px]"
-                  disabled={isLoading}
-                  suppressHydrationWarning
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || isLoading}
-                  className="mr-2 p-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors"
-                  suppressHydrationWarning
-                >
-                  {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-                </button>
-              </form>
-            </div>
-
-            {(isLoading || processSteps.length > 0 || sourceDomains.length > 0) && (
-              <div className="mt-3 grid gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Sub Agents</p>
-                    <span className="text-[10px] text-slate-500">{isLoading ? "Live" : "Last run"}</span>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {agentSteps.length === 0 && (
-                      <p className="text-xs text-slate-500">Waiting for routing...</p>
-                    )}
-                    {agentSteps.map((step) => (
-                      <div key={step.id} className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/70 px-2.5 py-2">
-                        {step.status === "completed" ? (
-                          <CheckCircle2 size={14} className="text-emerald-400 flex-shrink-0" />
-                        ) : step.status === "error" ? (
-                          <div className="h-2.5 w-2.5 rounded-full bg-rose-400 flex-shrink-0" />
-                        ) : step.status === "info" ? (
-                          <div className="h-2.5 w-2.5 rounded-full bg-cyan-400 flex-shrink-0" />
-                        ) : (
-                          <Loader2 size={14} className="text-blue-400 animate-spin flex-shrink-0" />
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-xs text-slate-200 truncate">{step.agent?.replace(/_/g, " ")}</p>
-                          <p className="text-[11px] text-slate-500 truncate">{step.status}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Process</p>
-                    {sourceDomains.length > 0 && (
-                      <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                        <Globe size={12} />
-                        <span>Sources</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {sourceDomains.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {sourceDomains.map((domain) => (
-                        <span key={domain} className="px-2 py-1 rounded-full border border-cyan-900/60 bg-cyan-950/40 text-cyan-200 text-[11px]">
-                          {domain}
-                        </span>
-                      ))}
+                <div className={classNames("flex flex-col gap-2 max-w-[85%] md:max-w-[75%]", m.role === "user" ? "items-end" : "items-start")}>
+                  
+                  {m.role === "user" ? (
+                    <div className="px-5 py-3.5 rounded-2xl rounded-tr-sm bg-zinc-800/80 backdrop-blur-md border border-zinc-700/50 text-[15px] leading-relaxed text-zinc-100 shadow-sm">
+                      {m.content}
+                    </div>
+                  ) : (
+                    <div className="w-full text-left">
+                       {/* Contextual UI / Rich Response */}
+                       {m.rich && (
+                         <div className="mb-4 w-full overflow-hidden rounded-2xl border border-white/5 bg-white/[0.02] shadow-2xl backdrop-blur-xl">
+                            <RichResponseComponent data={m.rich} />
+                         </div>
+                       )}
+                       {/* Text Content */}
+                       <div className="prose prose-invert max-w-none text-[15px] leading-8 text-zinc-300 prose-p:my-4 prose-headings:font-semibold prose-headings:text-zinc-100 prose-a:text-zinc-100 prose-a:underline-offset-4 hover:prose-a:text-white prose-strong:text-zinc-100 prose-code:text-zinc-300 prose-code:bg-white/5 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/5">
+                          <ReactMarkdown>{m.content}</ReactMarkdown>
+                       </div>
+                       
+                       {/* Agents Used Tags */}
+                       {m.agents_used && m.agents_used.length > 0 && (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                             {m.agents_used.map((agent) => (
+                               <span key={agent} className="flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-wider font-medium text-zinc-500 border border-white/5">
+                                  <Terminal size={10} />
+                                  {agent.replace(/_/g, " ")}
+                               </span>
+                             ))}
+                          </div>
+                       )}
                     </div>
                   )}
+                </div>
+              </motion.div>
+            ))}
+            
+            {isLoading && <CreativeLoader key="creative-loader" mode={mode} steps={processSteps} />}
+          </AnimatePresence>
+          <div ref={messagesEndRef} className="h-4" />
+        </div>
+      </div>
 
-                  <div className="mt-3 max-h-32 overflow-y-auto space-y-2 pr-1">
-                    {recentSteps.length === 0 && (
-                      <p className="text-xs text-slate-500">No execution steps yet.</p>
-                    )}
-                    {recentSteps.map((step) => (
-                      <div key={`${step.id}-${step.label}`} className="flex items-start gap-2 text-xs">
-                        <span
-                          className={`mt-1 h-2 w-2 rounded-full flex-shrink-0 ${
-                            step.status === "completed"
-                              ? "bg-emerald-400"
-                              : step.status === "error"
-                                ? "bg-rose-400"
-                                : step.status === "info"
-                                  ? "bg-cyan-400"
-                                  : "bg-blue-400 animate-pulse"
-                          }`}
-                        ></span>
-                        <span className="text-slate-300">{step.label}</span>
-                      </div>
-                    ))}
-                  </div>
+      {/* Floating Input Area */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/90 to-transparent pb-6 pt-12 px-4 md:px-10">
+        <div className="mx-auto w-full max-w-3xl">
+          
+          {/* Progress Indicators (Only when active) */}
+          <AnimatePresence>
+            {(isLoading || processSteps.length > 0) && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="mb-4 flex flex-wrap gap-2"
+              >
+                 {agentSteps.map((step) => (
+                    <div key={step.id} className="flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-[11px] border border-white/5 backdrop-blur-md text-zinc-400">
+                      {step.status === "completed" ? <CheckCircle2 size={12} className="text-zinc-300" /> : <Loader2 size={12} className="animate-spin text-zinc-500" />}
+                      <span>{step.agent?.replace(/_/g, " ")}</span>
+                    </div>
+                 ))}
+                 {sourceDomains.length > 0 && (
+                   <div className="flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-[11px] border border-white/5 backdrop-blur-md text-zinc-400">
+                     <Globe size={12} />
+                     <span>{sourceDomains.length} Sources</span>
+                   </div>
+                 )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="relative group">
+            {/* Glow Effect behind input */}
+            <div className="absolute -inset-1 rounded-3xl bg-white/5 opacity-50 blur-xl transition-opacity group-focus-within:opacity-100 group-focus-within:bg-white/10" />
+            
+            <form onSubmit={handleSubmit} className="relative flex flex-col rounded-3xl bg-[#0f0f0f] border border-zinc-800/60 shadow-2xl overflow-hidden transition-all focus-within:border-zinc-700">
+              
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={mode === "marathon" ? "Deploy marathon research... (Shift+Enter for new line)" : "Ask a specific question..."}
+                className="w-full resize-none bg-transparent px-6 pt-5 pb-3 text-[15px] leading-relaxed text-zinc-100 placeholder:text-zinc-600 focus:outline-none min-h-[64px] max-h-[200px]"
+                disabled={isLoading}
+                rows={1}
+                suppressHydrationWarning
+              />
+              
+              <div className="flex items-center justify-between px-4 pb-4">
+                {/* Mode Switcher */}
+                <div className="flex items-center bg-black/40 rounded-full p-1 border border-white/5">
+                  {modes.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = mode === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setMode(item.id)}
+                        disabled={isLoading}
+                        className={classNames(
+                          "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-all duration-300",
+                          isActive 
+                            ? "bg-zinc-800 text-zinc-100 shadow-sm" 
+                            : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
+                        )}
+                      >
+                        <Icon size={12} className={isActive ? "opacity-100" : "opacity-60"} />
+                        {item.label}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2">
+                   {isLoading ? (
+                      <button
+                        type="button"
+                        onClick={handleStop}
+                        className="group flex h-9 w-9 items-center justify-center rounded-full bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20 border border-red-500/20"
+                        title="Stop Generation"
+                      >
+                         <Square size={14} className="fill-current" />
+                      </button>
+                   ) : (
+                      <button
+                        type="submit"
+                        disabled={!input.trim()}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-black transition-transform hover:scale-105 active:scale-95 disabled:opacity-30 disabled:hover:scale-100"
+                        title="Send Message"
+                      >
+                         <ArrowUp size={18} strokeWidth={2.5} />
+                      </button>
+                   )}
                 </div>
               </div>
-            )}
-
-            <div className="text-center mt-3">
-              <p className="text-[11px] text-slate-500 font-medium">Powered by LangGraph, FastMCP, and Deep Analysis Agents.</p>
-            </div>
+            </form>
+          </div>
+          
+          <div className="mt-4 text-center">
+             <p className="text-[10px] text-zinc-600 font-medium tracking-wide">Prospektlab can make mistakes. Verify critical information.</p>
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
+
