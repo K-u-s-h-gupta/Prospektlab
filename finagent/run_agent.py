@@ -50,8 +50,10 @@ from finagent.tools.data import (
     FilingNarrative,
     FxRate,
     HNStory,
+    IndiaCompanySnapshot,
     NewsItem,
     RedditPost,
+    SEBIFiling,
     SECCompanySnapshot,
     SECTimeSeries,
     StockTwitsSnapshot,
@@ -59,6 +61,9 @@ from finagent.tools.data import (
     YahooQuote,
     fetch_company_snapshot,
     fetch_filing_narrative,
+    fetch_india_snapshot,
+    fetch_sebi_filing,
+    fetch_shareholding_pattern,
     fetch_news,
     fetch_stocktwits,
     fetch_wikipedia_summary,
@@ -110,6 +115,8 @@ class AgentLoopConfig:
     emit_memo: bool = True
     close_bus_on_finish: bool = True
     chat_history: list[dict[str, str]] | None = None
+    # ── Comparison: when set, synthesis fetches rich enrichment for peers ──
+    peer_targets: list[str] = field(default_factory=list)
 
 
 def _auto_max_steps(objective: str, base: int) -> int:
@@ -554,30 +561,169 @@ async def _run_enrichment(
         )
         return items
 
-    sec_snap = await _sec()
-    if sec_snap:
-        ticker = sec_snap.ticker
-    elif entity.yahoo_ticker:
-        ticker = entity.yahoo_ticker
-    elif target.isalpha() and len(target) <= 5:
+    # ── India-specific data fetchers ─────────────────────────────────────────
+    # These are only called for IN-country entities; they run in parallel with
+    # the main gather below to avoid blocking the Yahoo/Wikipedia fetches.
+
+    _is_india = (entity.country_code == "IN")
+    # NSE symbol is the short ticker label (e.g. "TCS", "INFY")
+    _nse_sym: str = (entity.ticker_label or target.upper().split()[0])[:12]
+
+    async def _india_snap() -> IndiaCompanySnapshot | None:
+        if not _is_india:
+            return None
+        BUS.emit(session_id, "agent_task", task="NSE/Screener", status="running",
+                 note=f"Fetching India fundamentals for {_nse_sym}")
+        try:
+            snap = await fetch_india_snapshot(_nse_sym)
+            if snap:
+                BUS.emit(session_id, "agent_task", task="NSE/Screener", status="done",
+                         note=f"{snap.company_name or _nse_sym} — {len(snap.metrics)} metrics via {snap.source}")
+            else:
+                BUS.emit(session_id, "agent_task", task="NSE/Screener", status="warning",
+                         note=f"No fundamentals data returned for {_nse_sym}")
+            return snap
+        except Exception as exc:
+            logger.warning("India snapshot fetch failed for %s: %s", _nse_sym, exc)
+            BUS.emit(session_id, "agent_task", task="NSE/Screener", status="error", note=str(exc))
+            return None
+
+    async def _sebi_filing_fetch() -> SEBIFiling | None:
+        if not _is_india:
+            return None
+        BUS.emit(session_id, "agent_task", task="SEBI/Trendlyne", status="running",
+                 note=f"Fetching analysis filing for {_nse_sym}")
+        try:
+            filing_data = await fetch_sebi_filing(_nse_sym)
+            if filing_data:
+                present = ", ".join(
+                    k for k, v in [
+                        ("overview", filing_data.business_overview),
+                        ("risks", filing_data.risk_factors),
+                        ("financials", filing_data.financial_summary),
+                        ("MDA", filing_data.management_discussion),
+                    ] if v
+                )
+                BUS.emit(session_id, "agent_task", task="SEBI/Trendlyne", status="done",
+                         note=f"Sections: {present or 'none'}")
+            else:
+                BUS.emit(session_id, "agent_task", task="SEBI/Trendlyne", status="warning",
+                         note=f"No analysis sections found for {_nse_sym}")
+            return filing_data
+        except Exception as exc:
+            logger.warning("SEBI filing fetch failed for %s: %s", _nse_sym, exc)
+            BUS.emit(session_id, "agent_task", task="SEBI/Trendlyne", status="error", note=str(exc))
+            return None
+
+    async def _shareholding_fetch() -> dict | None:
+        if not _is_india:
+            return None
+        try:
+            data = await fetch_shareholding_pattern(_nse_sym)
+            if data:
+                p = data.get("promoter") or 0
+                f = data.get("fii") or 0
+                d = data.get("dii") or 0
+                BUS.emit(session_id, "agent_task", task="Shareholding", status="done",
+                         note=f"Promoter {p:.1f}% · FII {f:.1f}% · DII {d:.1f}%")
+            return data
+        except Exception as exc:
+            logger.warning("Shareholding fetch failed for %s: %s", _nse_sym, exc)
+            return None
+
+    # ── Derive ticker (best-effort without blocking on SEC) ────────────────
+    # SEC snap runs in the parallel gather below, so we derive ticker early
+    # from the already-resolved entity. US-only SEC data supplements later.
+    if entity.yahoo_ticker:
+        ticker: str | None = entity.yahoo_ticker
+    elif _is_india and _nse_sym:
+        ticker = _nse_sym + ".NS"
+    elif target.replace(" ", "").isalpha() and len(target) <= 5:
         ticker = target.upper()
     else:
         ticker = None
-    canonical_name = sec_snap.name if sec_snap else entity.canonical_name
-    yahoo_quote, wiki, filing, fx, reddit_posts, hn_stories, stocktwits_snap, news_items = await asyncio.gather(
+
+    canonical_name = entity.canonical_name
+
+    # ── Parallel fan-out: ALL enrichment including SEC ────────────────────
+    (
+        sec_snap,
+        india_snap_result,
+        sebi_filing_result,
+        shareholding_result,
+        yahoo_quote,
+        wiki,
+        fx,
+        reddit_posts,
+        hn_stories,
+        stocktwits_snap,
+        news_items,
+    ) = await asyncio.gather(
+        _sec(),
+        _india_snap(),
+        _sebi_filing_fetch(),
+        _shareholding_fetch(),
         _yahoo(ticker),
         _wiki(canonical_name),
-        _filing(sec_snap),
         _fx(),
         _reddit(),
         _hn(),
         _stocktwits(ticker),
         _news(),
+        return_exceptions=True,
     )
 
+    # Resolve gather exceptions
+    def _safe_sec(v):
+        return None if isinstance(v, Exception) else v
+    sec_snap = _safe_sec(sec_snap)
+
+    # Upgrade ticker/canonical_name from SEC snap if available (US companies)
+    if sec_snap:
+        if sec_snap.ticker:
+            ticker = sec_snap.ticker
+        if sec_snap.name:
+            canonical_name = sec_snap.name
+
+    # Fetch SEC filing now that we have sec_snap (fast — just an HTTP call)
+    sec_filing = None
+    if sec_snap:
+        try:
+            sec_filing = await _filing(sec_snap)
+        except Exception:
+            sec_filing = None
+
+    # Resolve any gather exceptions to None
+    def _safe(v):
+        return None if isinstance(v, Exception) else v
+
+    india_snap_result   = _safe(india_snap_result)
+    sebi_filing_result  = _safe(sebi_filing_result)
+    shareholding_result = _safe(shareholding_result)
+    yahoo_quote         = _safe(yahoo_quote)
+    wiki                = _safe(wiki)
+    fx                  = _safe(fx)
+    reddit_posts        = _safe(reddit_posts) or []
+    hn_stories          = _safe(hn_stories) or []
+    stocktwits_snap     = _safe(stocktwits_snap)
+    news_items          = _safe(news_items) or []
+
+    # Backfill canonical_name from India snapshot if available
+    if india_snap_result and india_snap_result.company_name:
+        canonical_name = india_snap_result.company_name
+
+    # India snap is the primary structured data source for Indian companies;
+    # sec_snap is used for US companies. The bundle.india_snap field holds both.
+    primary_snap: IndiaCompanySnapshot | SECCompanySnapshot | None = (
+        india_snap_result or sec_snap
+    )
+    # sebi_filing takes precedence for India; sec_filing for US
+    resolved_filing = sebi_filing_result or sec_filing
+
     bundle = EnrichmentBundle(
-        india_snap=sec_snap,          # legacy SEC snapshot now stored as india_snap
-        sebi_filing=filing,
+        india_snap=primary_snap,
+        sebi_filing=resolved_filing if isinstance(resolved_filing, SEBIFiling) else None,
+        shareholding=shareholding_result,
         yahoo=yahoo_quote,
         wikipedia=wiki,
         fx=fx,
@@ -590,15 +736,17 @@ async def _run_enrichment(
     BUS.emit(
         session_id,
         "intel",
-        sec=_serialize_sec(sec_snap),
+        sec=_serialize_india_snap(india_snap_result) if _is_india else _serialize_sec(sec_snap),
         yahoo=_serialize_yahoo(yahoo_quote),
         wikipedia=_serialize_wiki(wiki),
-        filing=_serialize_filing(filing),
+        filing=_serialize_filing(sec_filing),
         fx=_serialize_fx(fx),
         reddit=_serialize_reddit(reddit_posts),
         hackernews=_serialize_hn(hn_stories),
         stocktwits=_serialize_stocktwits(stocktwits_snap),
         news=_serialize_news(news_items),
+        india_snap=_serialize_india_snap(india_snap_result),
+        shareholding=shareholding_result,
     )
     return bundle
 
@@ -616,9 +764,49 @@ def _serialize_filing(f: FilingNarrative | None) -> dict | None:
     }
 
 
-def _serialize_sec(snap: SECCompanySnapshot | None) -> dict | None:
+def _serialize_india_snap(snap: "IndiaCompanySnapshot | None") -> dict | None:
+    """Serialize an IndiaCompanySnapshot for the intel SSE event."""
     if not snap:
         return None
+    return {
+        "symbol": snap.symbol,
+        "isin": snap.isin,
+        "name": snap.company_name,
+        "exchange": snap.exchange,
+        "sector": snap.sector,
+        "industry": snap.industry,
+        "source": snap.source,
+        "source_url": snap.source_url,
+        "current_price": snap.current_price,
+        "change_pct": snap.change_pct,
+        "week_52_high": snap.week_52_high,
+        "week_52_low": snap.week_52_low,
+        "market_cap_cr": snap.market_cap_cr,
+        "pe_ratio": snap.pe_ratio,
+        "pb_ratio": snap.pb_ratio,
+        "eps": snap.eps,
+        "book_value": snap.book_value,
+        "dividend_yield": snap.dividend_yield,
+        "roe": snap.roe,
+        "roce": snap.roce,
+        "debt_to_equity": snap.debt_to_equity,
+        "current_ratio": snap.current_ratio,
+        "promoter_holding": snap.promoter_holding,
+        "fii_holding": snap.fii_holding,
+        "dii_holding": snap.dii_holding,
+        "promoter_pledge_pct": snap.promoter_pledge_pct,
+        # Flat metrics dict for easy frontend consumption
+        "metrics": snap.metrics,
+    }
+
+
+def _serialize_sec(snap: "SECCompanySnapshot | None") -> dict | None:
+    if not snap:
+        return None
+    # Guard: if this is actually an IndiaCompanySnapshot (back-compat shim),
+    # delegate to the India serializer to avoid attribute errors.
+    if isinstance(snap, IndiaCompanySnapshot):
+        return _serialize_india_snap(snap)
     return {
         "ticker": snap.ticker,
         "name": snap.name,
@@ -1256,20 +1444,28 @@ async def run_research_session(
             BUS.emit(session_id, "warning", message=f"search failed: {exc}")
             docs = []
 
-    # ── Process round 1 ───────────────────────────────────────────────────
+    # ── Process round 1 (parallel batched) ────────────────────────────
     initial_cap = max(cfg.max_steps // 2, 6) if cfg.enable_deep_dive else cfg.max_steps
     enrichment_present = bundle.sec is not None
-    for doc in docs[:initial_cap]:
-        step += 1
-        await _process_doc(
-            doc, step, cp, harness, validator, session_id,
-            enrichment_corroborates=enrichment_present,
+    _doc_sem = asyncio.Semaphore(5)
+
+    async def _process_doc_parallel(doc, base_step):
+        async with _doc_sem:
+            await _process_doc(
+                doc, base_step, cp, harness, validator, session_id,
+                enrichment_corroborates=enrichment_present,
+            )
+
+    batch = docs[:initial_cap]
+    if batch:
+        await asyncio.gather(
+            *(_process_doc_parallel(doc, step + i + 1) for i, doc in enumerate(batch))
         )
+        step += len(batch)
         if should_compress(step, harness.settings.compression_interval_steps):
             _ = await compress_context_stub([d.excerpt for d in docs[:step]], cp)
             last_compression_step = step
             BUS.emit(session_id, "compression", step=step)
-        await asyncio.sleep(0)
 
     # ── Phase 4: deep-dive (multi-round iterative search) ─────────────────
     if cfg.enable_scraping and cfg.enable_deep_dive and step < cfg.max_steps:
@@ -1309,6 +1505,8 @@ async def run_research_session(
                 await asyncio.sleep(delay)
             return await _one(q)
 
+        _dive_doc_sem = asyncio.Semaphore(5)
+
         # Up to 4 rounds, gated by remaining step budget. Each round harvests
         # entities/gaps from the *cumulative* doc pool so coverage compounds.
         for round_index in range(4):
@@ -1324,9 +1522,10 @@ async def run_research_session(
                 note=f"Round {round_index + 1}: {len(followups)} targeted queries",
             )
             followup_results = await asyncio.gather(
-                *(_staggered_one(q, i * 0.3) for i, q in enumerate(followups))
+                *(_staggered_one(q, i * 0.1) for i, q in enumerate(followups))
             )
-            new_in_round = 0
+            # Collect new docs first, then process in parallel
+            new_docs_in_round = []
             for batch in followup_results:
                 for d in batch:
                     key = (d.final_url or d.url).split("#", 1)[0]
@@ -1334,17 +1533,24 @@ async def run_research_session(
                         continue
                     seen_urls.add(key)
                     docs.append(d)
-                    if step >= cfg.max_steps:
+                    if step + len(new_docs_in_round) + 1 >= cfg.max_steps:
                         break
-                    step += 1
-                    new_in_round += 1
-                    await _process_doc(
-                        d, step, cp, harness, validator, session_id,
-                        enrichment_corroborates=enrichment_present,
-                    )
-                    await asyncio.sleep(0)
-            # If a round yielded nothing fresh, stop iterating
-            if new_in_round == 0:
+                    new_docs_in_round.append(d)
+
+            # Process collected docs in parallel
+            if new_docs_in_round:
+                async def _dive_process(doc, s):
+                    async with _dive_doc_sem:
+                        await _process_doc(
+                            doc, s, cp, harness, validator, session_id,
+                            enrichment_corroborates=enrichment_present,
+                        )
+                await asyncio.gather(
+                    *(_dive_process(d, step + i + 1) for i, d in enumerate(new_docs_in_round))
+                )
+                step += len(new_docs_in_round)
+
+            if not new_docs_in_round:
                 break
 
     if step == 0:
@@ -1462,16 +1668,22 @@ async def run_research_session(
             # Merge new docs from subagents into the main pool +
             # process them through the citation log so they count toward
             # confidence/conflicts.
+            _orch_new = []
+            _orch_keys = {(x.final_url or x.url or "").split("#", 1)[0] for x in docs}
             for d in orch_result.new_docs:
                 key = (d.final_url or d.url or "").split("#", 1)[0]
-                if not key or key in {(x.final_url or x.url or "").split("#", 1)[0] for x in docs}:
+                if not key or key in _orch_keys:
                     continue
+                _orch_keys.add(key)
                 docs.append(d)
-                step += 1
-                await _process_doc(
-                    d, step, cp, harness, validator, session_id,
-                    enrichment_corroborates=(bundle.sec is not None),
-                )
+                _orch_new.append(d)
+            if _orch_new:
+                _orch_sem = asyncio.Semaphore(5)
+                async def _orch_proc(doc, s):
+                    async with _orch_sem:
+                        await _process_doc(doc, s, cp, harness, validator, session_id, enrichment_corroborates=(bundle.sec is not None))
+                await asyncio.gather(*(_orch_proc(d, step + i + 1) for i, d in enumerate(_orch_new)))
+                step += len(_orch_new)
 
             # Verifier — cross-checks all findings, demotes/promotes, runs
             # AccuracyValidator on each finding.
@@ -1556,8 +1768,8 @@ async def run_research_session(
                             return []
 
                     batches = await asyncio.gather(*(_bs_one(q) for q in fanout))
-                    bs_new = 0
                     existing_keys = {(d.final_url or d.url or "").split("#", 1)[0] for d in docs}
+                    _bs_docs = []
                     for batch in batches:
                         for d in batch:
                             key = (d.final_url or d.url or "").split("#", 1)[0]
@@ -1565,12 +1777,15 @@ async def run_research_session(
                                 continue
                             existing_keys.add(key)
                             docs.append(d)
-                            step += 1
-                            bs_new += 1
-                            await _process_doc(
-                                d, step, cp, harness, validator, session_id,
-                                enrichment_corroborates=(bundle.sec is not None),
-                            )
+                            _bs_docs.append(d)
+                    bs_new = len(_bs_docs)
+                    if _bs_docs:
+                        _bs_sem = asyncio.Semaphore(5)
+                        async def _bs_proc(doc, s):
+                            async with _bs_sem:
+                                await _process_doc(doc, s, cp, harness, validator, session_id, enrichment_corroborates=(bundle.sec is not None))
+                        await asyncio.gather(*(_bs_proc(d, step + i + 1) for i, d in enumerate(_bs_docs)))
+                        step += bs_new
                     blindspot_payload["new_docs"] = bs_new
                     _emit_event("blindspot_dispatched", new_docs=bs_new, queries=len(fanout))
             except Exception as exc:
@@ -1637,6 +1852,8 @@ async def run_research_session(
             specialist_findings=orchestration_findings,
             quality_report=final_quality,
             chat_history=cfg.chat_history,
+            session_id=session_id,
+            peer_targets=cfg.peer_targets,
         )
         memos_dir = finagent_data_path("memos")
         memos_dir.mkdir(parents=True, exist_ok=True)
@@ -1701,9 +1918,8 @@ async def run_research_session(
         logger.warning("playbook promotion failed: %s", exc)
 
     primary_count = sum(1 for c in cp.citation_log if c.kind == "primary")
-    BUS.emit(
-        session_id,
-        "final",
+
+    _final_payload = dict(
         target=target,
         canonical=canonical_label,
         steps=cp.step,
@@ -1729,6 +1945,16 @@ async def run_research_session(
         blindspot=blindspot_payload,
         resolved_entity=entity.to_event_payload(),
     )
+
+    if cfg.emit_memo:
+        # Only emit "final" for the true synthesis pass — intermediate deep-research
+        # passes use "pass_done" so the frontend never renders duplicate export blocks.
+        BUS.emit(session_id, "final", **_final_payload)
+    else:
+        # Lightweight completion signal for non-synthesis passes; frontend ignores this
+        # for UI rendering but it lets the orchestrator track progress.
+        BUS.emit(session_id, "pass_done", **_final_payload)
+
     if cfg.close_bus_on_finish:
         BUS.close(session_id)
 

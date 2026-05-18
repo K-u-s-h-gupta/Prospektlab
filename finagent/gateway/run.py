@@ -14,6 +14,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Load .env before any other finagent imports so OPENAI_API_KEY / TAVILY_API_KEY
+# are available when settings.py and runtime_provider.py are first imported.
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    # Try finagent/.env first, then project root .env
+    _here = Path(__file__).resolve().parent
+    _loaded = (
+        _load_dotenv(_here.parent / ".env", override=False)
+        or _load_dotenv(_here.parent.parent / ".env", override=False)
+    )
+except ImportError:
+    pass  # python-dotenv not installed; keys must come from environment
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
@@ -24,6 +37,21 @@ from finagent.paths import finagent_data_path, finagent_home
 from finagent.run_agent import AgentLoopConfig, run_research_session
 from finagent.tools.web.http_fetcher import aclose_shared_client
 from finagent.memory.chat_memory import ChatMemoryManager
+
+_COMPARISON_RE = re.compile(
+    r"\b(?:compare|comparison|compares|comparing|vs\.?|versus|against|head[\s-]to[\s-]head)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_comparison(query: str) -> bool:
+    return bool(_COMPARISON_RE.search(query or ""))
+
+
+def _extract_comparison_targets(query: str) -> list[str]:
+    """Extract up to 2 entity names from a comparison query."""
+    entities = extract_finance_entities(query, limit=2)
+    return [e.canonical_name for e in entities if e.canonical_name]
 
 _MEMORY_MANAGER = ChatMemoryManager()
 
@@ -519,21 +547,38 @@ async def start_research(req: StartResearchRequest):
     if mode not in {"chat", "standard", "deep", "marathon"}:
         mode = "chat"
     
+    # ── Comparison detection: extract both entities ────────────────────
+    is_comparison_query = _is_comparison(raw_query)
+    comparison_targets = _extract_comparison_targets(raw_query) if is_comparison_query else []
+    # Force comparison output mode for comparison queries
+    forced_output_mode = req.output_mode
+    if is_comparison_query and not forced_output_mode:
+        forced_output_mode = "company_comparison"
+    
     _session_record(session_id, mode=mode, target=target, objective=objective)
 
     async def _runner() -> None:
         try:
+            # ── Speed-first config ──────────────────────────────────────
+            # Standard "Research" mode = single fast pass (no marathon-level layers)
+            # Deep mode within /research/start = same path but with slightly higher budget
             if req.max_steps is not None:
                 base_steps = req.max_steps
             elif mode == "deep":
-                base_steps = 80
+                base_steps = 60
             elif mode == "standard":
-                base_steps = 56
+                base_steps = 38
             else:
-                base_steps = 40
+                base_steps = 28
             
             chat_history = _MEMORY_MANAGER.get_history(req.user_email, session_id)
-            
+
+            # Lightweight pipeline for non-marathon: skip expensive phases.
+            # The synthesis still has access to peer enrichment (added below
+            # in run_research_session via peer_targets).
+            is_fast_mode = mode in {"standard", "chat"}
+            is_deep_mode = mode == "deep"
+
             await run_research_session(
                 target,
                 objective,
@@ -542,13 +587,24 @@ async def start_research(req: StartResearchRequest):
                     session_id=session_id,
                     auto_depth=req.max_steps is None,
                     response_depth=mode,
-                    output_mode=req.output_mode,
+                    output_mode=forced_output_mode,
                     synth_model=os.getenv("FINAGENT_SYNTH_MODEL"),
-                    breadth_search_timeout=(150.0 if mode == "deep" else 110.0),
-                    followup_search_timeout=(70.0 if mode == "deep" else 50.0),
-                    reflection_per_query_timeout=(55.0 if mode == "deep" else 38.0),
-                    blindspot_per_query_timeout=(45.0 if mode == "deep" else 32.0),
-                    news_timeout=(40.0 if mode == "deep" else 30.0),
+                    # ── Speed: aggressively disable expensive phases for fast modes
+                    enable_multi_agent=not is_fast_mode,
+                    enable_blindspot=not is_fast_mode,
+                    enable_reflection=True,
+                    reflection_max_rounds=(1 if is_fast_mode else (3 if is_deep_mode else 5)),
+                    reflection_max_new_docs=(20 if is_fast_mode else (60 if is_deep_mode else 80)),
+                    enable_deep_dive=True,
+                    quality_threshold=(60.0 if is_fast_mode else (70.0 if is_deep_mode else 75.0)),
+                    # ── Tight timeouts for fast modes
+                    breadth_search_timeout=(45.0 if is_fast_mode else (90.0 if is_deep_mode else 150.0)),
+                    followup_search_timeout=(25.0 if is_fast_mode else (45.0 if is_deep_mode else 70.0)),
+                    reflection_per_query_timeout=(18.0 if is_fast_mode else (35.0 if is_deep_mode else 55.0)),
+                    blindspot_per_query_timeout=(15.0 if is_fast_mode else (30.0 if is_deep_mode else 45.0)),
+                    news_timeout=(15.0 if is_fast_mode else (25.0 if is_deep_mode else 40.0)),
+                    # ── Comparison: pass peer targets so synthesis has parallel enrichment
+                    peer_targets=comparison_targets[1:] if len(comparison_targets) >= 2 else [],
                     chat_history=chat_history,
                 ),
             )
@@ -577,12 +633,95 @@ async def start_research(req: StartResearchRequest):
 
 # ── Deep Research: multi-pass long-chain reasoning ──────────────────────
 
+# Each entry maps to one parallel enrichment pass. Passes 0-N-2 run in parallel;
+# pass N-1 is the serial synthesis. For Marathon (12 passes) the first 11 entries
+# are used; for Deep (5 passes) only the first 4 + synthesis are used.
 _DEEP_PASS_OBJECTIVES = [
-    "Core fundamentals: revenue, profit, margins, EPS, balance sheet, growth trajectory.",
-    "Competitive position: market share, peer comparison, moat analysis, sector dynamics.",
-    "Risk assessment: regulatory risks, governance, key-man risk, sector headwinds, SEBI compliance.",
-    "Macro overlay: interest rate sensitivity, FX exposure, crude/commodity linkage, government policy impact.",
-    "Final synthesis: triangulate all prior findings, resolve contradictions, produce investment-grade thesis.",
+    # Pass 0 — Financials foundation
+    (
+        "Core financials: 5-year revenue CAGR, EBITDA margin trend, net profit margins, EPS growth, "
+        "free cash flow yield, return on capital employed (ROCE), debt-to-equity, interest coverage ratio, "
+        "working capital cycle. Source from Screener.in, NSE filings, annual reports."
+    ),
+    # Pass 1 — Competitive moat
+    (
+        "Competitive moat and market position: market share vs top 5 peers, pricing power evidence, "
+        "switching costs, network effects, proprietary IP or patents, brand valuation, client concentration "
+        "risk (top-10 clients as % of revenue), order-book or deal pipeline size and TCV."
+    ),
+    # Pass 2 — Management and governance
+    (
+        "Management quality and corporate governance: CEO/MD track record and tenure, promoter pledge "
+        "percentage and trend, related-party transactions (RPTs) and their materiality, board independence "
+        "ratio, auditor tenure and any qualifications, SEBI/stock-exchange show-cause notices or penalties, "
+        "insider buying/selling patterns over the last 12 months."
+    ),
+    # Pass 3 — Valuation
+    (
+        "Valuation deep-dive: trailing and forward P/E vs sector median, EV/EBITDA vs global peers, "
+        "PEG ratio, DCF implied price at WACC 10-12%, Graham number, price-to-free-cash-flow, "
+        "dividend yield and payout sustainability, analyst consensus target price and upside/downside."
+    ),
+    # Pass 4 — Risk and red flags
+    (
+        "Risk and red flag scan: regulatory investigations, pending litigation with financial exposure, "
+        "environmental/ESG controversies, customer attrition or large contract losses, forex hedging "
+        "policy and un-hedged exposure, commodity or input cost sensitivity, key-man dependency, "
+        "technology disruption risk, recent management exits, any going-concern qualifications."
+    ),
+    # Pass 5 — Macro and sector tailwinds/headwinds
+    (
+        "Macro and sector overlay: government policy tailwinds (PLI schemes, budget allocations, "
+        "infrastructure spend), RBI/interest-rate sensitivity, USD-INR impact on margins, crude oil "
+        "or energy cost linkage, global demand cycle for the sector, peer capex plans, new entrants "
+        "or foreign competition, import/export duties that affect the business model."
+    ),
+    # Pass 6 — Institutional and shareholding intelligence
+    (
+        "Shareholding and smart-money signals: latest FII/DII/promoter holding changes (QoQ), "
+        "mutual fund entry/exit (top AMFs buying or trimming), bulk and block deal activity, "
+        "promoter pledge creation or release, ESOP grants and dilution pipeline, ADR/GDR premium "
+        "or discount, short interest data from F&O segment if available."
+    ),
+    # Pass 7 — Hidden catalysts and growth drivers
+    (
+        "Hidden catalysts and growth optionality: new product lines or business segments under "
+        "development, M&A pipeline or recent acquisitions and integration status, geographic "
+        "expansion plans (new markets, international revenue mix), R&D pipeline and patent filings, "
+        "digital transformation initiatives, capacity expansion capex with expected COD dates, "
+        "recently-won mega-contracts or government tenders."
+    ),
+    # Pass 8 — News, sentiment and narrative
+    (
+        "Recent news, analyst commentary and market narrative: last 90-day earnings call key "
+        "management guidance, analyst upgrades/downgrades with reasoning, negative investigative "
+        "journalism or short-seller reports, Reddit/StockTwits retail sentiment trend, any "
+        "Hacker News / tech community mentions, social media buzz or viral concerns."
+    ),
+    # Pass 9 — Peer comparison deep-dive
+    (
+        "Peer comparison deep-dive: side-by-side financial metrics vs 4-6 named peers (revenue "
+        "growth, margins, valuation multiples, return ratios, debt levels), market-share trajectory "
+        "over 3 years, relative stock performance YTD and 3-year CAGR, who is gaining vs losing "
+        "share and why, pricing strategy differences, talent/attrition comparison if available."
+    ),
+    # Pass 10 — Capital allocation and future returns
+    (
+        "Capital allocation quality and future return potential: historical capex efficiency (asset "
+        "turns trend), dividend history and special dividend probability, buyback activity and "
+        "its accretive/dilutive impact, reinvestment rate and incremental ROCE, management's "
+        "stated capital allocation framework, balance sheet optionality (net cash or net debt), "
+        "potential for re-rating if key milestones are met."
+    ),
+    # Pass 11 (synthesis) — Investment-grade thesis
+    (
+        "Final synthesis: integrate all prior pass findings into a structured investment-grade "
+        "research report. Resolve any data contradictions. Produce: (1) executive summary with "
+        "clear bull/bear/base case, (2) key financial metrics dashboard, (3) top 5 risk factors "
+        "with probability/impact matrix, (4) competitive positioning verdict, (5) valuation "
+        "summary with price targets under each scenario, (6) recommended action with conviction "
+        "level (High/Medium/Low) and key monitorables."
+    ),
 ]
 
 
@@ -593,11 +732,17 @@ async def start_deep_research(req: DeepResearchRequest):
     raw_query = req.target.strip()
     target = primary_target_from_query(raw_query)
 
+    # ── Comparison detection for marathon ──────────────────────────────
+    is_comparison_query = _is_comparison(raw_query)
+    comparison_targets = _extract_comparison_targets(raw_query) if is_comparison_query else []
+    peer_targets_list = comparison_targets[1:] if len(comparison_targets) >= 2 else []
+
     async def _deep_runner() -> None:
         total_passes = req.passes
         completed_passes = 0
         started_at = asyncio.get_running_loop().time()
         chat_history = _MEMORY_MANAGER.get_history(req.user_email, master_session)
+        is_marathon = req.passes >= 8
         
         try:
             async def _run_pass(i: int) -> bool:
@@ -615,6 +760,9 @@ async def start_deep_research(req: DeepResearchRequest):
                 BUS.emit(master_session, "deep_pass", pass_number=i+1, total_passes=total_passes, objective=objective, status="running")
                 
                 pass_objective = f"{raw_query}\n\n{pass_label} - {objective}"
+                # For comparison queries, force comparison output mode on synthesis pass
+                effective_output_mode = "company_comparison" if (is_comparison_query and is_last) else ("deep_research_report" if is_last else None)
+
                 await run_research_session(
                     target,
                     pass_objective,
@@ -623,26 +771,31 @@ async def start_deep_research(req: DeepResearchRequest):
                         session_id=master_session,
                         auto_depth=False,
                         enable_memory=True,
-                        reflection_max_rounds=3,
-                        quality_threshold=65.0,
+                        reflection_max_rounds=(5 if is_last else (4 if is_marathon else 3)),
+                        quality_threshold=(72.0 if is_last else (68.0 if is_marathon else 65.0)),
+                        reflection_per_query_limit=(8 if is_last else 6),
+                        reflection_max_new_docs=(120 if is_last else 80),
                         synth_model="gpt-4o",
                         response_depth=("deep" if is_last else "standard"),
-                        output_mode=("deep_research_report" if is_last else None),
+                        output_mode=effective_output_mode,
                         emit_memo=is_last,
                         close_bus_on_finish=False,
                         chat_history=chat_history if (i == 0 or is_last) else None,
-                        breadth_search_timeout=180.0,
-                        followup_search_timeout=75.0,
-                        reflection_per_query_timeout=60.0,
-                        blindspot_per_query_timeout=50.0,
-                        news_timeout=45.0,
+                        breadth_search_timeout=(240.0 if is_marathon else 180.0),
+                        followup_search_timeout=(100.0 if is_marathon else 75.0),
+                        reflection_per_query_timeout=(75.0 if is_marathon else 60.0),
+                        blindspot_per_query_timeout=(60.0 if is_marathon else 50.0),
+                        news_timeout=(60.0 if is_marathon else 45.0),
+                        enable_blindspot=True,
+                        # ── Peer targets ensure synthesis fetches BOTH companies' enrichment
+                        peer_targets=peer_targets_list,
                     ),
                 )
                 
                 BUS.emit(master_session, "deep_pass", pass_number=i+1, total_passes=total_passes, objective=objective, status="done")
                 return True
 
-            # Phase 1: Run all enrichment/research passes in parallel (Marathon mode parallel pass execution)
+            # All enrichment passes parallel + final synthesis
             BUS.emit(master_session, "phase", phase="deep_research", note=f"Executing passes 1 to {total_passes-1} in parallel")
             parallel_tasks = [_run_pass(i) for i in range(total_passes - 1)]
             results = await asyncio.gather(*parallel_tasks, return_exceptions=True)
@@ -650,10 +803,8 @@ async def start_deep_research(req: DeepResearchRequest):
                 if res is True:
                     completed_passes += 1
             
-            # Brief pause to let memory sync (SQLite WAL handles it concurrently, but safe measure)
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(0.5)
             
-            # Phase 2: Run final synthesis pass serially
             if await _run_pass(total_passes - 1):
                 completed_passes += 1
             
@@ -698,9 +849,22 @@ def _mode_instruction(mode: str) -> str:
     """Return system-level instruction text based on analysis depth mode."""
     if mode == "marathon":
         return (
-            "User selected Marathon mode. Produce a full-scale research report: executive summary, "
-            "historical performance, moat analysis, management quality, valuation models, SEBI/regulatory "
-            "context, competition landscape, investor-grade risk assessment. Completeness over brevity."
+            "User selected Marathon mode. Produce a full-scale, investment-grade research report structured as follows:\n"
+            "1. EXECUTIVE SUMMARY — 3-sentence verdict with bull/bear/base case and conviction level.\n"
+            "2. BUSINESS OVERVIEW — business model, revenue segments, geography mix, key customers.\n"
+            "3. FINANCIAL DEEP-DIVE — 5-year trend tables for revenue, EBITDA, net profit, EPS, FCF, ROCE, D/E. "
+            "Include CAGR figures and margin trajectory commentary.\n"
+            "4. VALUATION — P/E, EV/EBITDA, P/FCF vs sector peers; DCF base-case implied price; analyst consensus.\n"
+            "5. COMPETITIVE MOAT — market share, switching costs, pricing power, top peer comparison table.\n"
+            "6. MANAGEMENT & GOVERNANCE — promoter track record, pledge %, RPTs, board quality, SEBI actions.\n"
+            "7. SHAREHOLDING INTELLIGENCE — FII/DII/promoter trend, smart-money signals, bulk/block deals.\n"
+            "8. GROWTH CATALYSTS — hidden optionality, new products, capex cycle, M&A, government tailwinds.\n"
+            "9. RISK MATRIX — top 5 risks with probability (H/M/L) and financial impact quantified where possible.\n"
+            "10. MACRO & SECTOR CONTEXT — policy tailwinds/headwinds, RBI rate sensitivity, commodity exposure.\n"
+            "11. INVESTMENT VERDICT — recommended action (Buy/Hold/Sell), price target range, key monitorables.\n"
+            "Rules: Use real numbers with source citations. Flag data gaps explicitly. "
+            "Prefer ₹ for Indian stocks. No vague phrases — every claim needs a number or a named source. "
+            "Completeness and factual accuracy over brevity."
         )
     return (
         "User selected Deep mode. Provide an in-depth but concise analysis covering ratios, sector context, "

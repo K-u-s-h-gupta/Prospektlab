@@ -178,13 +178,18 @@ def _parse_screener_html(html: str, symbol: str) -> IndiaCompanySnapshot | None:
     ratio_section = re.search(r'id=["\']top-ratios["\'].*?</ul>', html, re.DOTALL)
     if ratio_section:
         block = ratio_section.group(0)
-        snap.market_cap_cr  = _num(_find(r'Market\s+Cap.*?₹\s*([\d,]+)'))
-        snap.current_price  = _num(_find(r'Current\s+Price.*?₹\s*([\d,.]+)'))
-        snap.pe_ratio       = _num(_find(r'Stock\s+P/E.*?<span[^>]*>([\d.]+)'))
-        snap.book_value     = _num(_find(r'Book\s+Value.*?₹\s*([\d.]+)'))
-        snap.dividend_yield = _num(_find(r'Dividend\s+Yield.*?([\d.]+)\s*%'))
-        snap.roce           = _num(_find(r'ROCE.*?([\d.]+)\s*%'))
-        snap.roe            = _num(_find(r'ROE.*?([\d.]+)\s*%'))
+
+        def _find_block(pattern: str) -> str | None:
+            m = re.search(pattern, block, re.IGNORECASE | re.DOTALL)
+            return m.group(1).strip() if m else None
+
+        snap.market_cap_cr  = _num(_find_block(r'Market\s+Cap.*?₹\s*([\d,]+)'))
+        snap.current_price  = _num(_find_block(r'Current\s+Price.*?₹\s*([\d,.]+)'))
+        snap.pe_ratio       = _num(_find_block(r'Stock\s+P/E.*?<span[^>]*>([\d.]+)'))
+        snap.book_value     = _num(_find_block(r'Book\s+Value.*?₹\s*([\d.]+)'))
+        snap.dividend_yield = _num(_find_block(r'Dividend\s+Yield.*?([\d.]+)\s*%'))
+        snap.roce           = _num(_find_block(r'ROCE.*?([\d.]+)\s*%'))
+        snap.roe            = _num(_find_block(r'ROE.*?([\d.]+)\s*%'))
 
     # Shareholding from Screener
     snap.promoter_holding = _num(_find(r'Promoter Holding.*?([\d.]+)\s*%'))
@@ -220,10 +225,10 @@ async def _fetch_moneycontrol(symbol: str) -> IndiaCompanySnapshot | None:
     url = f"https://priceapi.moneycontrol.com/techCharts/indianMarket/stock/history?symbol={mc_sym}&resolution=1D&countback=5&currencyCode=INR"
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS_MC) as session:
-            async with session.get(url) as resp:
-                if resp.status_code != 200:
-                    return None
-                data = await resp.json(content_type=None)
+            resp = await session.get(url)
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
         return _parse_moneycontrol_json(data, symbol)
     except Exception as exc:
         logger.debug("moneycontrol fetch failed for %s: %s", symbol, exc)
@@ -257,12 +262,11 @@ async def _fetch_nse(symbol: str) -> IndiaCompanySnapshot | None:
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as session:
             # Seed cookies with a homepage visit
-            async with session.get("https://www.nseindia.com", headers=_HEADERS_NSE) as _:
-                pass
-            async with session.get(quote_url, headers=_HEADERS_NSE) as resp:
-                if resp.status_code != 200:
-                    return None
-                data = await resp.json(content_type=None)
+            await session.get("https://www.nseindia.com", headers=_HEADERS_NSE)
+            resp = await session.get(quote_url, headers=_HEADERS_NSE)
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
         return _parse_nse_json(data, symbol)
     except Exception as exc:
         logger.debug("NSE fetch failed for %s: %s", symbol, exc)
@@ -318,10 +322,10 @@ async def _fetch_bse(symbol: str) -> IndiaCompanySnapshot | None:
     url = f"https://api.bseindia.com/BseIndiaAPI/api/getScripHeaderData/w?Debtflag=&scripcode={scrip}&seriesid="
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS_MC) as session:
-            async with session.get(url) as resp:
-                if resp.status_code != 200:
-                    return None
-                data = await resp.json(content_type=None)
+            resp = await session.get(url)
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
         return _parse_bse_json(data, symbol, scrip)
     except Exception as exc:
         logger.debug("BSE fetch failed for %s: %s", symbol, exc)
@@ -367,15 +371,14 @@ async def fetch_shareholding_pattern(symbol: str) -> dict | None:
     url = f"https://www.nseindia.com/api/corporate-share-holdings-master?index=shareHolding&symbol={symbol.upper()}&csvVal=1"
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as session:
-            async with session.get("https://www.nseindia.com", headers=_HEADERS_NSE) as _:
-                pass
-            async with session.get(url, headers=_HEADERS_NSE) as resp:
-                if resp.status_code == 200:
-                    data = await resp.json(content_type=None)
-                    holding = _parse_nse_shareholding(data)
-                    if holding:
-                        cache_set("shareholding", symbol, holding, "shareholding")
-                        return holding
+            await session.get("https://www.nseindia.com", headers=_HEADERS_NSE)
+            resp = await session.get(url, headers=_HEADERS_NSE)
+            if resp.status_code == 200:
+                data = resp.json()
+                holding = _parse_nse_shareholding(data)
+                if holding:
+                    cache_set("shareholding", symbol, holding, "shareholding")
+                    return holding
     except Exception as exc:
         logger.debug("NSE shareholding failed for %s: %s", symbol, exc)
 

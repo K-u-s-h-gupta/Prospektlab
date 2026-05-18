@@ -17,6 +17,46 @@ from collections import Counter
 from finagent.agents.base import AgentTaskResult, BaseSubAgent, Finding, SubAgentContext, search_and_dedupe
 
 
+# Static sector hints for well-known Indian companies so that peer queries
+# are meaningful even when the live india_snap.industry field is blank.
+_STATIC_SECTOR_HINTS: dict[str, str] = {
+    "tcs": "information technology services India",
+    "tata consultancy services": "information technology services India",
+    "infosys": "information technology services India",
+    "wipro": "information technology services India",
+    "hcltech": "information technology services India",
+    "techm": "information technology services India",
+    "ltimindtree": "information technology services India",
+    "mphasis": "information technology services India",
+    "reliance": "oil gas telecom conglomerate India",
+    "hdfcbank": "private sector bank India",
+    "icicibank": "private sector bank India",
+    "kotakbank": "private sector bank India",
+    "axisbank": "private sector bank India",
+    "sbin": "public sector bank India",
+    "bajfinance": "NBFC consumer finance India",
+    "bajajfinsv": "financial services NBFC India",
+    "maruti": "automobile passenger cars India",
+    "tatamotors": "automobile commercial vehicles India",
+    "sunpharma": "pharmaceuticals India",
+    "drreddy": "pharmaceuticals generics India",
+    "bhartiartl": "telecom mobile broadband India",
+    "ongc": "oil gas upstream India",
+    "ntpc": "power generation electricity India",
+    "adanient": "infrastructure ports energy India",
+    "ltfoods": "FMCG food products India",
+    "itc": "FMCG cigarettes hotels India",
+    "hindunilvr": "FMCG consumer goods India",
+    "nestleind": "FMCG packaged foods India",
+    "asianpaint": "paints decorative India",
+    "titan": "jewellery watches retail India",
+    "tatasteel": "steel metals India",
+    "jswsteel": "steel metals India",
+    "ultracemco": "cement construction India",
+    "grasim": "cement chemicals India",
+}
+
+
 # Words to never count as competitors
 _STOPWORDS = {
     "the", "and", "for", "with", "this", "that", "their", "they", "from",
@@ -55,7 +95,12 @@ class CompetitorAgent(BaseSubAgent):
     async def execute(self, ctx: SubAgentContext) -> AgentTaskResult:
         out = AgentTaskResult(agent_name=self.name)
         sec = ctx.bundle.sec if ctx.bundle else None
+        # Prefer live industry from the India snapshot; fall back to the static
+        # map so peer queries always have meaningful sector context.
         sector_hint = (sec.sic_description if sec and sec.sic_description else "").strip()
+        if not sector_hint:
+            label_key = (ctx.canonical_label or "").lower().strip()
+            sector_hint = _STATIC_SECTOR_HINTS.get(label_key, "")
 
         queries = [
             f"top competitors of {ctx.canonical_label} {sector_hint}".strip(),

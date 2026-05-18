@@ -272,6 +272,51 @@ async def _search_bing(query: str, *, max_results: int) -> list[tuple[str, str]]
     return out
 
 
+async def _search_tavily(query: str, *, max_results: int) -> list[tuple[str, str, str]]:
+    """Search via Tavily API — returns (url, title, snippet) tuples.
+
+    Returns empty list if TAVILY_API_KEY is not set or the package is unavailable.
+    Tavily results include pre-extracted snippets so we skip the full HTML fetch
+    for these and construct ScrapedDocs directly from the API response.
+    """
+    key = os.environ.get("TAVILY_API_KEY", "")
+    if not key:
+        return []
+    try:
+        from tavily import TavilyClient
+        client = TavilyClient(api_key=key)
+        resp = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: client.search(
+                query,
+                max_results=max_results,
+                search_depth="advanced",
+                include_answer=False,
+            ),
+        )
+        results = resp.get("results", []) if isinstance(resp, dict) else []
+        return [(r.get("url", ""), r.get("title", ""), r.get("content", "")) for r in results if r.get("url")]
+    except Exception as exc:
+        logger.debug("Tavily search failed for %r: %s", query, exc)
+        return []
+
+
+def _tavily_to_scraped_doc(url: str, title: str, snippet: str) -> ScrapedDoc:
+    domain = _domain_of(url)
+    return ScrapedDoc(
+        url=url,
+        final_url=url,
+        domain=domain,
+        tier=_tier_for(domain),
+        title=title[:300],
+        excerpt=snippet[:600],
+        text_len=len(snippet),
+        status=200,
+        blocked_reason=None,
+        via="tavily",
+    )
+
+
 async def search_web(
     query: str,
     *,
@@ -280,25 +325,42 @@ async def search_web(
     entity: ResolvedEntity | None = None,
     query_cache: dict[str, list[ScrapedDoc]] | None = None,
 ) -> list[ScrapedDoc]:
-    """Multi-backend search: DuckDuckGo + Bing in parallel, dedup, then
-    fetch+parse the top N. Falls back gracefully when one backend fails.
+    """Multi-backend search: Tavily (primary) + DuckDuckGo + Bing (fallback),
+    dedup, then fetch+parse the top N. Falls back gracefully when one backend fails.
+    Tavily provides pre-extracted content so full HTML fetching is skipped for
+    those results, making search significantly faster when the key is configured.
     """
     if query_cache is not None and query in query_cache:
         return query_cache[query]
 
-    # Pull a wider raw list from each backend so the merged top-N is
-    # actually diverse, not just the first 5 from whichever returned first.
     raw_target = max(max_results * 3, 12)
-    ddg_task = asyncio.create_task(_search_ddg(query, max_results=raw_target))
-    bing_task = asyncio.create_task(_search_bing(query, max_results=raw_target))
-    ddg_raw, bing_raw = await asyncio.gather(ddg_task, bing_task, return_exceptions=True)
-    ddg_results = [] if isinstance(ddg_raw, Exception) else ddg_raw
-    bing_results = [] if isinstance(bing_raw, Exception) else bing_raw
 
+    # Run all three backends concurrently
+    tavily_task = asyncio.create_task(_search_tavily(query, max_results=raw_target))
+    ddg_task    = asyncio.create_task(_search_ddg(query, max_results=raw_target))
+    bing_task   = asyncio.create_task(_search_bing(query, max_results=raw_target))
+    tavily_raw, ddg_raw, bing_raw = await asyncio.gather(
+        tavily_task, ddg_task, bing_task, return_exceptions=True
+    )
+    tavily_results = [] if isinstance(tavily_raw, Exception) else tavily_raw
+    ddg_results    = [] if isinstance(ddg_raw, Exception) else ddg_raw
+    bing_results   = [] if isinstance(bing_raw, Exception) else bing_raw
+
+    # Build merged list — Tavily results go first (pre-ranked, higher quality)
     merged: list[tuple[str, str]] = []
+    tavily_snippets: dict[str, str] = {}
     seen: set[str] = set()
-    # Interleave so both engines contribute to the top of the list rather
-    # than DDG monopolising it.
+
+    for url, title, snippet in tavily_results:
+        key = url.split("#", 1)[0]
+        if key not in seen:
+            seen.add(key)
+            merged.append((url, title))
+            tavily_snippets[url] = snippet
+        if len(merged) >= max_results:
+            break
+
+    # Fill remaining slots from DDG + Bing interleaved
     for pair in _zip_longest_pairs(ddg_results, bing_results):
         for href, title in pair:
             if not href:
@@ -308,8 +370,6 @@ async def search_web(
                 continue
             seen.add(key)
             merged.append((href, title))
-            if len(merged) >= max_results:
-                break
         if len(merged) >= max_results:
             break
 
@@ -319,6 +379,11 @@ async def search_web(
     title_by_url = {h: t for h, t in merged}
 
     async def _enriched_fetch(target_url: str) -> ScrapedDoc:
+        # If Tavily already returned a snippet, skip full HTML fetch
+        if target_url in tavily_snippets:
+            return _tavily_to_scraped_doc(
+                target_url, title_by_url.get(target_url, ""), tavily_snippets[target_url]
+            )
         doc = await fetch_and_parse(target_url)
         fallback_title = title_by_url.get(target_url, "")
         if (not doc.title or doc.status >= 400 or doc.blocked_reason) and fallback_title:

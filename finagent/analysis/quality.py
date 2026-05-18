@@ -104,11 +104,24 @@ def score_research(
     has_sec = bool(bundle and bundle.sec is not None)
     has_yahoo = bool(bundle and bundle.yahoo is not None)
     has_wiki = bool(bundle and bundle.wikipedia is not None)
+    # For Indian companies, the local India snapshot plays the role of SEC data.
+    has_india_snap = bool(
+        not is_us_like
+        and bundle
+        and getattr(bundle, "india_snap", None) is not None
+    )
+    # The "structured data" flag unifies SEC (US) and India-snap (IN) for scoring
+    has_structured = has_sec if is_us_like else has_india_snap
 
     yahoo = getattr(bundle, "yahoo", None) if bundle else None
     yahoo_metrics = dict(getattr(yahoo, "financial_metrics", {}) or {})
     yahoo_rev_years = len(getattr(yahoo, "annual_revenue", []) or [])
     yahoo_ni_years = len(getattr(yahoo, "annual_net_income", []) or [])
+
+    # India snap metrics supplement Yahoo when Yahoo is rate-limited
+    india_snap = getattr(bundle, "india_snap", None) if bundle else None
+    india_metrics = dict(getattr(india_snap, "metrics", {}) or {}) if (has_india_snap and india_snap) else {}
+
     metrics_target = 6 if is_us_like else 4
     history_target = 5 if is_us_like else 4
     press_headline_target = 4 if is_us_like else 3
@@ -125,9 +138,10 @@ def score_research(
         id_detail = f"sec={has_sec} yahoo={has_yahoo} wiki={has_wiki}"
         id_gap = "Canonical entity not fully resolved across SEC + Yahoo + Wikipedia."
     else:
-        id_score = (has_yahoo * 0.7) + (has_wiki * 0.2) + (has_sec * 0.1)
+        # For India: india_snap is the primary source; Yahoo and Wikipedia supplement
+        id_score = (has_india_snap * 0.5) + (has_yahoo * 0.3) + (has_wiki * 0.2)
         id_ok = id_score >= 0.5
-        id_detail = f"market_entity={country_code} yahoo={has_yahoo} wiki={has_wiki} sec={has_sec}"
+        id_detail = f"india_snap={has_india_snap} yahoo={has_yahoo} wiki={has_wiki}"
         id_gap = "Canonical entity not fully resolved across local-market sources + Yahoo/Wikipedia."
     rep.dimensions["identity"] = {
         "weight": _WEIGHTS["identity"],
@@ -139,8 +153,8 @@ def score_research(
     if not id_ok:
         rep.gaps.append(id_gap)
 
-    # Financials
-    if has_sec:
+    # Financials — combine India snap metrics + Yahoo metrics for non-US
+    if is_us_like and has_sec:
         metrics_n = len((bundle.sec.metrics if has_sec else {}) or {})
         fin_detail = f"{metrics_n} SEC concept metrics resolved"
         fin_queries = [
@@ -148,13 +162,16 @@ def score_research(
             f"{target} annual report fiscal year financial highlights",
         ]
     else:
-        metrics_n = len(yahoo_metrics)
-        fin_detail = f"{metrics_n} Yahoo/local-market financial metrics resolved"
+        # For India: merge india_snap metrics (P/E, ROE, ROCE, etc.) with Yahoo metrics
+        combined_metrics = {**india_metrics, **yahoo_metrics}
+        metrics_n = len(combined_metrics)
+        fin_detail = f"{metrics_n} metrics resolved (india_snap={len(india_metrics)}, yahoo={len(yahoo_metrics)})"
         fin_queries = [
-            f"{target} annual report investor presentation revenue margin debt",
-            f"{target} quarterly results financial highlights",
+            f"{target} screener.in annual report revenue EBITDA margin ROE",
+            f"{target} NSE quarterly results financial highlights ROCE",
+            f"{target} Moneycontrol financials balance sheet debt equity",
         ]
-    fin_ratio = min(1.0, metrics_n / float(max(metrics_target, 6)))
+    fin_ratio = min(1.0, metrics_n / float(max(metrics_target, 4)))
     rep.dimensions["financials"] = {
         "weight": _WEIGHTS["financials"],
         "ratio": round(fin_ratio, 2),
@@ -167,13 +184,18 @@ def score_research(
         rep.suggested_queries.extend(fin_queries)
 
     # History
-    if has_sec:
+    if is_us_like and has_sec:
         sec_history = (bundle.sec.history if has_sec else {}) or {}
         rev_years = _annual_len(sec_history, "revenue")
         ni_years = _annual_len(sec_history, "net_income")
     else:
+        # India: use Yahoo history; Screener quarterly data provides additional context
         rev_years = yahoo_rev_years
         ni_years = yahoo_ni_years
+        if has_india_snap and india_snap:
+            qr = len(getattr(india_snap, "quarterly_revenue", []) or [])
+            if qr > 0 and rev_years == 0:
+                rev_years = qr // 4  # approximate annual years from quarterly data
     history_target_total = max(history_target * 2, 8)
     h_ratio = min(1.0, (rev_years + ni_years) / float(history_target_total))
     rep.dimensions["history"] = {
@@ -186,10 +208,18 @@ def score_research(
     if not (rev_years >= history_target and ni_years >= history_target):
         rep.gaps.append(f"Multi-year history thin (rev={rev_years}, ni={ni_years}).")
 
-    # Filing narrative
+    # Filing narrative — check both SEC filing (US) and SEBI/Trendlyne filing (India)
     fil = bundle.filing if bundle else None
-    has_risks = bool(fil and getattr(fil, "risk_factors", None))
-    has_mdna = bool(fil and getattr(fil, "mdna", None))
+    sebi_fil = getattr(bundle, "sebi_filing", None) if bundle else None
+    has_risks = bool(
+        (fil and getattr(fil, "risk_factors", None))
+        or (sebi_fil and getattr(sebi_fil, "risk_factors", None))
+    )
+    has_mdna = bool(
+        (fil and getattr(fil, "mdna", None))
+        or (sebi_fil and getattr(sebi_fil, "management_discussion", None))
+        or (sebi_fil and getattr(sebi_fil, "financial_summary", None))
+    )
     if is_us_like:
         fn_ratio = (0.5 * has_risks) + (0.5 * has_mdna)
         fn_ok = has_risks and has_mdna
@@ -289,9 +319,9 @@ def score_research(
     if n_primary < primary_target:
         rep.gaps.append("Tier-1 (primary) citations under-represented.")
         if is_us_like:
-            rep.suggested_queries.append(f"{target} annual report BSE NSE exchange filing")
+            rep.suggested_queries.append(f"{target} investor relations annual report SEC 10-K filing")
         else:
-            rep.suggested_queries.append(f"{target} investor relations annual report")
+            rep.suggested_queries.append(f"{target} annual report BSE NSE screener.in exchange filing")
 
     # Conflicts
     conf_ran = conflicts is not None

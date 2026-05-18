@@ -23,27 +23,39 @@
       theme: {
         extend: {
           colors: {
-            background: "#0b1326",
-            "on-surface": "#dae2fd",
-            "on-surface-variant": "#c2c6d6",
-            "surface": "#0b1326",
-            "surface-container-lowest": "#060e20",
-            "surface-container-low": "#131b2e",
-            "surface-container": "#171f33",
-            "surface-container-high": "#222a3d",
-            "surface-container-highest": "#2d3449",
-            "surface-bright": "#31394d",
-            "surface-variant": "#2d3449",
-            "outline": "#8c909f",
-            "outline-variant": "#424754",
-            "primary": "#adc6ff",
-            "primary-fixed-dim": "#adc6ff",
-            "primary-container": "#1e3a8a",
-            "secondary": "#b7c8e1",
-            "tertiary": "#bcc7de",
-            "error": "#ffb4ab",
-            "success": "#6ee7b7",
+            // ── MINIMALIST DARK PALETTE ─────────────────────────────────
+            // Pure neutrals only. Single accent (primary). Functional states.
+            background: "#09090b",
+            surface: "#09090b",
+            "surface-1": "#0c0c0e",
+            "surface-2": "#111114",
+            "surface-3": "#17171a",
+            "surface-4": "#202024",
+            "on-surface": "#fafafa",
+            "on-surface-variant": "#a1a1aa",
+            "outline": "#71717a",
+            "outline-variant": "#27272a",
+            // Legacy aliases — preserved so existing render fns keep working
+            "surface-container-lowest": "#09090b",
+            "surface-container-low": "#0c0c0e",
+            "surface-container": "#111114",
+            "surface-container-high": "#17171a",
+            "surface-container-highest": "#202024",
+            "surface-bright": "#27272a",
+            "surface-variant": "#17171a",
+            // Single accent — soft white-blue
+            "primary": "#e4e4e7",
+            "primary-fixed-dim": "#e4e4e7",
+            "primary-container": "#3f3f46",
+            "secondary": "#a1a1aa",
+            "tertiary": "#71717a",
+            // Functional state colors (muted, not saturated)
+            "error": "#f87171",
+            "success": "#4ade80",
             "warn": "#fbbf24",
+            // Mode-distinct accents
+            "research": "#60a5fa",
+            "marathon": "#a78bfa",
           },
           fontFamily: {
             inter: ["Inter", "sans-serif"],
@@ -54,173 +66,911 @@
     };
   </script>
   <style>
-    html,
-    body {
-      background: #0f1115;
-      color: #d1d5db;
-      font-family: -apple-system, system-ui, sans-serif;
-      overflow: hidden;
+    /* ═══════════════════════════════════════════════════════════════════
+       MINIMALIST DARK · DESIGN TOKENS
+       ───────────────────────────────────────────────────────────────────
+       Pure black-neutral palette. Single accent. Functional state colors.
+       Every surface, border, and motion is intentional.
+       ═══════════════════════════════════════════════════════════════════ */
+    :root {
+      --bg: #09090b;
+      --surface-1: #0c0c0e;
+      --surface-2: #111114;
+      --surface-3: #17171a;
+      --surface-4: #202024;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-strong: rgba(255, 255, 255, 0.12);
+      --text: #fafafa;
+      --text-muted: #a1a1aa;
+      --text-faint: #52525b;
+      --accent: #e4e4e7;
+      --research: #60a5fa;
+      --marathon: #a78bfa;
+      --success: #4ade80;
+      --error: #f87171;
+      --warn: #fbbf24;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    /* Merged Teammate UI Styles */
-    .metric-card {
-      border-radius: 0.5rem;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(30, 41, 59, 0.4);
-      padding: 1rem;
-      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-      transition: box-shadow 0.2s;
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", -apple-system, system-ui, sans-serif;
+      font-feature-settings: "cv11", "ss01";
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
-    .metric-card:hover {
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+
+    /* ═══ MOTION ════════════════════════════════════════════════════════ */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-    .metric-grid {
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
-    .gradient-text {
-      background: linear-gradient(to right, #3b82f6, #14b8a6);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.4); }
+      70% { box-shadow: 0 0 0 12px rgba(248, 113, 113, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0); }
     }
     @keyframes orbit-pulse {
       0% { transform: scale(1); opacity: 0.75; }
       70% { transform: scale(1.45); opacity: 0; }
       100% { transform: scale(1.45); opacity: 0; }
     }
-    @keyframes shimmer {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
+    @keyframes dotblink {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 1; }
     }
-    .animate-shimmer {
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+    @keyframes thinking-dot {
+      0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
+      40% { opacity: 1; transform: translateY(-3px); }
+    }
+    @keyframes research-wave {
+      0%, 100% { transform: scaleY(0.4); }
+      50% { transform: scaleY(1); }
+    }
+    @keyframes marathon-orbit {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes marathon-pulse-ring {
+      0% { transform: scale(0.85); opacity: 0.7; }
+      50% { transform: scale(1.15); opacity: 0.3; }
+      100% { transform: scale(0.85); opacity: 0.7; }
+    }
+    @keyframes gradient-shift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .anim-fade-up { animation: fadeUp 0.4s var(--ease) both; }
+    .anim-fade-in { animation: fadeIn 0.3s var(--ease) both; }
+    .anim-slide-down { animation: slideDown 0.25s var(--ease) both; }
+    .anim-scale-in { animation: scaleIn 0.3s var(--ease) both; }
+    .anim-in { animation: fadeUp 0.35s var(--ease) both; }
+
+    /* ═══ RESEARCH MODE LOADING ════════════════════════════════════════ */
+    .research-loader {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 20px;
+      padding: 0 4px;
+    }
+    .research-loader .bar {
+      width: 3px;
+      border-radius: 2px;
+      background: var(--research);
+      animation: research-wave 1s ease-in-out infinite;
+    }
+    .research-loader .bar:nth-child(1) { height: 60%; animation-delay: 0s; }
+    .research-loader .bar:nth-child(2) { height: 80%; animation-delay: 0.12s; }
+    .research-loader .bar:nth-child(3) { height: 100%; animation-delay: 0.24s; }
+    .research-loader .bar:nth-child(4) { height: 70%; animation-delay: 0.36s; }
+    .research-loader .bar:nth-child(5) { height: 50%; animation-delay: 0.48s; }
+
+    /* ═══ MARATHON MODE LOADING ════════════════════════════════════════ */
+    .marathon-loader {
+      position: relative;
+      width: 36px;
+      height: 36px;
+    }
+    .marathon-loader .orbit {
+      position: absolute;
+      inset: 0;
+      border: 2px solid transparent;
+      border-top-color: var(--marathon);
+      border-radius: 50%;
+      animation: marathon-orbit 1.5s linear infinite;
+    }
+    .marathon-loader .orbit:nth-child(2) {
+      inset: 4px;
+      border-top-color: rgba(167,139,250,0.4);
+      animation-duration: 2.2s;
+      animation-direction: reverse;
+    }
+    .marathon-loader .core {
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 8px; height: 8px;
+      margin: -4px 0 0 -4px;
+      background: var(--marathon);
+      border-radius: 50%;
+      animation: marathon-pulse-ring 2s ease-in-out infinite;
+    }
+
+    /* ═══ INLINE PROGRESS (inside chat turn) ═══════════════════════════ */
+    .turn-progress {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin-bottom: 12px;
+      animation: fadeUp 0.3s var(--ease) both;
+    }
+    .turn-progress-text {
+      flex: 1;
+      min-width: 0;
+    }
+    .turn-progress-phase {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .turn-progress-detail {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+    .turn-progress-bar {
+      width: 100%;
+      height: 2px;
+      background: var(--surface-4);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .turn-progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 2px;
+      transition: width 0.6s var(--ease);
+    }
+    .turn-progress-fill.research { background: linear-gradient(90deg, var(--research), #93c5fd); background-size: 200% 100%; animation: gradient-shift 2s ease infinite; }
+    .turn-progress-fill.marathon { background: linear-gradient(90deg, var(--marathon), #c4b5fd); background-size: 200% 100%; animation: gradient-shift 2s ease infinite; }
+
+    /* ═══ SKELETON / SHIMMER LOADING ════════════════════════════════════ */
+    .skeleton {
+      background: linear-gradient(90deg,
+        rgba(255,255,255,0.02) 0%,
+        rgba(255,255,255,0.06) 50%,
+        rgba(255,255,255,0.02) 100%);
       background-size: 200% 100%;
-      animation: shimmer 2.4s linear infinite;
+      animation: shimmer 1.8s linear infinite;
+      border-radius: 6px;
     }
-    .animate-orbit-pulse {
-      animation: orbit-pulse 1.7s ease-out infinite;
+    .skeleton-line { height: 14px; margin: 8px 0; border-radius: 4px; }
+    .skeleton-line.w-90 { width: 90%; }
+    .skeleton-line.w-75 { width: 75%; }
+    .skeleton-line.w-60 { width: 60%; }
+    .skeleton-line.w-40 { width: 40%; }
+    .animate-shimmer {
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+      background-size: 200% 100%;
+      animation: shimmer 2s linear infinite;
     }
+    .animate-orbit-pulse { animation: orbit-pulse 1.7s ease-out infinite; }
+
+    /* ═══ TYPOGRAPHY ════════════════════════════════════════════════════ */
+    .label-mono {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 10px;
+      font-weight: 500;
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #fafafa 0%, #71717a 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+    }
+
+    /* ═══ SCROLLBARS ════════════════════════════════════════════════════ */
+    .scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+    .scroll-thin::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 3px;
+    }
+    .scroll-thin::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    /* ═══ MODE SELECTOR ═════════════════════════════════════════════════ */
+    .mode-pill-container {
+      position: relative;
+      display: inline-flex;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px;
+      gap: 0;
+    }
+    .mode-pill-indicator {
+      position: absolute;
+      top: 3px;
+      bottom: 3px;
+      left: 3px;
+      width: calc(50% - 3px);
+      background: var(--surface-4);
+      border-radius: 999px;
+      transition: transform 0.35s var(--ease), background 0.25s var(--ease);
+      z-index: 0;
+    }
+    .mode-pill-container[data-mode="marathon"] .mode-pill-indicator {
+      transform: translateX(100%);
+      background: linear-gradient(135deg, rgba(167,139,250,0.18), rgba(167,139,250,0.08));
+      box-shadow: 0 0 0 1px rgba(167,139,250,0.25);
+    }
+    .mode-pill-container[data-mode="deep"] .mode-pill-indicator {
+      background: linear-gradient(135deg, rgba(96,165,250,0.18), rgba(96,165,250,0.08));
+      box-shadow: 0 0 0 1px rgba(96,165,250,0.25);
+    }
+    .mode-pill {
+      position: relative;
+      z-index: 1;
+      padding: 6px 16px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 999px;
+      transition: color 0.25s var(--ease);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      border: none;
+    }
+    .mode-pill.active { color: var(--text); }
+    .mode-pill .material-symbols-outlined { font-size: 14px; }
+
+    /* ═══ STOP / ABORT BUTTON ═══════════════════════════════════════════ */
+    .abort-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: rgba(248, 113, 113, 0.08);
+      color: var(--error);
+      border: 1px solid rgba(248, 113, 113, 0.25);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: all 0.2s var(--ease);
+      animation: pulse-ring 2s infinite;
+    }
+    .abort-btn:hover {
+      background: rgba(248, 113, 113, 0.15);
+      border-color: rgba(248, 113, 113, 0.45);
+    }
+    .abort-btn .material-symbols-outlined { font-size: 14px; }
+    .abort-btn .stop-square {
+      width: 8px;
+      height: 8px;
+      background: var(--error);
+      border-radius: 1.5px;
+    }
+
+    /* ═══ INPUT BAR ═════════════════════════════════════════════════════ */
+    .input-shell {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px 16px;
+      transition: border-color 0.25s var(--ease), background 0.25s var(--ease);
+    }
+    .input-shell:focus-within {
+      border-color: var(--border-strong);
+      background: var(--surface-3);
+    }
+    .input-shell input {
+      width: 100%;
+      background: transparent;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      border: none;
+      font-family: inherit;
+    }
+    .input-shell input::placeholder { color: var(--text-faint); }
+
+    /* ═══ EXECUTE BUTTON ═══════════════════════════════════════════════ */
+    .execute-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: var(--text);
+      color: var(--bg);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: all 0.2s var(--ease);
+      border: none;
+    }
+    .execute-btn:hover { background: #d4d4d8; transform: translateY(-1px); }
+    .execute-btn:active { transform: translateY(0); }
+    .execute-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .execute-btn .material-symbols-outlined { font-size: 14px; }
+
+    /* ═══ CHAT BUBBLES ══════════════════════════════════════════════════ */
+    .stream-cursor::after {
+      content: "▊";
+      color: var(--text-muted);
+      animation: dotblink 0.9s steps(2) infinite;
+      margin-left: 2px;
+      font-weight: 100;
+    }
+    .hidden { display: none !important; }
+
+    .chat-thread {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+    .chat-turn {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      animation: fadeUp 0.4s var(--ease) both;
+    }
+    .chat-row { display: flex; width: 100%; }
+    .chat-row.user { justify-content: flex-end; }
+    .chat-row.assistant { justify-content: flex-start; }
+
+    .user-bubble {
+      max-width: min(560px, 78%);
+      background: var(--surface-3);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 13.5px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+
+    .assistant-card {
+      width: 100%;
+      max-width: 800px;
+      color: var(--text);
+    }
+
+    /* ═══ THINKING / LOADING INDICATOR ══════════════════════════════════ */
+    .thinking-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+    }
+    .thinking-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: thinking-dot 1.4s infinite ease-in-out both;
+    }
+    .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+    .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+
+    /* ═══ PROGRESS BAR (minimalist line) ════════════════════════════════ */
+    .progress-track {
+      height: 2px;
+      background: var(--surface-3);
+      overflow: hidden;
+      border-radius: 999px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--text);
+      width: 0%;
+      transition: width 0.6s var(--ease), background 0.3s var(--ease);
+    }
+    .progress-fill.research-mode { background: linear-gradient(90deg, var(--research), #93c5fd); }
+    .progress-fill.marathon-mode { background: linear-gradient(90deg, var(--marathon), #c4b5fd); }
+
+    /* ═══ INLINE COMPONENTS (charts, cards, etc) ════════════════════════ */
+    .analysis-panel {
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 18px;
+      animation: scaleIn 0.4s var(--ease) both;
+    }
+    .chart-box {
+      min-height: 200px;
+      background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+    .chart-box::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+    }
+    .chart-tooltip {
+      position: absolute;
+      pointer-events: none;
+      display: none;
+      background: var(--surface-4);
+      border: 1px solid var(--border-strong);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 6px 9px;
+      font-size: 11px;
+      z-index: 10;
+      font-family: "JetBrains Mono", monospace;
+    }
+    .chart-tooltip.visible { display: block; }
+
+    .visual-dashboard {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 4px 0 12px;
+    }
+
+    /* ═══ METRIC CARDS ══════════════════════════════════════════════════ */
+    .metric-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+      gap: 10px;
+    }
+    .metric-card {
+      background: linear-gradient(145deg, var(--surface-2), var(--surface-1));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 18px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.25s var(--ease), transform 0.25s var(--ease), background 0.25s var(--ease), box-shadow 0.25s var(--ease);
+      animation: fadeUp 0.45s var(--ease) both;
+    }
+    .metric-card:hover {
+      border-color: var(--border-strong);
+      background: linear-gradient(145deg, var(--surface-3), var(--surface-2));
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    }
+    .metric-card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+    }
+    .metric-card-accent {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      border-radius: 12px 12px 0 0;
+    }
+    .metric-card-icon {
+      width: 26px; height: 26px;
+      border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .metric-label {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+    }
+    .metric-value {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+    .metric-change {
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: 4px;
+      font-family: "JetBrains Mono", monospace;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .metric-sparkline { margin-top: 10px; opacity: 0.7; }
+
+    /* ═══ CLAUDE CARD WRAPPER ═══════════════════════════════════════════ */
+    .claude-card {
+      background: linear-gradient(180deg, rgba(17,17,20,0.9), rgba(12,12,14,0.95));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px;
+      margin-bottom: 16px;
+      animation: scaleIn 0.35s var(--ease) both;
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(8px);
+    }
+    .claude-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent 10%, rgba(255,255,255,0.08), transparent 90%);
+    }
+    .claude-header {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* ═══ CHART CONTAINERS ══════════════════════════════════════════════ */
+    .chart-container-native {
+      position: relative;
+      height: 260px;
+      width: 100%;
+      margin-top: 8px;
+    }
+    .chart-type-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 20px; padding: 2px 8px;
+      font-size: 10px; font-family: "JetBrains Mono", monospace;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em;
+    }
+
+    /* ═══ COMPARISON V2 ═════════════════════════════════════════════════ */
+    .comp-scoreboard {
+      display: grid;
+      grid-template-columns: 1fr 44px 1fr;
+      gap: 12px;
+      align-items: stretch;
+      margin-bottom: 16px;
+    }
+    .comp-hero {
+      background: linear-gradient(145deg, var(--surface-2), var(--surface-1));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px 24px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.35s var(--ease);
+    }
+    .comp-hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .comp-hero::after {
+      content: '';
+      position: absolute;
+      bottom: -40px; right: -40px;
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      opacity: 0.04;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .comp-hero:hover::after { opacity: 0.08; }
+    .comp-hero.winner {
+      border-color: rgba(110,231,183,0.4);
+      background: linear-gradient(145deg, rgba(110,231,183,0.08) 0%, rgba(110,231,183,0.02) 40%, var(--surface-2) 100%);
+      box-shadow: 0 4px 20px rgba(110,231,183,0.08);
+    }
+    .comp-hero.winner::after { background: #6ee7b7; opacity: 0.06; }
+    .comp-hero.loser { opacity: 0.72; }
+    .comp-hero-color-bar {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      border-radius: 14px 14px 0 0;
+    }
+    .comp-hero-name {
+      font-size: 15px; font-weight: 600;
+      letter-spacing: -0.01em; color: var(--text);
+      margin-bottom: 2px;
+    }
+    .comp-hero-subtitle {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px; color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+    .comp-score-number {
+      font-size: 40px; font-weight: 700; line-height: 1;
+      font-family: "JetBrains Mono", monospace;
+      letter-spacing: -0.04em;
+    }
+    .comp-score-unit {
+      font-size: 11px; font-family: "JetBrains Mono", monospace;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-muted); margin-top: 3px;
+    }
+    .comp-winner-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(110,231,183,0.1);
+      border: 1px solid rgba(110,231,183,0.28);
+      border-radius: 20px; padding: 3px 9px;
+      font-size: 10px; font-family: "JetBrains Mono", monospace;
+      color: var(--success); text-transform: uppercase;
+      letter-spacing: 0.07em; margin-top: 10px;
+      animation: fadeUp 0.5s 0.3s var(--ease) both;
+    }
+    .comp-vs-pill {
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, var(--surface-3), var(--surface-4));
+      border: 1px solid var(--border-strong);
+      border-radius: 50%;
+      width: 44px; height: 44px; align-self: center;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px; font-weight: 700; color: var(--text);
+      letter-spacing: 0.08em; flex-shrink: 0;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    }
+    .comp-chart-wrap {
+      position: relative; height: 230px; width: 100%;
+      margin: 4px 0 18px;
+    }
+    /* metric rows with visual bar fill */
+    .comp-rows-header {
+      display: grid;
+      grid-template-columns: 1fr 110px 60px 110px 1fr;
+      gap: 8px;
+      padding: 6px 0 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .comp-rows-header span {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 9px; text-transform: uppercase;
+      letter-spacing: 0.09em; color: var(--text-muted);
+    }
+    .comp-rows-header span:nth-child(2) { text-align: right; }
+    .comp-rows-header span:nth-child(3) { text-align: center; }
+    .comp-rows-header span:nth-child(4) { text-align: left; }
+    .comp-rows-header span:nth-child(5) { text-align: right; }
+    .comp-metric-row {
+      display: grid;
+      grid-template-columns: 1fr 110px 60px 110px 1fr;
+      gap: 8px;
+      align-items: center;
+      padding: 11px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      transition: background 0.15s;
+    }
+    .comp-metric-row:hover { background: rgba(255,255,255,0.015); border-radius: 8px; }
+    .comp-bar-track {
+      height: 5px; border-radius: 3px;
+      background: rgba(255,255,255,0.05);
+      overflow: hidden; position: relative;
+    }
+    .comp-bar-fill {
+      position: absolute; top: 0; height: 100%;
+      border-radius: 3px;
+      transition: width 1.2s var(--ease);
+      width: 0%;
+      box-shadow: 0 0 6px rgba(255,255,255,0.05);
+    }
+    .comp-val {
+      font-size: 13px; font-weight: 500; color: var(--text);
+    }
+    .comp-val.win { color: var(--success); font-weight: 600; }
+    .comp-metric-name {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--text-muted);
+      text-align: center;
+    }
+
+    /* ═══ LEGACY FALLBACK STYLES (kept for backward compat) ════════════ */
+    .comparison-hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+    .hero-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+    .hero-title { font-size: 16px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .head-to-head-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .head-to-head-table th { padding: 10px 14px; color: var(--text-muted); font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; border-bottom: 1px solid var(--border); text-align: left; }
+    .head-to-head-table td { padding: 12px 14px; color: var(--text); border-bottom: 1px solid var(--border); }
+    .head-to-head-table tr:hover td { background: var(--surface-1); }
+    .text-success { color: var(--success); }
+    .text-danger  { color: var(--error); }
+    .text-muted   { color: var(--text-muted); }
 
     .material-symbols-outlined {
       font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
     }
 
-    .label-mono {
-      font-family: "JetBrains Mono", ui-monospace, monospace;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
     .glass {
-      background: #1a1c23;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 6px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
     }
 
-    .scroll-thin::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
+    .border-divider { border-color: var(--border); }
 
-    .scroll-thin::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-    }
-
-    .border-divider {
-      border-color: rgba(255, 255, 255, 0.08);
+    /* ═══ MEMO PROSE (rendered markdown body) ═══════════════════════════ */
+    .memo-prose {
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.7;
     }
 
     .memo-prose h1 {
-      font-size: 24px;
-      font-weight: 700;
-      margin: 16px 0;
-      color: #fff;
+      font-size: 22px;
+      font-weight: 600;
+      margin: 18px 0 14px;
+      color: var(--text);
+      letter-spacing: -0.02em;
     }
 
     .memo-prose h2 {
       font-size: 11px;
-      font-weight: 600;
-      font-family: monospace;
+      font-weight: 500;
+      font-family: "JetBrains Mono", monospace;
       letter-spacing: 0.1em;
-      color: #8b949e;
+      color: var(--text-muted);
       text-transform: uppercase;
-      margin: 24px 0 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      padding-bottom: 6px;
+      margin: 28px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
     }
 
     .memo-prose h3,
     .memo-prose h4 {
       font-size: 15px;
-      font-weight: 700;
-      color: #f8fafc;
+      font-weight: 600;
+      color: var(--text);
       margin: 22px 0 10px;
-      padding-bottom: 6px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      letter-spacing: -0.01em;
     }
 
     .memo-prose p {
       margin: 12px 0;
       font-size: 14px;
-      line-height: 1.6;
-      color: #c9d1d9;
+      line-height: 1.7;
+      color: var(--text);
     }
 
     .memo-prose ul {
-      list-style: disc;
-      padding-left: 1.5rem;
-      margin: 8px 0;
+      list-style: none;
+      padding-left: 0;
+      margin: 10px 0;
       font-size: 14px;
-      color: #c9d1d9;
     }
 
     .memo-prose li {
-      margin: 4px 0;
+      margin: 6px 0;
+      padding-left: 18px;
+      position: relative;
+    }
+    .memo-prose li::before {
+      content: "";
+      position: absolute;
+      left: 4px;
+      top: 11px;
+      width: 4px;
+      height: 4px;
+      background: var(--text-muted);
+      border-radius: 50%;
     }
 
     .memo-prose a {
-      color: #adc6ff;
+      color: var(--text);
       text-decoration: underline;
-      text-underline-offset: 2px;
+      text-decoration-color: var(--text-faint);
+      text-underline-offset: 3px;
+      transition: text-decoration-color 0.2s;
     }
+    .memo-prose a:hover { text-decoration-color: var(--text); }
 
     .memo-prose table {
       width: 100%;
       border-collapse: collapse;
       font-size: 12.5px;
-      margin: 12px 0;
+      margin: 14px 0;
       overflow: hidden;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(255, 255, 255, 0.025);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface-1);
     }
 
     .memo-prose th,
     .memo-prose td {
-      padding: 8px 10px;
+      padding: 10px 14px;
       text-align: left;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      border-bottom: 1px solid var(--border);
     }
+    .memo-prose tbody tr:last-child td { border-bottom: none; }
 
     .memo-prose th {
       font-family: "JetBrains Mono", monospace;
       font-size: 10px;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #c2c6d6;
-      background: rgba(255, 255, 255, 0.02);
+      color: var(--text-muted);
+      font-weight: 500;
+      background: var(--surface-2);
+    }
+
+    .memo-prose code {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      padding: 1px 6px;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
     }
 
     .memo-prose pre {
-      margin: 12px 0;
-      padding: 12px;
+      margin: 14px 0;
+      padding: 14px;
       overflow-x: auto;
-      border-radius: 8px;
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      background: var(--surface-1);
+      border: 1px solid var(--border);
       font-size: 12px;
+    }
+    .memo-prose pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
     }
 
     .finchart-legend i {
@@ -231,559 +981,280 @@
       margin-right: 6px;
     }
 
-    .stream-cursor::after {
-      content: "▍";
-      color: #8b949e;
-      animation: dotblink 0.9s steps(2) infinite;
-      margin-left: 1px;
-    }
-
-    @keyframes dotblink {
-
-      0%,
-      100% {
-        opacity: 0;
-      }
-
-      50% {
-        opacity: 1;
-      }
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    .chat-thread {
-      display: flex;
-      flex-direction: column;
-      gap: 22px;
-    }
-
-    .chat-turn {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .chat-row {
-      display: flex;
-      width: 100%;
-    }
-
-    .chat-row.user {
-      justify-content: flex-end;
-    }
-
-    .chat-row.assistant {
-      justify-content: flex-start;
-      gap: 12px;
-    }
-
-    .user-bubble {
-      max-width: min(560px, 78%);
-      background: #07080b;
-      color: #f8fafc;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px;
-      padding: 14px 16px;
-      font-size: 13px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.35);
-    }
-
-    .assistant-card {
-      width: min(760px, 100%);
-      background: #20211f;
-      color: #f5f5f4;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 14px;
-      padding: 18px;
-      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
-    }
-
-    .analysis-panel {
-      background: linear-gradient(135deg, rgba(18, 41, 48, 0.9), rgba(26, 28, 35, 0.92));
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 14px;
-      padding: 14px;
-      margin-bottom: 16px;
-    }
-
-    .chart-box {
-      min-height: 190px;
-      background: rgba(0, 0, 0, 0.18);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
-      padding: 12px;
-      position: relative;
-    }
-
-    .chart-tooltip {
-      position: absolute;
-      pointer-events: none;
-      display: none;
-      background: #05070a;
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      color: #f8fafc;
-      border-radius: 8px;
-      padding: 6px 8px;
-      font-size: 11px;
-      z-index: 10;
-    }
-
-    .chart-tooltip.visible {
-      display: block;
-    }
-
-    /* ═══ NEW CLAUDE-LIKE VISUAL OUTPUT STYLES ═══════════════════════════════════════ */
-
-    .claude-card {
-      background: #0f1117;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-    }
-
-    .claude-header {
+    /* ═══ CONFIDENCE PILLS ══════════════════════════════════════════════ */
+    .conf-pill {
+      display: inline-block;
       font-family: "JetBrains Mono", monospace;
-      font-size: 0.75rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: #8b949e;
-      margin-bottom: 1.25rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      margin-left: 8px;
+      vertical-align: middle;
     }
+    .conf-high { color: var(--success); border-color: rgba(74,222,128,0.25); background: rgba(74,222,128,0.06); }
+    .conf-medium { color: var(--research); border-color: rgba(96,165,250,0.25); background: rgba(96,165,250,0.06); }
+    .conf-low { color: var(--warn); border-color: rgba(251,191,36,0.25); background: rgba(251,191,36,0.06); }
+    .conf-derived { color: var(--text-muted); }
 
-    /* Metric Cards Grid */
-    .metric-cards-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .metric-card {
-      background: #161b22;
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 12px;
-      padding: 1.25rem;
-      transition: border-color 0.2s;
-    }
-
-    .metric-card:hover {
-      border-color: rgba(255, 255, 255, 0.15);
-    }
-
-    .metric-label {
-      font-size: 0.75rem;
-      color: #8b949e;
-      margin-bottom: 0.5rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .metric-value {
-      font-size: 1.5rem;
-      font-weight: 600;
-      color: #e6edf3;
-      margin-bottom: 0.25rem;
-    }
-
-    /* Comparison Hero Grid */
-    .comparison-hero-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .hero-card {
-      background: #161b22;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
-      padding: 1.25rem;
-    }
-
-    .hero-title {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: #e6edf3;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-    }
-
-    .hero-metrics {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-    }
-
-    /* Head to Head Table */
-    .head-to-head-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.875rem;
-    }
-
-    .head-to-head-table th {
-      text-align: left;
-      padding: 0.75rem 1rem;
-      color: #8b949e;
-      font-weight: 600;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .head-to-head-table td {
-      padding: 0.875rem 1rem;
-      color: #c9d1d9;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-    }
-
-    .head-to-head-table tr:hover td {
-      background: rgba(255, 255, 255, 0.02);
-    }
-
-    .text-success {
-      color: #3fb950;
-    }
-
-    .text-danger {
-      color: #f85149;
-    }
-
-    .text-muted {
-      color: #8b949e;
-    }
-
-    .chart-container-native {
-      position: relative;
-      height: 300px;
-      width: 100%;
-      margin-top: 1rem;
-    }
-
-    .visual-dashboard {
-      padding: 1rem 0;
+    /* ═══ ACTIVITY DRAWER (slide-out right panel) ═══════════════════════ */
+    .activity-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 340px;
+      background: var(--surface-1);
+      border-left: 1px solid var(--border);
+      transform: translateX(100%);
+      transition: transform 0.35s var(--ease);
+      z-index: 40;
       display: flex;
       flex-direction: column;
-      gap: 1.5rem;
+    }
+    .activity-drawer.open { transform: translateX(0); }
+
+    /* ═══ ICON BUTTONS ═════════════════════════════════════════════════ */
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s var(--ease);
+    }
+    .icon-btn:hover {
+      background: var(--surface-2);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .icon-btn .material-symbols-outlined { font-size: 18px; }
+    .icon-btn.active {
+      background: var(--surface-3);
+      color: var(--text);
+      border-color: var(--border-strong);
     }
   </style>
 </head>
 
-<body class="flex flex-col h-screen bg-[#0f1115] text-[#d1d5db]">
+<body class="flex flex-col h-screen">
 
-  <!-- ═══ TOP BAR ═══════════════════════════════════════════════════ -->
-  <header class="h-14 flex items-center justify-between px-5 border-b border-white/[0.07] shrink-0 bg-[#0c0e12]">
-    <div class="font-bold text-base text-white tracking-widest uppercase">FIN-OS INTEL</div>
-    <div id="authControls" class="flex items-center gap-4 text-sm">
-      <!-- Injected via JS -->
+  <!-- ═══ MINIMAL HEADER ═══════════════════════════════════════════════
+       Just the brand, mode toggle, and utility controls.
+       Mode selector is the prominent center element.
+  ════════════════════════════════════════════════════════════════════ -->
+  <header class="h-14 flex items-center justify-between px-6 shrink-0 anim-fade-in">
+    <div class="flex items-center gap-3">
+      <button id="newRunBtn" class="icon-btn" title="New thread">
+        <span class="material-symbols-outlined">add</span>
+      </button>
+      <div class="text-sm font-medium text-white tracking-tight">prospektlab</div>
     </div>
+
+    <!-- ── MODE SELECTOR (animated pill toggle) ─────────────────── -->
+    <div id="modeSelector" class="mode-pill-container" data-mode="deep" role="tablist" aria-label="Research mode">
+      <span class="mode-pill-indicator"></span>
+      <button id="modeDeep" class="mode-pill mode-toggle active" role="tab" aria-selected="true"
+        title="Targeted query with focused analysis">
+        <span class="material-symbols-outlined">search</span>
+        Research
+      </button>
+      <button id="modeMarathon" class="mode-pill mode-toggle" role="tab" aria-selected="false"
+        title="Full-scale multi-pass research report">
+        <span class="material-symbols-outlined">all_inclusive</span>
+        Marathon
+      </button>
     </div>
-    <script>
-      (function () {
-        const c = document.getElementById('authControls');
-        try {
-          const userStr = localStorage.getItem('prospektlab_user');
-          if (userStr) {
-            const user = JSON.parse(userStr);
-            c.innerHTML = `
-              <span class="text-gray-300">Welcome, <strong>${user.name || user.email}</strong></span>
-              <button onclick="localStorage.removeItem('prospektlab_user'); location.reload();" class="text-red-400 hover:text-red-300 transition-colors bg-white/5 px-3 py-1 rounded">Logout</button>
-            `;
-          } else {
-            c.innerHTML = `
-              <a href="/login" class="text-gray-300 hover:text-white transition-colors">Login</a>
-              <a href="/signup" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition-colors">Sign Up</a>
-            `;
-          }
-        } catch (e) { console.error(e); }
-      })();
-    </script>
+
+    <div class="flex items-center gap-2">
+      <button id="activityToggle" class="icon-btn" title="Activity stream">
+        <span class="material-symbols-outlined">bolt</span>
+      </button>
+      <div id="authControls" class="flex items-center gap-2 text-xs"></div>
+    </div>
   </header>
 
-  <!-- ═══ MAIN 3-COLUMN LAYOUT ════════════════════════════════════════ -->
-  <main class="flex-1 flex overflow-hidden min-h-0">
+  <script>
+    (function () {
+      const c = document.getElementById('authControls');
+      try {
+        const userStr = localStorage.getItem('prospektlab_user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          c.innerHTML = `
+            <span class="text-[11px] text-zinc-400">${user.name || user.email}</span>
+            <button onclick="localStorage.removeItem('prospektlab_user'); location.reload();"
+              class="icon-btn" title="Logout">
+              <span class="material-symbols-outlined">logout</span>
+            </button>
+          `;
+        } else {
+          c.innerHTML = `
+            <a href="/login" class="text-[11px] text-zinc-400 hover:text-white transition-colors px-2 py-1">Login</a>
+            <a href="/signup" class="text-[11px] text-white bg-white/10 hover:bg-white/15 px-3 py-1.5 rounded-full transition-colors">Sign up</a>
+          `;
+        }
+      } catch (e) { console.error(e); }
+    })();
+  </script>
 
-    <!-- ── LEFT SIDEBAR ────────────────────────────────────────────── -->
-    <aside id="mainSidebar" class="w-56 border-r border-white/[0.07] flex flex-col shrink-0 bg-[#0c0e12]">
-      <div class="p-3">
-        <button onclick="location.reload()"
-          class="w-full flex items-center justify-center gap-2 py-2 bg-[#1e2129] hover:bg-[#272b34] text-xs text-gray-300 rounded border border-white/[0.07] transition-colors">
-          <span class="material-symbols-outlined text-[14px]">add</span> New Thread
+  <!-- ═══ MAIN: SINGLE-COLUMN FOCUSED CHAT ═════════════════════════════ -->
+  <main class="flex-1 flex overflow-hidden min-h-0 relative">
+
+    <section class="flex-1 flex flex-col relative overflow-hidden min-h-0">
+
+      <!-- Scrollable conversation area -->
+      <div class="flex-1 overflow-y-auto overflow-x-hidden scroll-thin pb-40">
+
+        <!-- ── STATE: COMMAND (Initial empty / hero state) ─────────────── -->
+        <div id="stateCommand" class="min-h-full flex flex-col items-center justify-center p-8">
+          <div class="text-center max-w-md anim-fade-up">
+            <div class="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-600 mb-3">Intelligence engine</div>
+            <h1 class="text-4xl font-semibold text-white mb-3 tracking-tight gradient-text">Ask anything.</h1>
+            <p class="text-sm text-zinc-500 leading-relaxed">
+              Choose <span class="text-zinc-300">Research</span> for focused analysis,
+              or <span class="text-zinc-300">Marathon</span> for a full-scale multi-pass report.
+            </p>
+          </div>
+        </div>
+
+        <!-- ── STATE: PROCESSING (subtle, single-line progress) ────────── -->
+        <div id="stateProcessing" class="hidden px-6 pt-8 anim-fade-in">
+          <div class="max-w-3xl mx-auto w-full">
+            <div class="flex items-baseline justify-between mb-4">
+              <h2 class="text-base font-medium text-white tracking-tight">
+                <span id="processingTarget"></span>
+              </h2>
+              <span id="processingPercent" class="label-mono text-zinc-500"></span>
+            </div>
+            <div id="processingPhaseLabel" class="label-mono text-zinc-500 mb-3">Connecting…</div>
+            <div class="progress-track">
+              <div id="processingBar" class="progress-fill"></div>
+            </div>
+            <div id="processingTitle" class="hidden"></div>
+          </div>
+        </div>
+
+        <!-- ── STATE: RESULT (chat thread) ─────────────────────────────── -->
+        <div id="stateResult" class="hidden flex-col px-6 pt-6">
+          <div class="max-w-3xl mx-auto w-full">
+            <div class="mb-6">
+              <h1 id="resultTitle" class="text-xl font-semibold text-white tracking-tight"></h1>
+              <p id="resultBreadcrumb" class="label-mono text-zinc-600 mt-1"></p>
+            </div>
+
+            <div id="chatThread" class="chat-thread">
+              <!-- Turns appended dynamically by appendConversationTurn() -->
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end scroll -->
+
+      <!-- ═══ INPUT BAR (always visible, floating) ════════════════════════ -->
+      <div class="absolute bottom-6 left-0 right-0 px-6 z-20 pointer-events-none">
+        <div class="max-w-3xl mx-auto pointer-events-auto anim-fade-up">
+          <div class="input-shell">
+            <input type="text" id="targetInput"
+              placeholder="Ask about a company, ticker, or sector…" autocomplete="off">
+            <input type="text" id="activeInput" class="hidden">
+            <input type="text" id="heroSearchInput" class="hidden">
+
+            <div class="flex items-center justify-between mt-3">
+              <div class="flex items-center gap-3">
+                <span id="modeIndicator" class="label-mono text-zinc-500">research mode</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <!-- ── Persistent Stop / Abort Button ─────────────── -->
+                <button id="stopBtn" class="abort-btn hidden" title="Terminate active generation">
+                  <span class="stop-square"></span>
+                  Stop
+                </button>
+                <button id="executeBtn" class="execute-btn" title="Execute query">
+                  <span>Send</span>
+                  <span class="material-symbols-outlined">arrow_upward</span>
+                </button>
+              </div>
+              <button id="activeExecuteBtn" class="hidden"></button>
+              <button id="heroExecuteBtn" class="hidden"></button>
+            </div>
+          </div>
+          <div class="text-[10px] text-zinc-700 text-center mt-2 font-mono tracking-wide">
+            Press <kbd class="text-zinc-500">↵</kbd> to execute · <kbd class="text-zinc-500">esc</kbd> to abort
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ═══ SLIDE-OUT ACTIVITY DRAWER ════════════════════════════════════ -->
+    <aside id="activityDrawer" class="activity-drawer scroll-thin">
+      <div class="px-5 py-4 flex items-center justify-between border-b border-white/5">
+        <div class="label-mono text-zinc-400">Live activity</div>
+        <button id="activityClose" class="icon-btn" title="Close">
+          <span class="material-symbols-outlined">close</span>
         </button>
       </div>
-      <div class="px-3 py-2 flex-1 overflow-y-auto scroll-thin">
-        <div class="text-[9px] font-bold text-gray-600 mb-2 uppercase tracking-widest">Recent Intelligence</div>
-        <div class="flex flex-col gap-0.5" id="recentThreadsList">
-          <!-- Populated dynamically by memo library loader -->
+      <div class="flex-1 overflow-y-auto scroll-thin">
+        <div class="px-5 py-4">
+          <div class="label-mono text-zinc-600 mb-2">Queries</div>
+          <div id="queryGrid" class="flex flex-col gap-2"></div>
+        </div>
+        <div class="px-5 py-4 border-t border-white/5">
+          <div class="label-mono text-zinc-600 mb-2">Events</div>
+          <div id="activityStream" class="flex flex-col gap-1 text-[11px]"></div>
+        </div>
+        <div class="px-5 py-4 border-t border-white/5">
+          <div class="label-mono text-zinc-600 mb-2">Sources</div>
+          <div id="liveSourcesList" class="flex flex-col gap-2"></div>
         </div>
       </div>
     </aside>
+  </main>
 
-    <!-- ── CENTER COLUMN ────────────────────────────────────────────── -->
-    <section class="flex-1 flex flex-col relative overflow-hidden min-h-0">
-
-      <!-- Unified Scrollable Area -->
-      <div class="flex-1 overflow-y-auto overflow-x-hidden scroll-thin pb-32">
-
-        <!-- STATE: COMMAND (Initial empty state) -->
-        <div id="stateCommand" class="min-h-full flex flex-col items-center justify-center p-6 bg-[#0c0e12]">
-          <div class="text-center px-8">
-            <div class="text-xl font-bold text-white mb-2">FIN-OS System Ready</div>
-            <div class="text-sm text-gray-500">Initialize a query below to begin analysis.</div>
-          </div>
-        </div>
-
-        <!-- STATE: PROCESSING (Live activity while research runs) -->
-        <div id="stateProcessing" class="hidden p-6">
-          <div class="max-w-3xl mx-auto w-full">
-            <div class="text-xl font-bold text-white mb-1">Analyzing <span id="processingTarget"></span></div>
-            <div class="text-xs text-gray-500 mb-5">Synthesizing intelligence streams…</div>
-            <div id="processingTitle" class="hidden"></div>
-            <div id="processingPhaseLabel" class="text-[11px] text-gray-400 uppercase tracking-widest mb-2">Connecting…
-            </div>
-            <div class="h-0.5 bg-[#1e2129] rounded overflow-hidden mb-1">
-              <div id="processingBar" class="h-full bg-gray-500 w-0 transition-all duration-500 rounded"></div>
-            </div>
-            <div id="processingPercent" class="text-[10px] text-gray-600 text-right"></div>
-          </div>
-        </div>
-
-        <!-- STATE: RESULT (Memo output) -->
-        <div id="stateResult" class="hidden flex-col p-6 pb-32">
-          <div class="max-w-3xl mx-auto w-full">
-            <h1 id="resultTitle" class="text-2xl font-bold text-white mb-1"></h1>
-            <p id="resultBreadcrumb" class="text-xs text-gray-500 mb-6"></p>
-
-            <div id="chatThread" class="chat-thread">
-              <div class="chat-row user">
-                <div id="userBubble" class="user-bubble"></div>
-              </div>
-              <div class="chat-row assistant">
-                <div class="shrink-0 mt-1">
-                  <div
-                    class="w-8 h-8 rounded-lg bg-[#1e2129] flex items-center justify-center border border-white/[0.09]">
-                    <span class="material-symbols-outlined text-[15px] text-gray-300">graphic_eq</span>
-                  </div>
-                </div>
-                <div class="assistant-card">
-                  <div id="visualDashboard" class="hidden">
-                    <div id="chartPanel" class="analysis-panel hidden">
-                      <div class="flex items-center justify-between mb-2">
-                        <div class="label-mono text-[10px] text-gray-400">Price trend</div>
-                        <div id="chartMeta" class="text-[11px] text-gray-400"></div>
-                      </div>
-                      <div id="chartHost" class="chart-box"></div>
-                    </div>
-                    <div id="historyPanel" class="analysis-panel hidden">
-                      <div class="flex items-center justify-between mb-2">
-                        <div>
-                          <div class="label-mono text-[10px] text-gray-400">Financial history</div>
-                          <div id="historyMeta" class="text-[11px] text-gray-400 mt-1"></div>
-                        </div>
-                        <div id="historyPill" class="label-mono text-[9px] px-2 py-1 rounded bg-white/5 text-gray-300">
-                        </div>
-                      </div>
-                      <div class="flex gap-2 mb-2">
-                        <button class="hist-tab label-mono text-[9px] px-2 py-1 rounded border border-white/10"
-                          data-hist="revenue">Revenue</button>
-                        <button class="hist-tab label-mono text-[9px] px-2 py-1 rounded border border-white/10"
-                          data-hist="net_income">Net income</button>
-                      </div>
-                      <div id="historyHost" class="chart-box"></div>
-                    </div>
-                  </div>
-                  <div class="flex-1 memo-prose break-words overflow-x-auto max-w-full min-w-0" id="memoBody"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div><!-- End unified scrollable area -->
-
-      <!-- ── BOTTOM INPUT BAR (always visible, floats above content) ── -->
-      <div class="absolute bottom-4 left-0 right-0 px-6 z-20">
-        <div class="max-w-3xl mx-auto bg-[#1a1c23] border border-white/[0.09] rounded-xl p-3 shadow-2xl">
-          <input type="text" id="targetInput"
-            class="w-full bg-transparent text-white text-sm outline-none px-2 py-1.5 placeholder-gray-600"
-            placeholder="Query intelligence matrix…" autocomplete="off">
-          <!-- Hidden inputs required by JS -->
-          <input type="text" id="activeInput" class="hidden">
-          <input type="text" id="heroSearchInput" class="hidden">
-
-          <div class="flex items-center justify-between mt-2 px-1">
-            <div class="flex items-center gap-2 text-gray-500">
-              <button id="modeDeep"
-                class="mode-toggle text-[9px] uppercase font-mono px-2.5 py-1 border rounded transition-all tracking-widest bg-blue-500/15 text-blue-400 border-blue-500/30"
-                title="Fast in-depth analysis with ratios, risks, and sector context">
-                Deep Mode
-              </button>
-              <button id="modeMarathon"
-                class="mode-toggle text-[9px] uppercase font-mono px-2.5 py-1 border border-white/[0.09] rounded hover:text-white hover:border-white/20 transition-all tracking-widest"
-                title="Exhaustive multi-pass research with export to PDF/Word/Excel">
-                Marathon
-              </button>
-            </div>
-            <div class="flex items-center gap-2">
-              <!-- Stop Button (hidden by default, shown during processing) -->
-              <button id="stopBtn"
-                class="hidden items-center gap-1 bg-red-600/80 hover:bg-red-500 text-[11px] font-mono text-white px-3 py-1.5 rounded border border-red-500/30 transition-colors"
-                title="Stop the current research">
-                <span class="material-symbols-outlined text-[12px]">stop_circle</span> Stop
-              </button>
-              <!-- Execute Button -->
-              <button id="executeBtn"
-                class="flex items-center gap-1 bg-[#272b34] hover:bg-[#323742] text-[11px] font-mono text-gray-300 px-3 py-1.5 rounded border border-white/[0.09] transition-colors">
-                Execute <span class="material-symbols-outlined text-[12px]">play_arrow</span>
-              </button>
-            </div>
-            <!-- Hidden buttons required by JS -->
-            <button id="activeExecuteBtn" class="hidden"></button>
-            <button id="heroExecuteBtn" class="hidden"></button>
-          </div>
-        </div>
-      </div>
-
-    </section><!-- end center -->
-
-    <!-- ── RIGHT SIDEBAR ────────────────────────────────────────────── -->
-    <aside
-      class="w-[320px] border-l border-white/[0.07] flex flex-col shrink-0 bg-[#0c0e12] overflow-y-auto scroll-thin">
-
-      <!-- Search activity -->
-      <div class="p-4 border-b border-white/[0.07]">
-        <div class="flex items-center gap-1 text-xs text-gray-400 mb-3">
-          <span class="material-symbols-outlined text-[14px]">travel_explore</span>
-          Searched the web
-        </div>
-        <div id="queryGrid" class="flex flex-col gap-3 text-[11px]">
-          <!-- Query rows injected here by upsertQuery() -->
-        </div>
-        <!-- Activity stream shown below queries -->
-        <div id="activityStream" class="flex flex-col gap-1 mt-3 text-[10px]"></div>
-      </div>
-
-      <!-- Verified data streams -->
-      <div class="p-4">
-        <div class="flex items-center gap-2 mb-3">
-          <span class="material-symbols-outlined text-[13px] text-gray-500">verified_user</span>
-          <span class="text-[9px] font-bold text-gray-600 uppercase tracking-widest">Verified Data Streams</span>
-        </div>
-        <div id="liveSourcesList" class="flex flex-wrap gap-1.5 text-[10px]">
-          <!-- Pill badges injected by pushLiveSource() -->
-        </div>
-      </div>
-
-    </aside><!-- end right sidebar -->
-
-  </main><!-- end main -->
-
-  <!-- ═══ BOTTOM STATUS BAR ═══════════════════════════════════════════ -->
-  <footer
-    class="h-7 bg-[#090b0e] border-t border-white/[0.05] flex items-center justify-between px-4 shrink-0 text-[9px] font-mono text-gray-600 uppercase tracking-widest">
-    <div>INTEL-FEED // SYSTEM ACTIVE</div>
-    <div class="flex items-center gap-6">
-      <span>Market Sentiment: Bullish</span>
-      <span id="footerLatency">Latency: —</span>
-      <span>Live Alerts (4)</span>
-    </div>
-  </footer>
-
-  <!-- ═══ STUB IDs — required by the JS engine so it doesn't crash ════ -->
+  <!-- ═══ STUB IDs ═════════════════════════════════════════════════════
+       These remain as zero-size offscreen anchors so the existing JS
+       engine (renderIntel, resetCounters, etc.) keeps functioning while
+       the visible UI is minimized. Anything visually meaningful in the
+       new design is rendered into the inline chat thread on demand.
+  ═══════════════════════════════════════════════════════════════════ -->
   <div class="hidden" aria-hidden="true">
-    <div id="mainSidebar"></div>
-    <div id="topAppBar"></div>
-    <div id="ctrSources"></div>
-    <div id="ctrPrimary"></div>
-    <div id="agentGrid"></div>
-    <div id="agentGridPill"></div>
-    <div id="agentGridPanel"></div>
-    <div id="verifierPanel"></div>
-    <div id="verifierBody"></div>
-    <div id="blindspotPanel"></div>
-    <div id="blindspotBody"></div>
-    <div id="playbookPanel"></div>
-    <div id="playbookTitle"></div>
-    <div id="playbookPill"></div>
-    <div id="memoryPanel"></div>
-    <div id="memoryBody"></div>
-    <div id="qualityPanel"></div>
-    <div id="qualityBody"></div>
-    <div id="qualityGaps"></div>
-    <div id="reflectionPanel"></div>
-    <div id="reflectionRounds"></div>
-    <div id="chartContainer"></div>
-    <div id="chartMetrics"></div>
-    <div id="chartTooltip"></div>
-    <div id="brandText"></div>
-    <div id="memoViaPill"></div>
-    <div id="modeStandard"></div>
-    <div id="communityPanel"></div>
-    <div id="communityBadge"></div>
-    <div id="communityBody"></div>
-    <div id="heroTitle"></div>
-    <div id="landingView"></div>
-    <div id="activeInputBar"></div>
-    <div id="apiSources"></div>
-    <div id="backToLanding"></div>
-    <!-- Newly added stubs to prevent crashes in resetCounters and other areas -->
-    <div id="ctrElapsed"></div>
-    <div id="livesSourcesCount"></div>
-    <div id="historyHost"></div>
-    <div id="historyMeta"></div>
-    <div id="historyPanel"></div>
-    <div id="historyPill"></div>
-    <div id="mdnaBody"></div>
-    <div id="mdnaFilingLink"></div>
-    <div id="mdnaFormPill"></div>
-    <div id="mdnaPanel"></div>
-    <div id="riskFactorsBody"></div>
-    <div id="riskFactorsPanel"></div>
-    <div id="riskFilingLink"></div>
-    <div id="riskFormPill"></div>
-    <div id="financialFilingLink"></div>
-    <div id="financialGrid"></div>
-    <div id="financialPanel"></div>
-    <div id="financialPeriodPill"></div>
-    <div id="filingsList"></div>
-    <div id="filingsPanel"></div>
-    <div id="conflictsList"></div>
-    <div id="conflictsPanel"></div>
-    <div id="copyMemoBtn"></div>
-    <div id="downloadMdBtn"></div>
-    <div id="newRunBtn"></div>
-    <div id="tourReplayBtn"></div>
-    <div id="memoLibraryGrid"></div>
-    <div id="memoryRecallCount"></div>
-    <div id="memoryRecallList"></div>
-    <div id="memoryRecallPanel"></div>
-    <div id="memoryRecallSummary"></div>
-    <div id="meticStrip"></div>
-    <div id="newsCountPill"></div>
-    <div id="newsList"></div>
-    <div id="newsPanel"></div>
-    <div id="openaiState"></div>
-    <div id="qualityDial"></div>
-    <div id="qualityGapList"></div>
-    <div id="qualityPhasePill"></div>
-    <div id="qualityScoreText"></div>
-    <div id="qualityTrend"></div>
-    <div id="reflectionList"></div>
-    <div id="reflectionRoundsPill"></div>
-    <div id="verifierTier1Pill"></div>
-    <div id="chartHost"></div>
-    <div id="chartMeta"></div>
-    <div id="chartPanel"></div>
+    <div id="mainSidebar"></div><div id="topAppBar"></div><div id="ctrSources"></div>
+    <div id="ctrPrimary"></div><div id="agentGrid"></div><div id="agentGridPill"></div>
+    <div id="agentGridPanel"></div><div id="verifierPanel"></div><div id="verifierBody"></div>
+    <div id="blindspotPanel"></div><div id="blindspotBody"></div><div id="playbookPanel"></div>
+    <div id="playbookTitle"></div><div id="playbookPill"></div><div id="memoryPanel"></div>
+    <div id="memoryBody"></div><div id="qualityPanel"></div><div id="qualityBody"></div>
+    <div id="qualityGaps"></div><div id="reflectionPanel"></div><div id="reflectionRounds"></div>
+    <div id="chartContainer"></div><div id="chartMetrics"></div><div id="chartTooltip"></div>
+    <div id="brandText"></div><div id="memoViaPill"></div><div id="modeStandard"></div>
+    <div id="communityPanel"></div><div id="communityBadge"></div><div id="communityBody"></div>
+    <div id="heroTitle"></div><div id="landingView"></div><div id="activeInputBar"></div>
+    <div id="apiSources"></div><div id="backToLanding"></div><div id="ctrElapsed"></div>
+    <div id="livesSourcesCount"></div><div id="historyHost"></div><div id="historyMeta"></div>
+    <div id="historyPanel"></div><div id="historyPill"></div><div id="mdnaBody"></div>
+    <div id="mdnaFilingLink"></div><div id="mdnaFormPill"></div><div id="mdnaPanel"></div>
+    <div id="riskFactorsBody"></div><div id="riskFactorsPanel"></div><div id="riskFilingLink"></div>
+    <div id="riskFormPill"></div><div id="financialFilingLink"></div><div id="financialGrid"></div>
+    <div id="financialPanel"></div><div id="financialPeriodPill"></div><div id="filingsList"></div>
+    <div id="filingsPanel"></div><div id="conflictsList"></div><div id="conflictsPanel"></div>
+    <div id="copyMemoBtn"></div><div id="downloadMdBtn"></div><div id="tourReplayBtn"></div>
+    <div id="memoLibraryGrid"></div><div id="recentThreadsList"></div>
+    <div id="memoryRecallCount"></div><div id="memoryRecallList"></div>
+    <div id="memoryRecallPanel"></div><div id="memoryRecallSummary"></div>
+    <div id="meticStrip"></div><div id="newsCountPill"></div><div id="newsList"></div>
+    <div id="newsPanel"></div><div id="openaiState"></div><div id="qualityDial"></div>
+    <div id="qualityGapList"></div><div id="qualityPhasePill"></div>
+    <div id="qualityScoreText"></div><div id="qualityTrend"></div><div id="reflectionList"></div>
+    <div id="reflectionRoundsPill"></div><div id="verifierTier1Pill"></div>
+    <div id="chartHost"></div><div id="chartMeta"></div><div id="chartPanel"></div>
+    <div id="memoBody"></div><div id="visualDashboard"></div>
   </div>
 
   <script>
@@ -838,10 +1309,14 @@
           el.classList.add("hidden");
         }
       }
-      // During processing, also show the result panel so memo tokens stream in
+      // During processing, show the result panel (progress is now inline in the turn)
+      // and hide the old top-level processing banner to avoid confusing the user
       if (name === "processing") {
         const res = $("stateResult");
         if (res) res.classList.remove("hidden");
+        // Keep the old processing bar hidden — we use inline turn progress now
+        const proc = $("stateProcessing");
+        if (proc) proc.classList.add("hidden");
       }
     }
 
@@ -891,22 +1366,22 @@
     // ────────────────────────────────────────────────────────────────────
     function pushActivity(icon, agent, message, statusKind = "running", meta = "") {
       const stream = $("activityStream");
+      if (!stream) return;
       if (stream.querySelector(".__empty")) stream.querySelector(".__empty").remove();
-      const dotCls = statusKind === "done" ? "bg-success shadow-[0_0_8px_rgba(110,231,183,0.5)]"
-        : statusKind === "error" ? "bg-error shadow-[0_0_8px_rgba(255,180,171,0.5)]"
-          : statusKind === "warning" ? "bg-warn shadow-[0_0_8px_rgba(251,191,36,0.5)]"
-            : "bg-primary shadow-[0_0_8px_rgba(173,198,255,0.5)] animate-pulse";
+      const dotCls = statusKind === "done" ? "bg-green-400"
+        : statusKind === "error" ? "bg-red-400"
+        : statusKind === "warning" ? "bg-amber-400"
+        : "bg-zinc-400 animate-pulse";
       const div = document.createElement("div");
-      div.className = "anim-in flex items-center gap-4 px-6 py-3.5 hover:bg-surface-variant/8 transition-colors";
+      div.className = "anim-in flex items-start gap-2 py-1.5";
       div.innerHTML = `
-      <div class="flex-shrink-0 w-2 h-2 rounded-full ${dotCls}"></div>
-      <div class="w-40 flex items-center gap-2">
-        <span class="material-symbols-outlined text-[15px] text-on-surface-variant">${icon}</span>
-        <span class="label-mono text-[11px] text-on-surface uppercase tracking-wider truncate">${escapeHtml(agent)}</span>
-      </div>
-      <div class="flex-1 text-[12.5px] text-on-surface/90 truncate">${escapeHtml(message)}</div>
-      <div class="hidden md:block label-mono text-[10px] text-on-surface-variant truncate max-w-[180px] text-right">${escapeHtml(meta)}</div>
-    `;
+        <div class="flex-shrink-0 w-1.5 h-1.5 rounded-full mt-1.5 ${dotCls}"></div>
+        <div class="flex-1 min-w-0">
+          <div class="label-mono text-zinc-500 mb-0.5">${escapeHtml(agent)}</div>
+          <div class="text-[11px] text-zinc-300 leading-snug truncate">${escapeHtml(message)}</div>
+          ${meta ? `<div class="text-[10px] text-zinc-600 truncate mt-0.5">${escapeHtml(meta)}</div>` : ""}
+        </div>
+      `;
       stream.prepend(div);
       while (stream.children.length > 60) stream.removeChild(stream.lastChild);
     }
@@ -916,25 +1391,55 @@
       const pct = PHASE_PROGRESS[phase] ?? 50;
       $("processingBar").style.width = pct + "%";
       $("processingPercent").textContent = pct + "%";
+      // Also update inline turn progress
+      const turn = getTurn();
+      if (turn) {
+        const progressPhase = turn.root.querySelector(".turn-progress-phase");
+        const progressDetail = turn.root.querySelector(".turn-progress-detail");
+        const progressFill = turn.root.querySelector(".turn-progress-fill");
+        if (progressPhase) {
+          const isMarathon = researchMode === "marathon";
+          const phaseShort = {
+            memory: "Recalling memory",
+            enrichment: "Pulling live data",
+            "breadth-survey": "Scanning sources",
+            "deep-dive": "Deep diving",
+            reflection: "Self-evaluating",
+            "multi-agent": "Running specialists",
+            blindspot: "Filling gaps",
+            analysis: "Cross-checking",
+            synthesis: "Writing report",
+            deep_research: "Multi-pass analysis",
+          }[phase] || phase;
+          progressPhase.textContent = phaseShort;
+          progressPhase.style.color = isMarathon ? "var(--marathon)" : "var(--research)";
+        }
+        if (progressDetail) progressDetail.textContent = note || (PHASE_LABEL[phase] || phase);
+        if (progressFill) progressFill.style.width = pct + "%";
+        // Scroll to keep progress visible
+        const scrollArea = turn.root.closest('.overflow-y-auto');
+        if (scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
+      }
     }
 
     function upsertQuery(q, status, count) {
       const grid = $("queryGrid");
+      if (!grid) return;
       let row = grid.querySelector(`[data-q="${CSS.escape(q)}"]`);
       if (!row) {
         row = document.createElement("div");
         row.dataset.q = q;
-        row.className = "flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-surface-container-low/40 border border-outline-variant/15";
+        row.className = "anim-in flex items-center justify-between gap-2 px-2 py-1.5 rounded-md bg-white/[0.02] border border-white/5";
         grid.appendChild(row);
       }
-      const statusBadge =
-        status === "done" ? `<span class="label-mono text-[10px] text-success uppercase tracking-wider">${count} hits</span>` :
-          status === "error" || status === "timeout" ? `<span class="label-mono text-[10px] text-error uppercase tracking-wider">${status}</span>` :
-            `<span class="label-mono text-[10px] text-primary uppercase tracking-wider dot-pulse">running</span>`;
+      const cls = status === "done" ? "text-green-400"
+        : (status === "error" || status === "timeout") ? "text-red-400"
+        : "text-zinc-400";
+      const label = status === "done" ? `${count}` : status;
       row.innerHTML = `
-      <span class="text-[12.5px] text-on-surface/90 truncate flex-1">${escapeHtml(q)}</span>
-      ${statusBadge}
-    `;
+        <span class="text-[11px] text-zinc-300 truncate flex-1">${escapeHtml(q)}</span>
+        <span class="label-mono ${cls}">${label}</span>
+      `;
     }
 
     function tickElapsed() {
@@ -945,23 +1450,29 @@
 
     function pushLiveSource(payload) {
       const list = $("liveSourcesList");
+      if (!list) return;
       list.querySelector(".__empty")?.remove();
       const emptyItalic = list.querySelector("div.italic");
       if (emptyItalic) emptyItalic.remove();
-      const tc = tierColor(payload.tier);
-      const cc = confColor(payload.confidence);
-      const card = document.createElement("div");
-      card.className = "anim-in bg-surface-container-low/40 border border-outline-variant/15 rounded-xl p-3";
+      const tierCls = (payload.tier || 99) <= 2 ? "text-green-400"
+        : (payload.tier || 99) <= 5 ? "text-zinc-400"
+        : "text-amber-400";
+      const card = document.createElement("a");
+      card.target = "_blank";
+      card.rel = "noopener";
+      card.href = payload.url || "#";
+      card.className = "anim-in block p-2 rounded-md bg-white/[0.02] border border-white/5 hover:border-white/15 transition-colors";
       card.innerHTML = `
-      <div class="flex items-center justify-between mb-1.5">
-        <span class="label-mono text-[10px] uppercase tracking-widest ${tc[0]} ${tc[1]} ${tc[2]} border px-2 py-0.5 rounded-md">tier ${payload.tier}</span>
-        <span class="label-mono text-[10px] uppercase tracking-widest ${cc} border px-2 py-0.5 rounded-md">${payload.confidence}</span>
-      </div>
-      <div class="text-[12.5px] font-semibold text-on-surface truncate">${escapeHtml(payload.title || payload.domain)}</div>
-      <a class="label-mono text-[10px] text-primary/80 hover:text-primary block truncate mt-0.5" target="_blank" href="${escapeHtml(payload.url)}">${escapeHtml(payload.domain)}</a>
-    `;
+        <div class="flex items-center justify-between mb-1">
+          <span class="label-mono ${tierCls}">T${payload.tier}</span>
+          <span class="label-mono text-zinc-600">${payload.confidence || ""}</span>
+        </div>
+        <div class="text-[11px] text-zinc-300 truncate leading-tight">${escapeHtml(payload.title || payload.domain || "")}</div>
+        <div class="label-mono text-zinc-600 truncate mt-0.5">${escapeHtml(payload.domain || "")}</div>
+      `;
       list.prepend(card);
-      $("livesSourcesCount").textContent = String(counters.sources);
+      const cnt = $("livesSourcesCount");
+      if (cnt) cnt.textContent = String(counters.sources);
     }
 
     function resetCounters() {
@@ -975,10 +1486,10 @@
       $("processingBar").style.width = "0%";
       $("processingPercent").textContent = "0%";
       $("processingPhaseLabel").textContent = "Starting…";
-      $("activityStream").innerHTML = '<div class="__empty px-6 py-6 text-outline-variant text-sm italic">Waiting for the agent to come online…</div>';
-      $("queryGrid").innerHTML = "";
-      $("liveSourcesList").innerHTML = '<div class="text-outline-variant text-xs italic">Sources will appear as the agent fetches them.</div>';
-      $("livesSourcesCount").textContent = "0";
+      if ($("activityStream")) $("activityStream").innerHTML = '<div class="__empty text-[11px] text-zinc-600 italic px-1 py-2">Waiting for activity…</div>';
+      if ($("queryGrid")) $("queryGrid").innerHTML = "";
+      if ($("liveSourcesList")) $("liveSourcesList").innerHTML = '<div class="text-[11px] text-zinc-600 italic px-1 py-2">No sources yet.</div>';
+      if ($("livesSourcesCount")) $("livesSourcesCount").textContent = "0";
       if ($("memoBody")) {
         $("memoBody").textContent = "";
         $("memoBody").classList.remove("stream-cursor");
@@ -1127,10 +1638,10 @@
       $("processingBar").style.width = "0%";
       $("processingPercent").textContent = "0%";
       $("processingPhaseLabel").textContent = "Starting...";
-      $("activityStream").innerHTML = '<div class="__empty px-6 py-6 text-outline-variant text-sm italic">Waiting for the agent to come online...</div>';
-      $("queryGrid").innerHTML = "";
-      $("liveSourcesList").innerHTML = '<div class="text-outline-variant text-xs italic">Sources will appear as the agent fetches them.</div>';
-      $("livesSourcesCount").textContent = "0";
+      if ($("activityStream")) $("activityStream").innerHTML = '<div class="__empty text-[11px] text-zinc-600 italic px-1 py-2">Waiting for activity…</div>';
+      if ($("queryGrid")) $("queryGrid").innerHTML = "";
+      if ($("liveSourcesList")) $("liveSourcesList").innerHTML = '<div class="text-[11px] text-zinc-600 italic px-1 py-2">No sources yet.</div>';
+      if ($("livesSourcesCount")) $("livesSourcesCount").textContent = "0";
       window.__lastIntel = {};
     }
 
@@ -1151,19 +1662,33 @@
       const wrapper = document.createElement("div");
       wrapper.className = "chat-turn";
       wrapper.dataset.turnId = turnId;
+      const isMarathon = researchMode === "marathon";
+      const loaderHtml = isMarathon
+        ? `<div class="marathon-loader"><div class="orbit"></div><div class="orbit"></div><div class="core"></div></div>`
+        : `<div class="research-loader"><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>`;
+      const modeColor = isMarathon ? "var(--marathon)" : "var(--research)";
+      const modeLabel = isMarathon ? "Marathon research" : "Researching";
+      const fillClass = isMarathon ? "marathon" : "research";
       wrapper.innerHTML = `
         <div class="chat-row user">
           <div class="user-bubble"></div>
         </div>
         <div class="chat-row assistant">
-          <div class="shrink-0 mt-1">
-            <div class="w-8 h-8 rounded-lg bg-[#1e2129] flex items-center justify-center border border-white/[0.09]">
-              <span class="material-symbols-outlined text-[15px] text-gray-300">graphic_eq</span>
-            </div>
-          </div>
           <div class="assistant-card">
-            <div class="turn-visual-dashboard hidden"></div>
+            <div class="turn-progress-container">
+              <div class="turn-progress">
+                ${loaderHtml}
+                <div class="turn-progress-text">
+                  <div class="turn-progress-phase" style="color:${modeColor}">${modeLabel}</div>
+                  <div class="turn-progress-detail">Starting...</div>
+                  <div class="turn-progress-bar"><div class="turn-progress-fill ${fillClass}" style="width:0%"></div></div>
+                </div>
+              </div>
+            </div>
+            <!-- Memo renders FIRST so the text answer is what the user sees -->
             <div class="turn-memo memo-prose break-words overflow-x-auto max-w-full min-w-0"></div>
+            <!-- Visuals (charts, comparison tables, metric cards) render BELOW the memo -->
+            <div class="turn-visual-dashboard visual-dashboard hidden" style="margin-top:18px"></div>
           </div>
         </div>
       `;
@@ -1183,13 +1708,18 @@
         queryEl,
         memoEl,
         visualEl,
+        marathonExportRendered: false,
       };
       conversationTurns.push(turn);
       activeTurnId = turnId;
       showState("result");
-      $("resultTitle").textContent = "Research chat";
-      $("resultBreadcrumb").textContent = "Conversation";
-      setTimeout(() => wrapper.scrollIntoView({ behavior: "smooth", block: "end" }), 0);
+      $("resultTitle").textContent = "";
+      $("resultBreadcrumb").textContent = "";
+      // Scroll to bottom to keep the new turn visible
+      setTimeout(() => {
+        const scrollArea = wrapper.closest('.overflow-y-auto');
+        if (scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
+      }, 50);
       return turn;
     }
 
@@ -1206,12 +1736,23 @@
 
     function shouldShowVisuals(query, outputMode) {
       const q = (query || "").toLowerCase();
-      const explicitVisual = /\b(stats|statistics|financials?|chart|graph|historical|history|trend|comparison|compare|valuation|revenue|profit|margin|market cap|shareholding|performance|pe ratio|p\/e)\b/.test(q);
-      const simpleText = /\b(news|latest|headline|full form|define|meaning|in one line|one-line|what is|stands for)\b/.test(q);
-      const visualModes = new Set(["company_snapshot", "company_comparison", "valuation_model", "investment_view", "deep_research_report"]);
-      const hiddenModes = new Set(["news_brief", "direct_answer"]);
+      // Comparison queries — always show visuals
+      const isComparison = /\bvs\.?\b|\bversus\b|\bcompare\b|\bcomparison\b/.test(q)
+        || (q.includes(" vs ") || q.includes(" vs."));
+      if (isComparison) return true;
+      // Finance / analytics keywords
+      const explicitVisual = /\b(stats|statistics|financials?|chart|graph|historical|history|trend|valuation|revenue|profit|margin|market.?cap|shareholding|performance|pe.?ratio|p\/e|roe|roce|ebitda|earnings|quarterly|annual|report|price|return|dividend|debt|cash.?flow|capex)\b/.test(q);
       if (explicitVisual) return true;
-      if (hiddenModes.has(outputMode) || simpleText) return false;
+      // Simple text-only requests — never show visuals
+      const simpleText = /\b(news|latest|headline|full form|define|meaning|in one line|one-line|what is|stands for|who is|when was|where is)\b/.test(q);
+      if (simpleText) return false;
+      // Mode-based gate (only for modes that have structured visual data)
+      const visualModes = new Set([
+        "company_snapshot", "company_comparison", "valuation_model",
+        "investment_view", "deep_research_report"
+      ]);
+      const hiddenModes = new Set(["news_brief", "direct_answer"]);
+      if (hiddenModes.has(outputMode)) return false;
       return visualModes.has(outputMode);
     }
 
@@ -1227,12 +1768,20 @@
     function renderTurnMemo(turnId, text, { streaming = false } = {}) {
       const turn = getTurn(turnId);
       if (!turn) return;
+      // Hide the progress/thinking indicator the moment we have any content
+      const progressContainer = turn.root.querySelector(".turn-progress-container");
+      if (progressContainer && text) progressContainer.remove();
       turn.memoEl.classList.toggle("stream-cursor", streaming);
       if (streaming) {
         turn.memoEl.textContent = cleanMemoText(text || "");
       } else {
         turn.memoEl.innerHTML = renderMarkdown(cleanMemoText(text || ""));
         hydrateMermaidBlocks();
+      }
+      // Keep scrolled to bottom during streaming
+      if (streaming) {
+        const scrollArea = turn.root.closest('.overflow-y-auto');
+        if (scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
       }
     }
 
@@ -1242,25 +1791,60 @@
         if (turn?.visualEl) turn.visualEl.classList.add("hidden");
         return;
       }
+      // ── Dedup: skip if visuals were already rendered by visual_data_ready ──
+      if (turn.visualEl.querySelector('.metric-cards-grid') || turn.visualEl.querySelector('.chart-container-native')) {
+        turn.visualEl.classList.remove("hidden");
+        return;
+      }
       const intel = turn.intel || {};
       const yahoo = intel.yahoo || {};
-      const cards = [];
-      if (yahoo.price != null) cards.push(["Price", `${yahoo.currency || ""} ${Number(yahoo.price).toLocaleString()}`.trim()]);
-      if (yahoo.market_cap) cards.push(["Market cap", fmtMoney(yahoo.market_cap, yahoo.currency || "USD")]);
+      const indiaSnap = intel.india_snap || {};
       const metrics = yahoo.financial_metrics || {};
-      if (metrics.total_revenue) cards.push(["Revenue", fmtMoney(metrics.total_revenue, yahoo.currency || "USD")]);
-      if (metrics.profit_margins != null) cards.push(["Net margin", `${(metrics.profit_margins * 100).toFixed(1)}%`]);
-      if (!cards.length && !(yahoo.series_closes?.length >= 2) && !(yahoo.annual_revenue?.length >= 2)) {
+
+      const metricCards = [];
+      const cur = yahoo.currency || "INR";
+      if (yahoo.price != null)
+        metricCards.push({ label: "Price", value: cur === "INR" ? `₹${Number(yahoo.price).toLocaleString("en-IN")}` : `${cur} ${Number(yahoo.price).toLocaleString()}`, icon: "trending_up", accent: "#38bdf8" });
+      if (yahoo.market_cap)
+        metricCards.push({ label: "Market cap", value: fmtMoney(yahoo.market_cap, cur), icon: "account_balance", accent: "#34d399" });
+      if (metrics.total_revenue)
+        metricCards.push({ label: "Revenue", value: fmtMoney(metrics.total_revenue, cur), icon: "payments", accent: "#a78bfa" });
+      if (metrics.profit_margins != null)
+        metricCards.push({ label: "Net margin", value: `${(metrics.profit_margins * 100).toFixed(1)}%`, icon: "percent", accent: "#fbbf24", changeType: metrics.profit_margins >= 0.15 ? "positive" : "neutral" });
+      if (metrics.return_on_equity != null)
+        metricCards.push({ label: "ROE", value: `${(metrics.return_on_equity * 100).toFixed(1)}%`, icon: "show_chart", accent: "#34d399", changeType: metrics.return_on_equity >= 0.15 ? "positive" : "neutral" });
+      if (metrics.trailing_pe != null)
+        metricCards.push({ label: "P/E", value: `${metrics.trailing_pe.toFixed(1)}×`, icon: "analytics", accent: "#93c5fd" });
+      if (!metricCards.length && indiaSnap.pe_ratio != null)
+        metricCards.push({ label: "P/E", value: `${indiaSnap.pe_ratio.toFixed(1)}×`, icon: "analytics", accent: "#93c5fd" });
+      if (!metricCards.some(c => c.label === "ROE") && indiaSnap.roe != null)
+        metricCards.push({ label: "ROE", value: `${indiaSnap.roe.toFixed(1)}%`, icon: "show_chart", accent: "#34d399" });
+
+      const hasMetrics = metricCards.length > 0;
+      const hasPriceChart = yahoo.series_closes?.length >= 2;
+      const hasRevenueChart = yahoo.annual_revenue?.length >= 2;
+      if (!hasMetrics && !hasPriceChart && !hasRevenueChart) {
         turn.visualEl.classList.add("hidden");
         return;
       }
-      const cardHtml = cards.length ? `
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-          ${cards.map(([label, value]) => `<div class="bg-black/20 border border-white/10 rounded-lg p-3"><div class="label-mono text-[9px] text-gray-500">${escapeHtml(label)}</div><div class="text-sm font-semibold text-white mt-1">${escapeHtml(value)}</div></div>`).join("")}
-        </div>` : "";
-      const priceChart = yahoo.series_closes?.length >= 2 ? buildSimpleLineChart(yahoo.series_closes, yahoo.series_dates || [], "Price trend") : "";
-      const revenueChart = yahoo.annual_revenue?.length >= 2 ? buildSimpleBarChart(yahoo.annual_revenue, yahoo.annual_revenue_dates || [], "Annual revenue") : "";
-      turn.visualEl.innerHTML = `<div class="analysis-panel">${cardHtml}${priceChart}${revenueChart}</div>`;
+
+      if (hasMetrics) renderMetricCardsIntoTurn(turn, metricCards);
+      if (hasPriceChart || hasRevenueChart) {
+        const charts = [];
+        if (hasPriceChart) charts.push({
+          title: "Price history (30d)",
+          chart_type: "line",
+          labels: yahoo.series_dates || [],
+          series: [{ name: "Price", color: "#38bdf8", data: yahoo.series_closes.map(v => ({ value: v })) }]
+        });
+        if (hasRevenueChart) charts.push({
+          title: "Annual revenue",
+          chart_type: "bar",
+          labels: yahoo.annual_revenue_dates || [],
+          series: [{ name: "Revenue", color: "#a78bfa", data: yahoo.annual_revenue.map(v => ({ value: v })) }]
+        });
+        renderChartsIntoTurn(turn, charts);
+      }
       turn.visualEl.classList.remove("hidden");
     }
 
@@ -1273,15 +1857,21 @@
       const y = (v) => H - P - ((v - min) / range) * (H - P * 2);
       const pts = data.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
       const up = data[data.length - 1] >= data[0];
-      const color = up ? "#6ee7b7" : "#ffb4ab";
-      return `<div class="chart-box mb-3"><div class="label-mono text-[10px] text-gray-400 mb-2">${escapeHtml(title)}</div><svg viewBox="0 0 ${W} ${H}" class="w-full h-44"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="${P}" y="${H - 4}" fill="#94a3b8" font-size="10">${escapeHtml((labels[0] || "").slice(0, 10))}</text><text x="${W - P}" y="${H - 4}" text-anchor="end" fill="#94a3b8" font-size="10">${escapeHtml((labels[labels.length - 1] || "").slice(0, 10))}</text></svg></div>`;
+      const color = up ? "#38bdf8" : "#fb7185";
+      const gradId = `lineGrad_${Date.now()}`;
+      return `<div class="chart-box mb-3"><div class="label-mono text-[10px] text-gray-400 mb-2">${escapeHtml(title)}</div><svg viewBox="0 0 ${W} ${H}" class="w-full h-44"><defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity="0.3"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><polygon points="${pts} ${(W-P).toFixed(1)},${(H-P).toFixed(1)} ${P},${(H-P).toFixed(1)}" fill="url(#${gradId})"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><text x="${P}" y="${H - 4}" fill="#94a3b8" font-size="10" font-family="'JetBrains Mono', monospace">${escapeHtml((labels[0] || "").slice(0, 10))}</text><text x="${W - P}" y="${H - 4}" text-anchor="end" fill="#94a3b8" font-size="10" font-family="'JetBrains Mono', monospace">${escapeHtml((labels[labels.length - 1] || "").slice(0, 10))}</text></svg></div>`;
     }
 
     function buildSimpleBarChart(values, labels, title) {
       const data = values.map(Number).filter((v) => Number.isFinite(v));
       if (data.length < 2) return "";
       const max = Math.max(...data.map((v) => Math.abs(v))) || 1;
-      return `<div class="chart-box"><div class="label-mono text-[10px] text-gray-400 mb-3">${escapeHtml(title)}</div><div class="flex items-end gap-2 h-40">${data.map((v, i) => `<div class="flex-1 flex flex-col items-center gap-1"><div class="w-full rounded-t bg-[#22c55e]" style="height:${Math.max(4, Math.abs(v) / max * 130)}px"></div><div class="text-[9px] text-gray-500">${escapeHtml(((labels[i] || `FY${i + 1}`).toString()).slice(0, 4))}</div></div>`).join("")}</div></div>`;
+      const barColors = ["#22d3ee","#6ee7b7","#a78bfa","#fbbf24","#f472b6","#fb923c","#818cf8","#93c5fd"];
+      return `<div class="chart-box"><div class="label-mono text-[10px] text-gray-400 mb-3">${escapeHtml(title)}</div><div class="flex items-end gap-3 h-40">${data.map((v, i) => {
+        const color = barColors[i % barColors.length];
+        const h = Math.max(6, Math.abs(v) / max * 130);
+        return `<div class="flex-1 flex flex-col items-center gap-1"><div class="w-full rounded-t-md" style="height:${h}px;background:linear-gradient(180deg, ${color}, ${color}88);box-shadow:0 0 12px ${color}22"></div><div class="text-[9px] text-gray-500">${escapeHtml(((labels[i] || `FY${i + 1}`).toString()).slice(0, 4))}</div></div>`;
+      }).join("")}</div></div>`;
     }
 
     // ── Multi-agent grid ──────────────────────────────────────────────────
@@ -1635,7 +2225,7 @@
       const yAt = (v) => PAD_T + innerH - ((v - min) / range) * innerH;
       const last = data[data.length - 1];
       const first = data[0];
-      const direction = last >= first ? "#6ee7b7" : "#ffb4ab";
+      const direction = last >= first ? "#38bdf8" : "#fb7185";
       const directionClass = last >= first ? "text-success" : "text-error";
       const pts = data.map((v, i) => `${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`);
       // Y-axis ticks
@@ -1796,7 +2386,8 @@
         const top = PAD_T + innerH - ((p.value - minV) / range) * innerH;
         const y = p.value >= 0 ? top : zeroY;
         const h = Math.abs(zeroY - top);
-        const color = p.value >= 0 ? "#6ee7b7" : "#ffb4ab";
+        const posColors = ["#22d3ee","#6ee7b7","#a78bfa","#93c5fd","#fbbf24","#818cf8"];
+        const color = p.value >= 0 ? posColors[i % posColors.length] : "#ffb4ab";
         const fy = p.fy || (p.end || "").slice(0, 4);
         const lblBase = isEps ? (tickerCurrency === "INR" ? `₹${p.value.toFixed(2)}` : `$${p.value.toFixed(2)}`) : fmtCompactUsd(p.value);
         const inr = (!isEps && fxRate) ? ` / ${fmtCompactInr(p.value, fxRate)}` : "";
@@ -1998,7 +2589,7 @@
       const range = maxV - minV || 1;
       const yAt = (v) => PT + ih - ((v - minV) / range) * ih;
       const xAt = (i) => PL + (labels.length === 1 ? iw / 2 : (i / (labels.length - 1)) * iw);
-      const palette = ["#6ee7b7", "#93c5fd", "#fbbf24", "#f0abfc"];
+      const palette = ["#38bdf8", "#a78bfa", "#fbbf24", "#f472b6"];
       const fmt = (v) => {
         const a = Math.abs(v);
         if (a >= 1e12) return (v / 1e12).toFixed(1) + "T";
@@ -2181,34 +2772,12 @@
     // Memo library
     // ────────────────────────────────────────────────────────────────────
     async function loadMemoLibrary() {
+      // In the minimalist UI we no longer render a memo library sidebar.
+      // We still fetch so the count is available if other code needs it.
       try {
         const r = await fetch("/memos");
         if (!r.ok) return;
-        const { memos } = await r.json();
-        const grid = $("memoLibraryGrid");
-        const sidebar = $("recentThreadsList");
-        if (!memos.length) {
-          grid.innerHTML = '<div class="text-outline-variant text-sm italic">Run your first research to populate this list.</div>';
-          if (sidebar) sidebar.innerHTML = '<div class="text-[11px] text-gray-600 italic px-1 py-2">No recent chats yet.</div>';
-          return;
-        }
-        grid.innerHTML = "";
-        if (sidebar) sidebar.innerHTML = "";
-        for (const m of memos.slice(0, 6)) {
-          const a = document.createElement("a");
-          a.href = `/sessions/${m.session_id}/memo`;
-          a.target = "_blank";
-          a.className = "flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/10 hover:border-primary/40 transition-all group";
-          const when = new Date(m.modified).toLocaleString();
-          a.innerHTML = `
-          <div class="min-w-0">
-            <div class="text-[13.5px] font-medium text-on-surface group-hover:text-primary transition-colors truncate">${escapeHtml(m.title || "Memo")}</div>
-            <div class="label-mono text-[10px] text-on-surface-variant truncate mt-0.5">${when} · ${Math.round(m.bytes / 1024)} KB</div>
-          </div>
-          <span class="material-symbols-outlined text-[18px] text-on-surface-variant group-hover:text-primary transition-colors">open_in_new</span>
-        `;
-          grid.appendChild(a);
-        }
+        await r.json();
       } catch (_) { }
     }
 
@@ -2228,9 +2797,9 @@
         return;
       }
       
-      // Sync the input
-      $("targetInput").value = target;
-            if ($("heroSearchInput")) $("heroSearchInput").value = target;
+      // Clear the input for next query
+      $("targetInput").value = "";
+            if ($("heroSearchInput")) $("heroSearchInput").value = "";
             if ($("activeInput")) $("activeInput").value = "";
             // Animate the hero title out
             const hero = $("heroTitle");
@@ -2241,26 +2810,21 @@
             const runToken = ++activeRunToken;
             resetRunPanels();
             const turn = appendConversationTurn(target);
-            showState("processing");
+            showState("result");
             $("processingTarget").textContent = target;
             $("processingTitle").textContent = target;
             // Show stop button, hide execute during processing
             $("stopBtn").classList.remove("hidden");
-            $("stopBtn").classList.add("flex");
             $("executeBtn").classList.add("hidden");
-            
+
+            const bar = $("processingBar");
+            bar.classList.remove("research-mode", "marathon-mode");
             if (researchMode === "marathon") {
-              $("processingPhaseLabel").innerHTML = `<span class="text-purple-400 font-medium">🏃 Marathon research in progress...</span>`;
-              $("processingBar").classList.remove("bg-gray-500");
-              $("processingBar").classList.add("bg-purple-500");
-            } else if (researchMode === "deep") {
-              $("processingPhaseLabel").innerHTML = `<span class="text-blue-400 font-medium">🔬 Deep analysis in progress...</span>`;
-              $("processingBar").classList.remove("bg-gray-500");
-              $("processingBar").classList.add("bg-blue-500");
+              $("processingPhaseLabel").innerHTML = `<span style="color: var(--marathon);">Marathon research · multi-pass</span>`;
+              bar.classList.add("marathon-mode");
             } else {
-              $("processingPhaseLabel").textContent = "Starting...";
-              $("processingBar").classList.remove("bg-purple-500", "bg-blue-500");
-              $("processingBar").classList.add("bg-gray-500");
+              $("processingPhaseLabel").innerHTML = `<span style="color: var(--research);">Research · focused analysis</span>`;
+              bar.classList.add("research-mode");
             }
 
             startedAt = Date.now();
@@ -2268,12 +2832,12 @@
             tickHandle = setInterval(tickElapsed, 250);
 
             let resp;
-            const endpoint = (researchMode === "deep" || researchMode === "marathon") ? "/research/deep" : "/research/start";
+            // Research mode = FAST single-pass via /research/start (mode=standard)
+            // Marathon mode = full multi-pass via /research/deep (12 passes)
+            const endpoint = researchMode === "marathon" ? "/research/deep" : "/research/start";
             const payload = researchMode === "marathon"
               ? { target, passes: 12, pass_depth: 120, max_wall_seconds: 4 * 60 * 60, heartbeat_interval_s: 20 }
-              : researchMode === "deep"
-                ? { target, passes: 5, pass_depth: 40 }
-                : { target, mode: "chat" };
+              : { target, mode: "standard" };
 
             try {
               const email = currentUserEmail();
@@ -2505,7 +3069,6 @@
                 if (turn) {
                   turn.memoBuffer = full;
                   renderTurnMemo(turn.turnId, full);
-                  renderTurnVisuals(turn.turnId);
                 }
                 window.__lastMemoMd = full;
               } catch (_) {
@@ -2513,21 +3076,35 @@
                 if (turn) {
                   turn.memoBuffer = d.preview || "";
                   renderTurnMemo(turn.turnId, d.preview || "");
-                  renderTurnVisuals(turn.turnId);
                 }
               }
               pushActivity("auto_awesome", "Synthesizer", `Memo synthesized via ${d.via} (${d.chars} chars)`, "done");
             });
 
-            // Visual data event handler
+            // ═══ DYNAMIC RENDERING ENGINE ═══════════════════════════════
+            // Inline custom components (metric cards, charts, comparisons)
+            // mount ONLY when the agent emits `visual_data_ready` with payload
+            // that justifies them. Simple text queries get text-only responses.
             eventSource.addEventListener("visual_data_ready", (e) => {
               if (runToken !== activeRunToken) return;
               const d = JSON.parse(e.data);
-              if (!turn || !shouldShowVisuals(turn.query, turn.outputMode)) return;
+              if (!turn) return;
+              if (!shouldShowVisuals(turn.query, turn.outputMode)) return;
               turn.visualEl.classList.remove("hidden");
-              const cards = (d.metric_cards || []).map((c) => [c.label || "", c.value || ""]);
-              if (cards.length) {
-                turn.visualEl.innerHTML = `<div class="analysis-panel"><div class="grid grid-cols-2 md:grid-cols-4 gap-2">${cards.map(([label, value]) => `<div class="bg-black/20 border border-white/10 rounded-lg p-3"><div class="label-mono text-[9px] text-gray-500">${escapeHtml(label)}</div><div class="text-sm font-semibold text-white mt-1">${escapeHtml(value)}</div></div>`).join("")}</div></div>`;
+              // Dedup: only render each component once
+              if (Array.isArray(d.metric_cards) && d.metric_cards.length && !turn.visualEl.querySelector('.metric-cards-grid')) {
+                renderMetricCardsIntoTurn(turn, d.metric_cards);
+              }
+              if (Array.isArray(d.charts) && d.charts.length) {
+                // Filter out charts with no usable data (missing labels/series)
+                const validCharts = d.charts.filter(c => (c.labels?.length || c.series?.length));
+                if (validCharts.length && !turn.visualEl.querySelector('.chart-container-native')) {
+                  renderChartsIntoTurn(turn, validCharts);
+                }
+              }
+              const compData = d.comparison_results || d.comparison;
+              if (Array.isArray(compData) && compData.length && !turn.visualEl.querySelector('.comp-scoreboard')) {
+                renderComparisonIntoTurn(turn, compData);
               }
             });
 
@@ -2539,35 +3116,50 @@
                 turn.rich = d.rich || null;
                 renderTurnVisuals(turn.turnId);
 
-                // Render rich payload if available (better formatted)
+                // Render rich payload if available — use proper card renderers
                 if (d.rich) {
-                  let html = `<div class="rich-panel mt-4 p-4 border border-emerald-500/30 bg-emerald-500/5 rounded-xl">`;
-                  if (d.rich.title) html += `<div class="font-semibold text-emerald-300 mb-3">${d.rich.title}</div>`;
-                  
-                  if (d.rich.metric_cards?.length) {
-                    html += `<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">`;
-                    d.rich.metric_cards.forEach(c => {
-                      html += `<div class="bg-black/40 border border-white/10 rounded p-3"><div class="text-[10px] text-gray-400">${c.label}</div><div class="text-lg font-bold">${c.value}</div></div>`;
-                    });
-                    html += `</div>`;
+                  if (d.rich.metric_cards?.length && !turn.visualEl.querySelector('.metric-cards-grid')) {
+                    renderMetricCardsIntoTurn(turn, d.rich.metric_cards);
                   }
-                  
-                  html += `<div class="text-xs text-emerald-300">Structured rich data available.</div></div>`;
-                  turn.visualEl.insertAdjacentHTML("beforeend", html);
+                  if (d.rich.charts?.length && !turn.visualEl.querySelector('.chart-container-native')) {
+                    renderChartsIntoTurn(turn, d.rich.charts);
+                  }
+                  const richComp = d.rich.comparison_rows || d.rich.comparison_results || d.rich.comparison;
+                  if (richComp?.length && !turn.visualEl.querySelector('.comp-scoreboard')) {
+                    renderComparisonIntoTurn(turn, richComp);
+                  }
                   turn.visualEl.classList.remove("hidden");
                 }
 
-                if (researchMode === "marathon") {
+                if (researchMode === "marathon" && !turn.marathonExportRendered) {
+                  turn.marathonExportRendered = true;
                   const exportHtml = `
-                    <div class="mt-4 p-4 border border-indigo-500/30 bg-indigo-500/10 rounded-lg">
-                      <div class="text-sm text-indigo-300 font-semibold mb-2 flex items-center gap-2">
-                        <span class="material-symbols-outlined text-[16px]">task_alt</span> Marathon Research Complete.
+                    <div class="claude-card anim-fade-up" style="border-color: rgba(167,139,250,0.3); background: linear-gradient(145deg, rgba(167,139,250,0.06), rgba(12,12,14,0.95));">
+                      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                        <div style="width:40px;height:40px;border-radius:12px;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.25);display:flex;align-items:center;justify-content:center">
+                          <span class="material-symbols-outlined" style="font-size:20px;color:var(--marathon)">auto_awesome</span>
+                        </div>
+                        <div>
+                          <div style="font-size:13px;font-weight:600;color:var(--text);letter-spacing:-0.01em">Marathon report complete</div>
+                          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-muted);letter-spacing:0.04em">Export as professionally formatted document</div>
+                        </div>
                       </div>
-                      <div class="text-xs text-gray-400 mb-3">Generate a professional document for offline review:</div>
-                      <div class="flex gap-2">
-                        <button onclick="window.exportToPdf()" class="px-3 py-1.5 bg-red-600/80 hover:bg-red-500 text-white rounded text-xs flex items-center gap-1 transition-colors"><span class="material-symbols-outlined text-[14px]">picture_as_pdf</span> PDF</button>
-                        <button onclick="window.exportToWord()" class="px-3 py-1.5 bg-blue-600/80 hover:bg-blue-500 text-white rounded text-xs flex items-center gap-1 transition-colors"><span class="material-symbols-outlined text-[14px]">description</span> Word</button>
-                        <button onclick="window.exportToExcel()" class="px-3 py-1.5 bg-green-600/80 hover:bg-green-500 text-white rounded text-xs flex items-center gap-1 transition-colors"><span class="material-symbols-outlined text-[14px]">table_chart</span> Excel</button>
+                      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                        <button onclick="window.exportToPdf()" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 12px;background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);border-radius:12px;color:var(--text);cursor:pointer;transition:all 0.2s;">
+                          <span class="material-symbols-outlined" style="font-size:22px;color:#f87171">picture_as_pdf</span>
+                          <span style="font-size:11px;font-weight:600">PDF Report</span>
+                          <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-muted)">Styled layout</span>
+                        </button>
+                        <button onclick="window.exportToWord()" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 12px;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.2);border-radius:12px;color:var(--text);cursor:pointer;transition:all 0.2s;">
+                          <span class="material-symbols-outlined" style="font-size:22px;color:#60a5fa">description</span>
+                          <span style="font-size:11px;font-weight:600">Word Doc</span>
+                          <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-muted)">Editable</span>
+                        </button>
+                        <button onclick="window.exportToExcel()" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 12px;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.2);border-radius:12px;color:var(--text);cursor:pointer;transition:all 0.2s;">
+                          <span class="material-symbols-outlined" style="font-size:22px;color:#4ade80">table_chart</span>
+                          <span style="font-size:11px;font-weight:600">Excel Data</span>
+                          <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-muted)">Spreadsheet</span>
+                        </button>
                       </div>
                     </div>
                   `;
@@ -2575,17 +3167,24 @@
                   turn.visualEl.classList.remove("hidden");
                 }
               }
-              $("processingBar").style.width = "100%";
-              $("processingPercent").textContent = "100%";
-              $("processingPhaseLabel").textContent = "Done";
-              // Restore execute button, hide stop
-              $("stopBtn").classList.add("hidden");
-              $("stopBtn").classList.remove("flex");
-              $("executeBtn").classList.remove("hidden");
-              pushActivity("flag", "Final", `${d.steps} steps · ${d.citations} citations · ${d.primary_citations} primary · ${(d.elapsed_ms / 1000).toFixed(1)}s`, "done", d.canonical || "");
-              if (tickHandle) clearInterval(tickHandle);
-              tickHandle = null;
-              loadMemoLibrary();
+              // Only mark complete and restore the UI for the true synthesis pass.
+              // Intermediate passes (memo_via === "suppressed") must not reset progress.
+              if (d.memo_via !== "suppressed") {
+                $("processingBar").style.width = "100%";
+                $("processingPercent").textContent = "100%";
+                $("processingPhaseLabel").innerHTML = `<span style="color: var(--success);">Complete</span>`;
+                $("stopBtn").classList.add("hidden");
+                $("executeBtn").classList.remove("hidden");
+                // Remove inline progress from the turn
+                if (turn) {
+                  const pc = turn.root.querySelector(".turn-progress-container");
+                  if (pc) pc.remove();
+                }
+                pushActivity("flag", "Final", `${d.steps} steps · ${d.citations} citations · ${d.primary_citations} primary · ${(d.elapsed_ms / 1000).toFixed(1)}s`, "done", d.canonical || "");
+                if (tickHandle) clearInterval(tickHandle);
+                tickHandle = null;
+                loadMemoLibrary();
+              }
             });
             eventSource.addEventListener("warning", (e) => {
               const d = JSON.parse(e.data);
@@ -2611,9 +3210,7 @@
             eventSource.onerror = () => {
               if (runToken !== activeRunToken) return;
               pushActivity("link_off", "Stream", "Connection lost", "error");
-              // Restore buttons on error
               $("stopBtn").classList.add("hidden");
-              $("stopBtn").classList.remove("flex");
               $("executeBtn").classList.remove("hidden");
             };
           }
@@ -2628,24 +3225,32 @@
             startRun();
           }));
 
-          // Mode toggle: Deep vs Marathon
+          // ── Mode toggle: Research vs Marathon (animated pill) ──
+          const modeSelector = document.getElementById("modeSelector");
+          const modeIndicator = document.getElementById("modeIndicator");
           document.querySelectorAll(".mode-toggle").forEach((btn) => btn.addEventListener("click", () => {
-            // Reset all toggles to inactive
-            document.querySelectorAll(".mode-toggle").forEach((b) => {
-              b.className = "mode-toggle text-[9px] uppercase font-mono px-2.5 py-1 border border-white/[0.09] rounded hover:text-white hover:border-white/20 transition-all tracking-widest text-gray-500";
-            });
-            const isDeep = btn.id === "modeDeep";
             const isMarathon = btn.id === "modeMarathon";
             researchMode = isMarathon ? "marathon" : "deep";
-            // Highlight active button
-            if (isMarathon) {
-              btn.className = "mode-toggle text-[9px] uppercase font-mono px-2.5 py-1 border rounded transition-all tracking-widest bg-purple-500/15 text-purple-400 border-purple-500/30";
-            } else {
-              btn.className = "mode-toggle text-[9px] uppercase font-mono px-2.5 py-1 border rounded transition-all tracking-widest bg-blue-500/15 text-blue-400 border-blue-500/30";
+            // Update pill indicator via data attribute (CSS handles the slide)
+            modeSelector.setAttribute("data-mode", isMarathon ? "marathon" : "deep");
+            // Toggle active state on buttons
+            document.querySelectorAll(".mode-toggle").forEach((b) => {
+              b.classList.toggle("active", b === btn);
+              b.setAttribute("aria-selected", b === btn ? "true" : "false");
+            });
+            // Update mode indicator text near input
+            if (modeIndicator) {
+              modeIndicator.textContent = isMarathon ? "marathon mode" : "research mode";
+              modeIndicator.style.color = isMarathon ? "var(--marathon)" : "var(--research)";
             }
           }));
+          // Initialize indicator color
+          if (modeIndicator) modeIndicator.style.color = "var(--research)";
 
-          // ── Stop button handler ──
+          // ─── ABORT CONTROL ───────────────────────────────────────────
+          // Terminates the active generation stream both client-side (closes
+          // EventSource, clears tick) and server-side (POST /sessions/:id/stop).
+          // Exposed globally via Esc key + the persistent stop button.
           async function stopRun() {
             if (!sessionId) return;
             try {
@@ -2653,17 +3258,47 @@
             } catch (e) { console.warn("Stop request failed:", e); }
             if (eventSource) { eventSource.close(); eventSource = null; }
             if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
-            $("processingPhaseLabel").innerHTML = `<span class="text-red-400 font-medium">⏹ Research stopped by user</span>`;
-            $("processingBar").style.width = $("processingBar").style.width; // freeze
-            // Restore buttons
+            $("processingPhaseLabel").innerHTML = `<span style="color: var(--error);">Generation stopped</span>`;
             $("stopBtn").classList.add("hidden");
-            $("stopBtn").classList.remove("flex");
             $("executeBtn").classList.remove("hidden");
+            const activeTurn = getTurn();
+            if (activeTurn) {
+              // Remove inline progress
+              const pc = activeTurn.root.querySelector(".turn-progress-container");
+              if (pc) pc.remove();
+              if (!activeTurn.memoBuffer) {
+                activeTurn.memoEl.innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Generation stopped by user.</p>`;
+              }
+            }
             pushActivity("stop_circle", "User", "Research cancelled", "warning");
           }
           $("stopBtn").addEventListener("click", stopRun);
 
-          console.log("[DEBUG] Wiring executeBtn listener now...");
+          // ── Activity drawer toggle ──
+          const activityDrawer = document.getElementById("activityDrawer");
+          const activityToggleBtn = document.getElementById("activityToggle");
+          const activityCloseBtn = document.getElementById("activityClose");
+          if (activityToggleBtn) {
+            activityToggleBtn.addEventListener("click", () => {
+              const isOpen = activityDrawer.classList.toggle("open");
+              activityToggleBtn.classList.toggle("active", isOpen);
+            });
+          }
+          if (activityCloseBtn) {
+            activityCloseBtn.addEventListener("click", () => {
+              activityDrawer.classList.remove("open");
+              activityToggleBtn?.classList.remove("active");
+            });
+          }
+
+          // ── Global keyboard shortcut: Esc aborts active generation ──
+          document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && !$("stopBtn").classList.contains("hidden")) {
+              e.preventDefault();
+              stopRun();
+            }
+          });
+
           $("executeBtn").addEventListener("click", startRun);
           $("targetInput").addEventListener("keydown", (e) => { if (e.key === "Enter") startRun(); });
           // Hero search input (Perplexity-style centered)
@@ -2751,47 +3386,380 @@
           showState("command");
 
           // ════════════════════════════════════════════════════════════════════
-          // Visual Output Rendering Functions
-          // Render metric cards, charts, and comparison data from SSE events
+          // DYNAMIC RENDERING ENGINE — Inline components mounted into chat turns
           // ════════════════════════════════════════════════════════════════════
+          //
+          // These functions mount custom components (metric cards, Chart.js
+          // canvases, comparison tables) directly into the conversation turn's
+          // visualEl. They are called by the visual_data_ready SSE handler
+          // ONLY when the payload contains the relevant data.
+          //
+          // Turn-scoped variants ensure components mount in the correct chat
+          // bubble even during multi-turn conversations.
 
-          function renderMetricCards(cards) {
-            const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
-            if (!container) return;
+          function renderMetricCardsIntoTurn(turn, cards) {
+            if (!turn || !cards || !cards.length) return;
+            const _accentMap = {
+              price: "#38bdf8", "market cap": "#34d399", revenue: "#a78bfa",
+              "net margin": "#fbbf24", roe: "#34d399", roce: "#2dd4bf",
+              "p/e": "#93c5fd", "p/b": "#818cf8", ebitda: "#f472b6",
+              eps: "#fb923c", "52w range": "#94a3b8", "book value": "#64748b",
+              "div yield": "#86efac", "d/e": "#fca5a5", default: "#60a5fa"
+            };
+            const _iconMap = {
+              price: "trending_up", "market cap": "account_balance",
+              revenue: "payments", "net margin": "percent",
+              roe: "show_chart", roce: "bar_chart_4_bars",
+              "p/e": "analytics", "p/b": "library_books",
+              ebitda: "monitoring", eps: "currency_rupee",
+              "52w range": "expand", "book value": "book_2",
+              "div yield": "savings", "d/e": "account_balance_wallet",
+              default: "finance_mode"
+            };
+            const html = `
+              <div class="claude-card anim-scale-in">
+                <div class="claude-header">
+                  <span style="display:flex;align-items:center;gap:6px">
+                    <span class="material-symbols-outlined" style="font-size:14px;color:var(--text-muted)">monitoring</span>
+                    Key metrics
+                  </span>
+                  <span style="color: var(--text-faint); font-size:10px;text-transform:none;letter-spacing:0">${cards.length} data points</span>
+                </div>
+                <div class="metric-cards-grid">
+                  ${cards.map((c, i) => {
+                    const key = (c.label || "").toLowerCase();
+                    const accent = c.accent || _accentMap[key] || _accentMap.default;
+                    const icon  = c.icon  || _iconMap[key]  || _iconMap.default;
+                    const chgType = c.change_type || c.changeType || "neutral";
+                    const chgColor = chgType === "positive" ? "var(--success)"
+                      : chgType === "negative" ? "var(--error)" : "var(--text-muted)";
+                    const chgArrow = chgType === "positive" ? "arrow_upward" : chgType === "negative" ? "arrow_downward" : "";
+                    const changeHtml = c.change
+                      ? `<div class="metric-change" style="color:${chgColor}">${chgArrow ? `<span class="material-symbols-outlined" style="font-size:11px">${chgArrow}</span>` : ""} ${escapeHtml(c.change)}</div>` : "";
+                    return `
+                      <div class="metric-card" style="animation-delay:${i * 50}ms">
+                        <div class="metric-card-accent" style="background:linear-gradient(90deg, ${accent}, ${accent}66)"></div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                          <div class="metric-card-icon" style="background:${accent}15; color:${accent}; border:1px solid ${accent}20">
+                            <span class="material-symbols-outlined" style="font-size:14px">${icon}</span>
+                          </div>
+                          ${changeHtml}
+                        </div>
+                        <div class="metric-label">${escapeHtml(c.label || "")}</div>
+                        <div class="metric-value" style="background:linear-gradient(135deg, var(--text), ${accent}88);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${escapeHtml(c.value || "—")}</div>
+                      </div>`;
+                  }).join("")}
+                </div>
+              </div>`;
+            turn.visualEl.insertAdjacentHTML("beforeend", html);
+          }
 
-            let dashboard = document.getElementById("visualDashboard");
-            if (!dashboard) {
-              dashboard = document.createElement("div");
-              dashboard.id = "visualDashboard";
-              dashboard.className = "visual-dashboard";
-              container.insertBefore(dashboard, container.firstChild);
-            }
+          // Shared Chart.js defaults matching the dark theme
+          const _CHART_DEFAULTS = {
+            tooltipBg: "rgba(9,9,11,0.95)",
+            tooltipBorder: "rgba(255,255,255,0.12)",
+            gridColor: "rgba(255,255,255,0.04)",
+            tickColor: "#64748b",
+            legendColor: "#94a3b8",
+            fontFamily: "'JetBrains Mono', monospace",
+            palette: ["#38bdf8","#34d399","#a78bfa","#fb923c","#f472b6","#fbbf24","#818cf8","#22d3ee"],
+          };
 
-            let html = '<div class="claude-card"><div class="claude-header"><span>Metric Snapshot</span></div><div class="metric-cards-grid">';
+          function _makeGradient(ctx, color, h) {
+            try {
+              const g = ctx.getContext("2d").createLinearGradient(0, 0, 0, h || 260);
+              g.addColorStop(0,  color + "44");
+              g.addColorStop(0.6, color + "11");
+              g.addColorStop(1,  color + "00");
+              return g;
+            } catch(_) { return color + "22"; }
+          }
 
-            cards.forEach(card => {
-              const changeClass = card.change_type || "neutral";
-              const partialClass = card.is_partial ? "partial" : "";
-              const changeColor = changeClass === "positive" ? "text-success" : (changeClass === "negative" ? "text-danger" : "text-muted");
-              const changeHtml = card.change ? `<div class="metric-change ${changeColor} mt-1 text-xs font-semibold">${card.change}</div>` : "";
+          function renderChartsIntoTurn(turn, charts) {
+            if (!turn || !charts || !charts.length) return;
+            charts.forEach((chart, idx) => {
+              const chartId = `chart_${turn.turnId}_${idx}`;
+              const typeIcon = chart.chart_type === "bar" ? "bar_chart" : "show_chart";
+              const html = `
+                <div class="claude-card anim-scale-in" style="animation-delay:${idx * 60}ms">
+                  <div class="claude-header">
+                    <span style="display:flex;align-items:center;gap:6px">
+                      <span class="material-symbols-outlined" style="font-size:14px;color:${_CHART_DEFAULTS.palette[idx % _CHART_DEFAULTS.palette.length]}">${typeIcon}</span>
+                      ${escapeHtml(chart.title || "Chart")}
+                    </span>
+                    ${chart.subtitle
+                      ? `<span style="color:var(--text-muted);font-size:10px;text-transform:none;letter-spacing:0">${escapeHtml(chart.subtitle)}</span>`
+                      : `<span class="chart-type-badge">${chart.chart_type || "line"}</span>`}
+                  </div>
+                  <div class="chart-container-native"><canvas id="${chartId}"></canvas></div>
+                </div>`;
+              turn.visualEl.insertAdjacentHTML("beforeend", html);
+              setTimeout(() => {
+                const canvasEl = document.getElementById(chartId);
+                if (!canvasEl || typeof Chart === "undefined") return;
+                const isLine = (chart.chart_type || "line") !== "bar";
+                const isMulti = (chart.series || []).length > 1;
+                const datasets = (chart.series || []).map((s, si) => {
+                  const vals = s.data ? s.data.map(d => d.value) : (s.values || []);
+                  const col  = s.color || _CHART_DEFAULTS.palette[si % _CHART_DEFAULTS.palette.length];
+                  return {
+                    label: s.name || "",
+                    data: vals,
+                    borderColor: col,
+                    backgroundColor: isLine ? _makeGradient(canvasEl, col) : col + "cc",
+                    fill: isLine && !isMulti,
+                    tension: 0.4,
+                    borderWidth: isLine ? 2.5 : undefined,
+                    pointRadius: isLine ? 0 : undefined,
+                    pointHoverRadius: isLine ? 5 : undefined,
+                    borderRadius: isLine ? 0 : 5,
+                    borderSkipped: false,
+                  };
+                });
+                new Chart(canvasEl, {
+                  type: isLine ? "line" : "bar",
+                  data: { labels: chart.labels || [], datasets },
+                  options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        display: isMulti,
+                        labels: { color: _CHART_DEFAULTS.legendColor, font: { family: _CHART_DEFAULTS.fontFamily, size: 11 }, boxWidth: 12, padding: 16 }
+                      },
+                      tooltip: {
+                        backgroundColor: _CHART_DEFAULTS.tooltipBg,
+                        titleColor: "#e2e8f0", bodyColor: "#cbd5e1",
+                        borderColor: _CHART_DEFAULTS.tooltipBorder, borderWidth: 1,
+                        padding: 12, cornerRadius: 8,
+                        displayColors: isMulti,
+                        callbacks: {
+                          label: ctx => {
+                            const v = ctx.parsed.y;
+                            if (v == null) return "";
+                            if (Math.abs(v) >= 1e9) return ` ${(v/1e9).toFixed(2)}B`;
+                            if (Math.abs(v) >= 1e6) return ` ${(v/1e6).toFixed(2)}M`;
+                            if (Math.abs(v) >= 1e5) return ` ₹${(v/1e7).toFixed(2)} Cr`;
+                            return ` ${v.toLocaleString()}`;
+                          }
+                        }
+                      }
+                    },
+                    scales: {
+                      x: {
+                        grid: { display: false },
+                        border: { color: "rgba(255,255,255,0.06)" },
+                        ticks: { color: _CHART_DEFAULTS.tickColor, font: { family: _CHART_DEFAULTS.fontFamily, size: 10 }, maxTicksLimit: 8 }
+                      },
+                      y: {
+                        grid: { color: _CHART_DEFAULTS.gridColor, drawBorder: false },
+                        border: { dash: [3,3], color: "transparent" },
+                        ticks: { color: _CHART_DEFAULTS.tickColor, font: { family: _CHART_DEFAULTS.fontFamily, size: 10 },
+                          callback: v => Math.abs(v) >= 1e9 ? `${(v/1e9).toFixed(1)}B`
+                            : Math.abs(v) >= 1e6 ? `${(v/1e6).toFixed(1)}M`
+                            : Math.abs(v) >= 1e5 ? `₹${(v/1e7).toFixed(0)}Cr`
+                            : v.toLocaleString()
+                        },
+                        beginAtZero: !isLine
+                      }
+                    },
+                    interaction: { mode: "index", intersect: false },
+                    animation: { duration: 700, easing: "easeOutQuart",
+                      onProgress: a => { if (a.currentStep === 1) canvasEl.closest(".claude-card")?.classList.add("anim-scale-in"); }
+                    },
+                    hover: { mode: "index", intersect: false }
+                  }
+                });
+              }, idx * 80 + 60);
+            });
+          }
 
-              html += `
-          <div class="metric-card ${partialClass}">
-            <div class="metric-label">${card.label}</div>
-            <div class="metric-value">${card.value}</div>
-            ${changeHtml}
-          </div>
-        `;
+          function renderComparisonIntoTurn(turn, results) {
+            if (!turn || !results || !results.length) return;
+            const e1 = results[0].primary_entity   || "Company A";
+            const e2 = results[0].secondary_entity || "Company B";
+            const COL1 = "#38bdf8", COL2 = "#c084fc";  // sky blue vs purple
+            let p = 0, s = 0;
+            results.forEach(r => { if (r.winner === "primary") p++; else if (r.winner === "secondary") s++; });
+            const leader = p > s ? e1 : s > p ? e2 : null;
+            const e1Won = p > s, e2Won = s > p;
+            const chartId = `comp_chart_${turn.turnId}_${Date.now()}`;
+
+            // Extract numeric values for side-by-side chart
+            const chartRows = results.filter(r => {
+              const pn = parseFloat((r.primary_value || "").replace(/[^0-9.%-]/g, ""));
+              const sn = parseFloat((r.secondary_value || "").replace(/[^0-9.%-]/g, ""));
+              return !isNaN(pn) && !isNaN(sn) && pn !== 0 && sn !== 0;
+            }).slice(0, 6);
+
+            const html = `
+              <div class="claude-card anim-scale-in">
+                <div class="claude-header">
+                  <span style="display:flex;align-items:center;gap:6px">
+                    <span class="material-symbols-outlined" style="font-size:14px;color:${COL1}">compare</span>
+                    Head-to-head
+                  </span>
+                  <span style="color:${leader ? "var(--success)" : "var(--text-muted)"}; text-transform:none; letter-spacing:0; font-size:11px">
+                    ${leader ? `${escapeHtml(leader)} leads` : "Tied"}
+                  </span>
+                </div>
+
+                <!-- Scoreboard -->
+                <div class="comp-scoreboard">
+                  <div class="comp-hero ${e1Won ? "winner" : e2Won ? "loser" : ""}">
+                    <div class="comp-hero-color-bar" style="background:${COL1}"></div>
+                    <div class="comp-hero-name">${escapeHtml(e1)}</div>
+                    <div class="comp-hero-subtitle">${p} winning metric${p !== 1 ? "s" : ""}</div>
+                    <div class="comp-score-number" style="color:${COL1}">${p}</div>
+                    <div class="comp-score-unit">wins</div>
+                    ${e1Won ? `<div class="comp-winner-chip"><span class="material-symbols-outlined" style="font-size:11px">emoji_events</span> Leader</div>` : ""}
+                  </div>
+                  <div class="comp-vs-pill">VS</div>
+                  <div class="comp-hero ${e2Won ? "winner" : e1Won ? "loser" : ""}">
+                    <div class="comp-hero-color-bar" style="background:${COL2}"></div>
+                    <div class="comp-hero-name">${escapeHtml(e2)}</div>
+                    <div class="comp-hero-subtitle">${s} winning metric${s !== 1 ? "s" : ""}</div>
+                    <div class="comp-score-number" style="color:${COL2}">${s}</div>
+                    <div class="comp-score-unit">wins</div>
+                    ${e2Won ? `<div class="comp-winner-chip"><span class="material-symbols-outlined" style="font-size:11px">emoji_events</span> Leader</div>` : ""}
+                  </div>
+                </div>
+
+                <!-- Side-by-side bar chart (only when numeric data available) -->
+                ${chartRows.length >= 2 ? `
+                  <div class="claude-header" style="margin-bottom:8px">
+                    <span style="display:flex;align-items:center;gap:6px">
+                      <span class="material-symbols-outlined" style="font-size:13px;color:var(--text-muted)">bar_chart</span>
+                      Metrics comparison
+                    </span>
+                    <span style="display:flex;align-items:center;gap:12px;text-transform:none;letter-spacing:0;font-size:11px">
+                      <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:${COL1};display:inline-block"></span>${escapeHtml(e1)}</span>
+                      <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:50%;background:${COL2};display:inline-block"></span>${escapeHtml(e2)}</span>
+                    </span>
+                  </div>
+                  <div class="comp-chart-wrap"><canvas id="${chartId}"></canvas></div>
+                ` : ""}
+
+                <!-- Metric rows with visual bars -->
+                <div class="comp-rows-header">
+                  <span style="text-align:right">${escapeHtml(e1)}</span>
+                  <span></span>
+                  <span style="text-align:center">Metric</span>
+                  <span></span>
+                  <span>${escapeHtml(e2)}</span>
+                </div>
+                ${results.map((r, ri) => {
+                  const pIsWin = r.winner === "primary", sIsWin = r.winner === "secondary";
+                  const pv = parseFloat((r.primary_value   || "").replace(/[^0-9.-]/g, "")) || 0;
+                  const sv = parseFloat((r.secondary_value || "").replace(/[^0-9.-]/g, "")) || 0;
+                  const total = Math.abs(pv) + Math.abs(sv) || 1;
+                  const pPct = Math.round((Math.abs(pv) / total) * 100);
+                  const sPct = Math.round((Math.abs(sv) / total) * 100);
+                  return `
+                    <div class="comp-metric-row" data-pct1="${pPct}" data-pct2="${sPct}" style="animation-delay:${ri*35}ms">
+                      <div style="text-align:right">
+                        <div class="comp-val ${pIsWin ? "win" : ""}">${escapeHtml(r.primary_value || "—")}</div>
+                        <div class="comp-bar-track" style="margin-top:5px">
+                          <div class="comp-bar-fill" data-target="${pPct}" style="right:0;left:auto;background:${pIsWin ? COL1 : COL1+"80"}"></div>
+                        </div>
+                      </div>
+                      <div style="display:flex;align-items:center;justify-content:center;padding:0 4px">
+                        ${pIsWin ? `<span class="material-symbols-outlined" style="font-size:13px;color:${COL1}">chevron_right</span>`
+                          : sIsWin ? `<span class="material-symbols-outlined" style="font-size:13px;color:${COL2}">chevron_left</span>`
+                          : `<span style="color:var(--text-muted);font-size:10px">·</span>`}
+                      </div>
+                      <div class="comp-metric-name">${escapeHtml(r.metric || "")}</div>
+                      <div style="display:flex;align-items:center;justify-content:center;padding:0 4px">
+                        ${sIsWin ? `<span class="material-symbols-outlined" style="font-size:13px;color:${COL2}">chevron_right</span>`
+                          : pIsWin ? `<span class="material-symbols-outlined" style="font-size:13px;color:${COL1}">chevron_left</span>`
+                          : `<span style="color:var(--text-muted);font-size:10px">·</span>`}
+                      </div>
+                      <div>
+                        <div class="comp-val ${sIsWin ? "win" : ""}" style="${sIsWin ? "color:"+COL2 : ""}">${escapeHtml(r.secondary_value || "—")}</div>
+                        <div class="comp-bar-track" style="margin-top:5px">
+                          <div class="comp-bar-fill" data-target="${sPct}" style="background:${sIsWin ? COL2 : COL2+"80"}"></div>
+                        </div>
+                      </div>
+                    </div>`;
+                }).join("")}
+              </div>`;
+
+            turn.visualEl.insertAdjacentHTML("beforeend", html);
+            turn.visualEl.classList.remove("hidden");
+
+            // Animate bar fills after DOM insertion
+            requestAnimationFrame(() => {
+              setTimeout(() => {
+                turn.visualEl.querySelectorAll(".comp-bar-fill").forEach(bar => {
+                  const t = bar.dataset.target || "0";
+                  bar.style.width = t + "%";
+                });
+              }, 120);
             });
 
-            html += "</div></div>";
-            dashboard.insertAdjacentHTML("beforeend", html);
+            // Mount side-by-side Chart.js bar chart
+            if (chartRows.length >= 2) {
+              setTimeout(() => {
+                const cv = document.getElementById(chartId);
+                if (!cv || typeof Chart === "undefined") return;
+                new Chart(cv, {
+                  type: "bar",
+                  data: {
+                    labels: chartRows.map(r => r.metric || ""),
+                    datasets: [
+                      {
+                        label: e1,
+                        data: chartRows.map(r => parseFloat((r.primary_value || "").replace(/[^0-9.-]/g, "")) || 0),
+                        backgroundColor: COL1 + "cc",
+                        borderColor: COL1,
+                        borderWidth: 1,
+                        borderRadius: 5,
+                        borderSkipped: false,
+                      },
+                      {
+                        label: e2,
+                        data: chartRows.map(r => parseFloat((r.secondary_value || "").replace(/[^0-9.-]/g, "")) || 0),
+                        backgroundColor: COL2 + "cc",
+                        borderColor: COL2,
+                        borderWidth: 1,
+                        borderRadius: 5,
+                        borderSkipped: false,
+                      }
+                    ]
+                  },
+                  options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: true, labels: { color: _CHART_DEFAULTS.legendColor, font: { family: _CHART_DEFAULTS.fontFamily, size: 11 }, boxWidth: 10, padding: 14 } },
+                      tooltip: { backgroundColor: _CHART_DEFAULTS.tooltipBg, titleColor: "#e2e8f0", bodyColor: "#cbd5e1", borderColor: _CHART_DEFAULTS.tooltipBorder, borderWidth: 1, padding: 11, cornerRadius: 8 }
+                    },
+                    scales: {
+                      x: { grid: { display: false }, border: { color: "rgba(255,255,255,0.06)" }, ticks: { color: _CHART_DEFAULTS.tickColor, font: { family: _CHART_DEFAULTS.fontFamily, size: 10 } } },
+                      y: { grid: { color: _CHART_DEFAULTS.gridColor }, border: { color: "transparent" }, ticks: { color: _CHART_DEFAULTS.tickColor, font: { family: _CHART_DEFAULTS.fontFamily, size: 10 } }, beginAtZero: true }
+                    },
+                    interaction: { mode: "index", intersect: false },
+                    animation: { duration: 800, easing: "easeOutQuart" }
+                  }
+                });
+              }, 100);
+            }
+          }
+
+          // ── Legacy wrappers (preserved for any external callers) ──
+          function renderMetricCards(cards) {
+            const turn = getTurn();
+            if (turn) renderMetricCardsIntoTurn(turn, cards);
           }
 
           function renderCharts(charts) {
+            const turn = getTurn();
+            if (turn) renderChartsIntoTurn(turn, charts);
+          }
+
+          // ── Original dead-code Chart.js block (kept compiling for safety) ──
+          function _legacyRenderCharts(charts) {
             const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
             if (!container) return;
-
             let dashboard = document.getElementById("visualDashboard");
             if (!dashboard) {
               dashboard = document.createElement("div");
@@ -2799,7 +3767,6 @@
               dashboard.className = "visual-dashboard";
               container.insertBefore(dashboard, container.firstChild);
             }
-
             charts.forEach((chart, index) => {
               const chartId = `chartCanvas_${Date.now()}_${index}`;
 
@@ -2871,6 +3838,12 @@
           }
 
           function renderComparison(results) {
+            const turn = getTurn();
+            if (turn && results && results.length) {
+              renderComparisonIntoTurn(turn, results);
+              return;
+            }
+            // Fallback (legacy dead path)
             const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
             if (!container || !results.length) return;
 
@@ -3174,53 +4147,280 @@
             try { localStorage.setItem("prospektlab_tour_seen", "1"); } catch (_) { }
           }
 
-          $("tourReplayBtn").addEventListener("click", startTour);
-
-          // Auto-launch on first visit (or right after signup which sets the new-user flag).
-          try {
-            const isNew = localStorage.getItem("prospektlab_new_user") === "1";
-            const seen = localStorage.getItem("prospektlab_tour_seen") === "1";
-            if (isNew || !seen) {
-              localStorage.removeItem("prospektlab_new_user");
-              setTimeout(startTour, 700);
-            }
-          } catch (_) { }
+          // Tour replay (stub element since the visible button was removed
+          // in the minimalist overhaul; the function remains available for
+          // programmatic invocation).
+          if ($("tourReplayBtn")) $("tourReplayBtn").addEventListener("click", startTour);
+          // Auto-launch tour is disabled in the minimalist UI — no chrome,
+          // no onboarding overlays. The interface speaks for itself.
 
           // --- Export Functions for Marathon Mode ---
           window.exportToPdf = function() {
             try {
               const { jsPDF } = window.jspdf;
-              const doc = new jsPDF();
-              const title = $("resultTitle")?.textContent || "Marathon Research Report";
-              doc.text(title, 10, 10);
-              const txt = window.__lastMemoMd || $("memoBody")?.innerText || "";
-              // Extremely simple text split for PDF
-              const lines = doc.splitTextToSize(txt, 180);
-              let y = 20;
-              for (let i = 0; i < lines.length; i++) {
-                if (y > 280) { doc.addPage(); y = 10; }
-                doc.text(lines[i], 10, y);
-                y += 7;
+              const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+              const pageW = 210, pageH = 297;
+              const marginL = 20, marginR = 20, marginT = 25, marginB = 20;
+              const contentW = pageW - marginL - marginR;
+              const activeTurn = getTurn();
+              const reportTitle = activeTurn?.query || $("resultTitle")?.textContent || "Marathon Research Report";
+              const md = window.__lastMemoMd || activeTurn?.memoEl?.innerText || "";
+              const now = new Date();
+              const dateStr = now.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+
+              // ── Cover page ──
+              // Dark header band
+              doc.setFillColor(15, 23, 42);
+              doc.rect(0, 0, pageW, 80, 'F');
+              // Accent line
+              doc.setFillColor(96, 165, 250);
+              doc.rect(marginL, 72, 40, 1.5, 'F');
+              // Brand
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(9);
+              doc.setTextColor(148, 163, 184);
+              doc.text('PROSPEKTLAB INTELLIGENCE', marginL, 30);
+              // Title
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(22);
+              doc.setTextColor(250, 250, 250);
+              const titleLines = doc.splitTextToSize(reportTitle.toUpperCase(), contentW);
+              doc.text(titleLines, marginL, 45);
+              // Subtitle
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(10);
+              doc.setTextColor(148, 163, 184);
+              doc.text('Marathon Research Report', marginL, 62);
+              // Date on cover
+              doc.setFontSize(9);
+              doc.setTextColor(100, 116, 139);
+              doc.text(dateStr, marginL, 95);
+              doc.text('Generated by ProspektLab AI', marginL, 101);
+              // Divider
+              doc.setDrawColor(226, 232, 240);
+              doc.setLineWidth(0.3);
+              doc.line(marginL, 108, pageW - marginR, 108);
+              // Table of contents hint
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(11);
+              doc.setTextColor(30, 41, 59);
+              doc.text('CONTENTS', marginL, 120);
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(9);
+              doc.setTextColor(71, 85, 105);
+              const sections = md.match(/^#{1,3}\s+.+$/gm) || [];
+              let tocY = 130;
+              sections.slice(0, 15).forEach((s, i) => {
+                const clean = s.replace(/^#+\s+/, '').replace(/\[CONFIDENCE:.*?\]/gi, '').trim();
+                if (tocY > 270) return;
+                doc.text(`${i + 1}.  ${clean}`, marginL + 4, tocY);
+                tocY += 6;
+              });
+
+              // ── Content pages ──
+              doc.addPage();
+              let y = marginT;
+              // Header for content pages
+              function addPageHeader() {
+                doc.setFillColor(248, 250, 252);
+                doc.rect(0, 0, pageW, 14, 'F');
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(7);
+                doc.setTextColor(148, 163, 184);
+                doc.text('PROSPEKTLAB', marginL, 9);
+                doc.text(dateStr, pageW - marginR, 9, { align: 'right' });
+                doc.setDrawColor(226, 232, 240);
+                doc.setLineWidth(0.2);
+                doc.line(marginL, 14, pageW - marginR, 14);
               }
-              doc.save("marathon_report.pdf");
+              function addPageFooter(pageNum) {
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(7);
+                doc.setTextColor(148, 163, 184);
+                doc.text(String(pageNum), pageW / 2, pageH - 10, { align: 'center' });
+              }
+              addPageHeader();
+              y = 22;
+              let pageNum = 2;
+
+              // Parse markdown lines
+              const lines = md.split('\n');
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) { y += 3; continue; }
+                // Check page break
+                if (y > pageH - marginB - 10) {
+                  addPageFooter(pageNum);
+                  doc.addPage();
+                  pageNum++;
+                  addPageHeader();
+                  y = 22;
+                }
+                // Headings
+                const hMatch = line.match(/^(#{1,3})\s+(.+)$/);
+                if (hMatch) {
+                  const level = hMatch[1].length;
+                  const text = hMatch[2].replace(/\[CONFIDENCE:.*?\]/gi, '').replace(/\*+/g, '').trim();
+                  y += level === 1 ? 8 : level === 2 ? 6 : 4;
+                  if (level === 1) {
+                    doc.setFillColor(96, 165, 250);
+                    doc.rect(marginL, y - 4, 3, 10, 'F');
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(14);
+                    doc.setTextColor(15, 23, 42);
+                    doc.text(text, marginL + 7, y + 3);
+                    y += 12;
+                  } else if (level === 2) {
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(11);
+                    doc.setTextColor(30, 58, 95);
+                    doc.text(text.toUpperCase(), marginL, y + 2);
+                    doc.setDrawColor(96, 165, 250);
+                    doc.setLineWidth(0.4);
+                    doc.line(marginL, y + 5, marginL + 30, y + 5);
+                    y += 10;
+                  } else {
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(10);
+                    doc.setTextColor(44, 82, 130);
+                    doc.text(text, marginL, y + 2);
+                    y += 8;
+                  }
+                  continue;
+                }
+                // Bullet
+                if (/^[-*]\s+/.test(line)) {
+                  doc.setFont('helvetica', 'normal');
+                  doc.setFontSize(9);
+                  doc.setTextColor(51, 65, 85);
+                  const bulletText = line.replace(/^[-*]\s+/, '').replace(/\*+/g, '');
+                  const wrapped = doc.splitTextToSize(bulletText, contentW - 8);
+                  doc.setFillColor(96, 165, 250);
+                  doc.circle(marginL + 2, y + 1, 0.8, 'F');
+                  doc.text(wrapped, marginL + 6, y + 2);
+                  y += wrapped.length * 4.5 + 2;
+                  continue;
+                }
+                // Table row
+                if (line.startsWith('|') && line.endsWith('|')) {
+                  if (/^\|[\s-:|]+\|$/.test(line)) continue; // separator
+                  const cells = line.split('|').filter(c => c.trim()).map(c => c.trim());
+                  const colW = contentW / Math.max(cells.length, 1);
+                  // Detect header (first table row typically)
+                  const isHeader = lines[i+1] && /^\|[\s-:|]+\|$/.test(lines[i+1].trim());
+                  if (isHeader) {
+                    doc.setFillColor(241, 245, 249);
+                    doc.rect(marginL, y - 2, contentW, 7, 'F');
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(7);
+                    doc.setTextColor(71, 85, 105);
+                  } else {
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(8);
+                    doc.setTextColor(51, 65, 85);
+                  }
+                  cells.forEach((cell, ci) => {
+                    doc.text(cell.slice(0, 30), marginL + ci * colW + 2, y + 3);
+                  });
+                  y += 7;
+                  continue;
+                }
+                // Normal paragraph
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9);
+                doc.setTextColor(51, 65, 85);
+                const cleaned = line.replace(/\*+/g, '').replace(/\[(\d+)\]/g, '[$1]');
+                const wrapped = doc.splitTextToSize(cleaned, contentW);
+                for (const wl of wrapped) {
+                  if (y > pageH - marginB - 10) {
+                    addPageFooter(pageNum);
+                    doc.addPage();
+                    pageNum++;
+                    addPageHeader();
+                    y = 22;
+                  }
+                  doc.text(wl, marginL, y + 2);
+                  y += 4.5;
+                }
+                y += 1.5;
+              }
+              addPageFooter(pageNum);
+
+              // ── Back cover ──
+              doc.addPage();
+              doc.setFillColor(15, 23, 42);
+              doc.rect(0, pageH - 50, pageW, 50, 'F');
+              doc.setFillColor(96, 165, 250);
+              doc.rect(pageW / 2 - 20, pageH - 42, 40, 1.5, 'F');
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(8);
+              doc.setTextColor(148, 163, 184);
+              doc.text('Generated by ProspektLab Intelligence Engine', pageW / 2, pageH - 30, { align: 'center' });
+              doc.text(dateStr, pageW / 2, pageH - 24, { align: 'center' });
+              doc.text('This report is AI-generated. Verify data independently before investment decisions.', pageW / 2, pageH - 16, { align: 'center' });
+
+              const filename = reportTitle.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 50) + '_report.pdf';
+              doc.save(filename);
             } catch (e) {
-              alert("PDF Export failed. Ensure jsPDF is loaded.");
+              console.error("PDF Export failed:", e);
+              alert("PDF Export failed: " + e.message);
             }
           };
 
           window.exportToWord = function() {
             try {
-              const txt = window.__lastMemoMd || $("memoBody")?.innerText || "";
-              const blob = new Blob([txt], { type: 'application/msword' });
+              const activeTurn = getTurn();
+              const title = activeTurn?.query || $("resultTitle")?.textContent || "Marathon Research Report";
+              const md = window.__lastMemoMd || activeTurn?.memoEl?.innerText || "";
+              const now = new Date();
+              const dateStr = now.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+              // Build HTML document for proper Word formatting
+              const htmlDoc = `
+                <html xmlns:o='urn:schemas-microsoft-com:office:office'
+                      xmlns:w='urn:schemas-microsoft-com:office:word'
+                      xmlns='http://www.w3.org/TR/REC-html40'>
+                <head><meta charset="utf-8">
+                <style>
+                  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1e293b; line-height: 1.6; margin: 40px; }
+                  h1 { font-size: 20pt; color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; margin-top: 24px; }
+                  h2 { font-size: 14pt; color: #1e3a5f; text-transform: uppercase; letter-spacing: 1px; margin-top: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+                  h3 { font-size: 12pt; color: #2c5282; margin-top: 16px; }
+                  p { margin: 8px 0; }
+                  ul { margin: 8px 0 8px 20px; }
+                  li { margin: 4px 0; }
+                  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+                  th { background: #f1f5f9; font-weight: bold; padding: 8px 12px; border: 1px solid #e2e8f0; text-align: left; font-size: 9pt; text-transform: uppercase; color: #475569; }
+                  td { padding: 8px 12px; border: 1px solid #e2e8f0; }
+                  .cover { text-align: center; padding: 80px 40px; page-break-after: always; }
+                  .cover h1 { border: none; font-size: 28pt; }
+                  .disclaimer { font-size: 8pt; color: #94a3b8; margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 12px; }
+                </style></head>
+                <body>
+                  <div class="cover">
+                    <p style="font-size:9pt;color:#94a3b8;letter-spacing:3px;text-transform:uppercase">PROSPEKTLAB INTELLIGENCE</p>
+                    <h1>${escapeHtml(title)}</h1>
+                    <p style="font-size:12pt;color:#64748b">Marathon Research Report</p>
+                    <p style="font-size:10pt;color:#94a3b8;margin-top:30px">${dateStr}</p>
+                  </div>
+                  ${renderMarkdown(md)}
+                  <div class="disclaimer">
+                    <p>This report was generated by ProspektLab AI Intelligence Engine. All data should be independently verified before making investment decisions.</p>
+                    <p>Generated: ${dateStr}</p>
+                  </div>
+                </body></html>`;
+              const blob = new Blob([htmlDoc], { type: 'application/msword' });
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
               a.href = url;
-              a.download = "marathon_report.doc";
+              const filename = title.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 50) + '_report.doc';
+              a.download = filename;
               document.body.appendChild(a);
               a.click();
               a.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 2000);
             } catch (e) {
-              alert("Word export failed.");
+              console.error("Word export failed:", e);
+              alert("Word export failed: " + e.message);
             }
           };
 

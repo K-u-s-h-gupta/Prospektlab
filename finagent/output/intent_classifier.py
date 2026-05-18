@@ -41,17 +41,22 @@ def classify_output_mode(
             return OutputMode(explicit_mode)
         except ValueError:
             pass
+
+    lower = f"{query or ''} {target or ''}".lower()
+
+    # ── Comparison detection takes priority over depth override ──
+    # "TCS vs Infosys" should always produce a comparison, even in deep mode
+    if any(term in lower for term in _COMPARE_TERMS):
+        return OutputMode.COMPANY_COMPARISON
+
     if depth == ResponseDepth.DEEP:
         return OutputMode.DEEP_RESEARCH_REPORT
 
-    lower = f"{query or ''} {target or ''}".lower()
     if any(term in lower for term in _FILING_TERMS):
         filing_versions = sum(1 for term in ("drhp", "rhp", "prospectus") if term in lower)
         if filing_versions >= 2 or (any(term in lower for term in _VERSION_TERMS) and ("drhp" in lower or "rhp" in lower)):
             return OutputMode.DOCUMENT_VERSION_COMPARISON
         return OutputMode.FILING_ANALYSIS
-    if any(term in lower for term in _COMPARE_TERMS):
-        return OutputMode.COMPANY_COMPARISON
     if any(term in lower for term in _VALUATION_TERMS):
         return OutputMode.VALUATION_MODEL
     if any(term in lower for term in _NEWS_TERMS):

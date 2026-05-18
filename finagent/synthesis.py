@@ -252,7 +252,49 @@ def _build_facts_block(bundle: EnrichmentBundle) -> str:
             lines.append(f"  Risk factors (Item 1A): {f.risk_factors[:1800]}")
         if f.mdna:
             lines.append(f"  MD&A (Item 7): {f.mdna[:1500]}")
-    if bundle.sec:
+    # India snapshot section (for Indian-listed companies)
+    india_snap = getattr(bundle, "india_snap", None)
+    _is_india_snap = india_snap is not None and hasattr(india_snap, "market_cap_cr")
+    if _is_india_snap:
+        s = india_snap
+        lines.append(
+            f"\nIndia Market Data: {s.symbol} | {s.company_name or s.symbol} "
+            f"| Exchange: {s.exchange or 'NSE/BSE'}"
+        )
+        if s.sector:
+            lines.append(f"  Sector: {s.sector}")
+        if s.industry:
+            lines.append(f"  Industry: {s.industry}")
+        if s.current_price is not None:
+            chg = f" ({s.change_pct:+.2f}%)" if s.change_pct is not None else ""
+            lines.append(f"  Current price: ₹{s.current_price:,.2f}{chg}")
+        if s.week_52_high is not None and s.week_52_low is not None:
+            lines.append(f"  52-week range: ₹{s.week_52_low:,.2f} – ₹{s.week_52_high:,.2f}")
+        if s.market_cap_cr is not None:
+            lines.append(f"  Market cap: ₹{s.market_cap_cr:,.0f} Cr")
+        # Key ratios
+        ratio_parts: list[str] = []
+        if s.pe_ratio  is not None: ratio_parts.append(f"P/E {s.pe_ratio:.2f}x")
+        if s.pb_ratio  is not None: ratio_parts.append(f"P/B {s.pb_ratio:.2f}x")
+        if s.roe       is not None: ratio_parts.append(f"ROE {s.roe:.1f}%")
+        if s.roce      is not None: ratio_parts.append(f"ROCE {s.roce:.1f}%")
+        if s.eps       is not None: ratio_parts.append(f"EPS ₹{s.eps:.2f}")
+        if s.book_value is not None: ratio_parts.append(f"Book value ₹{s.book_value:.2f}")
+        if s.dividend_yield is not None: ratio_parts.append(f"Div yield {s.dividend_yield:.2f}%")
+        if s.debt_to_equity is not None: ratio_parts.append(f"D/E {s.debt_to_equity:.2f}")
+        if ratio_parts:
+            lines.append("  Ratios: " + ", ".join(ratio_parts))
+        # Shareholding
+        holding_parts: list[str] = []
+        if s.promoter_holding  is not None: holding_parts.append(f"Promoter {s.promoter_holding:.1f}%")
+        if s.fii_holding       is not None: holding_parts.append(f"FII {s.fii_holding:.1f}%")
+        if s.dii_holding       is not None: holding_parts.append(f"DII {s.dii_holding:.1f}%")
+        if s.promoter_pledge_pct is not None: holding_parts.append(f"Pledge {s.promoter_pledge_pct:.1f}%")
+        if holding_parts:
+            lines.append("  Shareholding: " + ", ".join(holding_parts))
+        lines.append(f"  Data source: {s.source} ({s.source_url})")
+    elif bundle.sec:
+        # US / SEC path — sec.metrics are SECMetric objects with .display_value()
         s = bundle.sec
         lines.append(f"\nSEC EDGAR: {s.ticker} | {s.name} | CIK {s.cik}")
         if s.sic_description:
@@ -260,16 +302,54 @@ def _build_facts_block(bundle: EnrichmentBundle) -> str:
         if s.exchanges:
             lines.append(f"  Listed on: {', '.join(s.exchanges)}")
         for key, m in s.metrics.items():
-            inr_part = ""
-            if fx and m.unit.upper() == "USD":
-                inr_part = f" / INR ~ {format_inr(m.value, fx.rate)}"
-            lines.append(
-                f"  {key} = {m.display_value()}{inr_part} ({m.label}; {m.form} FY{m.fy} {m.fp or ''} ending {m.end})"
-            )
+            # m is a SECMetric dataclass — use its methods
+            try:
+                inr_part = ""
+                if fx and getattr(m, "unit", "").upper() == "USD":
+                    inr_part = f" / INR ~ {format_inr(m.value, fx.rate)}"
+                lines.append(
+                    f"  {key} = {m.display_value()}{inr_part} "
+                    f"({m.label}; {m.form} FY{m.fy} {m.fp or ''} ending {m.end})"
+                )
+            except Exception:
+                lines.append(f"  {key} = {m}")
         if s.recent_filings:
             lines.append("  Recent filings:")
             for f in s.recent_filings[:6]:
                 lines.append(f"    - {f.form} filed {f.filing_date} (report {f.report_date}): {f.url}")
+
+    # Shareholding pattern (India — from NSE shareholding API)
+    if getattr(bundle, "shareholding", None):
+        sh = bundle.shareholding
+        lines.append(
+            f"\nShareholding pattern (latest): "
+            f"Promoter {sh.get('promoter', 'n/a')}% | "
+            f"FII {sh.get('fii', 'n/a')}% | "
+            f"DII {sh.get('dii', 'n/a')}% | "
+            f"Public {sh.get('public', 'n/a')}%"
+            + (f" (as of {sh['as_of']})" if sh.get('as_of') else "")
+        )
+
+    # SEBI filing narrative
+    sebi_fil = getattr(bundle, "sebi_filing", None)
+    if sebi_fil and not isinstance(sebi_fil, type(None)):
+        try:
+            has_sebi_content = any([
+                sebi_fil.business_overview, sebi_fil.risk_factors,
+                sebi_fil.financial_summary, sebi_fil.management_discussion,
+            ])
+            if has_sebi_content:
+                lines.append(f"\nSEBI/Trendlyne Analysis ({sebi_fil.company}):")
+                if sebi_fil.business_overview:
+                    lines.append(f"  Business overview: {sebi_fil.business_overview[:1200]}")
+                if sebi_fil.management_discussion:
+                    lines.append(f"  Management discussion: {sebi_fil.management_discussion[:1000]}")
+                if sebi_fil.financial_summary:
+                    lines.append(f"  Financial summary: {sebi_fil.financial_summary[:1000]}")
+                if sebi_fil.risk_factors:
+                    lines.append(f"  Risk factors: {sebi_fil.risk_factors[:1000]}")
+        except Exception:
+            pass
     if bundle.yahoo:
         y = bundle.yahoo
         chg = f"{y.change_pct:+.2f}%" if y.change_pct is not None else "n/a"
@@ -395,10 +475,11 @@ async def _emit_token(sink: TokenSink, chunk: str) -> None:
 
 
 _LLM_STYLE_GUIDE = """
-Writing style rules — follow strictly:
-1. Write in clear, natural paragraphs. NO bullet lists, NO bold-asterisks,
-   NO Markdown headings inside paragraphs. The reader is reading a memo,
-   not a slide.
+Writing style and formatting rules — follow strictly:
+1. Use Markdown headings (## for sections, ### for sub-sections), bold for
+   key terms, and tables for comparative data. Bullet points are allowed for
+   lists of items (risks, catalysts, metrics). The output will be rendered as
+   Markdown, so structure aids readability.
 2. This is an India-focused research system. Present all monetary figures
    in INR FIRST (crore / lakh notation), with USD equivalents in parentheses
    only where relevant. Use Indian-style grouping (e.g. ₹3.45 Cr or ₹45.6 L).
@@ -406,12 +487,15 @@ Writing style rules — follow strictly:
 3. Authoritative Indian sources: NSE India, BSE India, SEBI filings,
    company investor relations, Screener.in, Trendlyne, Moneycontrol, Mint,
    Economic Times. Regulatory framework is SEBI, not SEC.
-4. Do not invent numbers. If a figure is missing, say it is missing.
+4. Do not invent numbers. If a figure is missing, say "data not available" —
+   never fill gaps with estimates presented as facts.
 5. Cite sources inline as [n] referring to the numbered SOURCES list.
-6. End each major section with a confidence tag on its own line:
-   `[CONFIDENCE: HIGH]` | `MEDIUM` | `LOW` based on triangulation.
-7. Tone: junior equity analyst note — measured, specific, no hype words.
-   For IPO analysis use DRHP/RHP terminology. For earnings, use concall.
+6. End each major section with a confidence tag:
+   **[CONFIDENCE: HIGH]** | **MEDIUM** | **LOW** based on source triangulation.
+7. Tone: senior equity analyst memo — measured, specific, evidence-driven.
+   For IPO analysis use DRHP/RHP terminology. For earnings, use "concall".
+8. For deep research reports, produce ALL requested sections in full.
+   Do not truncate or summarise. Each section must be substantive (≥150 words).
 """
 
 
@@ -428,7 +512,7 @@ async def _openai_memo(
 ) -> str:
     cfg = resolve_openai_config()
     if cfg is None:
-        raise RuntimeError("OPENAI_API_KEY not configured")
+        raise RuntimeError("No LLM provider configured — set OPENAI_API_KEY or XAI_API_KEY")
     try:
         from openai import AsyncOpenAI
     except ImportError as exc:
@@ -436,19 +520,45 @@ async def _openai_memo(
 
     client = AsyncOpenAI(api_key=cfg.api_key, base_url=cfg.base_url)
     system_prompt = default_system_prompt() + "\n" + _LLM_STYLE_GUIDE
+
+    # Detect comparison queries to inject comparison-specific instructions
+    _lower_obj = (objective or "").lower()
+    _is_comparison = any(t in _lower_obj for t in (" vs ", " versus ", "compare", "comparison", "against", "head to head"))
+
+    if _is_comparison:
+        comparison_instructions = (
+            "This is a COMPARISON query. You MUST:\n"
+            "1. Analyze BOTH companies equally with parallel depth.\n"
+            "2. Structure the report with side-by-side analysis:\n"
+            "   - ## Executive Summary (declare an overall winner with reasoning)\n"
+            "   - ## Company Profiles (one subsection per company)\n"
+            "   - ## Financial Comparison (use a markdown table: | Metric | Company A | Company B | Advantage |)\n"
+            "   - ## Revenue & Growth Comparison\n"
+            "   - ## Profitability & Margins\n"
+            "   - ## Valuation Comparison (P/E, P/B, EV/EBITDA)\n"
+            "   - ## Strengths & Weaknesses (parallel bullet points for each)\n"
+            "   - ## Risk Comparison\n"
+            "   - ## Investment Verdict (which is the better pick and why)\n"
+            "3. Include a head-to-head metrics table with at least 8 metrics.\n"
+            "4. For each metric, state which company wins and by how much.\n"
+            "5. Use specific numbers from the facts — never generalize.\n\n"
+        )
+    else:
+        comparison_instructions = ""
+
     user_prompt = (
-        f"Target: {target}\n"
-        f"Objective: {objective}\n\n"
-        "You are an expert financial advisor. Provide a comprehensive, structured response "
-        "addressing the user's objective directly.\n"
-        "- Format your answer beautifully using Markdown (bold text, bullet points, headers).\n"
-        "- Use tables to present comparative data or key financial metrics clearly.\n"
-        "- If the user asks for a comparison, structure it as a comparison.\n"
-        "- If they ask for an estimate or analysis, structure it accordingly.\n"
-        "- Cite your sources using the numbered citations provided in the sources list.\n"
-        "- Never hallucinate numbers. Use the provided facts and sources exclusively.\n\n"
-        f"=== FACTS ===\n{facts}\n\n"
-        f"=== SOURCES ===\n{digest}\n\n"
+        f"**Research target:** {target}\n"
+        f"**Objective:** {objective}\n\n"
+        f"{comparison_instructions}"
+        "Produce a comprehensive, structured research report addressing the objective above.\n\n"
+        "Requirements:\n"
+        "- Use all available facts and source material provided below.\n"
+        "- Never hallucinate numbers or invent figures — cite every claim with [n].\n"
+        "- Use Markdown structure: ## section headings, tables for metrics, bullet points for lists.\n"
+        "- If a data point is missing from the provided facts, explicitly state it is unavailable.\n"
+        "- For deep/marathon reports: produce ALL sections in full — do NOT abbreviate.\n\n"
+        f"=== VERIFIED FACTS ===\n{facts}\n\n"
+        f"=== SOURCE DOCUMENTS ===\n{digest}\n\n"
         f"{_conflict_block(conflicts)}"
     )
 
@@ -459,10 +569,16 @@ async def _openai_memo(
         messages.extend(chat_history)
     messages.append({"role": "user", "content": user_prompt})
 
+    # Deep/marathon reports need more tokens; standard chat can stay short.
+    _is_deep = any(kw in (objective or "").lower() for kw in (
+        "deep_research_report", "synthesis", "investment-grade", "marathon", "full-scale"
+    ))
+    _max_tokens = 8000 if _is_deep else 4000
+
     stream = await client.chat.completions.create(
         model=model_to_use,
         temperature=0.2,
-        max_tokens=4000,
+        max_tokens=_max_tokens,
         stream=True,
         messages=messages,
     )
@@ -1299,6 +1415,7 @@ async def synthesize_memo(
     quality_report=None,
     session_id: str | None = None,
     chat_history: list[dict[str, str]] | None = None,
+    peer_targets: list[str] | None = None,
 ) -> SynthesisResult:
     digest, used = _build_source_digest(docs)
     conflicts = conflicts or []
@@ -1312,7 +1429,20 @@ async def synthesize_memo(
         explicit_mode=output_mode,
     )
 
-    peer_quotes = await _load_peer_quotes(objective, target, entity, bundle, mode)
+    # ── Force comparison mode if peer_targets provided ──
+    if peer_targets and mode != OutputMode.COMPANY_COMPARISON:
+        mode = OutputMode.COMPANY_COMPARISON
+
+    # ── Fetch RICH peer enrichment in parallel (yahoo + india + wiki + news) ──
+    peer_bundles = await _load_peer_bundles(peer_targets or [], objective, target, entity, mode)
+
+    # Legacy: peer_quotes is now derived from peer_bundles for backward compat
+    peer_quotes: dict[str, YahooQuote] = {
+        name: pb["yahoo"] for name, pb in peer_bundles.items() if pb.get("yahoo")
+    }
+    # Fallback: if no peer_targets but comparison mode, use the old entity-extraction path
+    if not peer_quotes and mode == OutputMode.COMPANY_COMPARISON:
+        peer_quotes = await _load_peer_quotes(objective, target, entity, bundle, mode)
     artifact = build_answer_artifact(
         target=target,
         objective=objective,
@@ -1328,12 +1458,12 @@ async def synthesize_memo(
         quality_report=quality_report,
     )
     
-    # Emit visual data event if session_id provided
+    # Build visual data payload but DEFER emit until after first memo token.
+    # This ensures the text answer starts streaming BEFORE charts/cards appear,
+    # which fixes the perception of "stats first, text minutes later".
+    _visual_payload: dict | None = None
     if session_id:
-        from finagent.events import BUS
-        BUS.emit(
-            session_id,
-            "visual_data_ready",
+        _visual_payload = dict(
             metric_cards=[
                 {
                     "label": card.label,
@@ -1352,10 +1482,15 @@ async def synthesize_memo(
                     "title": chart.title,
                     "subtitle": chart.subtitle,
                     "chart_type": chart.chart_type,
-                    "svg_data": chart.svg_data,
-                    "png_data": chart.png_data.decode('latin-1') if chart.png_data else "",
-                    "width": chart.dimensions.get("width", 600) if hasattr(chart, 'dimensions') else 600,
-                    "height": chart.dimensions.get("height", 300) if hasattr(chart, 'dimensions') else 300,
+                    "labels": chart.labels or [],
+                    "series": [
+                        {
+                            "name": s.name,
+                            "color": s.color,
+                            "data": [{"label": dp.label, "value": dp.value} for dp in s.data] if s.data else [],
+                        }
+                        for s in chart.series
+                    ] if chart.series else [],
                     "is_partial": chart.is_partial,
                 }
                 for chart in artifact.charts
@@ -1384,7 +1519,50 @@ async def synthesize_memo(
             ] if artifact.visual_sections else [],
         )
 
+    # Wrap on_token so visual_data_ready emits AFTER the first text chunk arrives.
+    _visual_emitted = {"done": False}
+    _orig_on_token = on_token
+
+    async def _emit_visuals_once():
+        if _visual_payload and not _visual_emitted["done"] and session_id:
+            _visual_emitted["done"] = True
+            try:
+                from finagent.events import BUS
+                BUS.emit(session_id, "visual_data_ready", **_visual_payload)
+            except Exception:
+                pass
+
+    if _visual_payload and session_id:
+        if _orig_on_token is None:
+            # No streaming sink — emit visuals immediately after the call
+            on_token = None
+        else:
+            if asyncio.iscoroutinefunction(_orig_on_token):
+                async def _wrapped_async_sink(chunk: str):
+                    await _orig_on_token(chunk)
+                    if not _visual_emitted["done"]:
+                        await _emit_visuals_once()
+                on_token = _wrapped_async_sink
+            else:
+                def _wrapped_sync_sink(chunk: str):
+                    _orig_on_token(chunk)
+                    if not _visual_emitted["done"]:
+                        # Sync sinks: fire-and-forget the emit
+                        try:
+                            from finagent.events import BUS
+                            BUS.emit(session_id, "visual_data_ready", **_visual_payload)
+                            _visual_emitted["done"] = True
+                        except Exception:
+                            pass
+                on_token = _wrapped_sync_sink
+
     facts = _build_facts_block(bundle)
+    # ── Append RICH peer data to facts block for comparison queries ──
+    # Prefer peer_bundles (full enrichment) over peer_quotes (yahoo-only)
+    if peer_bundles:
+        facts += "\n" + _build_peer_facts_block(peer_bundles)
+    elif peer_quotes:
+        facts += "\n" + _build_peer_quotes_only_block(peer_quotes)
     if resolve_openai_config() is not None:
         try:
             memo = await asyncio.wait_for(
@@ -1399,6 +1577,8 @@ async def synthesize_memo(
                     rich = new_rich.model_dump(mode="json")
             except Exception:
                 pass
+            # Safety net: ensure visuals are emitted even if no tokens streamed
+            await _emit_visuals_once()
             return SynthesisResult(memo=memo, via="openai", used_sources=used, artifact=artifact, rich=rich)
         except Exception as exc:
             logger.warning("OpenAI synthesis failed (%s); using structured prose builder", exc)
@@ -1413,6 +1593,8 @@ async def synthesize_memo(
             rich = new_rich.model_dump(mode="json")
     except Exception:
         pass
+    # Safety net: emit visuals in fallback path too
+    await _emit_visuals_once()
     return SynthesisResult(memo=memo, via=f"artifact:{mode.value}", used_sources=used, artifact=artifact, rich=rich)
 
 
@@ -1427,16 +1609,245 @@ async def _load_peer_quotes(
         return {}
     peers: dict[str, YahooQuote] = {}
     primary_key = getattr(entity, "yahoo_ticker", None) or getattr(entity, "normalized_name", None)
-    for peer in extract_finance_entities(objective or target, limit=4):
-        key = peer.yahoo_ticker or peer.normalized_name
-        if not key or key == primary_key:
-            continue
-        if not peer.yahoo_ticker:
-            continue
+    peer_entities = [
+        peer for peer in extract_finance_entities(objective or target, limit=4)
+        if (peer.yahoo_ticker or peer.normalized_name) != primary_key and peer.yahoo_ticker
+    ]
+    if not peer_entities:
+        return {}
+
+    async def _fetch_one(peer):
         try:
-            quote = await asyncio.wait_for(fetch_yahoo_quote(peer.yahoo_ticker), timeout=12.0)
+            return peer, await asyncio.wait_for(fetch_yahoo_quote(peer.yahoo_ticker), timeout=12.0)
         except Exception:
-            quote = None
+            return peer, None
+
+    results = await asyncio.gather(*(_fetch_one(p) for p in peer_entities))
+    for peer, quote in results:
         if quote is not None:
-            peers[peer.canonical_name or peer.ticker_label or peer.yahoo_ticker] = quote
+            key = peer.canonical_name or peer.ticker_label or peer.yahoo_ticker
+            peers[key] = quote
     return peers
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# RICH PEER ENRICHMENT — for comparison queries
+# Fetches yahoo + india snapshot + wikipedia + news for each peer IN PARALLEL.
+# This gives the LLM symmetric data on both companies so comparison output
+# isn't lopsided toward the primary entity.
+# ════════════════════════════════════════════════════════════════════════════
+async def _load_peer_bundles(
+    peer_targets: list[str],
+    objective: str,
+    target: str,
+    entity,
+    mode: OutputMode,
+) -> dict[str, dict]:
+    """Fetch comprehensive enrichment (yahoo + india + wiki + news) for each peer in parallel."""
+    if not peer_targets and mode != OutputMode.COMPANY_COMPARISON:
+        return {}
+
+    # If no explicit peer_targets passed, derive from query (comparison fallback)
+    candidate_names: list[str] = []
+    if peer_targets:
+        candidate_names = list(peer_targets)
+    elif mode == OutputMode.COMPANY_COMPARISON:
+        primary_key = getattr(entity, "yahoo_ticker", None) or getattr(entity, "normalized_name", None)
+        for p in extract_finance_entities(objective or target, limit=4):
+            pk = p.yahoo_ticker or p.normalized_name
+            if pk and pk != primary_key:
+                candidate_names.append(p.canonical_name or p.ticker_label or p.yahoo_ticker)
+
+    if not candidate_names:
+        return {}
+
+    # Lazy import to avoid circular / startup costs
+    try:
+        from finagent.tools.data import (
+            fetch_india_snapshot,
+            fetch_news,
+            fetch_wikipedia_summary,
+        )
+    except ImportError:
+        fetch_india_snapshot = None
+        fetch_news = None
+        fetch_wikipedia_summary = None
+
+    from finagent.geo.entity_resolver import resolve_entity
+
+    async def _fetch_one_peer(name: str) -> tuple[str, dict]:
+        try:
+            peer_entity = resolve_entity(name)
+        except Exception:
+            return name, {}
+
+        ticker = peer_entity.yahoo_ticker
+        canonical = peer_entity.canonical_name or name
+        # Decide which fetchers to run
+        is_india_peer = bool(getattr(peer_entity, "country_code", "") == "IN" or (ticker or "").endswith(".NS") or (ticker or "").endswith(".BO"))
+        nse_sym = None
+        if is_india_peer and ticker:
+            nse_sym = ticker.split(".")[0]
+
+        async def _safe(coro, timeout):
+            if coro is None:
+                return None
+            try:
+                return await asyncio.wait_for(coro, timeout=timeout)
+            except Exception:
+                return None
+
+        # Build coroutines (some may be None if fetcher unavailable)
+        yahoo_coro = fetch_yahoo_quote(ticker) if ticker else None
+        india_coro = fetch_india_snapshot(nse_sym) if (fetch_india_snapshot and nse_sym) else None
+        wiki_coro = fetch_wikipedia_summary(canonical) if fetch_wikipedia_summary else None
+        news_coro = None
+        if fetch_news:
+            try:
+                news_coro = fetch_news(
+                    canonical,
+                    hl=getattr(peer_entity.profile, "news_hl", "en"),
+                    gl=getattr(peer_entity.profile, "news_gl", "IN"),
+                    ceid=getattr(peer_entity.profile, "news_ceid", "IN:en"),
+                )
+            except Exception:
+                news_coro = None
+
+        yahoo, india, wiki, news = await asyncio.gather(
+            _safe(yahoo_coro, 12.0),
+            _safe(india_coro, 15.0),
+            _safe(wiki_coro, 8.0),
+            _safe(news_coro, 12.0),
+            return_exceptions=False,
+        )
+
+        return canonical, {
+            "yahoo": yahoo,
+            "india_snap": india,
+            "wikipedia": wiki,
+            "news": news or [],
+            "entity": peer_entity,
+        }
+
+    results = await asyncio.gather(*(_fetch_one_peer(n) for n in candidate_names))
+    out: dict[str, dict] = {}
+    for name, data in results:
+        # Skip empty results
+        if data and (data.get("yahoo") or data.get("india_snap") or data.get("wikipedia")):
+            out[name] = data
+    return out
+
+
+def _build_peer_facts_block(peer_bundles: dict[str, dict]) -> str:
+    """Build a comprehensive facts block for peer companies — symmetric with primary bundle data."""
+    lines: list[str] = ["=== PEER COMPANY DATA (use for side-by-side comparison) ==="]
+    for peer_name, pb in peer_bundles.items():
+        lines.append(f"\n──── {peer_name} ────")
+        yahoo = pb.get("yahoo")
+        india = pb.get("india_snap")
+        wiki = pb.get("wikipedia")
+        news = pb.get("news") or []
+
+        # Yahoo data
+        if yahoo:
+            cur = getattr(yahoo, "currency", "") or ""
+            if getattr(yahoo, "price", None) is not None:
+                chg = getattr(yahoo, "change_pct", None)
+                chg_str = f" ({chg:+.2f}%)" if chg is not None else ""
+                lines.append(f"  Price: {cur} {yahoo.price:,.2f}{chg_str}")
+            if getattr(yahoo, "market_cap", None):
+                lines.append(f"  Market cap: {cur} {yahoo.market_cap:,.0f}")
+            lo = getattr(yahoo, "fifty_two_week_low", None)
+            hi = getattr(yahoo, "fifty_two_week_high", None)
+            if lo is not None and hi is not None:
+                lines.append(f"  52-week range: {lo:.2f} – {hi:.2f}")
+            pm = getattr(yahoo, "financial_metrics", None) or {}
+            if isinstance(pm, dict):
+                if pm.get("total_revenue"):
+                    lines.append(f"  Revenue (TTM): {pm['total_revenue']:,.0f}")
+                if pm.get("ebitda"):
+                    lines.append(f"  EBITDA: {pm['ebitda']:,.0f}")
+                if pm.get("gross_margins") is not None:
+                    lines.append(f"  Gross margin: {pm['gross_margins']*100:.1f}%")
+                if pm.get("operating_margins") is not None:
+                    lines.append(f"  Operating margin: {pm['operating_margins']*100:.1f}%")
+                if pm.get("profit_margins") is not None:
+                    lines.append(f"  Net margin: {pm['profit_margins']*100:.1f}%")
+                if pm.get("return_on_equity") is not None:
+                    lines.append(f"  ROE: {pm['return_on_equity']*100:.1f}%")
+                if pm.get("return_on_assets") is not None:
+                    lines.append(f"  ROA: {pm['return_on_assets']*100:.1f}%")
+                if pm.get("trailing_pe") is not None:
+                    lines.append(f"  P/E (trailing): {pm['trailing_pe']:.2f}x")
+                if pm.get("forward_pe") is not None:
+                    lines.append(f"  P/E (forward): {pm['forward_pe']:.2f}x")
+                if pm.get("price_to_book") is not None:
+                    lines.append(f"  P/B: {pm['price_to_book']:.2f}x")
+                if pm.get("debt_to_equity") is not None:
+                    lines.append(f"  D/E: {pm['debt_to_equity']:.2f}")
+                if pm.get("dividend_yield") is not None:
+                    lines.append(f"  Dividend yield: {pm['dividend_yield']*100:.2f}%")
+                if pm.get("earnings_growth") is not None:
+                    lines.append(f"  Earnings growth: {pm['earnings_growth']*100:.1f}%")
+                if pm.get("revenue_growth") is not None:
+                    lines.append(f"  Revenue growth: {pm['revenue_growth']*100:.1f}%")
+
+        # India snapshot data (Indian peers)
+        if india:
+            if getattr(india, "sector", None):
+                lines.append(f"  Sector: {india.sector}")
+            if getattr(india, "industry", None):
+                lines.append(f"  Industry: {india.industry}")
+            if getattr(india, "market_cap_cr", None) is not None:
+                lines.append(f"  Market cap (NSE): ₹{india.market_cap_cr:,.0f} Cr")
+            if getattr(india, "pe_ratio", None) is not None:
+                lines.append(f"  P/E (NSE): {india.pe_ratio:.2f}x")
+            if getattr(india, "pb_ratio", None) is not None:
+                lines.append(f"  P/B (NSE): {india.pb_ratio:.2f}x")
+            if getattr(india, "roe", None) is not None:
+                lines.append(f"  ROE (NSE): {india.roe:.1f}%")
+            if getattr(india, "roce", None) is not None:
+                lines.append(f"  ROCE: {india.roce:.1f}%")
+            if getattr(india, "debt_to_equity", None) is not None:
+                lines.append(f"  D/E (NSE): {india.debt_to_equity:.2f}")
+            if getattr(india, "dividend_yield", None) is not None:
+                lines.append(f"  Dividend yield (NSE): {india.dividend_yield:.2f}%")
+
+        # Wikipedia overview
+        if wiki and getattr(wiki, "extract", None):
+            snippet = wiki.extract[:600].replace("\n", " ")
+            lines.append(f"  Overview: {snippet}")
+
+        # Recent news headlines
+        if news:
+            lines.append("  Recent news:")
+            for n in news[:4]:
+                title = getattr(n, "title", "") or ""
+                source = getattr(n, "source", "") or ""
+                if title:
+                    lines.append(f"    • {title[:140]}{f' ({source})' if source else ''}")
+
+    return "\n".join(lines) + "\n"
+
+
+def _build_peer_quotes_only_block(peer_quotes: dict) -> str:
+    """Fallback facts block when only yahoo quotes are available (no rich bundles)."""
+    lines: list[str] = ["=== PEER COMPANY DATA (yahoo-only) ==="]
+    for peer_name, pq in peer_quotes.items():
+        lines.append(f"\n──── {peer_name} ────")
+        if getattr(pq, "price", None) is not None:
+            cur = getattr(pq, "currency", "") or ""
+            lines.append(f"  Price: {cur} {pq.price:,.2f}")
+        if getattr(pq, "market_cap", None):
+            lines.append(f"  Market cap: {pq.market_cap:,.0f}")
+        pm = getattr(pq, "financial_metrics", None) or {}
+        if isinstance(pm, dict):
+            if pm.get("total_revenue"):
+                lines.append(f"  Revenue: {pm['total_revenue']:,.0f}")
+            if pm.get("profit_margins") is not None:
+                lines.append(f"  Net margin: {pm['profit_margins']*100:.1f}%")
+            if pm.get("return_on_equity") is not None:
+                lines.append(f"  ROE: {pm['return_on_equity']*100:.1f}%")
+            if pm.get("trailing_pe") is not None:
+                lines.append(f"  P/E: {pm['trailing_pe']:.2f}x")
+    return "\n".join(lines) + "\n"
