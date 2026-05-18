@@ -576,10 +576,10 @@ async def _run_enrichment(
     )
 
     bundle = EnrichmentBundle(
-        sec=sec_snap,
+        india_snap=sec_snap,          # legacy SEC snapshot now stored as india_snap
+        sebi_filing=filing,
         yahoo=yahoo_quote,
         wikipedia=wiki,
-        filing=filing,
         fx=fx,
         reddit=reddit_posts,
         hackernews=hn_stories,

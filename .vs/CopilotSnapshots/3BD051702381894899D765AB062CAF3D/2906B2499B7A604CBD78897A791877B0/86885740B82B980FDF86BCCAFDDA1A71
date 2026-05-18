@@ -1,0 +1,70 @@
+﻿"use client";
+
+import dynamic from "next/dynamic";
+import { Chart as ChartType } from "../lib/types";
+
+const RechartLineChart = dynamic(
+  () => import("recharts").then((mod) => mod.LineChart),
+  { ssr: false }
+);
+const Line = dynamic(() => import("recharts").then((mod) => mod.Line), { ssr: false });
+const XAxis = dynamic(() => import("recharts").then((mod) => mod.XAxis), { ssr: false });
+const YAxis = dynamic(() => import("recharts").then((mod) => mod.YAxis), { ssr: false });
+const CartesianGrid = dynamic(() => import("recharts").then((mod) => mod.CartesianGrid), { ssr: false });
+const Tooltip = dynamic(() => import("recharts").then((mod) => mod.Tooltip), { ssr: false });
+const Legend = dynamic(() => import("recharts").then((mod) => mod.Legend), { ssr: false });
+const ResponsiveContainer = dynamic(() => import("recharts").then((mod) => mod.ResponsiveContainer), { ssr: false });
+
+interface MultiSeriesLineChartProps {
+  chart: ChartType;
+}
+
+export function MultiSeriesLineChart({ chart }: MultiSeriesLineChartProps) {
+  if (!chart.series || chart.series.length === 0) {
+    return <div className="h-80 flex items-center justify-center text-gray-400">No data available</div>;
+  }
+
+  const data = (chart.x_labels || []).map((label, idx) => {
+    const row: Record<string, unknown> = { name: label };
+    chart.series?.forEach((series) => {
+      row[series.name] = series.values?.[idx] ?? null;
+    });
+    return row;
+  });
+
+  const colors = chart.series.map((s) => s.color || "#3b82f6");
+
+  return (
+    <div className="w-full rounded-lg border border-gray-200 bg-white p-4">
+      <div className="mb-4">
+        <h3 className="text-sm font-semibold text-gray-900">{chart.title}</h3>
+        {chart.subtitle && <p className="text-xs text-gray-500">{chart.subtitle}</p>}
+      </div>
+      <div className="h-80">
+        <ResponsiveContainer width="100%" height="100%">
+          <RechartLineChart
+            data={data}
+            margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis dataKey="name" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            {chart.series?.map((series, idx) => (
+              <Line
+                key={idx}
+                type="monotone"
+                dataKey={series.name}
+                stroke={colors[idx] || "#3b82f6"}
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            ))}
+          </RechartLineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}

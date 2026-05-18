@@ -278,10 +278,14 @@ async def search_web(
     max_results: int = 5,
     preferred_domains: list[str] | None = None,
     entity: ResolvedEntity | None = None,
+    query_cache: dict[str, list[ScrapedDoc]] | None = None,
 ) -> list[ScrapedDoc]:
     """Multi-backend search: DuckDuckGo + Bing in parallel, dedup, then
     fetch+parse the top N. Falls back gracefully when one backend fails.
     """
+    if query_cache is not None and query in query_cache:
+        return query_cache[query]
+
     # Pull a wider raw list from each backend so the merged top-N is
     # actually diverse, not just the first 5 from whichever returned first.
     raw_target = max(max_results * 3, 12)
@@ -327,7 +331,10 @@ async def search_web(
     docs: list[ScrapedDoc] = []
     for fut in asyncio.as_completed(tasks):
         docs.append(await fut)
-    return rerank_docs(query, docs, entity=entity, preferred_domains=preferred_domains)
+    final_docs = rerank_docs(query, docs, entity=entity, preferred_domains=preferred_domains)
+    if query_cache is not None:
+        query_cache[query] = final_docs
+    return final_docs
 
 
 def _zip_longest_pairs(a: list, b: list):

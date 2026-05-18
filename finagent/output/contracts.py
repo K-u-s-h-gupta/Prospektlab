@@ -22,6 +22,7 @@ class ResponseDepth(str, Enum):
     CHAT = "chat"
     STANDARD = "standard"
     DEEP = "deep"
+    MARATHON = "marathon"  # Full research + document generation (PDF/DOCX/XLSX)
 
 
 @dataclass

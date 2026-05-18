@@ -2218,8 +2218,10 @@
     let researchMode = "deep";
 
     async function startRun() {
+      console.log("[DEBUG] startRun() called");
       // Read directly from the unified bottom input
       const target = $("targetInput").value.trim();
+      console.log("[DEBUG] target =", target);
 
       if (!target) {
         $("targetInput").focus();
@@ -2534,7 +2536,27 @@
               const d = JSON.parse(e.data);
               if (turn) {
                 turn.outputMode = d.output_mode || turn.outputMode;
+                turn.rich = d.rich || null;
                 renderTurnVisuals(turn.turnId);
+
+                // Render rich payload if available (better formatted)
+                if (d.rich) {
+                  let html = `<div class="rich-panel mt-4 p-4 border border-emerald-500/30 bg-emerald-500/5 rounded-xl">`;
+                  if (d.rich.title) html += `<div class="font-semibold text-emerald-300 mb-3">${d.rich.title}</div>`;
+                  
+                  if (d.rich.metric_cards?.length) {
+                    html += `<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">`;
+                    d.rich.metric_cards.forEach(c => {
+                      html += `<div class="bg-black/40 border border-white/10 rounded p-3"><div class="text-[10px] text-gray-400">${c.label}</div><div class="text-lg font-bold">${c.value}</div></div>`;
+                    });
+                    html += `</div>`;
+                  }
+                  
+                  html += `<div class="text-xs text-emerald-300">Structured rich data available.</div></div>`;
+                  turn.visualEl.insertAdjacentHTML("beforeend", html);
+                  turn.visualEl.classList.remove("hidden");
+                }
+
                 if (researchMode === "marathon") {
                   const exportHtml = `
                     <div class="mt-4 p-4 border border-indigo-500/30 bg-indigo-500/10 rounded-lg">
@@ -2641,6 +2663,7 @@
           }
           $("stopBtn").addEventListener("click", stopRun);
 
+          console.log("[DEBUG] Wiring executeBtn listener now...");
           $("executeBtn").addEventListener("click", startRun);
           $("targetInput").addEventListener("keydown", (e) => { if (e.key === "Enter") startRun(); });
           // Hero search input (Perplexity-style centered)
@@ -2688,19 +2711,29 @@
             const txt = window.__lastMemoMd || activeTurn?.memoEl?.innerText || $("memoBody")?.innerText || "";
             try { await navigator.clipboard.writeText(txt); } catch (_) { }
           });
-          $("downloadMdBtn").addEventListener("click", async () => {
-            if (!sessionId) return;
-            try {
-              const md = window.__lastMemoMd || await fetch(`/sessions/${sessionId}/memo?t=${Date.now()}`).then((r) => r.text());
-              const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `${($("resultTitle").textContent || "memo").toLowerCase().replace(/[^a-z0-9]+/g, "_")}.md`;
-              document.body.appendChild(a); a.click(); a.remove();
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
-            } catch (_) { }
-          });
+           $("downloadMdBtn").addEventListener("click", async () => {
+             if (!sessionId) return;
+             try {
+               const md = window.__lastMemoMd || await fetch(`/sessions/${sessionId}/memo?t=${Date.now()}`).then((r) => r.text());
+               const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+               const url = URL.createObjectURL(blob);
+               const a = document.createElement("a");
+               a.href = url;
+               a.download = `${($("resultTitle").textContent || "memo").toLowerCase().replace(/[^a-z0-9]+/g, "_")}.md`;
+               document.body.appendChild(a); a.click(); a.remove();
+               setTimeout(() => URL.revokeObjectURL(url), 1000);
+             } catch (_) { }
+           });
+
+           // Document generation buttons — only visible in Marathon mode
+           function showDocumentGenerationUI(show) {
+             const pdfBtn = $("generatePdfBtn");
+             const docxBtn = $("generateDocxBtn");
+             const xlsxBtn = $("generateXlsxBtn");
+             [pdfBtn, docxBtn, xlsxBtn].forEach(el => {
+               if (el) el.style.display = show ? "inline-flex" : "none";
+             });
+           }
           document.querySelectorAll(".nav-btn").forEach((n) => n.addEventListener("click", (e) => {
             e.preventDefault();
             if (n.dataset.nav === "command") { showState("command"); }

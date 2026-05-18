@@ -1,13 +1,12 @@
 """LLM synthesis pass — turn the full evidence pool into a readable memo.
 
 When OPENAI_API_KEY is set we stream tokens from OpenAI. When it isn't
-we still produce a polished prose memo (proper paragraphs, no bullet
-clutter, no boilerplate disclosures) from the same fact bundle.
+we still produce a polished prose memo from the same fact bundle.
 
-All USD figures are duplicated in INR using the live USDINR Yahoo quote
-fetched at session start. The memo never invents numbers — every figure
-is sourced from the SEC EDGAR companyfacts API, the 10-K narrative we
-pulled directly, the live Yahoo quote, or one of the community signals.
+All monetary figures are presented in INR (crore/lakh notation) first.
+The memo never invents numbers — every figure is sourced from NSE/BSE,
+Moneycontrol, Screener.in, SEBI filings, the live Yahoo quote (.NS/.BO),
+or community signals.
 """
 
 from __future__ import annotations
@@ -22,21 +21,23 @@ from datetime import datetime, timezone
 
 from finagent.analysis.conflicts import ConflictReport
 from finagent.output.artifact_builder import build_answer_artifact
-from finagent.output.contracts import OutputMode, ResponseDepth
+from finagent.output.contracts import AnswerArtifact, OutputMode, ResponseDepth
 from finagent.output.intent_classifier import classify_output_mode, extract_finance_entities, normalize_depth
 from finagent.output.memo_formatter import MemoSection, format_memo
-from finagent.output.renderer import render_markdown
+from finagent.output.renderer import render_markdown, render_rich_json
+import finagent.rich_builder as teammate_rich_builder
+
 from finagent.prompt_builder import default_system_prompt
 from finagent.runtime_provider import resolve_openai_config
 from finagent.state.checkpoint import Checkpoint
 from finagent.state.citation_log import Citation
 from finagent.tools.data import (
-    FilingNarrative,
     FxRate,
     HNStory,
+    IndiaCompanySnapshot,
     NewsItem,
     RedditPost,
-    SECCompanySnapshot,
+    SEBIFiling,
     StockTwitsSnapshot,
     WikipediaSummary,
     YahooQuote,
@@ -55,10 +56,13 @@ TokenSink = Callable[[str], Awaitable[None]] | Callable[[str], None] | None
 
 @dataclass
 class EnrichmentBundle:
-    sec: SECCompanySnapshot | None = None
+    # India-specific data sources (replaces SEC EDGAR)
+    india_snap: IndiaCompanySnapshot | None = None
+    sebi_filing: SEBIFiling | None = None
+    shareholding: dict | None = None
+    # Universal sources
     yahoo: YahooQuote | None = None
     wikipedia: WikipediaSummary | None = None
-    filing: FilingNarrative | None = None
     fx: FxRate | None = None
     reddit: list[RedditPost] = field(default_factory=list)
     hackernews: list[HNStory] = field(default_factory=list)
@@ -67,15 +71,24 @@ class EnrichmentBundle:
 
     def has_any(self) -> bool:
         return bool(
-            self.sec
+            self.india_snap
             or self.yahoo
             or self.wikipedia
-            or self.filing
+            or self.sebi_filing
             or self.reddit
             or self.hackernews
             or self.stocktwits
             or self.news
         )
+
+    # Back-compat shims — code that read bundle.sec now gets india_snap
+    @property
+    def sec(self) -> IndiaCompanySnapshot | None:       # type: ignore[override]
+        return self.india_snap
+
+    @property
+    def filing(self) -> SEBIFiling | None:              # type: ignore[override]
+        return self.sebi_filing
 
 
 @dataclass
@@ -83,6 +96,8 @@ class SynthesisResult:
     memo: str
     via: str  # "openai" | "structured"
     used_sources: int
+    artifact: AnswerArtifact | None = None
+    rich: dict | None = None  # result of render_rich_json(artifact)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -135,6 +150,15 @@ def _amount_to_usd(value: float, unit: str) -> float:
         return value
     # SEC EDGAR sometimes returns share counts in "shares" — leave untouched.
     return value
+
+
+def _get_attr_or_key(obj, key, default=None):
+    """Safely get attribute or dict key."""
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
 
 
 def _format_money(value: float | None, unit: str | None, fx: FxRate | None) -> str:
@@ -515,7 +539,7 @@ def _history_paragraph(bundle: EnrichmentBundle) -> str | None:
     s = bundle.sec
     fx = bundle.fx
     y = bundle.yahoo
-    if not s or not s.history:
+    if not s or not getattr(s, 'history', None):
         if not y:
             return None
         parts: list[str] = []
@@ -546,12 +570,14 @@ def _history_paragraph(bundle: EnrichmentBundle) -> str | None:
         return None
     parts: list[str] = []
     rev = s.history.get("revenue")
-    if rev and rev.annual and len(rev.annual) >= 2:
-        first_p = rev.annual[0]
-        last_p = rev.annual[-1]
-        cagr = _cagr(rev.annual)
-        first_val = _format_money(first_p.value, rev.unit, fx)
-        last_val = _format_money(last_p.value, rev.unit, fx)
+    if rev and _get_attr_or_key(rev, "annual") and len(_get_attr_or_key(rev, "annual", [])) >= 2:
+        annual = _get_attr_or_key(rev, "annual", [])
+        first_p = annual[0]
+        last_p = annual[-1]
+        cagr = _cagr(annual)
+        rev_unit = _get_attr_or_key(rev, "unit")
+        first_val = _format_money(_get_attr_or_key(first_p, "value"), rev_unit, fx)
+        last_val = _format_money(_get_attr_or_key(last_p, "value"), rev_unit, fx)
         years = len(rev.annual) - 1
         cagr_clause = f" — a {cagr:+.1f}% compound annual growth rate" if cagr is not None else ""
         parts.append(
@@ -1365,14 +1391,29 @@ async def synthesize_memo(
                 _openai_memo(target, objective, digest, facts, conflicts, on_token=on_token, synth_model=synth_model, chat_history=chat_history),
                 timeout=timeout_s,
             )
-            return SynthesisResult(memo=memo, via="openai", used_sources=used)
+            rich = render_rich_json(artifact)
+            # Try teammate's new rich_builder for richer structured output
+            try:
+                new_rich = teammate_rich_builder.build(objective, [], [], memo)
+                if new_rich:
+                    rich = new_rich.model_dump(mode="json")
+            except Exception:
+                pass
+            return SynthesisResult(memo=memo, via="openai", used_sources=used, artifact=artifact, rich=rich)
         except Exception as exc:
             logger.warning("OpenAI synthesis failed (%s); using structured prose builder", exc)
             
     # Fallback to the python-generated structured text if LLM fails
     memo = render_markdown(artifact)
     await _emit_token(on_token, memo)
-    return SynthesisResult(memo=memo, via=f"artifact:{mode.value}", used_sources=used)
+    rich = render_rich_json(artifact)
+    try:
+        new_rich = teammate_rich_builder.build(objective, [], [], memo)
+        if new_rich:
+            rich = new_rich.model_dump(mode="json")
+    except Exception:
+        pass
+    return SynthesisResult(memo=memo, via=f"artifact:{mode.value}", used_sources=used, artifact=artifact, rich=rich)
 
 
 async def _load_peer_quotes(

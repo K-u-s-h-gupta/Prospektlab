@@ -13,7 +13,8 @@ from functools import lru_cache
 import certifi
 from fastmcp import FastMCP
 import yfinance as yf
-from valuation_engine import (
+from finagent.tools import valuation_engine
+from finagent.tools.valuation_engine import (
     dcf_valuation, graham_valuation, pe_valuation, ddm_valuation,
     ev_ebitda_valuation, calculate_piotroski_score, calculate_altman_z_score,
     calculate_wacc, calculate_cost_of_equity_capm, dupont_analysis,
