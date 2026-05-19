@@ -213,10 +213,12 @@ def _build_comparison_charts(artifact: AnswerArtifact, bundle, peer_quotes: dict
     labels = []
     values = []
     
-    primary_name = getattr(bundle, "yahoo", None)
-    primary_name = getattr(primary_name, "name", "Primary") if primary_name else "Primary"
+    y = getattr(bundle, "yahoo", None)
+    primary_name = getattr(y, "name", "Primary") if y else "Primary"
+    currency = getattr(y, "currency", None) or "INR"
     labels.append(primary_name)
-    values.append(float(getattr(bundle, "market_cap", 0) or 0))
+    # Bug fix: market_cap is on bundle.yahoo, NOT bundle directly
+    values.append(float(getattr(y, "market_cap", 0) or 0))
     
     for name, quote in peer_quotes.items():
         labels.append(name)
@@ -228,7 +230,7 @@ def _build_comparison_charts(artifact: AnswerArtifact, bundle, peer_quotes: dict
             name="Market Cap",
             color="#6366f1",
             data=data_points,
-            unit="USD",
+            unit=currency,
             chart_type="bar"
         )
         charts.append(AnswerChart(
@@ -253,6 +255,7 @@ def _build_comparison_results(bundle, peer_quotes: dict[str, object]) -> list[Co
     
     primary_metrics = getattr(y, "financial_metrics", {}) or {}
     primary_name = getattr(y, "name", "Primary")
+    currency = getattr(y, "currency", None) or "INR"
     
     # Compare against first peer
     peer_name = next(iter(peer_quotes.keys()), None)
@@ -273,8 +276,8 @@ def _build_comparison_results(bundle, peer_quotes: dict[str, object]) -> list[Co
     ]
     
     for metric, primary_val, secondary_val in metrics_to_compare:
-        primary_str = _format_comparison_value(primary_val, metric)
-        secondary_str = _format_comparison_value(secondary_val, metric)
+        primary_str = _format_comparison_value(primary_val, metric, currency)
+        secondary_str = _format_comparison_value(secondary_val, metric, currency)
         
         # Determine winner (lower P/E is better, higher others)
         if metric == "P/E Ratio":
@@ -290,10 +293,7 @@ def _build_comparison_results(bundle, peer_quotes: dict[str, object]) -> list[Co
         
         # Calculate delta
         if primary_val and secondary_val:
-            if metric == "P/E Ratio":
-                delta_pct = abs(primary_val - secondary_val) / secondary_val * 100 if secondary_val else 0
-            else:
-                delta_pct = abs(primary_val - secondary_val) / secondary_val * 100 if secondary_val else 0
+            delta_pct = abs(primary_val - secondary_val) / secondary_val * 100 if secondary_val else 0
             delta_str = f"{delta_pct:.1f}%"
         else:
             delta_str = "n/a"
@@ -390,12 +390,12 @@ def _generate_comparison_verdict(results: list[ComparisonResult]) -> str:
     return " ".join(verdict_parts) + "."
 
 
-def _format_comparison_value(value, metric_type: str) -> str:
+def _format_comparison_value(value, metric_type: str, currency: str = "INR") -> str:
     """Format a comparison value based on metric type."""
     if value is None or value == 0:
         return "n/a"
     if metric_type in ("Market Cap", "Revenue"):
-        return _money(value, "USD")
+        return _money(value, currency)
     if metric_type in ("Net Margin", "ROE"):
         return _pct(value)
     if metric_type == "P/E Ratio":
@@ -421,22 +421,30 @@ def build_answer_artifact(
     citations = _collect_citations(checkpoint, docs, bundle)
     title = _title_for(mode, target, entity)
     summary = _summary_for(mode, target, bundle, entity, quality_report)
-    # Build metric cards for all modes
-    metric_cards = _build_metric_cards(bundle, entity)
-    
-    # Build charts based on available data
+
+    is_comparison = mode == OutputMode.COMPANY_COMPARISON
+
+    # Build metric cards only for non-comparison modes.
+    # Comparison mode uses the head-to-head scoreboard instead; single-entity
+    # metric cards (Key Metrics grid) would be confusing and misleading.
+    metric_cards = [] if is_comparison else _build_metric_cards(bundle, entity)
+
+    # Build single-entity charts only for non-comparison modes.
+    # Price History and Revenue Trend charts are meaningless for a "TCS vs Infosys"
+    # query — they only show data for the primary entity and would mislead the user.
     charts = []
-    price_chart = _build_price_chart(bundle)
-    if price_chart:
-        charts.append(price_chart)
-    revenue_chart = _build_revenue_chart(bundle)
-    if revenue_chart:
-        charts.append(revenue_chart)
-    
+    if not is_comparison:
+        price_chart = _build_price_chart(bundle)
+        if price_chart:
+            charts.append(price_chart)
+        revenue_chart = _build_revenue_chart(bundle)
+        if revenue_chart:
+            charts.append(revenue_chart)
+
     # Build comparison elements if in comparison mode
     comparison_charts = []
     comparison_results = []
-    if mode == OutputMode.COMPANY_COMPARISON and peer_quotes:
+    if is_comparison and peer_quotes:
         comparison_charts = _build_comparison_charts(AnswerArtifact(mode=mode, depth=depth, title=title, summary=summary), bundle, peer_quotes or {})
         charts.extend(comparison_charts)
         comparison_results = _build_comparison_results(bundle, peer_quotes or {})

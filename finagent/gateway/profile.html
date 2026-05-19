@@ -198,7 +198,7 @@
   function loadUser() {
     let user = { name: "Researcher", email: "guest@prospektlab.app" };
     try {
-      const raw = localStorage.getItem("prospektlab_user");
+      const raw = localStorage.getItem("prospektlab_user") || sessionStorage.getItem("prospektlab_user");
       if (raw) user = { ...user, ...JSON.parse(raw) };
     } catch (_) {}
     $("userName").textContent = user.name || "Researcher";
@@ -282,7 +282,11 @@
 
   $("saveProfile").addEventListener("click", () => {
     const user = { name: $("editName").value.trim() || "Researcher", email: $("editEmail").value };
-    localStorage.setItem("prospektlab_user", JSON.stringify(user));
+    if (localStorage.getItem("prospektlab_user")) {
+      localStorage.setItem("prospektlab_user", JSON.stringify(user));
+    } else {
+      sessionStorage.setItem("prospektlab_user", JSON.stringify(user));
+    }
     const prefs = { currency: $("editCurrency").value, risk: $("editRisk").value };
     localStorage.setItem("prospektlab_prefs", JSON.stringify(prefs));
     $("saveMsg").classList.remove("hidden");
@@ -292,6 +296,7 @@
 
   $("signOutBtn").addEventListener("click", () => {
     localStorage.removeItem("prospektlab_user");
+    sessionStorage.removeItem("prospektlab_user");
     window.location.href = "/landing";
   });
 

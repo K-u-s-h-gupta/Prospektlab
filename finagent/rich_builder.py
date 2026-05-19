@@ -1,4 +1,4 @@
-﻿"""
+"""
 ORACLE FIOS - Rich (structured) response builder
 ================================================
 Takes the JSON tool outputs observed during a LangGraph run, classifies the
@@ -438,8 +438,13 @@ def extract_symbols(message: str, outputs: list[ToolOutput]) -> list[str]:
                             if u and u not in seen and u not in _BLACKLIST_TOKENS:
                                 seen.append(u)
 
-    # 3. Fall back to text extraction
-    if not seen:
+    # 3. Fall back to text extraction — also run when a comparison query has
+    #    fewer than 2 symbols, since the secondary entity may only appear in text.
+    _is_comp = bool(re.search(
+        r"\b(?:compare|comparison|compares|comparing|vs\.?|versus|against|head[\s-]to[\s-]head)\b",
+        (message or ""), re.IGNORECASE,
+    ))
+    if not seen or (_is_comp and len(seen) < 2):
         lower = (message or "").lower()
         for name, tick in _COMPANY_TO_TICKER.items():
             pat = r"\b" + re.escape(name) + r"\b"

@@ -12,8 +12,9 @@ _XAI_BASE_URL = "https://api.x.ai/v1"
 @dataclass
 class OpenAIConfig:
     api_key: str
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-5.4"
     base_url: str | None = None
+
 
 
 class ChatCompleter(Protocol):
@@ -24,7 +25,7 @@ def resolve_openai_config() -> OpenAIConfig | None:
     """Return config for the primary provider (OpenAI) or xAI as fallback."""
     key = os.getenv("OPENAI_API_KEY")
     if key:
-        model = os.getenv("FINAGENT_OPENAI_MODEL", "gpt-4o-mini")
+        model = os.getenv("FINAGENT_OPENAI_MODEL", "gpt-5.4")
         return OpenAIConfig(api_key=key, model=model)
 
     # Fallback: xAI (Grok) — OpenAI-compatible endpoint

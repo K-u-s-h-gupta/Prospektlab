@@ -1237,22 +1237,42 @@ def _persist_session_memory(
     if bundle.news:
         # Top 3 headline events as discrete facts so they're searchable
         for n in bundle.news[:3]:
+            # Defensive: handle both Pydantic model objects and raw dicts
+            if isinstance(n, dict):
+                _n_source = n.get("source", "")
+                _n_title = n.get("title", "")
+                _n_published = n.get("published", "")
+                _n_link = n.get("link") or n.get("url")
+            else:
+                _n_source = getattr(n, "source", "")
+                _n_title = getattr(n, "title", "")
+                _n_published = getattr(n, "published", "")
+                _n_link = getattr(n, "link", None) or getattr(n, "url", None)
             new_facts.append(
                 MemoryFact(
                     target_key=target,
                     kind="news_event",
-                    body=f"{n.source}: {n.title} ({n.published})",
+                    body=f"{_n_source}: {_n_title} ({_n_published})",
                     confidence="MEDIUM",
-                    source_url=n.link,
+                    source_url=_n_link,
                     session_id=session_id,
                 )
             )
     for c in conflicts or []:
+        # Defensive: handle both Pydantic model objects and raw dicts
+        if isinstance(c, dict):
+            _c_metric = c.get("metric", "unknown")
+            _c_spread = float(c.get("spread_pct", 0))
+            _c_note = c.get("note", "")
+        else:
+            _c_metric = getattr(c, "metric", "unknown")
+            _c_spread = float(getattr(c, "spread_pct", 0))
+            _c_note = getattr(c, "note", "") or ""
         new_facts.append(
             MemoryFact(
                 target_key=target,
                 kind="conflict",
-                body=f"Cross-source disagreement on {c.metric}: spread {c.spread_pct:.1f}% — {c.note or ''}",
+                body=f"Cross-source disagreement on {_c_metric}: spread {_c_spread:.1f}% — {_c_note}",
                 confidence="MEDIUM",
                 source_url=None,
                 session_id=session_id,
@@ -1945,6 +1965,10 @@ async def run_research_session(
         blindspot=blindspot_payload,
         resolved_entity=entity.to_event_payload(),
     )
+    # Attach rich structured data (comparison tables, charts) so the frontend
+    # final handler can render them even if visual_data_ready was insufficient.
+    if synthesis and getattr(synthesis, "rich", None):
+        _final_payload["rich"] = synthesis.rich
 
     if cfg.emit_memo:
         # Only emit "final" for the true synthesis pass — intermediate deep-research

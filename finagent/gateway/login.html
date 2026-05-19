@@ -9,6 +9,7 @@
   <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script>
     tailwind.config = { darkMode: "class", theme: { extend: { colors: { bg: "#0a0f1e", card: "#131b2e", elev: "#1a2238", text: "#e6ebf7", muted: "#9aa3bb", primary: "#7da8ff", success: "#5ce0a4", warn: "#f7c54a", error: "#ff8a80" }, fontFamily: { inter: ["Inter", "sans-serif"], mono: ["JetBrains Mono", "monospace"] } } } };
   </script>
@@ -119,67 +120,121 @@
       </a>
 
       <div class="glass-strong rounded-2xl p-8">
-        <h1 class="text-2xl font-bold tracking-tight mb-1.5">Welcome back</h1>
-        <p class="text-sm text-muted mb-7">Sign in to your research workspace.</p>
+        <div id="loginFormSection">
+          <h1 class="text-2xl font-bold tracking-tight mb-1.5">Welcome back</h1>
+          <p class="text-sm text-muted mb-7">Sign in to your research workspace.</p>
 
-        <!-- OAuth at top (more common modern pattern) -->
-        <div class="grid grid-cols-2 gap-3 mb-5">
-          <button id="googleBtn" type="button" class="bg-elev border border-white/10 rounded-lg py-2.5 text-sm font-medium hover:bg-elev/80 transition flex items-center justify-center gap-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.76c-.99.66-2.25 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.11c-.22-.66-.35-1.36-.35-2.11s.13-1.45.35-2.11V7.05H2.18A11 11 0 0 0 1 12c0 1.78.43 3.46 1.18 4.95l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.05l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>
-            Google
-          </button>
-          <button id="githubBtn" type="button" class="bg-elev border border-white/10 rounded-lg py-2.5 text-sm font-medium hover:bg-elev/80 transition flex items-center justify-center gap-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.27a11 11 0 0 0-3.48 21.46c.55.1.75-.24.75-.53v-1.85c-3.06.67-3.71-1.47-3.71-1.47-.5-1.27-1.22-1.61-1.22-1.61-1-.68.07-.67.07-.67 1.11.08 1.7 1.14 1.7 1.14.98 1.68 2.58 1.2 3.21.92.1-.72.39-1.2.7-1.48-2.44-.28-5.01-1.22-5.01-5.43 0-1.2.43-2.18 1.13-2.95-.11-.28-.49-1.4.11-2.92 0 0 .93-.3 3.04 1.13a10.5 10.5 0 0 1 5.53 0c2.11-1.43 3.04-1.13 3.04-1.13.6 1.52.22 2.64.11 2.92.71.77 1.13 1.75 1.13 2.95 0 4.22-2.58 5.15-5.03 5.42.4.34.75 1.02.75 2.06v3.05c0 .3.2.64.76.53A11 11 0 0 0 12 1.27"/></svg>
-            GitHub
-          </button>
-        </div>
-
-        <div class="flex items-center gap-3 text-xs text-muted my-5">
-          <div class="flex-1 h-px bg-white/10"></div>
-          or with email
-          <div class="flex-1 h-px bg-white/10"></div>
-        </div>
-
-        <form id="loginForm" class="space-y-4">
-          <div>
-            <label class="label-mono text-[11px] text-muted tracking-wider uppercase block mb-1.5">Email</label>
-            <div class="relative">
-              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">mail</span>
-              <input id="email" type="email" required placeholder="you@example.com" autocomplete="email"
-                     class="w-full bg-card border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm focus:border-primary outline-none" />
-            </div>
-          </div>
-          <div>
-            <div class="flex items-center justify-between mb-1.5">
-              <label class="label-mono text-[11px] text-muted tracking-wider uppercase">Password</label>
-              <a href="#" class="text-[11px] text-primary hover:underline">Forgot?</a>
-            </div>
-            <div class="relative">
-              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">lock</span>
-              <input id="password" type="password" required minlength="6" placeholder="••••••••" autocomplete="current-password"
-                     class="w-full bg-card border border-white/10 rounded-lg pl-10 pr-12 py-3 text-sm focus:border-primary outline-none" />
-              <button id="togglePw" type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-text p-1" aria-label="Toggle password visibility">
-                <span class="material-symbols-outlined text-[18px]">visibility</span>
+          <!-- OAuth at top (more common modern pattern) -->
+          <div class="mb-5">
+            <div class="relative w-full">
+              <button id="googleBtn" type="button" class="w-full bg-elev border border-white/10 rounded-lg py-2.5 text-sm font-medium hover:bg-elev/80 transition flex items-center justify-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.76c-.99.66-2.25 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.11c-.22-.66-.35-1.36-.35-2.11s.13-1.45.35-2.11V7.05H2.18A11 11 0 0 0 1 12c0 1.78.43 3.46 1.18 4.95l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.05l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>
+                Google
               </button>
+              <div id="googleBtnOverlay" class="absolute inset-0 opacity-[0.001] z-10 overflow-hidden pointer-events-auto cursor-pointer"></div>
             </div>
           </div>
 
-          <label class="flex items-center gap-2 text-xs text-muted cursor-pointer pt-1 select-none">
-            <input id="remember" type="checkbox" class="rounded border-white/10 bg-card text-primary focus:ring-primary/30" />
-            Keep me signed in for 30 days
-          </label>
+          <div class="flex items-center gap-3 text-xs text-muted my-5">
+            <div class="flex-1 h-px bg-white/10"></div>
+            or with email
+            <div class="flex-1 h-px bg-white/10"></div>
+          </div>
 
-          <button type="submit" id="loginBtn" class="w-full bg-primary text-bg font-semibold py-3 rounded-lg hover:opacity-90 transition flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
-            <span id="loginBtnLabel" class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">login</span> Sign in</span>
-            <span id="loginBtnSpinner" class="hidden">
-              <svg class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-            </span>
-          </button>
-        </form>
+          <form id="loginForm" class="space-y-4">
+            <div>
+              <label class="label-mono text-[11px] text-muted tracking-wider uppercase block mb-1.5">Email</label>
+              <div class="relative">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">mail</span>
+                <input id="email" type="email" required placeholder="you@example.com" autocomplete="email"
+                       class="w-full bg-card border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm focus:border-primary outline-none" />
+              </div>
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="label-mono text-[11px] text-muted tracking-wider uppercase">Password</label>
+                <a href="#" id="forgotPwLink" class="text-[11px] text-primary hover:underline">Forgot?</a>
+              </div>
+              <div class="relative">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">lock</span>
+                <input id="password" type="password" required minlength="6" placeholder="••••••••" autocomplete="current-password"
+                       class="w-full bg-card border border-white/10 rounded-lg pl-10 pr-12 py-3 text-sm focus:border-primary outline-none" />
+                <button id="togglePw" type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-text p-1" aria-label="Toggle password visibility">
+                  <span class="material-symbols-outlined text-[18px]">visibility</span>
+                </button>
+              </div>
+            </div>
 
-        <p class="text-center text-sm text-muted mt-6">
-          New here? <a href="/signup" class="text-primary hover:underline font-medium">Create an account</a>
-        </p>
+            <label class="flex items-center gap-2 text-xs text-muted cursor-pointer pt-1 select-none">
+              <input id="remember" type="checkbox" class="rounded border-white/10 bg-card text-primary focus:ring-primary/30" />
+              Keep me signed in for 30 days
+            </label>
+
+            <button type="submit" id="loginBtn" class="w-full bg-primary text-bg font-semibold py-3 rounded-lg hover:opacity-90 transition flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+              <span id="loginBtnLabel" class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">login</span> Sign in</span>
+              <span id="loginBtnSpinner" class="hidden">
+                <svg class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              </span>
+            </button>
+          </form>
+
+          <p class="text-center text-sm text-muted mt-6">
+            New here? <a href="/signup" class="text-primary hover:underline font-medium">Create an account</a>
+          </p>
+        </div>
+
+        <!-- Forgot Password Section -->
+        <div id="forgotPasswordSection" class="hidden">
+          <h1 class="text-2xl font-bold tracking-tight mb-1.5">Reset Password</h1>
+          <p class="text-sm text-muted mb-7">Enter your email to receive a 6-digit verification code.</p>
+
+          <form id="forgotForm" class="space-y-4">
+            <div>
+              <label class="label-mono text-[11px] text-muted tracking-wider uppercase block mb-1.5">Email address</label>
+              <div class="relative">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">mail</span>
+                <input id="forgotEmail" type="email" required placeholder="you@example.com"
+                       class="w-full bg-card border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm focus:border-primary outline-none" />
+              </div>
+            </div>
+
+            <button type="submit" id="sendResetBtn" class="w-full bg-primary text-bg font-semibold py-3 rounded-lg hover:opacity-90 transition flex items-center justify-center gap-2">
+              <span id="sendResetLabel">Send Reset Code</span>
+              <span id="sendResetSpinner" class="hidden">
+                <svg class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              </span>
+            </button>
+          </form>
+
+          <!-- Code Validation & New Password form -->
+          <form id="resetForm" class="hidden mt-6 space-y-4 pt-6 border-t border-white/5">
+            <div>
+              <label class="label-mono text-[11px] text-muted tracking-wider uppercase block mb-1.5">6-Digit Reset Code</label>
+              <div class="relative">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">verified_user</span>
+                <input id="resetCode" type="text" required placeholder="6-digit code"
+                       class="w-full bg-card border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm focus:border-primary outline-none" />
+              </div>
+            </div>
+
+            <div>
+              <label class="label-mono text-[11px] text-muted tracking-wider uppercase block mb-1.5">New Password</label>
+              <div class="relative">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">lock</span>
+                <input id="newPassword" type="password" required minlength="8" placeholder="At least 8 characters"
+                       class="w-full bg-card border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm focus:border-primary outline-none" />
+              </div>
+            </div>
+
+            <button type="submit" id="resetBtn" class="w-full bg-primary text-bg font-semibold py-3 rounded-lg hover:opacity-90 transition flex items-center justify-center gap-2">
+              Update Password
+            </button>
+          </form>
+
+          <p class="text-center text-sm text-muted mt-6">
+            Remember your password? <a href="#" id="backToLoginLink" class="text-primary hover:underline font-medium">Back to Login</a>
+          </p>
+        </div>
       </div>
 
       <p class="text-center text-xs text-muted mt-5">
@@ -201,8 +256,16 @@
   const $ = (id) => document.getElementById(id);
 
   function showToast(msg, kind = "error") {
+    let text = msg;
+    if (msg && typeof msg === "object") {
+      if (Array.isArray(msg)) {
+        text = msg.map(err => err.msg || JSON.stringify(err)).join(", ");
+      } else {
+        text = msg.message || msg.detail || JSON.stringify(msg);
+      }
+    }
     const t = $("toast");
-    $("toastMsg").textContent = msg;
+    $("toastMsg").textContent = text;
     t.className = `toast border visible ${kind === "error" ? "bg-error/15 border-error/30 text-error" : "bg-success/15 border-success/30 text-success"}`;
     setTimeout(() => t.classList.remove("visible"), 3500);
   }
@@ -213,8 +276,185 @@
     $("togglePw").firstElementChild.textContent = pw.type === "password" ? "visibility" : "visibility_off";
   });
 
-  $("googleBtn").addEventListener("click", () => showToast("Google sign-in coming soon. Use email for now.", "error"));
-  $("githubBtn").addEventListener("click", () => showToast("GitHub sign-in coming soon. Use email for now.", "error"));
+  const GOOGLE_CLIENT_ID = "140159239234-l6g7cqb4okkkb1g8g5fsbs6oiqmgpk5n.apps.googleusercontent.com"; // Replace with your actual client ID
+
+  
+  function showMobileNumberModal(userData, remember) {
+    if (document.getElementById("mobile-modal")) return;
+
+    const modal = document.createElement("div");
+    modal.id = "mobile-modal";
+    modal.className = "fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/90 backdrop-blur-md";
+    modal.innerHTML = `
+      <div class="w-full max-w-md glass-strong rounded-3xl p-8 border border-white/10 shadow-2xl relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-tr from-primary/10 via-transparent to-success/10 pointer-events-none"></div>
+        <div class="relative z-10">
+          <div class="w-12 h-12 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary mb-6">
+            <span class="material-symbols-outlined text-[28px]">phone_iphone</span>
+          </div>
+          <h3 class="text-xl font-bold tracking-tight text-text mb-2">Complete Your Profile</h3>
+          <p class="text-sm text-muted mb-6">Please enter your mobile number to complete registration and secure your account.</p>
+          <form id="mobile-form" class="space-y-5">
+            <div>
+              <label for="modal-mobile" class="block label-mono text-[10px] text-muted tracking-wider mb-2 uppercase">Mobile Number</label>
+              <div class="relative">
+                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-muted text-sm">+91</span>
+                <input 
+                  type="tel" 
+                  id="modal-mobile" 
+                  name="mobile" 
+                  placeholder="9876543210" 
+                  required 
+                  pattern="[6-9][0-9]{9}"
+                  title="Please enter a valid 10-digit mobile number"
+                  class="w-full pl-12 pr-4 py-3 bg-bg/50 border border-white/10 rounded-xl text-text placeholder-muted/40 focus:outline-none focus:border-primary/50 text-sm"
+                />
+              </div>
+            </div>
+            <button 
+              type="submit" 
+              id="modal-submit"
+              class="w-full py-3.5 bg-gradient-to-r from-primary to-success hover:opacity-95 text-bg font-semibold rounded-xl text-sm transition-all shadow-lg shadow-primary/10 flex items-center justify-center gap-2"
+            >
+              <span id="modal-submit-text">Verify & Continue</span>
+              <span class="material-symbols-outlined text-sm">arrow_forward</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const form = document.getElementById("mobile-form");
+    form.addEventListener("submit", function(e) {
+      e.preventDefault();
+      const mobileVal = document.getElementById("modal-mobile").value.trim();
+      const formattedMobile = "+91" + mobileVal;
+      
+      const btn = document.getElementById("modal-submit");
+      const btnText = document.getElementById("modal-submit-text");
+      btn.disabled = true;
+      btnText.textContent = "Saving...";
+      btn.style.opacity = "0.7";
+
+      fetch('/auth/google/update-mobile', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + userData.token
+        },
+        body: JSON.stringify({ mobile: formattedMobile })
+      })
+      .then(res => res.json().then(data => ({ ok: res.ok, body: data })))
+      .then(res => {
+        if (res.ok) {
+          showToast("Profile completed successfully!", "success");
+          userData.mobile = formattedMobile;
+          userData.require_mobile = false;
+          try {
+            if (remember) {
+              localStorage.setItem('prospektlab_user', JSON.stringify(userData));
+              sessionStorage.removeItem('prospektlab_user');
+            } else {
+              sessionStorage.setItem('prospektlab_user', JSON.stringify(userData));
+              localStorage.removeItem('prospektlab_user');
+            }
+          } catch (_) {}
+          setTimeout(() => {
+            modal.remove();
+            window.location.href = '/app';
+          }, 800);
+        } else {
+          showToast(res.body.detail || "Failed to save mobile number.", "error");
+          btn.disabled = false;
+          btnText.textContent = "Verify & Continue";
+          btn.style.opacity = "1";
+        }
+      })
+      .catch(err => {
+        showToast("Network error. Could not save mobile number.", "error");
+        btn.disabled = false;
+        btnText.textContent = "Verify & Continue";
+        btn.style.opacity = "1";
+      });
+    });
+  }
+
+  function handleCredentialResponse(response) {
+    showToast("Authenticating with Google...", "success");
+    fetch('/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: response.credential })
+    })
+    .then(res => res.json().then(data => ({ status: res.status, ok: res.ok, body: data })))
+    .then(res => {
+      if (res.ok && res.body.token) {
+        const remember = $("remember") ? $("remember").checked : false;
+        if (res.body.require_mobile) {
+          showMobileNumberModal(res.body, remember);
+        } else {
+          try {
+            if (remember) {
+              localStorage.setItem('prospektlab_user', JSON.stringify(res.body));
+              sessionStorage.removeItem('prospektlab_user');
+            } else {
+              sessionStorage.setItem('prospektlab_user', JSON.stringify(res.body));
+              localStorage.removeItem('prospektlab_user');
+            }
+          } catch (_) {}
+          showToast("Signed in. Redirecting...", "success");
+          setTimeout(() => { window.location.href = '/app'; }, 400);
+        }
+      } else {
+        showToast(res.body.detail || "Google authentication failed.", "error");
+      }
+    })
+    .catch(err => {
+      showToast("Network error. Could not connect to gateway.", "error");
+    });
+  }
+
+  let googleInitialized = false;
+  function initGoogleSignIn() {
+    if (googleInitialized) return;
+    if (!window.google) return;
+    try {
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleCredentialResponse
+      });
+      const overlay = $("googleBtnOverlay");
+      if (overlay) {
+        const btnWidth = $("googleBtn").offsetWidth || 200;
+        google.accounts.id.renderButton(overlay, {
+          theme: "outline",
+          size: "large",
+          width: btnWidth,
+          type: "standard"
+        });
+        googleInitialized = true;
+      }
+    } catch (err) {
+      console.error("Google sign-in initialization failed", err);
+    }
+  }
+
+  let googleInitAttempts = 0;
+  function checkAndInitGoogle() {
+    if (window.google) {
+      initGoogleSignIn();
+    } else if (googleInitAttempts < 50) {
+      googleInitAttempts++;
+      setTimeout(checkAndInitGoogle, 100);
+    } else {
+      $("googleBtn").addEventListener("click", () => {
+        showToast("Google script failed to load.", "error");
+      });
+    }
+  }
+
+  checkAndInitGoogle();
 
   $("loginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -236,7 +476,15 @@
         return;
       }
       const data = await r.json();
-      try { localStorage.setItem("prospektlab_user", JSON.stringify(data.user)); } catch (_) {}
+      try {
+        if (remember) {
+          localStorage.setItem("prospektlab_user", JSON.stringify(data.user));
+          sessionStorage.removeItem("prospektlab_user");
+        } else {
+          sessionStorage.setItem("prospektlab_user", JSON.stringify(data.user));
+          localStorage.removeItem("prospektlab_user");
+        }
+      } catch (_) {}
       showToast("Signed in. Redirecting…", "success");
       setTimeout(() => { window.location.href = "/app"; }, 400);
     } catch (e) {
@@ -245,6 +493,81 @@
       $("loginBtn").disabled = false;
       $("loginBtnLabel").classList.remove("hidden");
       $("loginBtnSpinner").classList.add("hidden");
+    }
+  });
+
+  // Toggle Forgot Password sections
+  $("forgotPwLink").addEventListener("click", (e) => {
+    e.preventDefault();
+    $("loginFormSection").classList.add("hidden");
+    $("forgotPasswordSection").classList.remove("hidden");
+  });
+
+  $("backToLoginLink").addEventListener("click", (e) => {
+    e.preventDefault();
+    $("forgotPasswordSection").classList.add("hidden");
+    $("loginFormSection").classList.remove("hidden");
+  });
+
+  // Forgot password form submit (requesting code)
+  $("forgotForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("forgotEmail").value.trim();
+    
+    $("sendResetBtn").disabled = true;
+    $("sendResetLabel").classList.add("hidden");
+    $("sendResetSpinner").classList.remove("hidden");
+
+    try {
+      const res = await fetch("/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("Reset code sent successfully!", "success");
+        $("resetForm").classList.remove("hidden");
+      } else {
+        showToast(data.detail || "Error generating reset code.");
+      }
+    } catch (e) {
+      showToast("Network error — could not connect to server.");
+    } finally {
+      $("sendResetBtn").disabled = false;
+      $("sendResetLabel").classList.remove("hidden");
+      $("sendResetSpinner").classList.add("hidden");
+    }
+  });
+
+  // Reset password form submit (updating the password)
+  $("resetForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("forgotEmail").value.trim();
+    const code = $("resetCode").value.trim();
+    const new_password = $("newPassword").value;
+
+    try {
+      const res = await fetch("/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code, new_password })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("Password updated successfully! You can now log in.", "success");
+        // Reset forms
+        $("forgotForm").reset();
+        $("resetForm").reset();
+        $("resetForm").classList.add("hidden");
+        // Back to login
+        $("forgotPasswordSection").classList.add("hidden");
+        $("loginFormSection").classList.remove("hidden");
+      } else {
+        showToast(data.detail || "Failed to reset password.");
+      }
+    } catch (e) {
+      showToast("Network error — could not connect to server.");
     }
   });
 </script>

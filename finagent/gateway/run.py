@@ -27,9 +27,16 @@ try:
 except ImportError:
     pass  # python-dotenv not installed; keys must come from environment
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
+
+import urllib.request
+import urllib.parse
+try:
+    import jwt
+except ImportError:
+    pass
 
 from finagent.events import BUS
 from finagent.output.intent_classifier import extract_finance_entities, primary_target_from_query
@@ -37,6 +44,7 @@ from finagent.paths import finagent_data_path, finagent_home
 from finagent.run_agent import AgentLoopConfig, run_research_session
 from finagent.tools.web.http_fetcher import aclose_shared_client
 from finagent.memory.chat_memory import ChatMemoryManager
+from finagent.gateway import supabase_client as supabase
 
 _COMPARISON_RE = re.compile(
     r"\b(?:compare|comparison|compares|comparing|vs\.?|versus|against|head[\s-]to[\s-]head)\b",
@@ -59,17 +67,136 @@ logger = logging.getLogger("finagent.gateway")
 
 app = FastAPI(title="ProspektLab Intelligence Gateway", version="0.5.0")
 
+JWT_SECRET = os.getenv("JWT_SECRET", "super_secret_ipo_key_123")
+
+class GoogleAuthRequest(BaseModel):
+    credential: str
+
+@app.post("/auth/google")
+async def google_auth(req: GoogleAuthRequest):
+    """Verify a Google ID token from GIS popup and return a session JWT."""
+    try:
+        url = f"https://oauth2.googleapis.com/tokeninfo?id_token={urllib.parse.quote(req.credential)}"
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            info = json.loads(resp.read())
+    except urllib.error.HTTPError:
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Google verification failed: {e}")
+
+    email = info.get("email")
+    name  = info.get("name") or info.get("given_name", "")
+    avatar = info.get("picture", "")
+    
+    if not email or not info.get("email_verified"):
+        raise HTTPException(status_code=401, detail="Google account email not verified")
+
+    existing = supabase.get_user_by_email(email)
+    if existing:
+        user_id = existing["id"]
+        full_name = existing.get("full_name") or name
+    else:
+        # Create user via Supabase Admin API
+        import secrets
+        rand_pw = secrets.token_urlsafe(32) + "A1!"
+        try:
+            res = supabase.create_admin_user(email, rand_pw, name, avatar_url=avatar, auth_provider="google")
+            user_id = res.get("id")
+            supabase.upsert_profile(user_id, email, name, "google", avatar_url=avatar)
+        except HTTPException as e:
+            if e.status_code == 409:
+                # User already exists in auth.users, fetch their ID directly from auth DB
+                user_id = supabase.get_user_id_from_auth(email) or "unknown"
+                if user_id != "unknown":
+                    supabase.upsert_profile(user_id, email, name, "google", avatar_url=avatar)
+            else:
+                raise e
+        full_name = name
+
+    # Refresh profile details to check if mobile number exists
+    profile = supabase.get_user_by_email(email)
+    mobile = profile.get("mobile") if profile else ""
+    require_mobile = not bool(mobile)
+
+    try:
+        token = jwt.encode({"user_id": user_id, "email": email}, JWT_SECRET, algorithm="HS256")
+    except Exception:
+        # Fallback if PyJWT is not installed, though it should be
+        token = f"mock_token_{user_id}"
+
+    return {
+        "token": token,
+        "user_id": user_id,
+        "email": email,
+        "name": full_name,
+        "full_name": full_name,
+        "require_mobile": require_mobile,
+        "mobile": mobile
+    }
+
+class UpdateMobileRequest(BaseModel):
+    mobile: str
+
+@app.post("/auth/google/update-mobile")
+async def update_google_mobile(req: UpdateMobileRequest, authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    
+    token = authorization.split(" ")[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        user_id = payload.get("user_id")
+        email = payload.get("email")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if not user_id or user_id == "unknown":
+        raise HTTPException(status_code=400, detail="Invalid user ID in token")
+
+    # Update in Supabase Auth via Admin API
+    try:
+        supabase.update_admin_user_mobile(user_id, req.mobile)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Fetch profile to preserve name and avatar
+    profile = supabase.get_user_by_email(email)
+    name = profile.get("full_name", "") if profile else ""
+    avatar = profile.get("avatar_url", "") if profile else ""
+
+    # Update in public.profiles table
+    supabase.upsert_profile(user_id, email, name, "google", mobile=req.mobile, avatar_url=avatar)
+
+    return {"message": "Mobile number updated successfully."}
+
+
 
 def _is_ambiguous_followup(query: str) -> bool:
     text = (query or "").strip().lower()
     if not text:
         return False
+
+    # 1. GUARD: Explicit new commands are NEVER ambiguous follow-ups.
+    if re.search(r"\b(analyze|analyse|research|review)\b", text):
+        return False
+        
+    # 2. GUARD: Explicit two-item comparisons ("compare X and Y" or "X vs Y")
+    if re.search(r"\bcompare\b.*\band\b", text):
+        return False
+    if re.search(r"\w+\s+(vs\.?|versus)\s+\w+", text):
+        return False
+
+    # 3. Check for explicit follow-up pronouns
     pronoun_ref = re.search(r"\b(it|its|they|their|them|that company|this company|same company)\b", text)
+    
+    # 4. Check for explicit entities (This handles "compare with TCS" or "vs TCS")
     explicit_entities = extract_finance_entities(query, limit=2)
     if explicit_entities:
         if len(explicit_entities) == 1 and re.search(r"\b(compare|vs|versus)\s+(with|against|to)?\b", text):
             return True
         return False
+        
+    # 5. Only fall back to word count if it lacks both entities and intent verbs
     return bool(pronoun_ref) or len(text.split()) <= 5
 
 _GATEWAY_DIR = Path(__file__).resolve().parent
@@ -132,6 +259,8 @@ class SignupRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=80)
     email: str = Field(..., min_length=3, max_length=160)
     password: str = Field(..., min_length=8, max_length=200)
+    mobile: str = Field(..., min_length=5, max_length=30)
+    verification_code: str = Field(..., min_length=6, max_length=6)
 
     @field_validator("email")
     @classmethod
@@ -143,6 +272,35 @@ class LoginRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=160)
     password: str = Field(..., min_length=1, max_length=200)
     remember: bool = False
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        return _validate_email(v)
+
+
+class SendVerificationRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=160)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        return _validate_email(v)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=160)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        return _validate_email(v)
+
+
+class ResetPasswordRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=160)
+    code: str = Field(..., min_length=6, max_length=6)
+    new_password: str = Field(..., min_length=8, max_length=200)
 
     @field_validator("email")
     @classmethod
@@ -491,37 +649,188 @@ def widget() -> HTMLResponse:
 # ── Auth endpoints ──────────────────────────────────────────────────────
 
 
+import time
+
+_VERIFICATION_CODES: dict[str, tuple[str, float]] = {}
+_RESET_CODES: dict[str, tuple[str, float]] = {}
+
+def _send_email_code(email: str, code: str, is_reset: bool = False) -> bool:
+    subject = "Reset Your ProspektLab Password" if is_reset else "Verify Your ProspektLab Email"
+    body = (
+        f"Your verification code to reset your password is: {code}\n\n"
+        "This code will expire in 10 minutes."
+        if is_reset else
+        f"Your email verification code for ProspektLab signup is: {code}\n\n"
+        "This code will expire in 10 minutes."
+    )
+    
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = os.getenv("SMTP_PORT")
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    smtp_from = os.getenv("SMTP_FROM", smtp_user or "no-reply@prospektlab.com")
+    
+    if not smtp_host or not smtp_user or not smtp_password:
+        # Fallback to printing in console
+        action_type = "RESET PASSWORD" if is_reset else "EMAIL VERIFICATION"
+        print(f"\n==================================================")
+        print(f"[SMTP FALLBACK - {action_type}]")
+        print(f"To: {email}")
+        print(f"Subject: {subject}")
+        print(f"Code: {code}")
+        print(f"==================================================\n", flush=True)
+        return False
+
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = smtp_from
+        msg["To"] = email
+        
+        port = int(smtp_port) if smtp_port else 587
+        server = smtplib.SMTP(smtp_host, port, timeout=10)
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.sendmail(smtp_from, [email], msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"[SMTP ERROR] Failed to send email to {email}: {e}", flush=True)
+        print(f"\n==================================================")
+        print(f"[SMTP FALLBACK ON FAILURE - Code: {code}]")
+        print(f"To: {email}")
+        print(f"==================================================\n", flush=True)
+        return False
+
+
+@app.post("/auth/send-verification")
+def auth_send_verification(req: SendVerificationRequest):
+    email_clean = req.email.lower().strip()
+    
+    # Check if user already exists
+    existing = supabase.get_user_by_email(email_clean)
+    if existing:
+        raise HTTPException(status_code=409, detail="An account with that email already exists.")
+        
+    code = f"{secrets.randbelow(900000) + 100000}"
+    _VERIFICATION_CODES[email_clean] = (code, time.time())
+    
+    sent = _send_email_code(email_clean, code, is_reset=False)
+    if sent:
+        return {"message": "Verification email sent successfully."}
+    else:
+        return {
+            "message": "Verification code generated.",
+            "detail": f"Verification code simulated. Code {code} has been logged to the server terminal console."
+        }
+
+
+@app.post("/auth/forgot-password")
+def auth_forgot_password(req: ForgotPasswordRequest):
+    email_clean = req.email.lower().strip()
+    
+    # Verify user exists
+    existing = supabase.get_user_by_email(email_clean)
+    if not existing:
+        raise HTTPException(status_code=404, detail="No account with that email exists.")
+        
+    code = f"{secrets.randbelow(900000) + 100000}"
+    _RESET_CODES[email_clean] = (code, time.time())
+    
+    sent = _send_email_code(email_clean, code, is_reset=True)
+    if sent:
+        return {"message": "Reset code sent to your email."}
+    else:
+        return {
+            "message": "Reset code generated.",
+            "detail": f"Reset code simulated. Code {code} has been logged to the server terminal console."
+        }
+
+
+@app.post("/auth/reset-password")
+def auth_reset_password(req: ResetPasswordRequest):
+    email_clean = req.email.lower().strip()
+    
+    if email_clean not in _RESET_CODES:
+        raise HTTPException(status_code=400, detail="Please request a password reset first.")
+        
+    code, timestamp = _RESET_CODES[email_clean]
+    if time.time() - timestamp > 600:
+        raise HTTPException(status_code=400, detail="Reset code has expired. Please request a new one.")
+        
+    if code != req.code.strip():
+        raise HTTPException(status_code=400, detail="Invalid reset code.")
+        
+    # Validate via Supabase
+    existing = supabase.get_user_by_email(email_clean)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Account not found.")
+        
+    user_id = existing["id"]
+    supabase.update_admin_user_password(user_id, req.new_password)
+    
+    # Clean up code
+    if email_clean in _RESET_CODES:
+        del _RESET_CODES[email_clean]
+    
+    return {"message": "Password reset successfully."}
+
+
 @app.post("/auth/signup")
 def auth_signup(req: SignupRequest):
-    user_path = _user_path(req.email)
-    if user_path.is_file():
-        raise HTTPException(status_code=409, detail="An account with that email already exists.")
-    h, salt = _hash_pw(req.password)
-    record = {
-        "name": req.name.strip(),
-        "email": req.email.lower().strip(),
-        "password_hash": h,
-        "salt": salt,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "plan": "free",
-    }
-    user_path.write_text(json.dumps(record, indent=2), encoding="utf-8")
-    return {"user": {"name": record["name"], "email": record["email"], "plan": "free"}}
+    email_clean = req.email.lower().strip()
+    
+    # Check verification code
+    if email_clean not in _VERIFICATION_CODES:
+        raise HTTPException(status_code=400, detail="Please send a verification code first.")
+        
+    code, timestamp = _VERIFICATION_CODES[email_clean]
+    if time.time() - timestamp > 600:
+        raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
+        
+    if code != req.verification_code.strip():
+        raise HTTPException(status_code=400, detail="Invalid verification code.")
+        
+    name_clean = req.name.strip()
+    mobile_clean = req.mobile.strip()
+    
+    # Create via Supabase
+    res = supabase.create_admin_user(email_clean, req.password, name_clean, mobile=mobile_clean, auth_provider="email")
+    user_id = res.get("id")
+    supabase.upsert_profile(user_id, email_clean, name_clean, "email", mobile=mobile_clean)
+    
+    # Clean up verification code
+    if email_clean in _VERIFICATION_CODES:
+        del _VERIFICATION_CODES[email_clean]
+        
+    return {"user": {"name": name_clean, "email": email_clean, "plan": "free"}}
 
 
 @app.post("/auth/login")
 def auth_login(req: LoginRequest):
-    user_path = _user_path(req.email)
-    if not user_path.is_file():
-        raise HTTPException(status_code=401, detail="No account with that email.")
-    try:
-        record = json.loads(user_path.read_text(encoding="utf-8"))
-    except Exception:
-        raise HTTPException(status_code=500, detail="Account file corrupted.")
-    h, _ = _hash_pw(req.password, salt=record.get("salt"))
-    if not secrets.compare_digest(h, record.get("password_hash", "")):
-        raise HTTPException(status_code=401, detail="Incorrect password.")
-    return {"user": {"name": record["name"], "email": record["email"], "plan": record.get("plan", "free")}}
+    email_clean = req.email.lower().strip()
+    
+    # Authenticate via Supabase
+    auth_data = supabase.authenticate_user(email_clean, req.password)
+    
+    user = auth_data.get("user", {})
+    user_metadata = user.get("user_metadata", {})
+    
+    full_name = user_metadata.get("full_name") or user_metadata.get("name") or "Researcher"
+    
+    # Use Supabase access token so the frontend can securely hit Supabase REST queries if needed!
+    token = auth_data.get("access_token")
+    
+    return {
+        "token": token,
+        "user": {
+            "name": full_name,
+            "email": email_clean,
+            "plan": "free"
+        }
+    }
 
 
 # ── Research orchestration ──────────────────────────────────────────────
@@ -541,6 +850,13 @@ async def start_research(req: StartResearchRequest):
         target = prior_target
     else:
         target = primary_target_from_query(raw_query)
+        # ── Session isolation: if the resolved target differs from the prior
+        # session's target, mint a fresh session_id so the old entity's
+        # enrichment data, caches, and tool outputs don't leak into the new query.
+        if req.session_id and prior_target and target and prior_target.lower() != target.lower():
+            session_id = uuid.uuid4().hex[:12]
+            BUS.open(session_id)
+            logger.info("Target changed from %r to %r — new session %s", prior_target, target, session_id)
         
     objective = (req.objective or raw_query).strip()
     mode = (req.mode or "chat").strip().lower()

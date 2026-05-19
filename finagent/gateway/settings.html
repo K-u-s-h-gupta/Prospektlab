@@ -187,6 +187,8 @@
       if (p.openaiKey) $("openaiKey").value = p.openaiKey;
       TOGGLES.forEach((id) => {
         const key = id.replace("tg", "tg_");
+      TOGGLES.forEach((id) => {
+        const key = id.replace("tg", "tg_");
         if (p[key] === false) $(id).classList.remove("on");
         if (p[key] === true) $(id).classList.add("on");
       });
@@ -209,6 +211,7 @@
   $("clearLocal").addEventListener("click", () => {
     if (!confirm("Clear all local ProspektLab data from this browser?")) return;
     localStorage.removeItem("prospektlab_user");
+    sessionStorage.removeItem("prospektlab_user");
     localStorage.removeItem("prospektlab_prefs");
     localStorage.removeItem("prospektlab_watchlist");
     window.location.href = "/landing";
