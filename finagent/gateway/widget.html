@@ -2997,8 +2997,109 @@
             pushActivity("play_circle", "Session", `Opened ${session_id}`, "done");
 
             const token = getAuthToken();
-            const streamUrl = (API_BASE ? API_BASE : "") + (token ? stream + "?token=" + encodeURIComponent(token) : stream);
-            eventSource = new EventSource(streamUrl);
+            const _streamBase = API_BASE ? API_BASE : "";
+            const _streamPath = stream; // e.g. /sessions/{id}/stream
+
+            // ── Fetch-based SSE reader ──────────────────────────────────────
+            // EventSource does not support custom headers and the browser will
+            // pass the ?token= query param instead. More importantly, API
+            // Gateway HTTP API has a hard 29-30 s integration timeout: it will
+            // return 503 at ~30 s regardless of keep-alives.  We work around
+            // this by proactively reconnecting every 25 s and sending the
+            // Last-Event-ID header so the backend replays missed events.
+            let _lastEventId = null;
+            let _sseAbort = new AbortController();
+            let _sseReconnectTimer = null;
+            let _sseActive = true;
+
+            // Dispatch synthetic CustomEvents onto a plain EventTarget so all
+            // the existing addEventListener("session_started", …) calls below
+            // continue to work without any changes.
+            const _sseEmitter = new EventTarget();
+            // Expose a minimal EventSource-compatible façade so existing code
+            // that calls eventSource.close() still works.
+            eventSource = {
+              close() { _sseActive = false; clearTimeout(_sseReconnectTimer); _sseAbort.abort(); },
+              readyState: 1, // 1 = OPEN
+              CLOSED: 2,
+              addEventListener: (t, fn) => _sseEmitter.addEventListener(t, fn),
+              removeEventListener: (t, fn) => _sseEmitter.removeEventListener(t, fn),
+            };
+
+            async function _connectSSE() {
+              if (!_sseActive || runToken !== activeRunToken) return;
+              _sseAbort = new AbortController();
+              // Reconnect before API Gateway's 30 s timeout fires.
+              clearTimeout(_sseReconnectTimer);
+              _sseReconnectTimer = setTimeout(() => {
+                if (_sseActive) {
+                  console.info("SSE: proactive reconnect (25 s window)");
+                  _sseAbort.abort();
+                  _connectSSE();
+                }
+              }, 25000);
+
+              const headers = { "Accept": "text/event-stream", "Cache-Control": "no-cache" };
+              if (token) headers["Authorization"] = "Bearer " + token;
+              if (_lastEventId !== null) headers["Last-Event-ID"] = String(_lastEventId);
+
+              let url = _streamBase + _streamPath;
+              if (token) url += (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(token);
+              if (_lastEventId !== null) url += (url.includes("?") ? "&" : "?") + "after=" + encodeURIComponent(_lastEventId);
+
+              let resp;
+              try {
+                resp = await fetch(url, { headers, signal: _sseAbort.signal });
+              } catch (err) {
+                if (!_sseActive || runToken !== activeRunToken) return;
+                if (err && err.name === "AbortError") return; // proactive reconnect
+                console.warn("SSE fetch error, retrying in 2 s:", err);
+                clearTimeout(_sseReconnectTimer);
+                _sseReconnectTimer = setTimeout(_connectSSE, 2000);
+                return;
+              }
+
+              if (!resp.ok) {
+                if (!_sseActive || runToken !== activeRunToken) return;
+                console.warn("SSE HTTP", resp.status, "— retrying in 3 s");
+                clearTimeout(_sseReconnectTimer);
+                _sseReconnectTimer = setTimeout(_connectSSE, 3000);
+                return;
+              }
+
+              const reader = resp.body.getReader();
+              const decoder = new TextDecoder();
+              let buf = "";
+              try {
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  buf += decoder.decode(value, { stream: true });
+                  let boundary;
+                  while ((boundary = buf.indexOf("\n\n")) !== -1) {
+                    const block = buf.slice(0, boundary);
+                    buf = buf.slice(boundary + 2);
+                    if (!block.trim() || block.startsWith(":")) continue; // keepalive
+                    let evType = "message", evData = "", evId = null;
+                    for (const line of block.split("\n")) {
+                      if (line.startsWith("event:")) evType = line.slice(6).trim();
+                      else if (line.startsWith("data:")) evData = line.slice(5).trim();
+                      else if (line.startsWith("id:")) evId = line.slice(3).trim();
+                    }
+                    if (evId !== null) _lastEventId = evId;
+                    _sseEmitter.dispatchEvent(Object.assign(new CustomEvent(evType), { data: evData, lastEventId: evId }));
+                  }
+                }
+              } catch (err) {
+                if (!_sseActive || runToken !== activeRunToken) return;
+                if (err && err.name === "AbortError") return; // proactive reconnect in progress
+                console.warn("SSE read error, retrying in 2 s:", err);
+                clearTimeout(_sseReconnectTimer);
+                _sseReconnectTimer = setTimeout(_connectSSE, 2000);
+              }
+            }
+
+            _connectSSE();
 
             eventSource.addEventListener("session_started", (e) => {
               const d = JSON.parse(e.data);
@@ -3344,15 +3445,11 @@
               if (runToken !== activeRunToken) return;
               if (eventSource) { eventSource.close(); eventSource = null; }
             });
+            // onerror is handled inside _connectSSE's retry logic above.
+            // This stub is kept for compatibility if anything still references it.
             eventSource.onerror = (err) => {
               if (runToken !== activeRunToken) return;
-              if (eventSource.readyState === EventSource.CLOSED) {
-                pushActivity("link_off", "Stream", "Connection lost", "error");
-                $("stopBtn").classList.add("hidden");
-                $("executeBtn").classList.remove("hidden");
-              } else {
-                console.warn("EventSource disconnected. Attempting to reconnect...", err);
-              }
+              console.warn("SSE error (handled by Fetch reader):", err);
             };
           }
 
