@@ -50,51 +50,79 @@ async def chat(req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
-    # TODO: integrate with actual agent loop
-    # For now return a placeholder with empty rich
-    return ChatResponse(
-        reply="This is a placeholder response. Full integration pending.",
-        agents_used=[],
-        rich=None,
-        output_mode="direct_answer",
-        response_depth=req.response_depth,
-    )
+    try:
+        from finagent.run_agent import run_finagent_session, AgentLoopConfig
+        session_id = str(uuid.uuid4())
+        cfg = AgentLoopConfig(
+            session_id=session_id,
+            response_depth=req.response_depth,
+            close_bus_on_finish=True,
+        )
+
+        reply, agents_used, rich = await run_finagent_session(req.message, cfg)
+        return ChatResponse(
+            reply=reply,
+            agents_used=agents_used or [],
+            rich=rich.model_dump(mode="json") if rich is not None else None,
+            output_mode="direct_answer",
+            response_depth=req.response_depth,
+        )
+    except Exception as e:
+        logger.error(f"Chat endpoint error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
 
 
 @app.post("/api/chat/stream")
 async def chat_stream(req: ChatRequest):
-    """Streaming endpoint that yields rich data in the final event."""
+    """Streaming endpoint that yields agent events and final rich data."""
     async def event_generator() -> AsyncIterator[str]:
-        yield "event: status\ndata: {\"type\":\"status\",\"label\":\"Analyzing...\"}\n\n"
-        await asyncio.sleep(0.2)
-
         try:
-            # Try to use the real agent loop
             from finagent.run_agent import run_finagent_session, AgentLoopConfig
+            from finagent.events import BUS
+
             session_id = str(uuid.uuid4())
-            cfg = AgentLoopConfig(session_id=session_id, response_depth=req.response_depth)
+            cfg = AgentLoopConfig(
+                session_id=session_id,
+                response_depth=req.response_depth,
+                close_bus_on_finish=False,  # We close manually after streaming
+            )
 
-            # Run the agent (this will emit events via BUS)
-            # For now we just return a placeholder rich response
-            rich = None
-            try:
-                pass
-            except Exception:
-                pass
+            # Subscribe to BUS events for this session
+            event_queue = []
 
+            def on_event(event_data):
+                event_queue.append(event_data)
+
+            # Register listener if BUS supports it
+            if hasattr(BUS, 'on'):
+                BUS.on(session_id, on_event)
+
+            # Run the agent loop
+            reply, agents_used, rich = await run_finagent_session(req.message, cfg)
+
+            # Yield buffered events
+            for event_data in event_queue:
+                yield f"event: agent_event\ndata: {json.dumps(event_data)}\n\n"
+
+            # Yield final response
             final_payload = {
                 "type": "final",
-                "reply": f"Analysis for: {req.message}",
-                "agents_used": ["market_data_agent", "fundamental_analysis_agent"],
-                "rich": rich,
+                "reply": reply,
+                "agents_used": agents_used or [],
+                "rich": rich.model_dump(mode="json") if rich is not None else None,
                 "output_mode": "company_snapshot",
                 "response_depth": req.response_depth,
             }
             yield f"event: final\ndata: {json.dumps(final_payload)}\n\n"
 
+            if hasattr(BUS, 'off'):
+                BUS.off(session_id)
+            if hasattr(BUS, 'close'):
+                BUS.close()
+
         except Exception as e:
-            logger.error(f"Agent error: {e}")
-            yield f"event: final\ndata: {json.dumps({'type':'final','reply':'Error running agent','rich':None})}\n\n"
+            logger.error(f"Stream error: {e}", exc_info=True)
+            yield f"event: error\ndata: {json.dumps({'type':'error','message':str(e)})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

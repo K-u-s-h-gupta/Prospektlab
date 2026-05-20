@@ -1,0 +1,61 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo "📦 Installing dependencies..."
+      - npm ci
+      - echo "Checking environment variables..."
+      - |
+        if [ -z "$BACKEND_API_URL" ]; then
+          echo "❌ Error: BACKEND_API_URL environment variable not set"
+          exit 1
+        fi
+      - echo "✅ Using backend URL: $BACKEND_API_URL"
+
+  build:
+    commands:
+      - echo "🔨 Building Amplify frontend..."
+      - echo "Injecting backend URL into HTML..."
+      - |
+        mkdir -p build
+        npm run build 2>&1 || true
+      - echo "Configuring backend URL..."
+      - |
+        # Create config script with backend URL
+        cat > public/config.js << 'EOF'
+        window.__BACKEND_URL = "${BACKEND_API_URL}";
+        window.__CONFIG__ = {
+          apiBase: window.__BACKEND_URL,
+          environment: 'production'
+        };
+        EOF
+      - echo "✅ Frontend built successfully"
+
+  post_build:
+    commands:
+      - echo "✅ Build completed on `date`"
+      - echo "Frontend is ready for deployment"
+      - |
+        echo "Build configuration:"
+        echo "  Backend URL: $BACKEND_API_URL"
+        echo "  Build timestamp: $(date)"
+
+artifacts:
+  files:
+    - '**/*'
+  name: AmplifyBuild
+  discard-paths: 'yes'
+
+cache:
+  paths:
+    - 'node_modules/**/*'
+
+environment_variables:
+  - name: NODE_ENV
+    value: production
+  - name: NEXT_PUBLIC_API_BASE
+    value: "${BACKEND_API_URL}"
+
+logs:
+  - 'npm-debug.log'

@@ -1144,13 +1144,13 @@
         </div>
 
         <!-- ── STATE: RESULT (chat thread) ─────────────────────────────── -->
-        <div id="stateResult" class="hidden flex-col px-6 pt-6">
+        <div id="stateResult" class="hidden px-6 pt-6 pb-6">
           <div class="max-w-3xl mx-auto w-full">
-            <div class="mb-6">
-              <h1 id="resultTitle" class="text-xl font-semibold text-white tracking-tight"></h1>
-              <p id="resultBreadcrumb" class="label-mono text-zinc-600 mt-1"></p>
+            <!-- resultTitle and resultBreadcrumb are populated by JS but kept hidden -->
+            <div class="hidden">
+              <h1 id="resultTitle"></h1>
+              <p id="resultBreadcrumb"></p>
             </div>
-
             <div id="chatThread" class="chat-thread">
               <!-- Turns appended dynamically by appendConversationTurn() -->
             </div>
@@ -1264,6 +1264,25 @@
     // App state machine
     // ────────────────────────────────────────────────────────────────────
     const $ = (id) => document.getElementById(id);
+
+    // ── API base URL ────────────────────────────────────────────────────
+    // When running on Amplify, proxy rewrites strip the Authorization
+    // header.  Detect production by hostname and route API calls directly
+    // to the API Gateway HTTPS endpoint which preserves all headers.
+    const _API_GATEWAY_URL = "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com";
+    const _BACKEND_URL_OVERRIDE = window.__BACKEND_URL || localStorage.getItem("backendUrl");
+    const API_BASE = (function() {
+      // First, check if backend URL is explicitly provided or stored
+      if (_BACKEND_URL_OVERRIDE) {
+        return _BACKEND_URL_OVERRIDE;
+      }
+      const host = window.location.hostname || "";
+      // Amplify domains: *.amplifyapp.com or custom domains (not localhost)
+      if (host.includes("amplifyapp.com") || host.includes("prospektlab")) {
+        return _API_GATEWAY_URL;
+      }
+      return "";  // local dev: use relative paths
+    })();
     const states = {
       command: $("stateCommand"),
       processing: $("stateProcessing"),
@@ -1767,6 +1786,24 @@
       } catch (_) {
         return "";
       }
+    }
+
+    function getAuthToken() {
+      try {
+        const userStr = localStorage.getItem("prospektlab_user") || sessionStorage.getItem("prospektlab_user");
+        return userStr ? JSON.parse(userStr).token || "" : "";
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function getAuthHeaders(extra = {}) {
+      const token = getAuthToken();
+      const headers = { ...extra };
+      if (token) {
+        headers["Authorization"] = "Bearer " + token;
+      }
+      return headers;
     }
 
     function renderTurnMemo(turnId, text, { streaming = false } = {}) {
@@ -2752,7 +2789,7 @@
       showState("result");
       $("resultTitle").textContent = title || "Research memo";
       $("resultBreadcrumb").textContent = "Recent chat";
-      const renderMemoFallback = () => fetch(`/sessions/${memoId}/memo?t=${Date.now()}`)
+      const renderMemoFallback = () => fetch(`${API_BASE}/sessions/${memoId}/memo?t=${Date.now()}`, { headers: getAuthHeaders() })
         .then((r) => r.text())
         .then((md) => {
           if (memoToken !== activeRunToken) return;
@@ -2766,8 +2803,8 @@
           if (loadedTurn) renderTurnMemo(loadedTurn.turnId, "Unable to load this memo.");
         });
       const email = currentUserEmail();
-      const historyUrl = `/chat/history?session_id=${encodeURIComponent(memoId)}${email ? `&user_email=${encodeURIComponent(email)}` : ""}`;
-      fetch(historyUrl)
+      const historyUrl = `${API_BASE}/chat/history?session_id=${encodeURIComponent(memoId)}${email ? `&user_email=${encodeURIComponent(email)}` : ""}`;
+      fetch(historyUrl, { headers: getAuthHeaders() })
         .then((r) => r.ok ? r.json() : null)
         .then((data) => {
           if (memoToken !== activeRunToken) return;
@@ -2790,7 +2827,7 @@
       // In the minimalist UI we no longer render a memo library sidebar.
       // We still fetch so the count is available if other code needs it.
       try {
-        const r = await fetch("/memos");
+        const r = await fetch(`${API_BASE}/memos`, { headers: getAuthHeaders() });
         if (!r.ok) return;
         await r.json();
       } catch (_) { }
@@ -2873,6 +2910,8 @@
       }
 
       // Enforce 3-query limit for guest / free login users
+      // REMOVED FOR NOW: user can execute any number of queries
+      /*
       if (!isProUser()) {
         const count = parseInt(localStorage.getItem("prospektlab_query_count") || "0", 10);
         if (count >= 3) {
@@ -2881,6 +2920,7 @@
         }
         localStorage.setItem("prospektlab_query_count", String(count + 1));
       }
+      */
       
       // Clear the input for next query
       $("targetInput").value = "";
@@ -2933,9 +2973,9 @@
             }
 
             try {
-              resp = await fetch(endpoint, {
+              resp = await fetch(API_BASE + endpoint, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify(payload),
               });
             } catch (e) {
@@ -2956,7 +2996,9 @@
             const eventSessionId = session_id;
             pushActivity("play_circle", "Session", `Opened ${session_id}`, "done");
 
-            eventSource = new EventSource(stream);
+            const token = getAuthToken();
+            const streamUrl = (API_BASE ? API_BASE : "") + (token ? stream + "?token=" + encodeURIComponent(token) : stream);
+            eventSource = new EventSource(streamUrl);
 
             eventSource.addEventListener("session_started", (e) => {
               const d = JSON.parse(e.data);
@@ -3149,7 +3191,7 @@
               $("memoViaPill").className = `label-mono text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md border ${d.via === "openai" ? "bg-success/15 text-success border-success/25" : "bg-primary/15 text-primary border-primary/25"}`;
               // Pull the full memo and render as parsed markdown INSIDE the panel.
               try {
-                const full = await fetch(`/sessions/${eventSessionId}/memo?t=${Date.now()}`).then((r) => r.text());
+                const full = await fetch(`${API_BASE}/sessions/${eventSessionId}/memo?t=${Date.now()}`, { headers: getAuthHeaders() }).then((r) => r.text());
                 if (runToken !== activeRunToken) return;
                 if (turn) {
                   turn.memoBuffer = full;
@@ -3384,7 +3426,7 @@
           async function stopRun() {
             if (!sessionId) return;
             try {
-              await fetch(`/sessions/${sessionId}/stop`, { method: "POST" });
+              await fetch(`${API_BASE}/sessions/${sessionId}/stop`, { method: "POST", headers: getAuthHeaders() });
             } catch (e) { console.warn("Stop request failed:", e); }
             if (eventSource) { eventSource.close(); eventSource = null; }
             if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
@@ -3479,7 +3521,7 @@
            $("downloadMdBtn").addEventListener("click", async () => {
              if (!sessionId) return;
              try {
-               const md = window.__lastMemoMd || await fetch(`/sessions/${sessionId}/memo?t=${Date.now()}`).then((r) => r.text());
+               const md = window.__lastMemoMd || await fetch(`${API_BASE}/sessions/${sessionId}/memo?t=${Date.now()}`, { headers: getAuthHeaders() }).then((r) => r.text());
                const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
                const url = URL.createObjectURL(blob);
                const a = document.createElement("a");
@@ -3506,7 +3548,7 @@
           }));
 
           // Check OpenAI availability
-          fetch("/config").then(r => r.ok ? r.json() : null).then(cfg => {
+          fetch(API_BASE + "/config", { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : null).then(cfg => {
             if (cfg?.openai) {
               $("openaiState").innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-success shadow-[0_0_8px_rgba(110,231,183,0.7)]"></span><span class="label-mono text-[10px] uppercase tracking-wider text-success">live</span>';
             }
