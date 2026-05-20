@@ -19,7 +19,7 @@ def get_headers():
         "Content-Type": "application/json"
     }
 
-def create_admin_user(email: str, password: str, full_name: str, mobile: str = "", avatar_url: str = "", auth_provider: str = "email"):
+async def create_admin_user(email: str, password: str, full_name: str, mobile: str = "", avatar_url: str = "", auth_provider: str = "email"):
     """Create a user via Supabase Admin API. This skips email confirmation checks."""
     url = f"{_get_supabase_url()}/auth/v1/admin/users"
     payload = {
@@ -34,14 +34,16 @@ def create_admin_user(email: str, password: str, full_name: str, mobile: str = "
         }
     }
     
-    with httpx.Client() as client:
-        res = client.post(url, json=payload, headers=get_headers())
+    async with httpx.AsyncClient() as client:
+        res = await client.post(url, json=payload, headers=get_headers())
         
         if res.status_code == 422:
             try:
                 msg = res.json().get("msg", "")
                 if "already registered" in msg.lower() or "already exists" in msg.lower():
                     raise HTTPException(status_code=409, detail="An account with that email already exists.")
+            except HTTPException:
+                raise
             except Exception:
                 pass
                 
@@ -51,20 +53,20 @@ def create_admin_user(email: str, password: str, full_name: str, mobile: str = "
             
         return res.json()
 
-def update_admin_user_password(user_id: str, new_password: str):
+async def update_admin_user_password(user_id: str, new_password: str):
     """Updates a user's password via the Admin API."""
     url = f"{_get_supabase_url()}/auth/v1/admin/users/{user_id}"
     payload = {
         "password": new_password
     }
     
-    with httpx.Client() as client:
-        res = client.put(url, json=payload, headers=get_headers())
+    async with httpx.AsyncClient() as client:
+        res = await client.put(url, json=payload, headers=get_headers())
         if not res.is_success:
             raise HTTPException(status_code=res.status_code, detail="Failed to update password in Supabase.")
         return res.json()
 
-def upsert_profile(user_id: str, email: str, full_name: str, auth_provider: str, mobile: str = "", avatar_url: str = ""):
+async def upsert_profile(user_id: str, email: str, full_name: str, auth_provider: str, mobile: str = "", avatar_url: str = ""):
     """Upserts the user profile into the public.profiles table."""
     url = f"{_get_supabase_url()}/rest/v1/profiles"
     payload = {
@@ -79,14 +81,13 @@ def upsert_profile(user_id: str, email: str, full_name: str, auth_provider: str,
     headers = get_headers()
     headers["Prefer"] = "resolution=merge-duplicates"
     
-    with httpx.Client() as client:
-        res = client.post(url, json=payload, headers=headers)
+    async with httpx.AsyncClient() as client:
+        res = await client.post(url, json=payload, headers=headers)
         if not res.is_success:
-            # We don't necessarily want to block the signup if profile upsert fails, but we should log it
             print(f"Failed to upsert profile for {email}: {res.text}")
         return res.is_success
 
-def authenticate_user(email: str, password: str):
+async def authenticate_user(email: str, password: str):
     """Authenticates a user with email and password via Supabase Auth."""
     url = f"{_get_supabase_url()}/auth/v1/token?grant_type=password"
     payload = {
@@ -94,20 +95,20 @@ def authenticate_user(email: str, password: str):
         "password": password
     }
     
-    with httpx.Client() as client:
-        res = client.post(url, json=payload, headers=get_headers())
+    async with httpx.AsyncClient() as client:
+        res = await client.post(url, json=payload, headers=get_headers())
         if not res.is_success:
             if res.status_code == 400:
                 raise HTTPException(status_code=401, detail="Invalid email or password.")
             raise HTTPException(status_code=res.status_code, detail="Authentication failed.")
         return res.json()
 
-def get_user_by_email(email: str):
+async def get_user_by_email(email: str):
     """Fetches a user profile from the profiles table."""
     url = f"{_get_supabase_url()}/rest/v1/profiles?email=eq.{email}&select=*"
     
-    with httpx.Client() as client:
-        res = client.get(url, headers=get_headers())
+    async with httpx.AsyncClient() as client:
+        res = await client.get(url, headers=get_headers())
         if not res.is_success:
             return None
             
@@ -116,20 +117,29 @@ def get_user_by_email(email: str):
             return data[0]
         return None
 
-def update_admin_user_mobile(user_id: str, mobile: str):
-    """Updates a user's mobile number via the Admin API."""
+async def update_admin_user_mobile(user_id: str, mobile: str):
+    """Updates a user's mobile number via the Admin API (user_metadata only).
+    
+    We intentionally do NOT set the top-level 'phone' field because Supabase
+    rejects it when phone-based auth is not enabled on the project. Storing
+    in user_metadata is sufficient for our purposes.
+    """
     url = f"{_get_supabase_url()}/auth/v1/admin/users/{user_id}"
     payload = {
-        "phone": mobile,  # Supabase uses 'phone' in the Admin API
         "user_metadata": {
             "mobile": mobile
         }
     }
     
-    with httpx.Client() as client:
-        res = client.put(url, json=payload, headers=get_headers())
+    async with httpx.AsyncClient() as client:
+        res = await client.put(url, json=payload, headers=get_headers())
         if not res.is_success:
-            raise HTTPException(status_code=res.status_code, detail="Failed to update mobile number in Supabase.")
+            detail = "Failed to update mobile number in Supabase."
+            try:
+                detail = res.json().get("message", detail) or detail
+            except Exception:
+                pass
+            raise HTTPException(status_code=res.status_code, detail=detail)
         return res.json()
 
 def get_user_id_from_auth(email: str) -> str | None:
@@ -148,4 +158,3 @@ def get_user_id_from_auth(email: str) -> str | None:
     except Exception as e:
         print(f"Error querying auth.users from database: {e}")
     return None
-

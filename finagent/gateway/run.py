@@ -21,22 +21,20 @@ try:
     # Try finagent/.env first, then project root .env
     _here = Path(__file__).resolve().parent
     _loaded = (
-        _load_dotenv(_here.parent / ".env", override=False)
-        or _load_dotenv(_here.parent.parent / ".env", override=False)
+        _load_dotenv(_here.parent / ".env", override=True)
+        or _load_dotenv(_here.parent.parent / ".env", override=True)
     )
 except ImportError:
     pass  # python-dotenv not installed; keys must come from environment
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, field_validator
 
-import urllib.request
+import httpx
 import urllib.parse
-try:
-    import jwt
-except ImportError:
-    pass
+import jwt
 
 from finagent.events import BUS
 from finagent.output.intent_classifier import extract_finance_entities, primary_target_from_query
@@ -45,6 +43,38 @@ from finagent.run_agent import AgentLoopConfig, run_research_session
 from finagent.tools.web.http_fetcher import aclose_shared_client
 from finagent.memory.chat_memory import ChatMemoryManager
 from finagent.gateway import supabase_client as supabase
+import time
+
+class InMemSlidingWindowRateLimiter:
+    def __init__(self, requests_limit: int, window_seconds: int):
+        self.requests_limit = requests_limit
+        self.window_seconds = window_seconds
+        self.history = {}
+
+    async def __call__(self, request: Request):
+        ip = "unknown"
+        auth = request.headers.get("Authorization")
+        if auth and auth.startswith("Bearer "):
+            ip = auth.split(" ")[1]
+        elif request.client:
+            ip = request.client.host
+            
+        now = time.time()
+        if ip not in self.history:
+            self.history[ip] = []
+        
+        self.history[ip] = [t for t in self.history[ip] if now - t < self.window_seconds]
+        
+        if len(self.history[ip]) >= self.requests_limit:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many requests. Please try again later."
+            )
+        self.history[ip].append(now)
+
+research_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=5, window_seconds=60)
+auth_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=10, window_seconds=60)
+default_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=100, window_seconds=60)
 
 _COMPARISON_RE = re.compile(
     r"\b(?:compare|comparison|compares|comparing|vs\.?|versus|against|head[\s-]to[\s-]head)\b",
@@ -67,20 +97,135 @@ logger = logging.getLogger("finagent.gateway")
 
 app = FastAPI(title="ProspektLab Intelligence Gateway", version="0.5.0")
 
+# ── CORS Middleware Configuration ─────────────────────────────────────────
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow Amplify, localhost, and all production origins
+    allow_credentials=False,  # Must be False when allow_origins=["*"]
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Global Security Headers Middleware ────────────────────────────────────
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://unpkg.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdn.tailwindcss.com; "
+        "font-src 'self' data: https://fonts.gstatic.com; "
+        "img-src 'self' data: https://*.googleusercontent.com; "
+        "connect-src 'self' https: wss: https://oauth2.googleapis.com https://*.supabase.co https://*.execute-api.us-east-1.amazonaws.com https://*.amplifyapp.com;"
+    )
+    return response
+
+# ── Unified get_current_user Dependency for JWT and BOLA checks ──────────
+async def get_current_user(
+    authorization: str = Header(None),
+    token: str | None = None
+) -> dict:
+    actual_token = None
+    if authorization and authorization.startswith("Bearer "):
+        actual_token = authorization.split(" ")[1]
+    elif token:
+        actual_token = token
+        
+    if not actual_token:
+        raise HTTPException(status_code=401, detail="Missing or invalid authentication credentials")
+        
+    try:
+        # Try local JWT_SECRET first (issued for Google login or local overrides)
+        payload = jwt.decode(actual_token, JWT_SECRET, algorithms=["HS256"])
+        return {
+            "user_id": payload.get("user_id"),
+            "email": payload.get("email"),
+            "auth_provider": "local_jwt"
+        }
+    except Exception:
+        # Fallback: decode as a Supabase authentication token
+        try:
+            supabase_jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
+            if supabase_jwt_secret:
+                payload = jwt.decode(actual_token, supabase_jwt_secret, algorithms=["HS256"], audience="authenticated")
+            else:
+                # If Supabase secret not set locally, decode without validation for local single-user context
+                # PROHIBIT unverified signature decode in production to prevent spoofing
+                if os.getenv("PROSPEKTLAB_ENV") == "production":
+                    raise HTTPException(status_code=401, detail="Supabase JWT verification secret is required in production")
+                payload = jwt.decode(actual_token, options={"verify_signature": False})
+            
+            user_id = payload.get("sub") or payload.get("user_id")
+            email = payload.get("email")
+            if not email:
+                raise HTTPException(status_code=401, detail="Invalid token details")
+            return {
+                "user_id": user_id,
+                "email": email,
+                "auth_provider": "supabase_jwt"
+            }
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise
+            raise HTTPException(status_code=401, detail="Could not validate authentication credentials")
+
+def verify_session_ownership(session_id: str, current_user: dict) -> None:
+    meta = _load_session_meta(session_id)
+    owner_email = meta.get("user_email")
+    if owner_email and owner_email.lower().strip() != current_user["email"].lower().strip():
+        raise HTTPException(status_code=403, detail="Access denied: You do not own this research session.")
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = []
+    for err in exc.errors():
+        loc = " -> ".join(str(l) for l in err.get("loc", []))
+        msg = err.get("msg", "Invalid value")
+        errors.append(f"[{loc}]: {msg}")
+    
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "Input validation failed",
+            "errors": errors
+        }
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled gateway error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "An internal server error occurred.",
+            "error_type": exc.__class__.__name__
+        }
+    )
+
 JWT_SECRET = os.getenv("JWT_SECRET", "super_secret_ipo_key_123")
+if JWT_SECRET == "super_secret_ipo_key_123" and os.getenv("PROSPEKTLAB_ENV") == "production":
+    raise RuntimeError("Insecure default JWT_SECRET fallback is prohibited in production!")
 
 class GoogleAuthRequest(BaseModel):
     credential: str
 
-@app.post("/auth/google")
+@app.post("/auth/google", dependencies=[Depends(auth_rate_limiter)])
 async def google_auth(req: GoogleAuthRequest):
     """Verify a Google ID token from GIS popup and return a session JWT."""
     try:
         url = f"https://oauth2.googleapis.com/tokeninfo?id_token={urllib.parse.quote(req.credential)}"
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            info = json.loads(resp.read())
-    except urllib.error.HTTPError:
-        raise HTTPException(status_code=401, detail="Invalid Google token")
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, timeout=10)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=401, detail="Invalid Google token")
+            info = resp.json()
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Google verification failed: {e}")
 
@@ -91,7 +236,7 @@ async def google_auth(req: GoogleAuthRequest):
     if not email or not info.get("email_verified"):
         raise HTTPException(status_code=401, detail="Google account email not verified")
 
-    existing = supabase.get_user_by_email(email)
+    existing = await supabase.get_user_by_email(email)
     if existing:
         user_id = existing["id"]
         full_name = existing.get("full_name") or name
@@ -100,21 +245,21 @@ async def google_auth(req: GoogleAuthRequest):
         import secrets
         rand_pw = secrets.token_urlsafe(32) + "A1!"
         try:
-            res = supabase.create_admin_user(email, rand_pw, name, avatar_url=avatar, auth_provider="google")
+            res = await supabase.create_admin_user(email, rand_pw, name, avatar_url=avatar, auth_provider="google")
             user_id = res.get("id")
-            supabase.upsert_profile(user_id, email, name, "google", avatar_url=avatar)
+            await supabase.upsert_profile(user_id, email, name, "google", avatar_url=avatar)
         except HTTPException as e:
             if e.status_code == 409:
                 # User already exists in auth.users, fetch their ID directly from auth DB
-                user_id = supabase.get_user_id_from_auth(email) or "unknown"
+                user_id = (await asyncio.to_thread(supabase.get_user_id_from_auth, email)) or "unknown"
                 if user_id != "unknown":
-                    supabase.upsert_profile(user_id, email, name, "google", avatar_url=avatar)
+                    await supabase.upsert_profile(user_id, email, name, "google", avatar_url=avatar)
             else:
                 raise e
         full_name = name
 
     # Refresh profile details to check if mobile number exists
-    profile = supabase.get_user_by_email(email)
+    profile = await supabase.get_user_by_email(email)
     mobile = profile.get("mobile") if profile else ""
     require_mobile = not bool(mobile)
 
@@ -137,35 +282,30 @@ async def google_auth(req: GoogleAuthRequest):
 class UpdateMobileRequest(BaseModel):
     mobile: str
 
-@app.post("/auth/google/update-mobile")
-async def update_google_mobile(req: UpdateMobileRequest, authorization: str = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    
-    token = authorization.split(" ")[1]
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-        user_id = payload.get("user_id")
-        email = payload.get("email")
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
+@app.post("/auth/google/update-mobile", dependencies=[Depends(auth_rate_limiter)])
+async def update_google_mobile(req: UpdateMobileRequest, current_user: dict = Depends(get_current_user)):
+    """Update mobile number for any auth provider (Google, email, etc.).
+    Uses the shared get_current_user dependency for consistent JWT validation.
+    """
+    user_id = current_user.get("user_id")
+    email = current_user.get("email")
 
     if not user_id or user_id == "unknown":
         raise HTTPException(status_code=400, detail="Invalid user ID in token")
 
     # Update in Supabase Auth via Admin API
     try:
-        supabase.update_admin_user_mobile(user_id, req.mobile)
+        await supabase.update_admin_user_mobile(user_id, req.mobile)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     # Fetch profile to preserve name and avatar
-    profile = supabase.get_user_by_email(email)
+    profile = await supabase.get_user_by_email(email)
     name = profile.get("full_name", "") if profile else ""
     avatar = profile.get("avatar_url", "") if profile else ""
 
     # Update in public.profiles table
-    supabase.upsert_profile(user_id, email, name, "google", mobile=req.mobile, avatar_url=avatar)
+    await supabase.upsert_profile(user_id, email, name, "google", mobile=req.mobile, avatar_url=avatar)
 
     return {"message": "Mobile number updated successfully."}
 
@@ -312,12 +452,13 @@ _TASKS: dict[str, asyncio.Task[Any]] = {}
 _SESSION_META: dict[str, dict[str, Any]] = {}
 
 
-def _session_record(session_id: str, *, mode: str, target: str, objective: str = "") -> None:
+def _session_record(session_id: str, *, mode: str, target: str, objective: str = "", user_email: str | None = None) -> None:
     record = {
         "session_id": session_id,
         "mode": mode,
         "target": target,
         "objective": objective,
+        "user_email": user_email,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "status": "running",
     }
@@ -431,7 +572,7 @@ def health():
         "status": "ok",
         "active_sessions": list(_TASKS.keys()),
         "openai": "enabled" if os.getenv("OPENAI_API_KEY") else "fallback",
-        "finagent_home": str(finagent_home()),
+        "finagent_home": "<redacted>",
         "version": app.version,
     }
 
@@ -495,7 +636,7 @@ def _has_module(name: str) -> bool:
 def config():
     return {
         "openai": bool(os.getenv("OPENAI_API_KEY")),
-        "finagent_home": str(finagent_home()),
+        "finagent_home": "<redacted>",
         "version": app.version,
         "fx_override": os.getenv("FINAGENT_USD_INR"),
     }
@@ -508,7 +649,7 @@ from finagent.memory.store import normalize_target
 
 
 @app.get("/memory/stats")
-def memory_stats():
+def memory_stats(current_user: dict = Depends(get_current_user)):
     """Overall memory statistics."""
     store = get_memory_store()
     import sqlite3 as _sq
@@ -523,13 +664,13 @@ def memory_stats():
     return {
         "total_facts": total,
         "total_sessions": sessions,
-        "db_path": str(store.db_path),
+        "db_path": "<redacted>",
         "targets": [{"target": r["target_key"], "facts": r["n"]} for r in targets],
     }
 
 
 @app.get("/memory/facts")
-def memory_facts(target: str = "", limit: int = 50):
+def memory_facts(target: str = "", limit: int = 50, current_user: dict = Depends(get_current_user)):
     """Browse facts — optionally filtered by target company."""
     store = get_memory_store()
     import sqlite3 as _sq
@@ -560,7 +701,7 @@ def memory_facts(target: str = "", limit: int = 50):
 
 
 @app.get("/memory/sessions")
-def memory_sessions(target: str = ""):
+def memory_sessions(target: str = "", current_user: dict = Depends(get_current_user)):
     """List session summaries from memory."""
     store = get_memory_store()
     import sqlite3 as _sq
@@ -589,7 +730,7 @@ def memory_sessions(target: str = ""):
 
 
 @app.delete("/memory/clear/{target}")
-def memory_clear(target: str):
+def memory_clear(target: str, current_user: dict = Depends(get_current_user)):
     """Delete all stored facts for a specific target."""
     store = get_memory_store()
     deleted = store.clear_target(target)
@@ -705,12 +846,12 @@ def _send_email_code(email: str, code: str, is_reset: bool = False) -> bool:
         return False
 
 
-@app.post("/auth/send-verification")
-def auth_send_verification(req: SendVerificationRequest):
+@app.post("/auth/send-verification", dependencies=[Depends(auth_rate_limiter)])
+async def auth_send_verification(req: SendVerificationRequest):
     email_clean = req.email.lower().strip()
     
     # Check if user already exists
-    existing = supabase.get_user_by_email(email_clean)
+    existing = await supabase.get_user_by_email(email_clean)
     if existing:
         raise HTTPException(status_code=409, detail="An account with that email already exists.")
         
@@ -727,12 +868,12 @@ def auth_send_verification(req: SendVerificationRequest):
         }
 
 
-@app.post("/auth/forgot-password")
-def auth_forgot_password(req: ForgotPasswordRequest):
+@app.post("/auth/forgot-password", dependencies=[Depends(auth_rate_limiter)])
+async def auth_forgot_password(req: ForgotPasswordRequest):
     email_clean = req.email.lower().strip()
     
     # Verify user exists
-    existing = supabase.get_user_by_email(email_clean)
+    existing = await supabase.get_user_by_email(email_clean)
     if not existing:
         raise HTTPException(status_code=404, detail="No account with that email exists.")
         
@@ -749,8 +890,8 @@ def auth_forgot_password(req: ForgotPasswordRequest):
         }
 
 
-@app.post("/auth/reset-password")
-def auth_reset_password(req: ResetPasswordRequest):
+@app.post("/auth/reset-password", dependencies=[Depends(auth_rate_limiter)])
+async def auth_reset_password(req: ResetPasswordRequest):
     email_clean = req.email.lower().strip()
     
     if email_clean not in _RESET_CODES:
@@ -764,12 +905,12 @@ def auth_reset_password(req: ResetPasswordRequest):
         raise HTTPException(status_code=400, detail="Invalid reset code.")
         
     # Validate via Supabase
-    existing = supabase.get_user_by_email(email_clean)
+    existing = await supabase.get_user_by_email(email_clean)
     if not existing:
         raise HTTPException(status_code=404, detail="Account not found.")
         
     user_id = existing["id"]
-    supabase.update_admin_user_password(user_id, req.new_password)
+    await supabase.update_admin_user_password(user_id, req.new_password)
     
     # Clean up code
     if email_clean in _RESET_CODES:
@@ -778,8 +919,8 @@ def auth_reset_password(req: ResetPasswordRequest):
     return {"message": "Password reset successfully."}
 
 
-@app.post("/auth/signup")
-def auth_signup(req: SignupRequest):
+@app.post("/auth/signup", dependencies=[Depends(auth_rate_limiter)])
+async def auth_signup(req: SignupRequest):
     email_clean = req.email.lower().strip()
     
     # Check verification code
@@ -797,31 +938,45 @@ def auth_signup(req: SignupRequest):
     mobile_clean = req.mobile.strip()
     
     # Create via Supabase
-    res = supabase.create_admin_user(email_clean, req.password, name_clean, mobile=mobile_clean, auth_provider="email")
+    res = await supabase.create_admin_user(email_clean, req.password, name_clean, mobile=mobile_clean, auth_provider="email")
     user_id = res.get("id")
-    supabase.upsert_profile(user_id, email_clean, name_clean, "email", mobile=mobile_clean)
+    await supabase.upsert_profile(user_id, email_clean, name_clean, "email", mobile=mobile_clean)
     
     # Clean up verification code
     if email_clean in _VERIFICATION_CODES:
         del _VERIFICATION_CODES[email_clean]
         
-    return {"user": {"name": name_clean, "email": email_clean, "plan": "free"}}
+    # Generate a JWT for immediate login after signup
+    try:
+        token = jwt.encode({"user_id": user_id, "email": email_clean}, JWT_SECRET, algorithm="HS256")
+    except Exception:
+        token = f"mock_token_{user_id}"
+        
+    return {"token": token, "user": {"name": name_clean, "email": email_clean, "plan": "free"}}
 
 
-@app.post("/auth/login")
-def auth_login(req: LoginRequest):
+
+@app.post("/auth/login", dependencies=[Depends(auth_rate_limiter)])
+async def auth_login(req: LoginRequest):
     email_clean = req.email.lower().strip()
     
     # Authenticate via Supabase
-    auth_data = supabase.authenticate_user(email_clean, req.password)
+    auth_data = await supabase.authenticate_user(email_clean, req.password)
     
     user = auth_data.get("user", {})
     user_metadata = user.get("user_metadata", {})
+    user_id = user.get("id") or user_metadata.get("sub") or email_clean
     
     full_name = user_metadata.get("full_name") or user_metadata.get("name") or "Researcher"
     
-    # Use Supabase access token so the frontend can securely hit Supabase REST queries if needed!
-    token = auth_data.get("access_token")
+    # Issue a local JWT (same format as Google auth + signup) so that
+    # get_current_user can verify it with JWT_SECRET in production.
+    # Using the raw Supabase access token here would cause 401s because
+    # the backend would need SUPABASE_JWT_SECRET to verify it.
+    try:
+        token = jwt.encode({"user_id": user_id, "email": email_clean}, JWT_SECRET, algorithm="HS256")
+    except Exception:
+        token = f"mock_token_{user_id}"
     
     return {
         "token": token,
@@ -836,11 +991,16 @@ def auth_login(req: LoginRequest):
 # ── Research orchestration ──────────────────────────────────────────────
 
 
-@app.post("/research/start")
-async def start_research(req: StartResearchRequest):
+@app.post("/research/start", dependencies=[Depends(research_rate_limiter)])
+async def start_research(req: StartResearchRequest, current_user: dict = Depends(get_current_user)):
     session_id = req.session_id or uuid.uuid4().hex[:12]
+    
+    if req.session_id:
+        verify_session_ownership(session_id, current_user)
+        
     BUS.open(session_id)
     raw_query = req.target.strip()
+    user_email = current_user["email"]
     
     # Preserve the prior target only for truly ambiguous follow-ups. If the
     # user names a new company/ticker, resolve the current query normally.
@@ -871,7 +1031,7 @@ async def start_research(req: StartResearchRequest):
     if is_comparison_query and not forced_output_mode:
         forced_output_mode = "company_comparison"
     
-    _session_record(session_id, mode=mode, target=target, objective=objective)
+    _session_record(session_id, mode=mode, target=target, objective=objective, user_email=user_email)
 
     async def _runner() -> None:
         try:
@@ -887,7 +1047,7 @@ async def start_research(req: StartResearchRequest):
             else:
                 base_steps = 28
             
-            chat_history = _MEMORY_MANAGER.get_history(req.user_email, session_id)
+            chat_history = _MEMORY_MANAGER.get_history(user_email, session_id)
 
             # Lightweight pipeline for non-marathon: skip expensive phases.
             # The synthesis still has access to peer enrichment (added below
@@ -929,13 +1089,15 @@ async def start_research(req: StartResearchRequest):
             memo_path = _MEMOS_DIR / f"{session_id}.md"
             if memo_path.is_file():
                 final_memo = memo_path.read_text(encoding="utf-8")
-                _MEMORY_MANAGER.append_message(req.user_email, session_id, "user", raw_query)
-                _MEMORY_MANAGER.append_message(req.user_email, session_id, "assistant", final_memo)
+                _MEMORY_MANAGER.append_message(user_email, session_id, "user", raw_query)
+                _MEMORY_MANAGER.append_message(user_email, session_id, "assistant", final_memo)
                 
         except Exception as exc:
             logger.exception("session %s crashed", session_id)
             BUS.emit(session_id, "error", message=str(exc))
             BUS.close(session_id)
+        finally:
+            _TASKS.pop(session_id, None)
 
     _TASKS[session_id] = asyncio.create_task(_runner())
     return JSONResponse({
@@ -1041,12 +1203,19 @@ _DEEP_PASS_OBJECTIVES = [
 ]
 
 
-@app.post("/research/deep")
-async def start_deep_research(req: DeepResearchRequest):
+@app.post("/research/deep", dependencies=[Depends(research_rate_limiter)])
+async def start_deep_research(req: DeepResearchRequest, current_user: dict = Depends(get_current_user)):
     master_session = req.session_id or uuid.uuid4().hex[:12]
+    
+    if req.session_id:
+        verify_session_ownership(master_session, current_user)
+        
     BUS.open(master_session)
     raw_query = req.target.strip()
     target = primary_target_from_query(raw_query)
+    user_email = current_user["email"]
+    
+    _session_record(master_session, mode="deep", target=target, objective=raw_query, user_email=user_email)
 
     # ── Comparison detection for marathon ──────────────────────────────
     is_comparison_query = _is_comparison(raw_query)
@@ -1057,7 +1226,7 @@ async def start_deep_research(req: DeepResearchRequest):
         total_passes = req.passes
         completed_passes = 0
         started_at = asyncio.get_running_loop().time()
-        chat_history = _MEMORY_MANAGER.get_history(req.user_email, master_session)
+        chat_history = _MEMORY_MANAGER.get_history(user_email, master_session)
         is_marathon = req.passes >= 8
         
         try:
@@ -1129,6 +1298,7 @@ async def start_deep_research(req: DeepResearchRequest):
             logger.exception("deep research %s crashed on pass", master_session)
             BUS.emit(master_session, "error", message=f"Deep research failed: {exc}")
         finally:
+            _TASKS.pop(master_session, None)
             BUS.close(master_session)
 
     _TASKS[master_session] = asyncio.create_task(_deep_runner())
@@ -1146,8 +1316,9 @@ async def start_deep_research(req: DeepResearchRequest):
 # ── Stop / cancel a running session ─────────────────────────────────────
 
 @app.post("/sessions/{session_id}/stop")
-async def stop_session(session_id: str):
+async def stop_session(session_id: str, current_user: dict = Depends(get_current_user)):
     """Cancel a running research session mid-flight."""
+    verify_session_ownership(session_id, current_user)
     task = _TASKS.get(session_id)
     if task is None or task.done():
         raise HTTPException(status_code=404, detail="No active task for this session.")
@@ -1188,14 +1359,17 @@ def _mode_instruction(mode: str) -> str:
     )
 
 
-@app.post("/chat/research")
-async def chat_research(req: ChatResearchRequest):
+@app.post("/chat/research", dependencies=[Depends(research_rate_limiter)])
+async def chat_research(req: ChatResearchRequest, current_user: dict = Depends(get_current_user)):
     """Chat-interface friendly entrypoint.
 
     Starts a background research job and returns polling/SSE/result URLs.
     A chat backend can call this, periodically poll `/status` or `/events`,
     then fetch `/result` when done.
     """
+    if req.session_id:
+        verify_session_ownership(req.session_id, current_user)
+        
     target = (req.target or req.message).strip()
     mode = (req.mode or "standard").strip().lower()
     if mode == "marathon":
@@ -1206,7 +1380,9 @@ async def chat_research(req: ChatResearchRequest):
                 pass_depth=120,
                 max_wall_seconds=req.max_wall_seconds or 4 * 60 * 60,
                 heartbeat_interval_s=20,
-            )
+                session_id=req.session_id,
+            ),
+            current_user=current_user
         )
     if mode == "deep":
         return await start_deep_research(
@@ -1216,7 +1392,9 @@ async def chat_research(req: ChatResearchRequest):
                 pass_depth=40,
                 max_wall_seconds=req.max_wall_seconds,
                 heartbeat_interval_s=20,
-            )
+                session_id=req.session_id,
+            ),
+            current_user=current_user
         )
     return await start_research(
         StartResearchRequest(
@@ -1225,16 +1403,24 @@ async def chat_research(req: ChatResearchRequest):
             max_wall_seconds=req.max_wall_seconds,
             heartbeat_interval_s=20,
             mode="standard",
-        )
+            session_id=req.session_id,
+        ),
+        current_user=current_user
     )
 
 
 @app.get("/memos")
-def list_memos() -> JSONResponse:
+def list_memos(current_user: dict = Depends(get_current_user)) -> JSONResponse:
     if not _MEMOS_DIR.is_dir():
         return JSONResponse({"memos": []})
     entries: list[dict[str, Any]] = []
     for p in sorted(_MEMOS_DIR.glob("*.md"), key=lambda x: x.stat().st_mtime, reverse=True)[:50]:
+        session_id = p.stem
+        meta = _load_session_meta(session_id)
+        owner_email = meta.get("user_email")
+        if owner_email and owner_email.lower().strip() != current_user["email"].lower().strip():
+            continue
+            
         try:
             head = p.read_text(encoding="utf-8")[:200]
         except Exception:
@@ -1242,7 +1428,7 @@ def list_memos() -> JSONResponse:
         title = head.split("\n", 1)[0].lstrip("# ").strip() or p.stem
         entries.append(
             {
-                "session_id": p.stem,
+                "session_id": session_id,
                 "title": title,
                 "bytes": p.stat().st_size,
                 "modified": datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc).isoformat(),
@@ -1252,7 +1438,8 @@ def list_memos() -> JSONResponse:
 
 
 @app.get("/sessions/{session_id}/memo")
-def get_memo(session_id: str):
+def get_memo(session_id: str, current_user: dict = Depends(get_current_user)):
+    verify_session_ownership(session_id, current_user)
     memo_path = _MEMOS_DIR / f"{session_id}.md"
     if not memo_path.is_file():
         raise HTTPException(status_code=404, detail="Memo not ready")
@@ -1264,12 +1451,14 @@ def get_memo(session_id: str):
 
 
 @app.get("/sessions/{session_id}/status")
-def session_status(session_id: str) -> JSONResponse:
+def session_status(session_id: str, current_user: dict = Depends(get_current_user)) -> JSONResponse:
+    verify_session_ownership(session_id, current_user)
     return JSONResponse(_session_status(session_id))
 
 
 @app.get("/sessions/{session_id}/events")
-def session_events(session_id: str, after: int = 0, limit: int = 250) -> JSONResponse:
+def session_events(session_id: str, after: int = 0, limit: int = 250, current_user: dict = Depends(get_current_user)) -> JSONResponse:
+    verify_session_ownership(session_id, current_user)
     if not BUS.known(session_id):
         raise HTTPException(status_code=404, detail="Unknown session")
     events = [_event_payload(idx, event) for idx, event in BUS.history(session_id, after=after, limit=limit)]
@@ -1282,14 +1471,17 @@ def session_events(session_id: str, after: int = 0, limit: int = 250) -> JSONRes
 
 
 @app.get("/chat/history")
-def chat_history(session_id: str, user_email: str | None = None) -> JSONResponse:
+def chat_history(session_id: str, current_user: dict = Depends(get_current_user)) -> JSONResponse:
     """Retrieve chat history for a session."""
+    verify_session_ownership(session_id, current_user)
+    user_email = current_user["email"]
     history = _MEMORY_MANAGER.get_history(user_email, session_id)
     return JSONResponse({"session_id": session_id, "history": history})
 
 
 @app.get("/sessions/{session_id}/result")
-def session_result(session_id: str) -> JSONResponse:
+def session_result(session_id: str, current_user: dict = Depends(get_current_user)) -> JSONResponse:
+    verify_session_ownership(session_id, current_user)
     status = _session_status(session_id)
     memo_path = _MEMOS_DIR / f"{session_id}.md"
     memo_text = memo_path.read_text(encoding="utf-8") if memo_path.is_file() else None
@@ -1306,31 +1498,69 @@ def session_result(session_id: str) -> JSONResponse:
 
 
 @app.get("/sessions/{session_id}/stream")
-async def stream_session(session_id: str):
+async def stream_session(
+    session_id: str,
+    last_event_id: str | None = Header(None, alias="Last-Event-ID"),
+    after: int | None = None,
+    current_user: dict = Depends(get_current_user)
+):
+    verify_session_ownership(session_id, current_user)
+    
+    if not BUS.known(session_id):
+        raise HTTPException(status_code=404, detail="Unknown session")
+
+    # If the session is active but the queue was popped on previous disconnect,
+    # re-create/re-open it to catch new events.
     q = BUS.get(session_id)
     if q is None and not BUS.is_closed(session_id):
-        raise HTTPException(status_code=404, detail="Unknown session")
+        q = BUS.open(session_id)
+
+    # Determine starting event seq number
+    after_seq = 0
+    if after is not None:
+        after_seq = after + 1
+    elif last_event_id:
+        try:
+            after_seq = int(last_event_id) + 1
+        except ValueError:
+            pass
 
     async def gen():
         yield f"event: open\ndata: {json.dumps({'session_id': session_id})}\n\n"
-        if q is None and BUS.is_closed(session_id):
-            for idx, event in BUS.history(session_id, limit=5000):
-                payload = _event_payload(idx, event)
-                yield f"id: {idx}\nevent: {event.type}\ndata: {json.dumps(payload, default=str)}\n\n"
+        
+        # 1. Replay missed events from history
+        max_seen_seq = after_seq - 1
+        history_events = BUS.history(session_id, after=after_seq, limit=5000)
+        for idx, event in history_events:
+            payload = _event_payload(idx, event)
+            yield f"id: {idx}\nevent: {event.type}\ndata: {json.dumps(payload, default=str)}\n\n"
+            max_seen_seq = max(max_seen_seq, idx)
+
+        # 2. Stream live events
+        if q is not None:
+            try:
+                while True:
+                    try:
+                        # Wait for up to 15 seconds for a new event.
+                        # If timeout occurs, send an SSE comment as a keep-alive/heartbeat.
+                        event = await asyncio.wait_for(q.get(), timeout=15.0)
+                    except asyncio.TimeoutError:
+                        yield ": keepalive\n\n"
+                        continue
+
+                    if event is None:
+                        yield "event: done\ndata: {}\n\n"
+                        return
+
+                    if event.seq > max_seen_seq:
+                        idx = event.seq
+                        payload = {"id": idx, "type": event.type, "timestamp": event.timestamp, **event.payload}
+                        yield f"id: {idx}\nevent: {event.type}\ndata: {json.dumps(payload, default=str)}\n\n"
+                        max_seen_seq = max(max_seen_seq, idx)
+            finally:
+                BUS.remove(session_id)
+        else:
             yield "event: done\ndata: {}\n\n"
-            return
-        try:
-            while True:
-                event = await q.get()
-                if event is None:
-                    yield "event: done\ndata: {}\n\n"
-                    return
-                idx = event.seq
-                payload = {"id": idx, "type": event.type, "timestamp": event.timestamp, **event.payload}
-                yield f"id: {idx}\nevent: {event.type}\ndata: {json.dumps(payload, default=str)}\n\n"
-        finally:
-            BUS.remove(session_id)
-            _TASKS.pop(session_id, None)
 
     return StreamingResponse(
         gen(),

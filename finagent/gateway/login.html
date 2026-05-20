@@ -255,6 +255,19 @@
 <script>
   const $ = (id) => document.getElementById(id);
 
+  // ── API base URL ────────────────────────────────────────────────────
+  // When running on Amplify, proxy rewrites strip the Authorization
+  // header. Detect production by hostname and route API calls directly
+  // to the API Gateway HTTPS endpoint.
+  const _API_GATEWAY_URL = "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com";
+  const API_BASE = (function() {
+    const host = window.location.hostname || "";
+    if (host.includes("amplifyapp.com") || host.includes("prospektlab")) {
+      return _API_GATEWAY_URL;
+    }
+    return "";  // local dev: use relative paths
+  })();
+
   function showToast(msg, kind = "error") {
     let text = msg;
     if (msg && typeof msg === "object") {
@@ -337,7 +350,7 @@
       btnText.textContent = "Saving...";
       btn.style.opacity = "0.7";
 
-      fetch('/auth/google/update-mobile', {
+      fetch(API_BASE + '/auth/google/update-mobile', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -382,7 +395,7 @@
 
   function handleCredentialResponse(response) {
     showToast("Authenticating with Google...", "success");
-    fetch('/auth/google', {
+    fetch(API_BASE + '/auth/google', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ credential: response.credential })
@@ -465,7 +478,7 @@
     $("loginBtnLabel").classList.add("hidden");
     $("loginBtnSpinner").classList.remove("hidden");
     try {
-      const r = await fetch("/auth/login", {
+      const r = await fetch(API_BASE + "/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, remember }),
@@ -477,11 +490,13 @@
       }
       const data = await r.json();
       try {
+        // Merge token into user object so getAuthToken() in widget.html can read it
+        const stored = { ...data.user, token: data.token };
         if (remember) {
-          localStorage.setItem("prospektlab_user", JSON.stringify(data.user));
+          localStorage.setItem("prospektlab_user", JSON.stringify(stored));
           sessionStorage.removeItem("prospektlab_user");
         } else {
-          sessionStorage.setItem("prospektlab_user", JSON.stringify(data.user));
+          sessionStorage.setItem("prospektlab_user", JSON.stringify(stored));
           localStorage.removeItem("prospektlab_user");
         }
       } catch (_) {}
@@ -519,7 +534,7 @@
     $("sendResetSpinner").classList.remove("hidden");
 
     try {
-      const res = await fetch("/auth/forgot-password", {
+      const res = await fetch(API_BASE + "/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email })
@@ -548,7 +563,7 @@
     const new_password = $("newPassword").value;
 
     try {
-      const res = await fetch("/auth/reset-password", {
+      const res = await fetch(API_BASE + "/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, code, new_password })

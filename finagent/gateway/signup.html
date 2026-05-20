@@ -233,6 +233,19 @@
 <script>
   const $ = (id) => document.getElementById(id);
 
+  // ── API base URL ────────────────────────────────────────────────────
+  // When running on Amplify, proxy rewrites strip the Authorization
+  // header. Detect production by hostname and route API calls directly
+  // to the API Gateway HTTPS endpoint.
+  const _API_GATEWAY_URL = "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com";
+  const API_BASE = (function() {
+    const host = window.location.hostname || "";
+    if (host.includes("amplifyapp.com") || host.includes("prospektlab")) {
+      return _API_GATEWAY_URL;
+    }
+    return "";  // local dev: use relative paths
+  })();
+
   function showToast(msg, kind = "error") {
     let text = msg;
     if (msg && typeof msg === "object") {
@@ -314,7 +327,7 @@
       btnText.textContent = "Saving...";
       btn.style.opacity = "0.7";
 
-      fetch('/auth/google/update-mobile', {
+      fetch(API_BASE + '/auth/google/update-mobile', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -354,7 +367,7 @@
 
   function handleCredentialResponse(response) {
     showToast("Creating account with Google...", "success");
-    fetch('/auth/google', {
+    fetch(API_BASE + '/auth/google', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ credential: response.credential })
@@ -457,7 +470,7 @@
     $("sendCodeSpinner").classList.remove("hidden");
     
     try {
-      const res = await fetch("/auth/send-verification", {
+      const res = await fetch(API_BASE + "/auth/send-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email })
@@ -513,7 +526,7 @@
     $("signupBtnLabel").classList.add("hidden");
     $("signupBtnSpinner").classList.remove("hidden");
     try {
-      const r = await fetch("/auth/signup", {
+      const r = await fetch(API_BASE + "/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password, mobile, verification_code }),
@@ -525,7 +538,9 @@
       }
       const data = await r.json();
       try {
-        localStorage.setItem("prospektlab_user", JSON.stringify(data.user));
+        // Merge token into user object so getAuthToken() in widget.html can read it
+        const stored = { ...data.user, token: data.token };
+        localStorage.setItem("prospektlab_user", JSON.stringify(stored));
         sessionStorage.removeItem("prospektlab_user");
       } catch (_) {}
       // Mark new user so the tour shows

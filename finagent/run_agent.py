@@ -1194,7 +1194,16 @@ def _persist_session_memory(
         )
         # Financial facts from the latest metrics
         for k, m in (sec.metrics or {}).items():
-            line = f"{m.label} = {m.display_value()} (form {m.form}, period ending {m.end})"
+            # m may be a plain dict if the EnrichmentBundle was rehydrated from
+            # a JSON/pickle cache rather than freshly constructed as a SECMetric.
+            if isinstance(m, dict):
+                label = m.get("label", k)
+                value = m.get("value", "n/a")
+                form  = m.get("form", "n/a")
+                end   = m.get("end", "n/a")
+                line  = f"{label} = {value} (form {form}, period ending {end})"
+            else:
+                line = f"{m.label} = {m.display_value()} (form {m.form}, period ending {m.end})"
             new_facts.append(
                 MemoryFact(
                     target_key=target,

@@ -193,6 +193,39 @@
 
 <script>
   const $ = (id) => document.getElementById(id);
+
+  // ── API base URL ────────────────────────────────────────────────────
+  // When running on Amplify, proxy rewrites strip the Authorization
+  // header. Detect production by hostname and route API calls directly
+  // to the API Gateway HTTPS endpoint.
+  const _API_GATEWAY_URL = "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com";
+  const API_BASE = (function() {
+    const host = window.location.hostname || "";
+    if (host.includes("amplifyapp.com") || host.includes("prospektlab")) {
+      return _API_GATEWAY_URL;
+    }
+    return "";  // local dev: use relative paths
+  })();
+
+  function getAuthToken() {
+    try {
+      const raw = localStorage.getItem("prospektlab_user") || sessionStorage.getItem("prospektlab_user");
+      if (raw) {
+        const u = JSON.parse(raw);
+        return u.token || null;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function getAuthHeaders(extra = {}) {
+    const token = getAuthToken();
+    const headers = { ...extra };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+  }
   const ESC = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
 
   function loadUser() {
@@ -216,7 +249,7 @@
 
   async function loadMemos() {
     try {
-      const r = await fetch("/memos");
+      const r = await fetch(API_BASE + "/memos", { headers: getAuthHeaders() });
       if (!r.ok) return;
       const { memos } = await r.json();
       $("statMemos").textContent = String(memos.length);
@@ -231,7 +264,8 @@
       }
       for (const m of memos.slice(0, 8)) {
         const a = document.createElement("a");
-        a.href = `/sessions/${m.session_id}/memo`;
+        const token = getAuthToken();
+        a.href = (API_BASE ? API_BASE : "") + `/sessions/${m.session_id}/memo` + (token ? `?token=${encodeURIComponent(token)}` : "");
         a.target = "_blank";
         a.className = "flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-card/50 border border-white/5 hover:border-primary/40 transition group";
         const when = new Date(m.modified).toLocaleString();

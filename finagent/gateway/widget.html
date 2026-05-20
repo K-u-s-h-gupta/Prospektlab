@@ -3344,11 +3344,15 @@
               if (runToken !== activeRunToken) return;
               if (eventSource) { eventSource.close(); eventSource = null; }
             });
-            eventSource.onerror = () => {
+            eventSource.onerror = (err) => {
               if (runToken !== activeRunToken) return;
-              pushActivity("link_off", "Stream", "Connection lost", "error");
-              $("stopBtn").classList.add("hidden");
-              $("executeBtn").classList.remove("hidden");
+              if (eventSource.readyState === EventSource.CLOSED) {
+                pushActivity("link_off", "Stream", "Connection lost", "error");
+                $("stopBtn").classList.add("hidden");
+                $("executeBtn").classList.remove("hidden");
+              } else {
+                console.warn("EventSource disconnected. Attempting to reconnect...", err);
+              }
             };
           }
 

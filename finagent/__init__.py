@@ -12,9 +12,9 @@ from pathlib import Path
 # Load from the finagent directory's .env file
 env_path = Path(__file__).parent / ".env"
 if env_path.exists():
-    load_dotenv(env_path)
+    load_dotenv(env_path, override=True)
 else:
-    load_dotenv()
+    load_dotenv(override=True)
 
 from finagent.settings import FinAgentSettings, load_settings
 
