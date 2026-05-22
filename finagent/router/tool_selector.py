@@ -1,7 +1,7 @@
 """Intent-driven tool selector for India-focused FinAgent.
 
 Maps the user's query intent (from the router) to the minimal set of
-enrichment tools needed.  This prevents running Reddit/HN/StockTwits
+enrichment tools needed.  This prevents running nonessential enrichment
 for a simple PE-ratio lookup, dramatically cutting latency.
 """
 
@@ -13,17 +13,17 @@ from finagent.router.intent_router import RoutingDecision
 
 _ALL = frozenset([
     "india_snap", "yahoo", "shareholding", "sebi_filing",
-    "news", "reddit", "hackernews", "stocktwits", "wikipedia", "fx",
+    "news", "wikipedia", "fx",
 ])
 
 _PRICE_ONLY        = frozenset(["india_snap", "yahoo"])
 _FUNDAMENTALS      = frozenset(["india_snap", "yahoo", "wikipedia"])
 _EARNINGS          = frozenset(["india_snap", "yahoo", "news"])
-_RISK              = frozenset(["india_snap", "sebi_filing", "news", "reddit"])
+_RISK              = frozenset(["india_snap", "sebi_filing", "news"])
 _GOVERNANCE        = frozenset(["india_snap", "shareholding", "sebi_filing", "news"])
-_SENTIMENT         = frozenset(["india_snap", "yahoo", "reddit", "stocktwits", "news"])
-_SECTOR            = frozenset(["india_snap", "yahoo", "news", "hackernews"])
-_NEWS_UPDATE       = frozenset(["news", "reddit", "hackernews"])
+_SENTIMENT         = frozenset(["india_snap", "yahoo", "news"])
+_SECTOR            = frozenset(["india_snap", "yahoo", "news"])
+_NEWS_UPDATE       = frozenset(["news"])
 _COMPARISON        = frozenset(["india_snap", "yahoo", "news", "wikipedia"])
 _FULL_RESEARCH     = _ALL
 _IPO               = frozenset(["india_snap", "sebi_filing", "news", "wikipedia"])
@@ -47,8 +47,7 @@ _INTENT_RULES: list[tuple[tuple[str, ...], frozenset[str]]] = [
     (("shareholding", "fii", "dii", "promoter stake", "promoter holding",
       "institutional holding", "board", "management", "corporate governance"), _GOVERNANCE),
     # Sentiment / community
-    (("sentiment", "reddit", "retail", "community", "stocktwits",
-      "social media", "buzz"), _SENTIMENT),
+    (("sentiment", "retail", "community", "buzz"), _SENTIMENT),
     # News only
     (("news", "latest news", "recent news", "headline", "update",
       "announcement", "press release"), _NEWS_UPDATE),
@@ -77,11 +76,11 @@ def select_tools(objective: str, routing: RoutingDecision) -> frozenset[str]:
             selected = set(tool_set)
             # Expand if routing adds specialist agents
             if "risk" in routing.selected_agents:
-                selected |= {"sebi_filing", "news", "reddit"}
+                selected |= {"sebi_filing", "news"}
             if "governance" in routing.selected_agents:
                 selected |= {"shareholding", "sebi_filing"}
             if "community" in routing.selected_agents:
-                selected |= {"reddit", "stocktwits", "hackernews"}
+                selected |= {"news"}
             if routing.deep_research or routing.query_complexity == "complex":
                 selected = set(_FULL_RESEARCH)
             return frozenset(selected)

@@ -14,6 +14,19 @@ import time
 
 
 def main() -> int:
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        stream=sys.stdout,
+    )
+    # Silence noisy default libraries
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("playwright").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+
     try:
         from starlette.testclient import TestClient
     except ImportError:
@@ -21,17 +34,20 @@ def main() -> int:
         return 1
 
     from finagent.gateway.run import app
+    import jwt
+    token = jwt.encode({"user_id": "test-user", "email": "test@example.com"}, "super_secret_ipo_key_123", algorithm="HS256")
 
     with TestClient(app, raise_server_exceptions=False) as client:
         r = client.post(
             "/research/start",
             json={
-                "target": "RELIANCE",
-                "objective": "smoke test run",
-                "max_steps": 8,
-                "max_wall_seconds": 180,
+                "target": 'Reliance Industries "annual report" site:nseindia.com',
+                "objective": "test query operators",
+                "max_steps": 4,
+                "max_wall_seconds": 360,
                 "heartbeat_interval_s": 30,
             },
+            headers={"Authorization": f"Bearer {token}"}
         )
         if r.status_code != 200:
             print("start failed", r.status_code, r.text, file=sys.stderr)
@@ -46,7 +62,7 @@ def main() -> int:
         saw_source = False
         saw_final = False
         last_after = 0
-        deadline = time.monotonic() + 150.0
+        deadline = time.monotonic() + 350.0
 
         while time.monotonic() < deadline:
             ev = client.get("/sessions/{}/events".format(sid), params={"after": last_after, "limit": 200})

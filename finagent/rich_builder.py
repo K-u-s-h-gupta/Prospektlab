@@ -646,6 +646,51 @@ def _format_quarter(date_str: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _wants_charts(message: str) -> bool:
+    msg = (message or "").lower()
+    
+    # 1. Check if it is a regulatory, filing, or informational lookup.
+    # If the user is looking up specific documents, filings, circulars, or regulatory details,
+    # they don't want charts unless they explicitly ask for a visual/trend.
+    regulatory_keywords = [
+        "sebi", "lodr", "regulation", "announcement", "circular", "disclosure", 
+        "board meeting", "filing", "promoter pledge", "pledged shares", 
+        "insider trading", "document", "pdf", "prospectus", "drhp", "rhp", 
+        "director", "governance", "committee", "audit", "compliance", "notice"
+    ]
+    is_regulatory = any(kw in msg for kw in regulatory_keywords)
+    
+    # Check if there is an explicit request for visuals/charts/historical trends/comparison
+    explicit_visuals = [
+        "chart", "graph", "plot", "visual", "trend", "historical", "history", "pattern",
+        "compare", "comparison", "vs", "versus", "forecast", "predict", "projection",
+        "growth", "analysis", "analyze", "valuation"
+    ]
+    has_explicit_visual = any(kw in msg for kw in explicit_visuals)
+    
+    if is_regulatory and not has_explicit_visual:
+        logger.info("Query '%s' is regulatory/informational without explicit visual request. Omitting charts.", message)
+        return False
+
+    # 2. General logic for other queries
+    keywords = [
+        "chart", "graph", "plot", "visual", "trend", "historical", "history", "pattern",
+        "compare", "comparison", "vs", "versus", "forecast", "predict", "projection",
+        "analysis", "analyze", "overview", "snapshot", "growth", "revenue", "profit",
+        "net income", "margin", "metrics", "financials", "performance", "valuation",
+        "shareholding", "holdings", "annual", "quarterly"
+    ]
+    # Simple symbol or company name lookup should have charts (e.g. "TCS")
+    words = msg.split()
+    if len(words) <= 2 and not any(w in msg for w in ["what", "how", "why", "who", "where", "when"]):
+        wants = True
+    else:
+        wants = any(kw in msg for kw in keywords)
+    
+    logger.info("Query '%s' wants charts? %s", message, wants)
+    return wants
+
+
 def _assemble_snapshot(message: str, outputs: list[ToolOutput], markdown_body: str) -> Optional[RichResponse]:
     symbols = extract_symbols(message, outputs)
     symbol = symbols[0] if symbols else None
@@ -751,66 +796,67 @@ def _assemble_snapshot(message: str, outputs: list[ToolOutput], markdown_body: s
 
     # ----- Charts -----
     charts: list[Chart] = []
-    history = _extract_annual_history(income.get("statements") if isinstance(income, dict) else None)
+    if _wants_charts(message):
+        history = _extract_annual_history(income.get("statements") if isinstance(income, dict) else None)
 
-    if history["labels"] and any(v is not None for v in history["revenue"]):
-        charts.append(Chart(
-            id="annual-revenue",
-            kind="bar",
-            title="Annual revenue",
-            subtitle=f"{currency} (Crore)" if currency == "INR" else f"({currency})",
-            x_labels=history["labels"],
-            series=[ChartSeries(
-                name="Revenue",
-                color="#10b981",
-                values=[_scale_for_chart(v, currency) for v in history["revenue"]],
-                unit="Cr" if currency == "INR" else currency,
-            )],
-            currency=currency,
-            y_unit="Cr" if currency == "INR" else currency,
-            is_partial=any(v is None for v in history["revenue"]),
-        ))
+        if history["labels"] and any(v is not None for v in history["revenue"]):
+            charts.append(Chart(
+                id="annual-revenue",
+                kind="bar",
+                title="Annual revenue",
+                subtitle=f"{currency} (Crore)" if currency == "INR" else f"({currency})",
+                x_labels=history["labels"],
+                series=[ChartSeries(
+                    name="Revenue",
+                    color="#10b981",
+                    values=[_scale_for_chart(v, currency) for v in history["revenue"]],
+                    unit="Cr" if currency == "INR" else currency,
+                )],
+                currency=currency,
+                y_unit="Cr" if currency == "INR" else currency,
+                is_partial=any(v is None for v in history["revenue"]),
+            ))
 
-    if history["labels"] and any(v is not None for v in history["net_income"]):
-        charts.append(Chart(
-            id="annual-net-profit",
-            kind="bar",
-            title="Net profit",
-            subtitle=f"{currency} (Crore)" if currency == "INR" else f"({currency})",
-            x_labels=history["labels"],
-            series=[ChartSeries(
-                name="Net income",
-                color="#3b82f6",
-                values=[_scale_for_chart(v, currency) for v in history["net_income"]],
-                unit="Cr" if currency == "INR" else currency,
-            )],
-            currency=currency,
-            y_unit="Cr" if currency == "INR" else currency,
-            is_partial=any(v is None for v in history["net_income"]),
-        ))
+        if history["labels"] and any(v is not None for v in history["net_income"]):
+            charts.append(Chart(
+                id="annual-net-profit",
+                kind="bar",
+                title="Net profit",
+                subtitle=f"{currency} (Crore)" if currency == "INR" else f"({currency})",
+                x_labels=history["labels"],
+                series=[ChartSeries(
+                    name="Net income",
+                    color="#3b82f6",
+                    values=[_scale_for_chart(v, currency) for v in history["net_income"]],
+                    unit="Cr" if currency == "INR" else currency,
+                )],
+                currency=currency,
+                y_unit="Cr" if currency == "INR" else currency,
+                is_partial=any(v is None for v in history["net_income"]),
+            ))
 
-    # Quarterly trend (area)
-    q_hist = _quarterly_history(qres if isinstance(qres, dict) else None)
-    if q_hist["labels"] and any(v is not None for v in q_hist["revenue"]):
-        charts.append(Chart(
-            id="quarterly-revenue",
-            kind="area",
-            title="Quarterly revenue trend",
-            x_labels=q_hist["labels"],
-            series=[ChartSeries(
-                name="Revenue",
-                color="#8b5cf6",
-                values=[_scale_for_chart(v, currency) for v in q_hist["revenue"]],
-                unit="Cr" if currency == "INR" else currency,
-            )],
-            currency=currency,
-            y_unit="Cr" if currency == "INR" else currency,
-        ))
+        # Quarterly trend (area)
+        q_hist = _quarterly_history(qres if isinstance(qres, dict) else None)
+        if q_hist["labels"] and any(v is not None for v in q_hist["revenue"]):
+            charts.append(Chart(
+                id="quarterly-revenue",
+                kind="area",
+                title="Quarterly revenue trend",
+                x_labels=q_hist["labels"],
+                series=[ChartSeries(
+                    name="Revenue",
+                    color="#8b5cf6",
+                    values=[_scale_for_chart(v, currency) for v in q_hist["revenue"]],
+                    unit="Cr" if currency == "INR" else currency,
+                )],
+                currency=currency,
+                y_unit="Cr" if currency == "INR" else currency,
+            ))
 
-    # Shareholding donut (from yfinance major holders or NSE)
-    donut = _build_shareholding_donut(shares)
-    if donut:
-        charts.append(donut)
+        # Shareholding donut (from yfinance major holders or NSE)
+        donut = _build_shareholding_donut(shares)
+        if donut:
+            charts.append(donut)
 
     # ----- Strengths / risks (derive heuristically) -----
     sr = _derive_strengths_risks(entity)
@@ -987,13 +1033,11 @@ def _domain_of(url: str) -> Optional[str]:
 
 
 def _default_sources(is_india: bool) -> list[DataSource]:
-    if is_india:
-        return [
-            DataSource(label="NSE India", url="https://www.nseindia.com"),
-            DataSource(label="Yahoo Finance"),
-            DataSource(label="Screener.in"),
-        ]
-    return [DataSource(label="Yahoo Finance"), DataSource(label="SEC EDGAR")]
+    return [
+        DataSource(label="NSE India", url="https://www.nseindia.com"),
+        DataSource(label="Yahoo Finance"),
+        DataSource(label="Screener.in"),
+    ]
 
 
 # ---------------------------------------------------------------------------

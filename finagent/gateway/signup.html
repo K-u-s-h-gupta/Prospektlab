@@ -31,8 +31,8 @@
       background-size: 600px 600px, 500px 500px;
       background-repeat: no-repeat; filter: blur(30px); opacity: 0.7; }
     .grid-bg { background-image: linear-gradient(rgba(125,168,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(125,168,255,0.04) 1px, transparent 1px); background-size: 56px 56px; }
-    .toast { position: fixed; top: 1rem; right: 1rem; padding: 12px 16px; border-radius: 12px; font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); transform: translateY(-150%); transition: transform 0.3s ease; z-index: 100; }
-    .toast.visible { transform: translateY(0); }
+    .toast { position: fixed; top: 1rem; left: 50%; right: auto; padding: 12px 16px; border-radius: 12px; font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); transform: translate(-50%, -150%); transition: transform 0.3s ease; z-index: 100; }
+    .toast.visible { transform: translate(-50%, 0); }
     .strength-bar { height: 4px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; }
     .strength-bar > div { height: 100%; transition: width 0.2s, background 0.2s; }
   </style>
@@ -217,7 +217,7 @@
       </div>
 
       <p class="text-center text-xs text-muted mt-5">
-        <a href="/app" class="hover:text-text underline-offset-2">Or skip and try the live demo →</a>
+        <a href="/login" class="hover:text-text underline-offset-2">Already verified? Sign in →</a>
       </p>
     </div>
   </div>
@@ -245,6 +245,10 @@
     }
     return "";  // local dev: use relative paths
   })();
+
+  function workspaceLaunchUrl(token) {
+    return `/app?token=${encodeURIComponent(token)}`;
+  }
 
   function showToast(msg, kind = "error") {
     let text = msg;
@@ -347,7 +351,7 @@
           } catch (_) {}
           setTimeout(() => {
             modal.remove();
-            window.location.href = '/app';
+            window.location.href = workspaceLaunchUrl(userData.token);
           }, 800);
         } else {
           showToast(res.body.detail || "Failed to save mobile number.", "error");
@@ -381,7 +385,7 @@
           try { localStorage.setItem('prospektlab_user', JSON.stringify(res.body)); } catch (_) {}
           try { localStorage.setItem("prospektlab_new_user", "1"); } catch (_) {}
           showToast("Welcome! Launching workspace...", "success");
-          setTimeout(() => { window.location.href = '/app'; }, 500);
+          setTimeout(() => { window.location.href = workspaceLaunchUrl(res.body.token); }, 500);
         }
       } else {
         showToast(res.body.detail || "Google authentication failed.", "error");
@@ -546,7 +550,7 @@
       // Mark new user so the tour shows
       try { localStorage.setItem("prospektlab_new_user", "1"); } catch (_) {}
       showToast("Welcome! Launching workspace…", "success");
-      setTimeout(() => { window.location.href = "/app"; }, 500);
+      setTimeout(() => { window.location.href = workspaceLaunchUrl(data.token); }, 500);
     } catch (e) {
       showToast("Network error — is the gateway running?");
     } finally {

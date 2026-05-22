@@ -6,7 +6,7 @@ we still produce a polished prose memo from the same fact bundle.
 All monetary figures are presented in INR (crore/lakh notation) first.
 The memo never invents numbers — every figure is sourced from NSE/BSE,
 Moneycontrol, Screener.in, SEBI filings, the live Yahoo quote (.NS/.BO),
-or community signals.
+or domestic financial-media signals.
 """
 
 from __future__ import annotations
@@ -33,12 +33,9 @@ from finagent.state.checkpoint import Checkpoint
 from finagent.state.citation_log import Citation
 from finagent.tools.data import (
     FxRate,
-    HNStory,
     IndiaCompanySnapshot,
     NewsItem,
-    RedditPost,
     SEBIFiling,
-    StockTwitsSnapshot,
     WikipediaSummary,
     YahooQuote,
     format_dual,
@@ -56,7 +53,7 @@ TokenSink = Callable[[str], Awaitable[None]] | Callable[[str], None] | None
 
 @dataclass
 class EnrichmentBundle:
-    # India-specific data sources (replaces SEC EDGAR)
+    # India-specific data sources.
     india_snap: IndiaCompanySnapshot | None = None
     sebi_filing: SEBIFiling | None = None
     shareholding: dict | None = None
@@ -64,9 +61,6 @@ class EnrichmentBundle:
     yahoo: YahooQuote | None = None
     wikipedia: WikipediaSummary | None = None
     fx: FxRate | None = None
-    reddit: list[RedditPost] = field(default_factory=list)
-    hackernews: list[HNStory] = field(default_factory=list)
-    stocktwits: StockTwitsSnapshot | None = None
     news: list[NewsItem] = field(default_factory=list)
 
     def has_any(self) -> bool:
@@ -75,13 +69,10 @@ class EnrichmentBundle:
             or self.yahoo
             or self.wikipedia
             or self.sebi_filing
-            or self.reddit
-            or self.hackernews
-            or self.stocktwits
             or self.news
         )
 
-    # Back-compat shims — code that read bundle.sec now gets india_snap
+    # Compatibility shim for older structured-data call sites
     @property
     def sec(self) -> IndiaCompanySnapshot | None:       # type: ignore[override]
         return self.india_snap
@@ -148,7 +139,7 @@ def _amount_to_usd(value: float, unit: str) -> float:
     u = (unit or "").upper()
     if u == "USD":
         return value
-    # SEC EDGAR sometimes returns share counts in "shares" — leave untouched.
+    # Share-count units are left untouched.
     return value
 
 
@@ -294,15 +285,15 @@ def _build_facts_block(bundle: EnrichmentBundle) -> str:
             lines.append("  Shareholding: " + ", ".join(holding_parts))
         lines.append(f"  Data source: {s.source} ({s.source_url})")
     elif bundle.sec:
-        # US / SEC path — sec.metrics are SECMetric objects with .display_value()
+        # Structured data fallback path.
         s = bundle.sec
-        lines.append(f"\nSEC EDGAR: {s.ticker} | {s.name} | CIK {s.cik}")
+        lines.append(f"\nStructured market data: {s.ticker} | {s.name} | identifier {s.cik}")
         if s.sic_description:
             lines.append(f"  Industry (SIC): {s.sic_description}")
         if s.exchanges:
             lines.append(f"  Listed on: {', '.join(s.exchanges)}")
         for key, m in s.metrics.items():
-            # m is a SECMetric dataclass — use its methods
+            # m is a structured metric dataclass — use its methods
             try:
                 inr_part = ""
                 if fx and getattr(m, "unit", "").upper() == "USD":
@@ -422,26 +413,6 @@ def _build_facts_block(bundle: EnrichmentBundle) -> str:
         w = bundle.wikipedia
         excerpt = (w.extract or "").replace("\n", " ").strip()
         lines.append(f"\nWikipedia ({w.title}): {excerpt[:600]}")
-    if bundle.reddit:
-        sent = {"bullish": 0, "bearish": 0, "hype": 0, "neutral": 0}
-        for p in bundle.reddit:
-            sent[p.sentiment] = sent.get(p.sentiment, 0) + 1
-        lines.append(
-            f"\nReddit (community signal): {len(bundle.reddit)} high-upvote posts | "
-            f"bullish {sent['bullish']}, bearish {sent['bearish']}, hype {sent['hype']}, neutral {sent['neutral']}"
-        )
-        for p in bundle.reddit[:5]:
-            lines.append(f"  - r/{p.subreddit} ({p.score} upvotes, {p.sentiment}): {p.title}")
-    if bundle.hackernews:
-        lines.append(f"\nHacker News ({len(bundle.hackernews)} stories):")
-        for h in bundle.hackernews[:5]:
-            lines.append(f"  - {h.points} pts, {h.num_comments} comments: {h.title}")
-    if bundle.stocktwits:
-        st = bundle.stocktwits
-        lines.append(
-            f"\nStockTwits ${st.ticker}: bullish {st.bullish}, bearish {st.bearish}, "
-            f"unrated {st.unrated} — net {st.net_sentiment}"
-        )
     if not lines:
         return "(no API enrichment available)"
     return "\n".join(lines)
@@ -485,8 +456,8 @@ Writing style and formatting rules — follow strictly:
    only where relevant. Use Indian-style grouping (e.g. ₹3.45 Cr or ₹45.6 L).
    Do NOT lead with USD for Indian-listed companies.
 3. Authoritative Indian sources: NSE India, BSE India, SEBI filings,
-   company investor relations, Screener.in, Trendlyne, Moneycontrol, Mint,
-   Economic Times. Regulatory framework is SEBI, not SEC.
+   company exchange disclosures, Screener.in, Trendlyne, Moneycontrol, Mint,
+   Economic Times. Regulatory framework is SEBI.
 4. Do not invent numbers. If a figure is missing, say "data not available" —
    never fill gaps with estimates presented as facts.
 5. Cite sources inline as [n] referring to the numbered SOURCES list.
@@ -499,6 +470,74 @@ Writing style and formatting rules — follow strictly:
 """
 
 
+_LLM_STYLE_GUIDE = """
+You are an institutional equity research expert specializing in the Indian capital markets.
+Synthesize the gathered context into an insight-dense, premium conversational research memo.
+
+Do not output plain list items, thin summaries, generic placeholders, or loose numerical ranges.
+Use explicit cross-validated numbers, concrete fiscal anchors, SEBI LODR parameters, Ind-AS
+financial language, and clear citations. Present monetary values in INR crore first; only add
+foreign-currency equivalents when the source itself uses them.
+
+Mandatory layout for full company research:
+
+## Business Overview
+Write publication-grade prose on operating segments, engineering focus, corporate ancestry,
+group ownership, and listed-entity structure.
+
+## Financial Performance Evaluation ([explicit fiscal anchor])
+Quote precise revenue, operating-profit metrics, consolidated profit, YoY growth percentages,
+margin changes, and multi-period trend links. Explain any unit-normalization or working-capital
+anomaly surfaced by the evidence.
+
+## Strategic Initiatives & Capital Expenditure Catalysts
+Detail capacity additions, technology deployments, order-book conversion, subsidiaries,
+joint ventures, and capex milestones with dates and quantified ranges.
+
+## Stock Valuation & Analyst Standings
+Provide precise trailing/forward valuation multiples, market capitalization in INR crore,
+peer context, and analyst target/rating evidence when available.
+
+## Operational Strengths & Strategic Tail Risks
+Use bold inline highlights inside prose. Address order-book visibility, tariff or spectrum
+obligations, promoter pledge, subscriber churn, raw-material exposure, regulatory actions,
+or execution delays where relevant.
+
+## Bottom Line Summary
+State whether the current valuation premium is justified by growth quality and execution
+visibility, or whether downside risk dominates. End with a SEBI-compliant informational
+disclaimer.
+
+For narrow follow-up questions, keep the same institutional tone but answer only the latest
+operational focus. Do not repeat a comprehensive profile unless the user explicitly asks for one.
+"""
+
+
+_FOCUSED_OUTPUT_MODES = {"news_brief", "valuation_model", "direct_answer", "filing_analysis"}
+
+
+def _compact_chat_history(
+    chat_history: list[dict[str, str]] | None,
+    *,
+    focused: bool,
+) -> list[dict[str, str]]:
+    """Keep prior chat useful for entity continuity without drowning the next answer."""
+
+    if not chat_history:
+        return []
+    compact: list[dict[str, str]] = []
+    for msg in chat_history[-8:]:
+        role = msg.get("role")
+        content = (msg.get("content") or "").strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+        if focused and role == "assistant":
+            continue
+        limit = 600 if focused else (1800 if role == "assistant" else 900)
+        compact.append({"role": role, "content": content[:limit]})
+    return compact[-4:] if focused else compact
+
+
 async def _openai_memo(
     target: str,
     objective: str,
@@ -509,6 +548,7 @@ async def _openai_memo(
     on_token: TokenSink = None,
     synth_model: str | None = None,
     chat_history: list[dict[str, str]] | None = None,
+    output_mode: str | None = None,
 ) -> str:
     cfg = resolve_openai_config()
     if cfg is None:
@@ -546,16 +586,34 @@ async def _openai_memo(
     else:
         comparison_instructions = ""
 
+    focused_output = output_mode in _FOCUSED_OUTPUT_MODES
+    focus_instruction = ""
+    if focused_output:
+        focus_instruction = (
+            f"Latest operational focus: {output_mode}. Answer this focus directly first, "
+            "using the existing conversation only to resolve the entity. Do not reissue a full company profile.\n"
+            "Use a tight structure: ## Direct Answer, ## Key Evidence, ## Why It Matters, ## Limitations. "
+            "For news briefs, list concrete dated headlines/developments first. For historical price requests, "
+            "lead with the price-window movement, high/low range, and data source before any business context.\n\n"
+        )
+    report_instruction = (
+        "Produce a focused answer addressing only the objective above.\n\n"
+        if focused_output
+        else "Produce a comprehensive, structured research report addressing the objective above.\n\n"
+    )
+
     user_prompt = (
         f"**Research target:** {target}\n"
         f"**Objective:** {objective}\n\n"
+        f"{focus_instruction}"
         f"{comparison_instructions}"
-        "Produce a comprehensive, structured research report addressing the objective above.\n\n"
+        f"{report_instruction}"
         "Requirements:\n"
         "- Use all available facts and source material provided below.\n"
         "- Never hallucinate numbers or invent figures — cite every claim with [n].\n"
         "- Use Markdown structure: ## section headings, tables for metrics, bullet points for lists.\n"
         "- If a data point is missing from the provided facts, explicitly state it is unavailable.\n"
+        "- For follow-up answers, do not summarize the earlier memo; answer the user's new request.\n"
         "- For deep/marathon reports: produce ALL sections in full — do NOT abbreviate.\n\n"
         f"=== VERIFIED FACTS ===\n{facts}\n\n"
         f"=== SOURCE DOCUMENTS ===\n{digest}\n\n"
@@ -566,7 +624,7 @@ async def _openai_memo(
     model_to_use = synth_model or cfg.model
     messages = [{"role": "system", "content": system_prompt}]
     if chat_history:
-        messages.extend(chat_history)
+        messages.extend(_compact_chat_history(chat_history, focused=focused_output))
     messages.append({"role": "user", "content": user_prompt})
 
     # Deep/marathon reports need more tokens; standard chat can stay short.
@@ -637,7 +695,7 @@ def _format_pct(v: float | None) -> str:
 
 
 def _cagr(points: list) -> float | None:
-    """Compute CAGR across a list of SECSeriesPoint-like objects (oldest first)."""
+    """Compute CAGR across a list of series point-like objects (oldest first)."""
     if not points or len(points) < 2:
         return None
     first = points[0].value if hasattr(points[0], "value") else points[0].get("value")
@@ -755,7 +813,7 @@ def _executive_summary_prose(target: str, bundle: EnrichmentBundle, conflicts: l
         )
     elif s:
         sentences.append(
-            f"{label} is a registered issuer (CIK {s.cik}) with market data sourced from SEC EDGAR for cross-listed reference."
+            f"{label} is an exchange-listed issuer (identifier {s.cik}) with market data sourced from Indian market disclosures."
         )
     elif y and y.price is not None:
         sentences.append(f"{label} is trading at {_format_price(y.price, y.currency, fx)}.")
@@ -827,7 +885,7 @@ def _company_overview_prose(bundle: EnrichmentBundle, target: str) -> str:
             exchange = f" and trades on {y.exchange}" if y.exchange else ""
             paras.append(f"{name} is covered by Yahoo Finance{exchange}. {cut}")
     elif s:
-        sentences = [f"{s.name} ({s.ticker}) is registered with the SEC under CIK {s.cik}."]
+        sentences = [f"{s.name} ({s.ticker}) is listed in Indian market datasets under identifier {s.cik}."]
         if s.sic_description:
             sentences.append(f"It is classified under {s.sic_description}.")
         if s.exchanges:
@@ -862,7 +920,7 @@ def _financial_profile_prose(bundle: EnrichmentBundle) -> str:
                 break
         if latest:
             paras.append(
-                f"The most recent SEC-filed financials come from a {latest[0]} for the period ending {latest[1]}. "
+                f"The most recent exchange-filed financials come from a {latest[0]} for the period ending {latest[1]}. "
                 "The headline numbers are as follows."
             )
 
@@ -969,44 +1027,19 @@ def _market_position_prose(docs: list[ScrapedDoc]) -> str:
     return f"Pulled from public commentary on the company: {joined}"
 
 
-def _community_sentiment_prose(bundle: EnrichmentBundle) -> str:
-    pieces: list[str] = []
-    if bundle.reddit:
-        sent = {"bullish": 0, "bearish": 0, "hype": 0, "neutral": 0}
-        for p in bundle.reddit:
-            sent[p.sentiment] = sent.get(p.sentiment, 0) + 1
-        total = len(bundle.reddit)
-        hype_flag = ""
-        if sent["hype"] >= 3:
-            hype_flag = " The hype-token density is high enough to warrant a pump-and-dump check before acting on retail flow."
-        pieces.append(
-            f"Across {total} high-upvote Reddit threads in r/IndianStreetBets, r/IndiaInvestments, "
-            f"r/DalalStreetTalks, r/IndiaFinance and r/investing, the breakdown is {sent['bullish']} bullish, "
-            f"{sent['bearish']} bearish, {sent['hype']} hype-leaning, {sent['neutral']} neutral.{hype_flag}"
-        )
-    if bundle.stocktwits:
-        st = bundle.stocktwits
-        pieces.append(
-            f"StockTwits messages tagged ${st.ticker} skew {st.net_sentiment}: "
-            f"{st.bullish} bullish, {st.bearish} bearish, {st.unrated} unrated across the latest stream."
-        )
-    if bundle.hackernews:
-        hn = bundle.hackernews
-        top = hn[0] if hn else None
-        if top:
-            pieces.append(
-                f"Hacker News surfaced {len(hn)} story-level discussions, the strongest being "
-                f"\"{top.title}\" at {top.points} points with {top.num_comments} comments."
-            )
-    if not pieces:
+def _market_narrative_prose(bundle: EnrichmentBundle) -> str:
+    news = bundle.news or []
+    if not news:
         return (
-            "Community and retail sentiment data was not available for this session. "
-            "For Indian stocks, discussions on r/IndianStreetBets, r/IndiaInvestments, "
-            "and platforms like Moneycontrol forums or TradingView Ideas may provide "
-            "additional retail sentiment signals. This section will auto-populate when "
-            "community APIs return valid data."
+            "Recent market narrative was not available from the domestic news feed in this session. "
+            "Use the web-source citations above for direct NSE/BSE filings and financial-media context."
         )
-    return " ".join(pieces)
+    sources = ", ".join(sorted({n.source for n in news if n.source})[:4])
+    headlines = "; ".join(n.title for n in news[:4] if n.title)
+    return (
+        f"Domestic financial media coverage came from {sources or 'the news feed'}. "
+        f"The latest captured headlines were: {headlines}."
+    )
 
 
 def _risks_prose(bundle: EnrichmentBundle, docs: list[ScrapedDoc], conflicts: list[ConflictReport]) -> str:
@@ -1048,7 +1081,7 @@ def _thesis_prose(bundle: EnrichmentBundle) -> str:
     bull: list[str] = []
     bear: list[str] = []
 
-    # SEC-based thesis points (US companies)
+    # Structured-data thesis points
     if s and "revenue" in s.metrics:
         rev = s.metrics["revenue"]
         bull.append(
@@ -1071,7 +1104,7 @@ def _thesis_prose(bundle: EnrichmentBundle) -> str:
                     "earnings compress."
                 )
 
-    # Yahoo-based thesis points (Indian companies with no SEC data)
+    # Yahoo-based thesis points when local structured data is thin
     if y and y.financial_metrics and not s:
         ym = y.financial_metrics
         # Revenue scale
@@ -1126,14 +1159,6 @@ def _thesis_prose(bundle: EnrichmentBundle) -> str:
             bear.append(
                 f"The print sits at {proximity*100:.0f}% of the 52-week high, suggesting sentiment is "
                 "still working through a derate."
-            )
-
-    if bundle.reddit:
-        hype = sum(1 for p in bundle.reddit if p.sentiment == "hype")
-        if hype >= 3:
-            bear.append(
-                "Retail hype intensity on Reddit is elevated, which historically precedes mean-reversion "
-                "rather than sustainable outperformance."
             )
 
     if not bull:
@@ -1324,7 +1349,7 @@ def _structured_memo(
         [
             MemoSection(title="Market and competitive position", body=_market_position_prose(docs), confidence="MEDIUM"),
             MemoSection(title="Recent news coverage", body=_news_prose(bundle), confidence="MEDIUM" if bundle.news else "LOW"),
-            MemoSection(title="Community and retail sentiment", body=_community_sentiment_prose(bundle), confidence="MEDIUM" if (bundle.reddit or bundle.stocktwits or bundle.hackernews) else "LOW"),
+            MemoSection(title="Domestic market narrative", body=_market_narrative_prose(bundle), confidence="MEDIUM" if bundle.news else "LOW"),
             MemoSection(
                 title="Key risks",
                 body=_risks_prose(bundle, docs, conflicts),
@@ -1338,7 +1363,7 @@ def _structured_memo(
     methodology_bits: list[str] = []
     methodology_bits.append(
         f"This memo synthesised {len(docs)} web sources via layered DuckDuckGo queries, "
-        "iterative gap-driven follow-ups, and direct community-data APIs."
+        "iterative gap-driven follow-ups, and domestic financial-media enrichment."
     )
     if blocked_count:
         methodology_bits.append(
@@ -1346,7 +1371,7 @@ def _structured_memo(
         )
     if bundle.sec:
         methodology_bits.append(
-            f"SEC EDGAR companyfacts supplied {len(bundle.sec.metrics)} authoritative metrics (CIK {bundle.sec.cik})."
+            f"Structured market data supplied {len(bundle.sec.metrics)} authoritative metrics (identifier {bundle.sec.cik})."
         )
     if bundle.filing:
         methodology_bits.append(
@@ -1360,16 +1385,6 @@ def _structured_memo(
         methodology_bits.append(
             f"USD figures are converted at USD/INR = {bundle.fx.rate:.4f} (source: {bundle.fx.source})."
         )
-    if bundle.reddit or bundle.stocktwits or bundle.hackernews:
-        community_parts = []
-        if bundle.reddit:
-            community_parts.append(f"{len(bundle.reddit)} Reddit posts")
-        if bundle.stocktwits:
-            community_parts.append(f"{bundle.stocktwits.bullish + bundle.stocktwits.bearish + bundle.stocktwits.unrated} StockTwits messages")
-        if bundle.hackernews:
-            community_parts.append(f"{len(bundle.hackernews)} Hacker News stories")
-        methodology_bits.append("Community signal was sampled from " + ", ".join(community_parts) + ".")
-
     sections.append(
         MemoSection(
             title="Data quality and methodology",
@@ -1566,7 +1581,17 @@ async def synthesize_memo(
     if resolve_openai_config() is not None:
         try:
             memo = await asyncio.wait_for(
-                _openai_memo(target, objective, digest, facts, conflicts, on_token=on_token, synth_model=synth_model, chat_history=chat_history),
+                _openai_memo(
+                    target,
+                    objective,
+                    digest,
+                    facts,
+                    conflicts,
+                    on_token=on_token,
+                    synth_model=synth_model,
+                    chat_history=chat_history,
+                    output_mode=mode.value,
+                ),
                 timeout=timeout_s,
             )
             rich = render_rich_json(artifact)

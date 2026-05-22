@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import re
 
-from finagent.geo.entity_resolver import ResolvedEntity, resolve_entity
-from finagent.geo.ticker_mapper import _ALIAS_TICKERS
+from finagent.geo.entity_resolver import ResolvedEntity, resolve_entities
 from finagent.output.contracts import OutputMode, ResponseDepth
 
 
 _COMPARE_TERMS = ("compare", " vs ", " versus ", "peer", "peers", "against")
 _VALUATION_TERMS = ("valuation", "dcf", "wacc", "intrinsic", "fair value", "target price", "cagr", "capm", "ddm")
 _NEWS_TERMS = ("news", "latest", "headline", "today", "recent", "update")
+_PRICE_HISTORY_TERMS = ("historical price", "price history", "stock history", "share price history", "past price")
 _FILING_TERMS = ("drhp", "rhp", "prospectus", "annual report", "filing", "risk factors")
 _VERSION_TERMS = ("changes", "changed", "compare documents", "from drhp to rhp", "version")
 _INVESTMENT_TERMS = ("should i buy", "buy", "sell", "hold", "invest", "recommendation")
@@ -52,6 +52,8 @@ def classify_output_mode(
     if depth == ResponseDepth.DEEP:
         return OutputMode.DEEP_RESEARCH_REPORT
 
+    if any(term in lower for term in _PRICE_HISTORY_TERMS):
+        return OutputMode.DIRECT_ANSWER
     if any(term in lower for term in _FILING_TERMS):
         filing_versions = sum(1 for term in ("drhp", "rhp", "prospectus") if term in lower)
         if filing_versions >= 2 or (any(term in lower for term in _VERSION_TERMS) and ("drhp" in lower or "rhp" in lower)):
@@ -75,34 +77,7 @@ def extract_finance_entities(query: str, *, limit: int = 4) -> list[ResolvedEnti
     known Indian aliases/tickers plus explicit exchange suffixes, then falls
     back to a bare all-caps ticker if present.
     """
-    text = query or ""
-    lower = f" {text.lower()} "
-    candidates: list[tuple[int, str]] = []
-
-    for alias in sorted(_ALIAS_TICKERS, key=len, reverse=True):
-        pattern = r"(?<![a-z0-9&])" + re.escape(alias.lower()) + r"(?![a-z0-9])"
-        match = re.search(pattern, lower)
-        if match:
-            candidates.append((match.start(), alias))
-
-    for match in re.finditer(r"\b[A-Z]{2,12}(?:\.(?:NS|BO|NSE|BSE))?\b", text):
-        token = match.group(0)
-        if token.lower() in {"NSE", "BSE", "SEBI", "RBI", "DCF", "WACC", "CAGR"}:
-            continue
-        candidates.append((match.start(), token))
-
-    out: list[ResolvedEntity] = []
-    seen: set[str] = set()
-    for _, raw in sorted(candidates, key=lambda item: item[0]):
-        entity = resolve_entity(raw)
-        key = entity.yahoo_ticker or entity.normalized_name
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(entity)
-        if len(out) >= limit:
-            break
-    return out
+    return resolve_entities(query, limit=limit)
 
 
 def primary_target_from_query(query: str) -> str:

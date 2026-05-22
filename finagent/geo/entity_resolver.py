@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 from dataclasses import dataclass, field
 
 from finagent.geo.jurisdiction_profiles import JurisdictionProfile, get_jurisdiction_profile
-from finagent.geo.ticker_mapper import canonical_ticker_label, infer_yahoo_ticker
+from finagent.geo.ticker_mapper import _ALIAS_TICKERS, canonical_ticker_label, infer_yahoo_ticker
 
 
 _INDIA_HINTS = (
@@ -17,28 +18,11 @@ _INDIA_HINTS = (
 )
 _JAPAN_HINTS = ("japan", "tokyo stock exchange", "tse")
 _EU_HINTS = ("europe", "germany", "france", "london", "xetra", "euronext", "lse")
-_US_SUFFIXES = (" inc", " inc.", " corporation", " corp", " corp.", " holdings")
 _INDIA_SUFFIXES = (" limited", " ltd", " ltd.", " pvt", " private limited")
-_US_TICKER_OVERRIDES = {
-    "AAPL",
-    "MSFT",
-    "GOOG",
-    "GOOGL",
-    "AMZN",
-    "META",
-    "TSLA",
-    "NVDA",
-    "NFLX",
-    "AMD",
-    "JPM",
-    "BAC",
-    "V",
-    "MA",
-    "UNH",
-    "LLY",
-    "XOM",
-    "CVX",
-    "WMT",
+_STOP_PHRASES = {
+    "compare", "analyse", "analyze", "research", "review", "latest",
+    "news", "valuation", "metrics", "fundamentals", "show", "provide",
+    "give", "me", "its", "their", "and", "with", "against", "versus", "vs",
 }
 _KNOWN_COUNTRIES = {
     "tcs": "IN",
@@ -61,6 +45,11 @@ _KNOWN_COUNTRIES = {
     "adani power": "IN",
     "bharti airtel": "IN",
     "airtel": "IN",
+    "cg power": "IN",
+    "cg power and industrial solutions": "IN",
+    "cgpower": "IN",
+    "vodafone idea": "IN",
+    "idea": "IN",
     "hcl technologies": "IN",
     "hcltech": "IN",
     "asian paints": "IN",
@@ -265,6 +254,7 @@ class ResolvedEntity:
     search_suffix: str = ""
     investor_relations_hint: str | None = None
     confidence: str = "low"
+    market_segment: str = "unknown"
     profile: JurisdictionProfile = field(default_factory=lambda: get_jurisdiction_profile("GLOBAL"))
 
     @property
@@ -287,6 +277,7 @@ class ResolvedEntity:
             "ticker_label": self.ticker_label,
             "preferred_domains": list(self.profile.preferred_domains),
             "confidence": self.confidence,
+            "market_segment": self.market_segment,
         }
 
 
@@ -296,11 +287,80 @@ def _normalize_name(query: str) -> str:
     return name.strip(" ,")
 
 
+def _strip_corporate_suffixes(value: str) -> str:
+    text = (value or "").strip(" ,.-")
+    lowered = text.lower()
+    suffixes = _INDIA_SUFFIXES + (" industries", " industry", " company", " co", " co.")
+    for suffix in sorted(suffixes, key=len, reverse=True):
+        if lowered.endswith(suffix):
+            text = text[: -len(suffix)].strip(" ,.-")
+            lowered = text.lower()
+    return text
+
+
+def _clean_entity_phrase(value: str) -> str:
+    text = re.sub(r"[\(\)\[\]{}]", " ", value or "")
+    text = re.sub(
+        r"\b(?:on|of|for|about|please|tell|latest|news|valuation|metrics|price|prices|historical|history|stock|share|show|provide)\b",
+        " ",
+        text,
+        flags=re.I,
+    )
+    text = re.sub(r"\s+", " ", text).strip(" ,.-")
+    return _strip_corporate_suffixes(text)
+
+
+def _compound_hypotheses(query: str) -> list[str]:
+    text = _clean_entity_phrase(query)
+    if not text:
+        return []
+    pieces = re.split(r"\b(?:vs\.?|versus|against|and|with|compare to|compared with)\b|[,/]", text, flags=re.I)
+    candidates: list[str] = []
+    for piece in pieces:
+        cleaned = _clean_entity_phrase(piece)
+        words = [w for w in cleaned.split() if w.lower() not in _STOP_PHRASES]
+        if not words:
+            continue
+        candidates.append(" ".join(words))
+        for width in (4, 3, 2):
+            for idx in range(0, max(len(words) - width + 1, 0)):
+                candidates.append(" ".join(words[idx : idx + width]))
+        for word in words:
+            if re.fullmatch(r"[A-Z&-]{2,14}", word):
+                candidates.append(word)
+    seen: set[str] = set()
+    out: list[str] = []
+    for candidate in candidates:
+        key = candidate.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(candidate)
+    return out
+
+
+def _fuzzy_alias(candidate: str) -> str | None:
+    """Recover common misspellings such as 'tata motor' -> 'tata motors'."""
+
+    cleaned = _clean_entity_phrase(candidate).lower()
+    if not cleaned or len(cleaned) < 3:
+        return None
+    if cleaned in _ALIAS_TICKERS:
+        return cleaned
+    best_alias = None
+    best_score = 0.0
+    for alias in _ALIAS_TICKERS:
+        if abs(len(alias) - len(cleaned)) > max(4, len(cleaned) // 2):
+            continue
+        score = SequenceMatcher(None, cleaned, alias).ratio()
+        if score > best_score:
+            best_score = score
+            best_alias = alias
+    return best_alias if best_alias and best_score >= 0.86 else None
+
+
 def _guess_country(query: str) -> str:
     q = (query or "").strip().lower()
-    raw = (query or "").strip().upper()
-    if raw in _US_TICKER_OVERRIDES:
-        return "US"
     if q in _KNOWN_COUNTRIES:
         return _KNOWN_COUNTRIES[q]
     if any(h in q for h in _INDIA_HINTS):
@@ -311,23 +371,43 @@ def _guess_country(query: str) -> str:
         return "EU"
     if any(q.endswith(suf) for suf in _INDIA_SUFFIXES):
         return "IN"
-    if any(q.endswith(suf) for suf in _US_SUFFIXES):
-        return "US"
     # Default to India — ProspektLab is India-focused
     return "IN"
 
 
+def _market_segment_for(query: str, ticker_label: str | None, confidence: str) -> str:
+    lower = (query or "").lower()
+    if any(term in lower for term in ("sme", "emerge", "small cap", "small-cap", "microcap", "micro-cap")):
+        return "sme_or_smallcap"
+    if confidence != "high":
+        return "sme_or_smallcap"
+    large = {
+        "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN",
+        "BHARTIARTL", "ITC", "LT", "HINDUNILVR", "AXISBANK", "KOTAKBANK",
+        "BAJFINANCE", "MARUTI", "SUNPHARMA", "TATAMOTORS",
+    }
+    if ticker_label and ticker_label.upper() not in large:
+        return "mid_or_smallcap"
+    return "largecap"
+
+
 def resolve_entity(query: str) -> ResolvedEntity:
-    canonical_name = _normalize_name(query)
+    hypotheses = _compound_hypotheses(query)
+    best = next((h for h in hypotheses if h.lower() in _ALIAS_TICKERS), None)
+    if best is None:
+        best = next((_fuzzy_alias(h) for h in hypotheses if _fuzzy_alias(h)), None)
+    if best is None:
+        best = _fuzzy_alias(query)
+    canonical_name = _normalize_name(best or query)
     country_code = _guess_country(query)
-    ticker_label = canonical_ticker_label(query)
+    ticker_label = canonical_ticker_label(canonical_name)
 
     raw = canonical_name.strip()
     if not ticker_label and raw == raw.upper() and re.fullmatch(r"[A-Z]{2,12}", raw):
         ticker_label = raw
 
     profile = get_jurisdiction_profile(country_code)
-    yahoo_ticker = infer_yahoo_ticker(query, profile)
+    yahoo_ticker = infer_yahoo_ticker(canonical_name, profile)
 
     confidence = "medium" if country_code != "GLOBAL" or yahoo_ticker else "low"
     if ticker_label and yahoo_ticker:
@@ -348,5 +428,39 @@ def resolve_entity(query: str) -> ResolvedEntity:
         search_aliases=tuple(x for x in (canonical_name, ticker_label or "", yahoo_ticker or "") if x),
         search_suffix=search_suffix,
         confidence=confidence,
+        market_segment=_market_segment_for(canonical_name, ticker_label, confidence),
         profile=profile,
     )
+
+
+def resolve_entities(query: str, *, limit: int = 4) -> list[ResolvedEntity]:
+    """Resolve one or more Indian-market entities from a conversational query."""
+
+    text = query or ""
+    lower = f" {text.lower()} "
+    candidates: list[tuple[int, str]] = []
+    for alias in sorted(_ALIAS_TICKERS, key=len, reverse=True):
+        pattern = r"(?<![a-z0-9&])" + re.escape(alias.lower()) + r"(?![a-z0-9])"
+        match = re.search(pattern, lower)
+        if match:
+            candidates.append((match.start(), alias))
+    for match in re.finditer(r"\b[A-Z][A-Z&-]{1,14}(?:\.(?:NS|BO|NSE|BSE))?\b", text):
+        token = match.group(0)
+        if token.upper() in {"NSE", "BSE", "SEBI", "RBI", "DCF", "WACC", "CAGR", "FY"}:
+            continue
+        candidates.append((match.start(), token))
+    if not candidates:
+        candidates.extend((idx, h) for idx, h in enumerate(_compound_hypotheses(text)))
+
+    out: list[ResolvedEntity] = []
+    seen: set[str] = set()
+    for _, raw in sorted(candidates, key=lambda item: (item[0], -len(item[1]))):
+        entity = resolve_entity(raw)
+        key = entity.yahoo_ticker or entity.ticker_label or entity.normalized_name
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(entity)
+        if len(out) >= limit:
+            break
+    return out

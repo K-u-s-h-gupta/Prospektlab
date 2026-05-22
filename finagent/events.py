@@ -44,6 +44,7 @@ class SessionBus:
         self._queues: dict[str, asyncio.Queue[AgentEvent | None]] = {}
         self._history: dict[str, list[AgentEvent]] = {}
         self._closed: set[str] = set()
+        self._ignore_closed_file: set[str] = set()
         self._max_history = 5000
 
     def forget_memory(self, session_id: str) -> None:
@@ -51,6 +52,7 @@ class SessionBus:
         self._queues.pop(session_id, None)
         self._history.pop(session_id, None)
         self._closed.discard(session_id)
+        self._ignore_closed_file.discard(session_id)
 
     def _session_dir(self, session_id: str) -> Path:
         path = finagent_data_path("sessions", session_id)
@@ -84,11 +86,36 @@ class SessionBus:
             return out
         return out
 
-    def open(self, session_id: str) -> asyncio.Queue[AgentEvent | None]:
+    def open(self, session_id: str, *, reset: bool = False) -> asyncio.Queue[AgentEvent | None]:
+        """Open a live event queue.
+
+        ``reset=True`` starts a fresh run for an existing conversation session.
+        Chat memory and memo storage live elsewhere; the SSE event log is
+        per-run UI state, so replaying old memo events would render the prior
+        answer under a new follow-up question.
+        """
+
         q: asyncio.Queue[AgentEvent | None] = asyncio.Queue(maxsize=1000)
         self._queues[session_id] = q
         self._session_dir(session_id)
-        self._history.setdefault(session_id, self._load_history_file(session_id))
+        if reset:
+            self._history[session_id] = []
+            events_path = self._events_path(session_id)
+            try:
+                events_path.unlink(missing_ok=True)
+            except OSError:
+                try:
+                    events_path.write_text("", encoding="utf-8")
+                except OSError:
+                    pass
+            closed_path = self._closed_path(session_id)
+            try:
+                closed_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            self._ignore_closed_file.add(session_id)
+        else:
+            self._history.setdefault(session_id, self._load_history_file(session_id))
         self._closed.discard(session_id)
         return q
 
@@ -109,6 +136,7 @@ class SessionBus:
 
     def close(self, session_id: str) -> None:
         self._closed.add(session_id)
+        self._ignore_closed_file.discard(session_id)
         try:
             self._closed_path(session_id).write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
         except OSError:
@@ -138,7 +166,11 @@ class SessionBus:
         return [(event.seq, event) for event in selected]
 
     def is_closed(self, session_id: str) -> bool:
-        return session_id in self._closed or self._closed_path(session_id).is_file()
+        if session_id in self._closed:
+            return True
+        if session_id in self._ignore_closed_file:
+            return False
+        return self._closed_path(session_id).is_file()
 
     def known(self, session_id: str) -> bool:
         return session_id in self._history or session_id in self._queues or self._events_path(session_id).is_file()

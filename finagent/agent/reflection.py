@@ -4,8 +4,8 @@ After the breadth-survey + initial deep-dive, run the quality scorer.
 If the score is below the threshold:
   1. Take the top gaps + suggested_queries from the report.
   2. Mint *additional* targeted queries from the gaps (mixing in
-     domain-specific operators like `site:sec.gov` for primary tier,
-     `site:reuters.com OR site:bloomberg.com` for tier-2).
+     domain-specific operators like `site:nseindia.com` and
+     `site:bseindia.com` for primary tier.
   3. Re-run the deep-dive with that query set, feeding new docs back
      into the citation log.
   4. Score again; loop until passes OR `max_rounds` reached OR no
@@ -50,9 +50,9 @@ class ReflectionResult:
 # Domain-specific operator decoration. We don't want to drown DuckDuckGo
 # with site: operators it sometimes ignores, so we sprinkle them only on
 # the queries that are likely to benefit.
-_PRIMARY_BOOST = " site:moneycontrol.com OR site:screener.in OR site:trendlyne.com"
+_PRIMARY_BOOST = " site:nseindia.com OR site:bseindia.com OR site:sebi.gov.in OR site:moneycontrol.com OR site:screener.in OR site:trendlyne.com"
 _TIER2_BOOST = " (Reuters OR \"Economic Times\" OR Livemint OR \"Business Standard\" OR NDTV Profit)"
-_TIER3_BOOST = " (reddit.com OR moneycontrol.com OR tickertape.in OR valueresearchonline.com)"
+_TIER3_BOOST = " (moneycontrol.com OR tickertape.in OR valueresearchonline.com OR trendlyne.com)"
 
 
 def _decorate(query: str, kind: str) -> str:
@@ -81,21 +81,17 @@ def _build_round_queries(
     drives operator decoration above.
     """
     out: list[tuple[str, str]] = []
-    is_us_like = (country_code or "GLOBAL").upper() in {"US", "GLOBAL"}
     # Always pull whatever the scorer already suggested
     for q in report.suggested_queries:
-        kind = "primary" if "sec.gov" in q.lower() or "10-k" in q.lower() else "tier2"
+        q_lower = q.lower()
+        kind = "primary" if any(token in q_lower for token in ("sebi", "lodr", "nse", "bse", "annual report")) else "tier2"
         out.append((q, kind))
 
     # Per-dimension fill-ins
     dims = report.dimensions
     if not dims.get("filing_narrative", {}).get("ok"):
-        if is_us_like:
-            out.append((f"{target} 10-K annual report risk factors MD&A", "primary"))
-            out.append((f"{target} annual report investor relations", "primary"))
-        else:
-            out.append((f"{target} annual report risk factors management discussion", "primary"))
-            out.append((f"{target} exchange filing annual report investor relations", "primary"))
+        out.append((f"{target} annual report risk factors management discussion SEBI LODR", "primary"))
+        out.append((f"{target} NSE BSE corporate announcements annual report", "primary"))
     if not dims.get("financials", {}).get("ok"):
         out.append((f"{target} quarterly earnings report Q3 Q4 revenue", "tier2"))
         out.append((f"{target} gross margin operating margin segment breakdown", "tier2"))
@@ -110,10 +106,7 @@ def _build_round_queries(
         out.append((f"{target} top competitors comparison market share", "tier2"))
         out.append((f"alternatives to {target} peers", "tier2"))
     if not dims.get("citation_tiering", {}).get("ok"):
-        if is_us_like:
-            out.append((f"{target} prospectus S-1 8-K filing", "primary"))
-        else:
-            out.append((f"{target} annual report PDF exchange filing", "primary"))
+        out.append((f"{target} annual report PDF NSE BSE SEBI filing", "primary"))
 
     # Round-specific deepening — every round adds a different angle so we
     # cover different parts of the surface area on subsequent passes.
@@ -127,10 +120,7 @@ def _build_round_queries(
             (f"{target} options unusual activity put call", "tier2"),
         ],
         [
-            (
-                f"{target} insider trading SEC form 4 buying selling" if is_us_like else f"{target} promoter shareholding insider trading exchange filing",
-                "primary",
-            ),
+            (f"{target} promoter shareholding insider trading exchange filing Regulation 31", "primary"),
             (f"{target} CEO CFO interview podcast", "tier2"),
         ],
         [
@@ -139,7 +129,7 @@ def _build_round_queries(
         ],
         [
             (f"{target} ESG controversy lawsuit settlement investigation", "tier2"),
-            (f"{target} regulatory action FDA FTC DOJ", "tier2"),
+            (f"{target} SEBI regulatory action exchange surveillance penalty", "tier2"),
         ],
     ]
     pack = angle_packs[round_idx % len(angle_packs)]

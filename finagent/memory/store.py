@@ -282,6 +282,15 @@ class MemoryStore:
             cur = c.execute("DELETE FROM facts WHERE target_key = ?", (target,))
             return int(cur.rowcount or 0)
 
+    def delete_session(self, session_id: str) -> dict[str, int]:
+        with self._conn() as c:
+            fact_cur = c.execute("DELETE FROM facts WHERE session_id = ?", (session_id,))
+            summary_cur = c.execute("DELETE FROM session_summaries WHERE session_id = ?", (session_id,))
+            return {
+                "facts": int(fact_cur.rowcount or 0),
+                "summaries": int(summary_cur.rowcount or 0),
+            }
+
 
 _singleton: MemoryStore | None = None
 

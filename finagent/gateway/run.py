@@ -8,6 +8,8 @@ import json
 import logging
 import os
 import re
+import shutil
+import sys
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -27,7 +29,7 @@ try:
 except ImportError:
     pass  # python-dotenv not installed; keys must come from environment
 
-from fastapi import FastAPI, HTTPException, Header, Depends, Request
+from fastapi import FastAPI, HTTPException, Header, Depends, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, field_validator
@@ -92,6 +94,8 @@ def _extract_comparison_targets(query: str) -> list[str]:
     return [e.canonical_name for e in entities if e.canonical_name]
 
 _MEMORY_MANAGER = ChatMemoryManager()
+AUTH_COOKIE_NAME = "prospektlab_auth"
+AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
 
 logger = logging.getLogger("finagent.gateway")
 
@@ -126,19 +130,27 @@ async def add_security_headers(request: Request, call_next):
     return response
 
 # ── Unified get_current_user Dependency for JWT and BOLA checks ──────────
-async def get_current_user(
-    authorization: str = Header(None),
-    token: str | None = None
-) -> dict:
-    actual_token = None
-    if authorization and authorization.startswith("Bearer "):
-        actual_token = authorization.split(" ")[1]
-    elif token:
-        actual_token = token
-        
+def _set_auth_cookie(response: Response, token: str, request: Request) -> None:
+    secure = request.url.scheme == "https" or os.getenv("PROSPEKTLAB_ENV") == "production"
+    response.set_cookie(
+        AUTH_COOKIE_NAME,
+        token,
+        max_age=AUTH_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=secure,
+        path="/",
+    )
+
+
+def _clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(AUTH_COOKIE_NAME, path="/", samesite="lax")
+
+
+def _decode_current_user(actual_token: str) -> dict:
     if not actual_token:
         raise HTTPException(status_code=401, detail="Missing or invalid authentication credentials")
-        
+
     try:
         # Try local JWT_SECRET first (issued for Google login or local overrides)
         payload = jwt.decode(actual_token, JWT_SECRET, algorithms=["HS256"])
@@ -173,6 +185,21 @@ async def get_current_user(
             if isinstance(e, HTTPException):
                 raise
             raise HTTPException(status_code=401, detail="Could not validate authentication credentials")
+
+
+async def get_current_user(
+    request: Request,
+    authorization: str = Header(None),
+    token: str | None = None,
+) -> dict:
+    actual_token = None
+    if authorization and authorization.startswith("Bearer "):
+        actual_token = authorization.split(" ")[1]
+    elif token:
+        actual_token = token
+    else:
+        actual_token = request.cookies.get(AUTH_COOKIE_NAME)
+    return _decode_current_user(actual_token)
 
 def verify_session_ownership(session_id: str, current_user: dict) -> None:
     meta = _load_session_meta(session_id)
@@ -215,7 +242,7 @@ class GoogleAuthRequest(BaseModel):
     credential: str
 
 @app.post("/auth/google", dependencies=[Depends(auth_rate_limiter)])
-async def google_auth(req: GoogleAuthRequest):
+async def google_auth(req: GoogleAuthRequest, request: Request):
     """Verify a Google ID token from GIS popup and return a session JWT."""
     try:
         url = f"https://oauth2.googleapis.com/tokeninfo?id_token={urllib.parse.quote(req.credential)}"
@@ -269,7 +296,7 @@ async def google_auth(req: GoogleAuthRequest):
         # Fallback if PyJWT is not installed, though it should be
         token = f"mock_token_{user_id}"
 
-    return {
+    response = JSONResponse({
         "token": token,
         "user_id": user_id,
         "email": email,
@@ -277,7 +304,9 @@ async def google_auth(req: GoogleAuthRequest):
         "full_name": full_name,
         "require_mobile": require_mobile,
         "mobile": mobile
-    }
+    })
+    _set_auth_cookie(response, token, request)
+    return response
 
 class UpdateMobileRequest(BaseModel):
     mobile: str
@@ -778,13 +807,33 @@ def settings_page() -> HTMLResponse:
 
 
 @app.get("/app")
-def widget() -> HTMLResponse:
+def widget(request: Request, token: str | None = None):
+    actual_token = token or request.cookies.get(AUTH_COOKIE_NAME)
+    if not actual_token:
+        return RedirectResponse(url="/login", status_code=302)
+    try:
+        _decode_current_user(actual_token)
+    except HTTPException:
+        response = RedirectResponse(url="/login", status_code=302)
+        _clear_auth_cookie(response)
+        return response
+    if token:
+        response = RedirectResponse(url="/app", status_code=302)
+        _set_auth_cookie(response, actual_token, request)
+        return response
     if not _WIDGET_PATH.is_file():
         return HTMLResponse("<h1>FinAgent</h1><p>widget.html missing</p>", status_code=500)
     return HTMLResponse(
         _WIDGET_PATH.read_text(encoding="utf-8"),
         headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"}
     )
+
+
+@app.post("/auth/logout")
+def auth_logout() -> JSONResponse:
+    response = JSONResponse({"ok": True})
+    _clear_auth_cookie(response)
+    return response
 
 
 # ── Auth endpoints ──────────────────────────────────────────────────────
@@ -920,7 +969,7 @@ async def auth_reset_password(req: ResetPasswordRequest):
 
 
 @app.post("/auth/signup", dependencies=[Depends(auth_rate_limiter)])
-async def auth_signup(req: SignupRequest):
+async def auth_signup(req: SignupRequest, request: Request):
     email_clean = req.email.lower().strip()
     
     # Check verification code
@@ -952,12 +1001,14 @@ async def auth_signup(req: SignupRequest):
     except Exception:
         token = f"mock_token_{user_id}"
         
-    return {"token": token, "user": {"name": name_clean, "email": email_clean, "plan": "free"}}
+    response = JSONResponse({"token": token, "user": {"name": name_clean, "email": email_clean, "plan": "free"}})
+    _set_auth_cookie(response, token, request)
+    return response
 
 
 
 @app.post("/auth/login", dependencies=[Depends(auth_rate_limiter)])
-async def auth_login(req: LoginRequest):
+async def auth_login(req: LoginRequest, request: Request):
     email_clean = req.email.lower().strip()
     
     # Authenticate via Supabase
@@ -978,14 +1029,16 @@ async def auth_login(req: LoginRequest):
     except Exception:
         token = f"mock_token_{user_id}"
     
-    return {
+    response = JSONResponse({
         "token": token,
         "user": {
             "name": full_name,
             "email": email_clean,
             "plan": "free"
         }
-    }
+    })
+    _set_auth_cookie(response, token, request)
+    return response
 
 
 # ── Research orchestration ──────────────────────────────────────────────
@@ -1074,8 +1127,8 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
                     enable_deep_dive=True,
                     quality_threshold=(60.0 if is_fast_mode else (70.0 if is_deep_mode else 75.0)),
                     # ── Tight timeouts for fast modes
-                    breadth_search_timeout=(45.0 if is_fast_mode else (90.0 if is_deep_mode else 150.0)),
-                    followup_search_timeout=(25.0 if is_fast_mode else (45.0 if is_deep_mode else 70.0)),
+                    breadth_search_timeout=(45.0 if is_fast_mode else (90.0 if is_deep_mode else 150.0)) * (2.0 if sys.platform == "win32" else 1.0),
+                    followup_search_timeout=(25.0 if is_fast_mode else (45.0 if is_deep_mode else 70.0)) * (2.0 if sys.platform == "win32" else 1.0),
                     reflection_per_query_timeout=(18.0 if is_fast_mode else (35.0 if is_deep_mode else 55.0)),
                     blindspot_per_query_timeout=(15.0 if is_fast_mode else (30.0 if is_deep_mode else 45.0)),
                     news_timeout=(15.0 if is_fast_mode else (25.0 if is_deep_mode else 40.0)),
@@ -1266,8 +1319,8 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                         emit_memo=is_last,
                         close_bus_on_finish=False,
                         chat_history=chat_history if (i == 0 or is_last) else None,
-                        breadth_search_timeout=(240.0 if is_marathon else 180.0),
-                        followup_search_timeout=(100.0 if is_marathon else 75.0),
+                        breadth_search_timeout=(240.0 if is_marathon else 180.0) * (2.0 if sys.platform == "win32" else 1.0),
+                        followup_search_timeout=(100.0 if is_marathon else 75.0) * (2.0 if sys.platform == "win32" else 1.0),
                         reflection_per_query_timeout=(75.0 if is_marathon else 60.0),
                         blindspot_per_query_timeout=(60.0 if is_marathon else 50.0),
                         news_timeout=(60.0 if is_marathon else 45.0),
@@ -1328,6 +1381,42 @@ async def stop_session(session_id: str, current_user: dict = Depends(get_current
     BUS.close(session_id)
     logger.info("Session %s cancelled by user", session_id)
     return {"session_id": session_id, "status": "cancelled"}
+
+
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str, current_user: dict = Depends(get_current_user)) -> JSONResponse:
+    """Delete a completed session and its persisted artifacts."""
+    verify_session_ownership(session_id, current_user)
+    task = _TASKS.get(session_id)
+    if task and not task.done():
+        raise HTTPException(status_code=409, detail="Cannot delete a session while it is still running.")
+
+    memo_path = _MEMOS_DIR / f"{session_id}.md"
+    removed_memo = False
+    if memo_path.is_file():
+        memo_path.unlink(missing_ok=True)
+        removed_memo = True
+
+    session_dir = finagent_data_path("sessions", session_id)
+    removed_session_dir = False
+    if session_dir.exists():
+        shutil.rmtree(session_dir, ignore_errors=True)
+        removed_session_dir = True
+
+    _SESSION_META.pop(session_id, None)
+    BUS.forget_memory(session_id)
+    deleted_history = _MEMORY_MANAGER.delete_session(current_user["email"], session_id)
+    memory_cleanup = get_memory_store().delete_session(session_id)
+
+    return JSONResponse({
+        "session_id": session_id,
+        "deleted": True,
+        "removed_memo": removed_memo,
+        "removed_session_dir": removed_session_dir,
+        "deleted_history_messages": deleted_history,
+        "deleted_memory_facts": memory_cleanup["facts"],
+        "deleted_session_summaries": memory_cleanup["summaries"],
+    })
 
 
 # ── Mode instruction helper (from teammate's Backend/api.py) ────────────

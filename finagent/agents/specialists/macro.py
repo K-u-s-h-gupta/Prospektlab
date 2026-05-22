@@ -1,7 +1,7 @@
 """MacroAgent — sector context + macro tailwinds/headwinds.
 
-Uses the SIC description from SEC enrichment as a sector seed and runs
-focused queries about sector tailwinds, headwinds, and policy
+Uses the industry classification from company enrichment as a sector seed
+and runs focused queries about sector tailwinds, headwinds, and policy
 exposures.
 """
 
@@ -25,7 +25,7 @@ class MacroAgent(BaseSubAgent):
                     agent=self.name,
                     kind="macro",
                     headline="Sector classification unavailable",
-                    detail="SEC SIC description was not populated for this issuer.",
+                    detail="Sector industry description was not populated for this issuer.",
                     confidence="LOW",
                 )
             )

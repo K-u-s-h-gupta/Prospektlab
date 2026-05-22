@@ -1042,6 +1042,108 @@
       color: var(--text);
       border-color: var(--border-strong);
     }
+
+    .session-sidebar {
+      width: 280px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent 28%), var(--surface-1);
+      display: none;
+      flex-direction: column;
+    }
+    .session-sidebar-header {
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .session-sidebar-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .session-card {
+      width: 100%;
+      text-align: left;
+      padding: 12px 12px 11px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+      transition: border-color 0.2s var(--ease), background 0.2s var(--ease), transform 0.2s var(--ease);
+    }
+    .session-card:hover {
+      border-color: var(--border-strong);
+      background: rgba(255,255,255,0.04);
+      transform: translateY(-1px);
+    }
+    .session-card.active {
+      border-color: rgba(96,165,250,0.28);
+      background: rgba(96,165,250,0.08);
+      box-shadow: inset 0 0 0 1px rgba(96,165,250,0.14);
+    }
+    .session-card-title {
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .session-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .session-delete-btn {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-faint);
+      transition: all 0.2s var(--ease);
+    }
+    .session-delete-btn:hover {
+      color: var(--error);
+      border-color: rgba(248, 113, 113, 0.18);
+      background: rgba(248, 113, 113, 0.08);
+    }
+    .session-delete-btn .material-symbols-outlined {
+      font-size: 16px;
+    }
+    .session-card-meta {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      color: var(--text-faint);
+      text-transform: uppercase;
+    }
+    .session-sidebar-empty {
+      padding: 16px 14px;
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      color: var(--text-muted);
+      font-size: 12px;
+      line-height: 1.55;
+      background: rgba(255,255,255,0.015);
+    }
+    @media (min-width: 1024px) {
+      .session-sidebar {
+        display: flex;
+      }
+    }
   </style>
 </head>
 
@@ -1091,7 +1193,7 @@
           const user = JSON.parse(userStr);
           c.innerHTML = `
             <span class="text-[11px] text-zinc-400">${user.name || user.email}</span>
-            <button onclick="localStorage.removeItem('prospektlab_user'); sessionStorage.removeItem('prospektlab_user'); location.reload();"
+            <button onclick="logoutApp();"
               class="icon-btn" title="Logout">
               <span class="material-symbols-outlined">logout</span>
             </button>
@@ -1108,6 +1210,21 @@
 
   <!-- ═══ MAIN: SINGLE-COLUMN FOCUSED CHAT ═════════════════════════════ -->
   <main class="flex-1 flex overflow-hidden min-h-0 relative">
+
+    <aside id="sessionSidebar" class="session-sidebar" data-tour="library">
+      <div class="session-sidebar-header">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <div class="label-mono text-zinc-500">Recent sessions</div>
+            <div class="text-sm text-zinc-200 mt-1">Your saved research</div>
+          </div>
+          <div id="sessionSidebarCount" class="label-mono text-zinc-600">0</div>
+        </div>
+      </div>
+      <div id="sessionSidebarList" class="session-sidebar-list scroll-thin">
+        <div class="session-sidebar-empty">Completed sessions will appear here so older research stays one click away.</div>
+      </div>
+    </aside>
 
     <section class="flex-1 flex flex-col relative overflow-hidden min-h-0">
 
@@ -1453,6 +1570,7 @@
         row.className = "anim-in flex items-center justify-between gap-2 px-2 py-1.5 rounded-md bg-white/[0.02] border border-white/5";
         grid.appendChild(row);
       }
+      row.dataset.status = status;
       const cls = status === "done" ? "text-green-400"
         : (status === "error" || status === "timeout") ? "text-red-400"
         : "text-zinc-400";
@@ -1461,6 +1579,15 @@
         <span class="text-[11px] text-zinc-300 truncate flex-1">${escapeHtml(q)}</span>
         <span class="label-mono ${cls}">${label}</span>
       `;
+    }
+
+    function finalizePendingQueries(status = "timeout") {
+      const grid = $("queryGrid");
+      if (!grid) return;
+      grid.querySelectorAll('[data-status="running"]').forEach((row) => {
+        const q = row.dataset.q || "";
+        if (q) upsertQuery(q, status, 0);
+      });
     }
 
     function tickElapsed() {
@@ -1571,7 +1698,7 @@
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // Render: intel (SEC + Yahoo + Wikipedia) into Result View
+    // Render: intel (India market data + Yahoo + Wikipedia) into Result View
     // ────────────────────────────────────────────────────────────────────
     // ── Memory recall panel ──────────────────────────────────────────────
     function fmtRelTime(ts) {
@@ -1759,16 +1886,19 @@
 
     function shouldShowVisuals(query, outputMode) {
       const q = (query || "").toLowerCase();
+      const textOnlyModes = new Set(["news_brief", "direct_answer", "filing_analysis"]);
+      const explicitChart = /\b(chart|graph|historical|history|trend|valuation|financials?|revenue|profit|margin|market.?cap|shareholding|performance|pe.?ratio|p\/e|roe|roce|ebitda|earnings|quarterly|annual|price history|historical price|return|dividend|debt|cash.?flow|capex)\b/.test(q);
+      if (textOnlyModes.has(outputMode) && !explicitChart) return false;
       // Comparison queries — always show visuals
       const isComparison = /\bvs\.?\b|\bversus\b|\bcompare\b|\bcomparison\b/.test(q)
         || (q.includes(" vs ") || q.includes(" vs."));
       if (isComparison) return true;
+      // Simple text-only requests — never show visuals unless they explicitly ask for a chart/history.
+      const simpleText = /\b(news|latest|headline|full form|define|meaning|in one line|one-line|what is|stands for|who is|when was|where is)\b/.test(q);
+      if (simpleText && !explicitChart) return false;
       // Finance / analytics keywords
       const explicitVisual = /\b(stats|statistics|financials?|chart|graph|historical|history|trend|valuation|revenue|profit|margin|market.?cap|shareholding|performance|pe.?ratio|p\/e|roe|roce|ebitda|earnings|quarterly|annual|report|price|return|dividend|debt|cash.?flow|capex)\b/.test(q);
       if (explicitVisual) return true;
-      // Simple text-only requests — never show visuals
-      const simpleText = /\b(news|latest|headline|full form|define|meaning|in one line|one-line|what is|stands for|who is|when was|where is)\b/.test(q);
-      if (simpleText) return false;
       // Mode-based gate (only for modes that have structured visual data)
       const visualModes = new Set([
         "company_snapshot", "company_comparison", "valuation_model",
@@ -1804,6 +1934,19 @@
         headers["Authorization"] = "Bearer " + token;
       }
       return headers;
+    }
+
+    async function logoutApp() {
+      try {
+        await fetch("/auth/logout", {
+          method: "POST",
+        });
+      } catch (_) { }
+      try {
+        localStorage.removeItem("prospektlab_user");
+        sessionStorage.removeItem("prospektlab_user");
+      } catch (_) { }
+      window.location.href = "/login";
     }
 
     function renderTurnMemo(turnId, text, { streaming = false } = {}) {
@@ -2147,7 +2290,7 @@
         const mcapSecondary = isINR ? "" : formatINR(yahoo.market_cap);
         stripCards.push({ label: "Market cap", value: mcapPrimary, inr: mcapSecondary, sub: `Yahoo Finance` });
       }
-      // Yahoo financial metrics strip for Indian companies (when no SEC data)
+      // Yahoo financial metrics strip for Indian companies.
       if (!sec && yahoo && yahoo.financial_metrics) {
         const ym = yahoo.financial_metrics;
         if (ym.total_revenue) stripCards.push({ label: "Revenue", value: fmtMoney(ym.total_revenue, tickerCurrency), inr: "", sub: "Yahoo Finance TTM" });
@@ -2241,7 +2384,7 @@
       }
 
       // ── Multi-year financial history (annual revenue / NI / EPS bars) ──
-      // Support both SEC history and Yahoo-sourced history for Indian companies
+      // Support Yahoo-sourced history for Indian companies.
       const historySource = (intel.sec && intel.sec.history && Object.keys(intel.sec.history).length)
         ? intel.sec.history
         : buildYahooHistory(yahoo);
@@ -2366,7 +2509,7 @@
       const v = tickerCurrency === "INR" ? usdValue : usdValue * (rate || 1);
       return fmtINRDirect(v);
     }
-    // Build Yahoo-sourced history for Indian companies that have no SEC data
+    // Build Yahoo-sourced history for Indian companies.
     function buildYahooHistory(yahoo) {
       if (!yahoo) return null;
       const hist = {};
@@ -2595,7 +2738,13 @@
     // Strip stray markdown asterisks from streamed memo prose
     function cleanMemoText(s) {
       if (!s) return "";
-      return s.replace(/\*{2,}/g, "").replace(/\*([^*\n]+)\*/g, "$1");
+      return s
+        .replace(/\s*\[SOURCE:\s*[^\]]*\]\s*/gi, " ")
+        .replace(/\*{2,}/g, "")
+        .replace(/\*([^*\n]+)\*/g, "$1")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
     }
 
     // ────────────────────────────────────────────────────────────────────
@@ -2784,6 +2933,7 @@
       activeRunToken += 1;
       const memoToken = activeRunToken;
       sessionId = memoId;
+      renderMemoSidebar(window.__memoLibrary || []);
       resetRunPanels();
       clearConversation();
       showState("result");
@@ -2823,13 +2973,83 @@
     // ────────────────────────────────────────────────────────────────────
     // Memo library
     // ────────────────────────────────────────────────────────────────────
+    function formatMemoTime(isoString) {
+      if (!isoString) return "";
+      const dt = new Date(isoString);
+      if (Number.isNaN(dt.getTime())) return "";
+      return dt.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+      });
+    }
+
+    function renderMemoSidebar(memos) {
+      const list = $("sessionSidebarList");
+      const count = $("sessionSidebarCount");
+      if (count) count.textContent = String(memos?.length || 0);
+      if (!list) return;
+      if (!memos || !memos.length) {
+        list.innerHTML = '<div class="session-sidebar-empty">Completed sessions will appear here so older research stays one click away.</div>';
+        return;
+      }
+      list.innerHTML = "";
+      memos.forEach((memo) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "session-card";
+        if (sessionId && memo.session_id === sessionId) btn.classList.add("active");
+        btn.innerHTML = `
+          <div class="session-card-head">
+            <div class="session-card-title">${escapeHtml(memo.title || memo.session_id)}</div>
+            <span class="session-delete-btn" data-delete-session="${escapeHtml(memo.session_id)}" title="Delete session">
+              <span class="material-symbols-outlined">delete</span>
+            </span>
+          </div>
+          <div class="session-card-meta">
+            <span>${escapeHtml(formatMemoTime(memo.modified) || "saved")}</span>
+          </div>
+        `;
+        btn.addEventListener("click", () => openMemoInThread(memo.session_id, memo.title));
+        const deleteBtn = btn.querySelector("[data-delete-session]");
+        if (deleteBtn) {
+          deleteBtn.addEventListener("click", async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const ok = window.confirm(`Delete session ${memo.session_id}?`);
+            if (!ok) return;
+            try {
+              const resp = await fetch(`${API_BASE}/sessions/${memo.session_id}`, {
+                method: "DELETE",
+                headers: getAuthHeaders(),
+              });
+              if (!resp.ok) {
+                const data = await resp.json().catch(() => ({}));
+                window.alert(data.detail || "Could not delete this session.");
+                return;
+              }
+              if (sessionId === memo.session_id) {
+                sessionId = null;
+                clearConversation();
+                showState("command");
+              }
+              window.__memoLibrary = (window.__memoLibrary || []).filter((item) => item.session_id !== memo.session_id);
+              renderMemoSidebar(window.__memoLibrary);
+            } catch (_) {
+              window.alert("Network error while deleting the session.");
+            }
+          });
+        }
+        list.appendChild(btn);
+      });
+    }
+
     async function loadMemoLibrary() {
-      // In the minimalist UI we no longer render a memo library sidebar.
-      // We still fetch so the count is available if other code needs it.
       try {
         const r = await fetch(`${API_BASE}/memos`, { headers: getAuthHeaders() });
         if (!r.ok) return;
-        await r.json();
+        const data = await r.json();
+        window.__memoLibrary = data?.memos || [];
+        renderMemoSidebar(window.__memoLibrary);
       } catch (_) { }
     }
 
@@ -2866,6 +3086,11 @@
       return false;
     }
 
+    function queryCountKey() {
+      const email = currentUserEmail();
+      return email ? `prospektlab_query_count:${email.toLowerCase()}` : "";
+    }
+
     function showPricingModal() {
       const modal = document.getElementById("pricingModal");
       if (modal) {
@@ -2898,29 +3123,44 @@
       }
     }
 
+    function readUnifiedQueryInput() {
+      const ids = ["targetInput", "activeInput", "heroSearchInput"];
+      for (const id of ids) {
+        const el = $(id);
+        if (el && !el.disabled && (el.value || "").trim()) return el.value.trim();
+      }
+      return "";
+    }
+
     async function startRun() {
       console.log("[DEBUG] startRun() called");
-      // Read directly from the unified bottom input
-      const target = $("targetInput").value.trim();
+      const target = readUnifiedQueryInput();
       console.log("[DEBUG] target =", target);
 
       if (!target) {
-        $("targetInput").focus();
+        ($("targetInput") || $("activeInput") || $("heroSearchInput"))?.focus();
         return;
       }
 
-      // Enforce 3-query limit for guest / free login users
-      // REMOVED FOR NOW: user can execute any number of queries
-      /*
+      if (!getAuthToken() || !currentUserEmail()) {
+        window.location.href = "/login";
+        return;
+      }
+
+      // Enforce 10-query limit for free users.
       if (!isProUser()) {
-        const count = parseInt(localStorage.getItem("prospektlab_query_count") || "0", 10);
-        if (count >= 3) {
+        const key = queryCountKey();
+        if (!key) {
+          window.location.href = "/login";
+          return;
+        }
+        const count = parseInt(localStorage.getItem(key) || "0", 10);
+        if (count >= 10) {
           showPricingModal();
           return;
         }
-        localStorage.setItem("prospektlab_query_count", String(count + 1));
+        localStorage.setItem(key, String(count + 1));
       }
-      */
       
       // Clear the input for next query
       $("targetInput").value = "";
@@ -2993,6 +3233,7 @@
             sessionId = session_id;
             if (turn) turn.sessionId = session_id;
             try { localStorage.setItem('prospektlab_session_id', session_id); } catch (e) { }
+            renderMemoSidebar(window.__memoLibrary || []);
             const eventSessionId = session_id;
             pushActivity("play_circle", "Session", `Opened ${session_id}`, "done");
 
@@ -3229,7 +3470,7 @@
             });
             eventSource.addEventListener("agent_task", (e) => {
               const d = JSON.parse(e.data);
-              const icon = d.task.includes("SEC") ? "account_balance" : d.task.includes("Yahoo") ? "show_chart" : d.task.includes("Wikipedia") ? "menu_book" : "memory";
+              const icon = (d.task.includes("SEBI") || d.task.includes("NSE") || d.task.includes("BSE")) ? "account_balance" : d.task.includes("Yahoo") ? "show_chart" : d.task.includes("Wikipedia") ? "menu_book" : "memory";
               pushActivity(icon, d.task, d.note || "", d.status);
             });
             eventSource.addEventListener("query", (e) => {
@@ -3352,7 +3593,7 @@
                 renderTurnVisuals(turn.turnId);
 
                 // Render rich payload if available — use proper card renderers
-                if (d.rich) {
+                if (d.rich && shouldShowVisuals(turn.query, turn.outputMode)) {
                   const _isCompFinal = /\bvs\.?\b|\bversus\b|\bcompare\b|\bcomparison\b/i.test(turn.query || "");
                   // For comparison queries, skip single-entity metric cards and charts.
                   // They would show data for only one company and confuse the user.
@@ -3367,6 +3608,8 @@
                     renderComparisonIntoTurn(turn, richComp);
                   }
                   turn.visualEl.classList.remove("hidden");
+                } else if (turn.visualEl) {
+                  turn.visualEl.classList.add("hidden");
                 }
 
                 if (researchMode === "marathon" && !turn.marathonExportRendered) {
@@ -3408,6 +3651,7 @@
               // Only mark complete and restore the UI for the true synthesis pass.
               // Intermediate passes (memo_via === "suppressed") must not reset progress.
               if (d.memo_via !== "suppressed") {
+                finalizePendingQueries("timeout");
                 $("processingBar").style.width = "100%";
                 $("processingPercent").textContent = "100%";
                 $("processingPhaseLabel").innerHTML = `<span style="color: var(--success);">Complete</span>`;
@@ -3443,6 +3687,7 @@
             });
             eventSource.addEventListener("done", () => {
               if (runToken !== activeRunToken) return;
+              finalizePendingQueries("timeout");
               if (eventSource) { eventSource.close(); eventSource = null; }
             });
             // onerror is handled inside _connectSSE's retry logic above.
@@ -3594,6 +3839,7 @@
               showState("command");
               clearConversation();
               sessionId = null;
+              renderMemoSidebar(window.__memoLibrary || []);
               if ($("heroSearchInput")) $("heroSearchInput").value = "";
               $("targetInput").value = "";
               const hero = $("heroTitle");
@@ -3605,6 +3851,7 @@
             showState("command");
             clearConversation();
             sessionId = null;
+            renderMemoSidebar(window.__memoLibrary || []);
             if ($("heroSearchInput")) $("heroSearchInput").value = "";
             $("targetInput").value = "";
             const hero = $("heroTitle");
@@ -4274,7 +4521,7 @@
             {
               selector: 'input[data-tour="search"]',
               title: "Step 1 · Type a ticker",
-              body: "AAPL, NVDA, TSLA, MSFT — anything publicly listed. The agent resolves it to a SEC CIK first, so it always works on the right company.",
+              body: "RELIANCE, TCS, INFY, HDFCBANK - type an Indian listed company or ticker and the agent resolves NSE/BSE context before researching.",
               placement: "bottom",
             },
             {
@@ -4790,7 +5037,7 @@
       <h3 class="text-xl font-bold tracking-tight text-white mb-2">Free Limit Reached</h3>
       <!-- Copy Writing -->
       <p class="text-sm text-muted mb-6 leading-relaxed">
-        You have exhausted your free limit. Subscribe to increase the limit and enjoy the market research.
+        You have used all 10 free queries. Subscribe to unlock a higher limit and keep researching.
       </p>
       <!-- Buttons -->
       <div class="w-full flex flex-col gap-3">

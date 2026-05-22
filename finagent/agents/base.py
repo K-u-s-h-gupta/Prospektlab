@@ -149,19 +149,21 @@ class BaseSubAgent(abc.ABC):
         t0 = time.perf_counter()
         emit = ctx.emit or (lambda *_a, **_kw: None)
         ok, reason = self.precondition(ctx)
-        if not ok and self.skippable:
-            emit(
-                "subagent_skipped",
-                agent=self.name,
-                display=self.display,
-                reason=reason,
-            )
-            return AgentTaskResult(
-                agent_name=self.name,
-                status="skipped",
-                error=reason,
-                elapsed_ms=0,
-            )
+        if not ok:
+            logger.info("Subagent '%s' (%s) precondition evaluation failed: %s (skippable=%s)", self.name, self.display, reason, self.skippable)
+            if self.skippable:
+                emit(
+                    "subagent_skipped",
+                    agent=self.name,
+                    display=self.display,
+                    reason=reason,
+                )
+                return AgentTaskResult(
+                    agent_name=self.name,
+                    status="skipped",
+                    error=reason,
+                    elapsed_ms=0,
+                )
         emit(
             "subagent_started",
             agent=self.name,

@@ -37,6 +37,11 @@ _ALIAS_TICKERS: dict[str, tuple[str, str]] = {
     "itc limited": ("ITC.NS", "ITC"),
     "bharti airtel": ("BHARTIARTL.NS", "BHARTIARTL"),
     "airtel": ("BHARTIARTL.NS", "BHARTIARTL"),
+    "cg power": ("CGPOWER.NS", "CGPOWER"),
+    "cg power and industrial solutions": ("CGPOWER.NS", "CGPOWER"),
+    "cgpower": ("CGPOWER.NS", "CGPOWER"),
+    "vodafone idea": ("IDEA.NS", "IDEA"),
+    "idea": ("IDEA.NS", "IDEA"),
     "hcl technologies": ("HCLTECH.NS", "HCLTECH"),
     "hcltech": ("HCLTECH.NS", "HCLTECH"),
     "tech mahindra": ("TECHM.NS", "TECHM"),
@@ -191,8 +196,6 @@ def infer_yahoo_ticker(query: str, profile: JurisdictionProfile) -> str | None:
         return upper
 
     ticker_match = re.fullmatch(r"[A-Z]{1,12}", upper)
-    if ticker_match and profile.country_code in {"US", "GLOBAL"}:
-        return upper
     if ticker_match and profile.yahoo_suffixes:
         return upper + profile.yahoo_suffixes[0]
 

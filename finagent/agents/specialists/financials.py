@@ -1,4 +1,4 @@
-"""FinancialsAgent — interprets SEC concept metrics + historical series.
+"""FinancialsAgent — interprets company financial metrics + historical series.
 
 Inputs: bundle.sec (metrics + history) from the shared enrichment.
 Output: structured findings — e.g. "Revenue grew at 30% CAGR over 5y",
@@ -227,7 +227,7 @@ class FinancialsAgent(BaseSubAgent):
                     f"net income {ni.display_value()}."
                 ),
                 confidence="HIGH",
-                evidence=[f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={sec.cik}"],
+                evidence=[sec.source_url] if (sec and getattr(sec, "source_url", None)) else [],
                 metrics={
                     "revenue_value": revenue.value,
                     "revenue_unit": revenue.unit,
@@ -259,7 +259,7 @@ class FinancialsAgent(BaseSubAgent):
                             f"{revenue.display_value()} revenue ({revenue.end})."
                         ),
                         confidence="HIGH" if op_margin > 0.15 else "MEDIUM",
-                        evidence=[f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={sec.cik}"],
+                        evidence=[sec.source_url] if (sec and getattr(sec, "source_url", None)) else [],
                         metrics={"operating_margin": op_margin},
                     )
                 )
@@ -289,7 +289,7 @@ class FinancialsAgent(BaseSubAgent):
                     headline=headline,
                     detail=detail,
                     confidence=conf,
-                    evidence=[f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={sec.cik}"],
+                    evidence=[sec.source_url] if (sec and getattr(sec, "source_url", None)) else [],
                     metrics={"cagr": cagr, "yoy": yoy, "years": yrs + 1, "concept": ts.concept},
                 )
             )
@@ -314,7 +314,7 @@ class FinancialsAgent(BaseSubAgent):
                     headline=headline,
                     detail=detail,
                     confidence=conf,
-                    evidence=[f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={sec.cik}"],
+                    evidence=[sec.source_url] if (sec and getattr(sec, "source_url", None)) else [],
                     metrics={"net_cash": net, "cash": cash.value, "long_term_debt": long_debt.value},
                 )
             )

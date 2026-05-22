@@ -59,7 +59,7 @@ def build_default_plan(target: str, objective: str) -> ResearchPlan:
         objective=objective,
         steps=[
             PlanStep(1, "Breadth survey", "web_search", "Surface map of sources"),
-            PlanStep(2, "Primary filings", "edgar", "10-K / 10-Q index", depends_on=(1,)),
+            PlanStep(2, "Primary filings", "exchange_filings", "SEBI LODR / NSE / BSE filing index", depends_on=(1,)),
             PlanStep(3, "Triangulate key metrics", "accuracy_validator", "Confidence tags", depends_on=(2,)),
             PlanStep(4, "Synthesis", "memo_formatter", "Research memo", depends_on=(3,)),
         ],

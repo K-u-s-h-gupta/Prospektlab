@@ -19,6 +19,25 @@ from finagent.output.contracts import (
 from finagent.output.templates import SECTION_TEMPLATES
 
 
+_TEXT_ONLY_MODES = {OutputMode.NEWS_BRIEF, OutputMode.FILING_ANALYSIS, OutputMode.DIRECT_ANSWER}
+_VISUAL_QUERY_TERMS = (
+    "chart", "graph", "historical", "history", "trend", "price", "valuation",
+    "financial", "revenue", "profit", "margin", "market cap", "shareholding",
+    "pe ratio", "p/e", "performance",
+)
+
+
+def _objective_wants_visuals(objective: str, mode: OutputMode) -> bool:
+    lower = (objective or "").lower()
+    if mode == OutputMode.COMPANY_COMPARISON:
+        return True
+    if mode == OutputMode.NEWS_BRIEF:
+        return False
+    if mode in {OutputMode.COMPANY_SNAPSHOT, OutputMode.VALUATION_MODEL, OutputMode.INVESTMENT_VIEW, OutputMode.DEEP_RESEARCH_REPORT}:
+        return True
+    return any(term in lower for term in _VISUAL_QUERY_TERMS)
+
+
 def _build_metric_cards(bundle, entity) -> list[MetricCard]:
     """Build 5-6 metric cards for company snapshot (Market Cap, Revenue, Net Margin, ROE, P/E, 52W Range)."""
     y = getattr(bundle, "yahoo", None)
@@ -95,13 +114,14 @@ def _build_price_chart(bundle) -> AnswerChart | None:
     if not y:
         return None
     
-    # Try to get historical data from bundle
+    # Try to get actual price history from bundle/Yahoo. Never substitute
+    # revenue history into a price chart; that creates a misleading visual.
     history = getattr(bundle, "price_history", None) or getattr(y, "history", None)
     if not history:
-        annual_rev = getattr(y, "annual_revenue", None)
-        annual_dates = getattr(y, "annual_revenue_dates", None)
-        if annual_rev and annual_dates and len(annual_rev) == len(annual_dates):
-            history = [{"date": str(d), "close": float(v)} for d, v in zip(annual_dates, annual_rev)]
+        series_dates = getattr(y, "series_dates", None) or []
+        series_closes = getattr(y, "series_closes", None) or []
+        if series_dates and series_closes and len(series_dates) == len(series_closes):
+            history = [{"date": str(d), "close": float(v)} for d, v in zip(series_dates, series_closes)]
     if not history or not isinstance(history, (list, dict)):
         return None
     
@@ -424,16 +444,19 @@ def build_answer_artifact(
 
     is_comparison = mode == OutputMode.COMPANY_COMPARISON
 
-    # Build metric cards only for non-comparison modes.
+    wants_visuals = _objective_wants_visuals(objective, mode)
+
+    # Build metric cards only when the user asked for a visual/metric style
+    # response. News and text-only direct answers should stay prose-first.
     # Comparison mode uses the head-to-head scoreboard instead; single-entity
     # metric cards (Key Metrics grid) would be confusing and misleading.
-    metric_cards = [] if is_comparison else _build_metric_cards(bundle, entity)
+    metric_cards = [] if is_comparison or not wants_visuals else _build_metric_cards(bundle, entity)
 
     # Build single-entity charts only for non-comparison modes.
     # Price History and Revenue Trend charts are meaningless for a "TCS vs Infosys"
     # query — they only show data for the primary entity and would mislead the user.
     charts = []
-    if not is_comparison:
+    if not is_comparison and wants_visuals:
         price_chart = _build_price_chart(bundle)
         if price_chart:
             charts.append(price_chart)
@@ -686,6 +709,9 @@ def _fill_deep_report(artifact: AnswerArtifact, bundle, docs, findings, conflict
 
 
 def _fill_direct_answer(artifact: AnswerArtifact, objective: str, bundle, docs) -> None:
+    if any(term in (objective or "").lower() for term in ("historical price", "price history", "stock history", "share price history", "past price")):
+        artifact.sections.append(ResponseSection("Historical Price View", _price_history_text(bundle, docs), "MEDIUM"))
+        return
     body = _doc_snippets(docs) or _business_text(bundle)
     artifact.sections.append(ResponseSection("Answer", body, "MEDIUM" if body else "LOW"))
 
@@ -809,6 +835,29 @@ def _news_text(bundle, docs) -> str:
     if news:
         return " ".join(f"{getattr(n, 'source', 'Source')}: {getattr(n, 'title', '')}." for n in news[:5])
     return _doc_snippets(docs, terms=("news", "announced", "reported", "earnings")) or "No fresh news headlines were retrieved."
+
+
+def _price_history_text(bundle, docs) -> str:
+    y = getattr(bundle, "yahoo", None)
+    dates = getattr(y, "series_dates", None) or []
+    closes = getattr(y, "series_closes", None) or []
+    currency = getattr(y, "currency", None) or "INR"
+    if dates and closes and len(dates) == len(closes):
+        first = float(closes[0])
+        last = float(closes[-1])
+        high = max(float(v) for v in closes)
+        low = min(float(v) for v in closes)
+        change = ((last - first) / first * 100) if first else 0.0
+        direction = "gained" if change >= 0 else "declined"
+        return (
+            f"Retrieved {len(closes)} recent trading observations from Yahoo Finance for "
+            f"{getattr(y, 'ticker', 'the stock')}. From {dates[0]} to {dates[-1]}, the close "
+            f"{direction} {abs(change):.2f}% from {currency} {first:,.2f} to {currency} {last:,.2f}. "
+            f"The observed range in this sample was {currency} {low:,.2f} to {currency} {high:,.2f}. "
+            "Use the chart below only as the retrieved sample window, not a full long-term backtest."
+        )
+    snippets = _doc_snippets(docs, terms=("price", "historical", "chart", "stock"))
+    return snippets or "Historical price data was not available from the retrieved sources for this run."
 
 
 def _risk_text(bundle, docs, findings) -> str:

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 import re
 import time
 import uuid
@@ -98,8 +99,8 @@ class AgentLoopConfig:
     reflection_per_query_limit: int = 6
     reflection_per_query_timeout: float = 25.0
     reflection_max_new_docs: int = 80
-    breadth_search_timeout: float = 90.0
-    followup_search_timeout: float = 45.0
+    breadth_search_timeout: float = 180.0 if sys.platform == "win32" else 90.0
+    followup_search_timeout: float = 90.0 if sys.platform == "win32" else 45.0
     news_timeout: float = 25.0
     # ── Multi-agent orchestration ──
     enable_multi_agent: bool = True
@@ -169,37 +170,8 @@ async def _run_enrichment(
     entity,
     news_timeout: float = 25.0,
 ) -> EnrichmentBundle:
-    """Fan-out to SEC, Yahoo, Wikipedia. None failures are non-fatal."""
+    """Fan-out to Yahoo, Wikipedia, and Indian sources. None failures are non-fatal."""
     BUS.emit(session_id, "phase", phase="enrichment", note="Pulling authoritative APIs (NSE/BSE, Yahoo Finance, Moneycontrol)")
-
-    async def _sec() -> SECCompanySnapshot | None:
-        if entity.country_code not in ("US", "GLOBAL"):
-            BUS.emit(
-                session_id,
-                "agent_task",
-                task="SEC EDGAR",
-                status="warning",
-                note=f"Skipped for {entity.country_name}; using local-market retrieval instead",
-            )
-            return None
-        BUS.emit(session_id, "agent_task", task="SEC EDGAR", status="running", note=f"Resolving {target} -> CIK")
-        try:
-            snap = await fetch_company_snapshot(target)
-            if snap is None:
-                BUS.emit(session_id, "agent_task", task="SEC EDGAR", status="warning", note="No SEC match (private or non-US)")
-                return None
-            BUS.emit(
-                session_id,
-                "agent_task",
-                task="SEC EDGAR",
-                status="done",
-                note=f"{snap.ticker} / {snap.name} (CIK {snap.cik}) — {len(snap.metrics)} metrics, {len(snap.recent_filings)} filings",
-            )
-            return snap
-        except Exception as exc:
-            logger.warning("SEC enrichment failed: %s", exc)
-            BUS.emit(session_id, "agent_task", task="SEC EDGAR", status="error", note=str(exc))
-            return None
 
     async def _yahoo(ticker: str | None) -> YahooQuote | None:
         if not ticker:
@@ -391,50 +363,6 @@ async def _run_enrichment(
             return w
         BUS.emit(session_id, "agent_task", task="Wikipedia", status="warning", note="No matching company article")
         return None
-
-    async def _filing(snap: SECCompanySnapshot | None) -> FilingNarrative | None:
-        if not snap:
-            return None
-        target_filing = next((f for f in snap.recent_filings if f.form in ("10-K", "20-F")), None)
-        if not target_filing:
-            target_filing = next((f for f in snap.recent_filings if f.form == "10-Q"), None)
-        if not target_filing:
-            return None
-        BUS.emit(
-            session_id,
-            "agent_task",
-            task="SEC filing",
-            status="running",
-            note=f"Fetching {target_filing.form} filed {target_filing.filing_date}",
-        )
-        try:
-            nar = await asyncio.wait_for(
-                fetch_filing_narrative(
-                    target_filing.url, form=target_filing.form, filed_date=target_filing.filing_date
-                ),
-                timeout=30.0,
-            )
-        except asyncio.TimeoutError:
-            BUS.emit(session_id, "agent_task", task="SEC filing", status="warning", note="Timed out (>30s)")
-            return None
-        except Exception as exc:
-            logger.warning("Filing narrative fetch failed: %s", exc)
-            BUS.emit(session_id, "agent_task", task="SEC filing", status="error", note=str(exc))
-            return None
-        if not nar or not nar.has_any():
-            BUS.emit(session_id, "agent_task", task="SEC filing", status="warning", note="Sections not located")
-            return None
-        present = ", ".join(
-            n for n in (("Item 1" if nar.business else None), ("Item 1A" if nar.risk_factors else None), ("Item 7" if nar.mdna else None)) if n
-        )
-        BUS.emit(
-            session_id,
-            "agent_task",
-            task="SEC filing",
-            status="done",
-            note=f"{target_filing.form} sections extracted: {present}",
-        )
-        return nar
 
     async def _fx() -> FxRate | None:
         BUS.emit(session_id, "agent_task", task="FX (USD/INR)", status="running", note="Fetching live USD-INR")
@@ -645,53 +573,28 @@ async def _run_enrichment(
 
     canonical_name = entity.canonical_name
 
-    # ── Parallel fan-out: ALL enrichment including SEC ────────────────────
+    # ── Parallel fan-out: ALL enrichment ────────────────────
     (
-        sec_snap,
         india_snap_result,
         sebi_filing_result,
         shareholding_result,
         yahoo_quote,
         wiki,
         fx,
-        reddit_posts,
-        hn_stories,
-        stocktwits_snap,
         news_items,
     ) = await asyncio.gather(
-        _sec(),
         _india_snap(),
         _sebi_filing_fetch(),
         _shareholding_fetch(),
         _yahoo(ticker),
         _wiki(canonical_name),
         _fx(),
-        _reddit(),
-        _hn(),
-        _stocktwits(ticker),
         _news(),
         return_exceptions=True,
     )
 
-    # Resolve gather exceptions
-    def _safe_sec(v):
-        return None if isinstance(v, Exception) else v
-    sec_snap = _safe_sec(sec_snap)
-
-    # Upgrade ticker/canonical_name from SEC snap if available (US companies)
-    if sec_snap:
-        if sec_snap.ticker:
-            ticker = sec_snap.ticker
-        if sec_snap.name:
-            canonical_name = sec_snap.name
-
-    # Fetch SEC filing now that we have sec_snap (fast — just an HTTP call)
+    sec_snap = None
     sec_filing = None
-    if sec_snap:
-        try:
-            sec_filing = await _filing(sec_snap)
-        except Exception:
-            sec_filing = None
 
     # Resolve any gather exceptions to None
     def _safe(v):
@@ -703,9 +606,6 @@ async def _run_enrichment(
     yahoo_quote         = _safe(yahoo_quote)
     wiki                = _safe(wiki)
     fx                  = _safe(fx)
-    reddit_posts        = _safe(reddit_posts) or []
-    hn_stories          = _safe(hn_stories) or []
-    stocktwits_snap     = _safe(stocktwits_snap)
     news_items          = _safe(news_items) or []
 
     # Backfill canonical_name from India snapshot if available
@@ -727,9 +627,6 @@ async def _run_enrichment(
         yahoo=yahoo_quote,
         wikipedia=wiki,
         fx=fx,
-        reddit=reddit_posts,
-        hackernews=hn_stories,
-        stocktwits=stocktwits_snap,
         news=news_items,
     )
 
@@ -741,9 +638,6 @@ async def _run_enrichment(
         wikipedia=_serialize_wiki(wiki),
         filing=_serialize_filing(sec_filing),
         fx=_serialize_fx(fx),
-        reddit=_serialize_reddit(reddit_posts),
-        hackernews=_serialize_hn(hn_stories),
-        stocktwits=_serialize_stocktwits(stocktwits_snap),
         news=_serialize_news(news_items),
         india_snap=_serialize_india_snap(india_snap_result),
         shareholding=shareholding_result,
@@ -1123,9 +1017,9 @@ async def _process_doc(
     )
     sources_for_validator = [src_self]
     if enrichment_corroborates:
-        # Treat SEC EDGAR companyfacts as a corroborating primary-financial source.
+        # Treat Screener.in data as a corroborating primary-financial source.
         sources_for_validator.append(
-            Source(name="data.sec.gov", tier=1, retrieved_at=datetime.now(timezone.utc), is_primary_financial=True)
+            Source(name="screener.in", tier=1, retrieved_at=datetime.now(timezone.utc), is_primary_financial=True)
         )
     try:
         result = validator.validate(
@@ -1151,6 +1045,8 @@ async def _process_doc(
     cp.completed_steps.append(StepResult(name=f"step_{step}", summary=" | ".join(summary_bits), ok=not doc.blocked_reason))
     cp.confidence_summary[doc.domain] = {"HIGH": 0.9, "MEDIUM": 0.6, "LOW": 0.3, "DERIVED": 0.5}.get(confidence, 0.5)
     _emit_source_event(session_id, doc, step, confidence, viral, kind)
+    logger.info("Step %d: Processed doc from %s (tier %d) | Title: %r | Confidence: %s | Viral score: %d (flags: %s)",
+                step, doc.domain, doc.tier, doc.title[:60] if doc.title else "No Title", confidence, viral.score, viral.flags)
     harness.maybe_persist_checkpoint(step, cp)
 
 
@@ -1188,7 +1084,7 @@ def _persist_session_memory(
                 kind="identity",
                 body="; ".join(identity_bits),
                 confidence="HIGH",
-                source_url=f"https://data.sec.gov/submissions/CIK{sec.cik}.json",
+                source_url=sec.source_url if sec.source_url else f"https://www.screener.in/company/{sec.ticker}/",
                 session_id=session_id,
             )
         )
@@ -1210,7 +1106,7 @@ def _persist_session_memory(
                     kind="financial",
                     body=line,
                     confidence="HIGH",
-                    source_url=f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={sec.cik}",
+                    source_url=sec.source_url if sec.source_url else f"https://www.screener.in/company/{sec.ticker}/",
                     session_id=session_id,
                 )
             )
@@ -1297,9 +1193,7 @@ def _persist_session_memory(
         f"Run for {canonical_label}: ingested {n_docs} docs from {n_domains} domains, "
         f"resolved {n_metrics} SEC metrics, scored {quality_score:.1f}/100 on the coverage rubric. "
         f"{len(conflicts or [])} cross-source conflicts. "
-        f"{len(bundle.news or [])} news headlines, "
-        f"{len(bundle.reddit or [])} Reddit posts, "
-        f"{len(bundle.hackernews or [])} HN stories."
+        f"{len(bundle.news or [])} news headlines."
     )
     metrics_dict = {
         "docs": n_docs,
@@ -1307,8 +1201,6 @@ def _persist_session_memory(
         "sec_metrics": n_metrics,
         "conflicts": len(conflicts or []),
         "news": len(bundle.news or []),
-        "reddit": len(bundle.reddit or []),
-        "hackernews": len(bundle.hackernews or []),
     }
     memory_store.save_session_summary(
         session_id=session_id,
@@ -1339,6 +1231,9 @@ async def run_research_session(
     validator = AccuracyValidator()
     entity = resolve_entity(target)
     preferred_domains = preferred_domains_for_entity(entity)
+    logger.info("Initializing research session | Target: '%s' | Objective: '%s' | Session ID: %s", target, objective, session_id)
+    logger.info("Resolved Entity: %s (Country: %s, Ticker: %s, Search Label: %s)",
+                entity.canonical_name, entity.country_code, entity.ticker_label, entity.search_label)
     try:
         playbook = retrieve_playbook(geography=entity.country_code, objective=objective)
     except Exception as exc:
@@ -1413,6 +1308,8 @@ async def run_research_session(
             logger.warning("memory recall failed: %s", exc)
             recalled_facts = []
             last_summary = None
+        logger.info("Phase 0 (Memory): recalled %d facts for target '%s' | Prior summary present: %s",
+                    len(recalled_facts), target, last_summary is not None)
         BUS.emit(
             session_id,
             "memory_recall",
@@ -1443,31 +1340,33 @@ async def run_research_session(
 
     bundle = EnrichmentBundle()
     if cfg.enable_enrichment:
+        logger.info("Phase 1 & 2 (Enrichment): Starting parallel enrichment API fetches for target '%s'", target)
         bundle = await _run_enrichment(target, session_id, entity=entity, news_timeout=cfg.news_timeout)
+        logger.info("Phase 1 & 2 (Enrichment): Completed enrichment bundle | Yahoo: %s | Wiki: %s | News items: %d | India snap / SEC: %s",
+                    bundle.yahoo is not None, bundle.wikipedia is not None, len(bundle.news), bundle.sec is not None)
 
     # ── Phase 3: breadth survey ───────────────────────────────────────────
     canonical_label = bundle.sec.name if bundle.sec else (bundle.yahoo.name if bundle.yahoo and bundle.yahoo.name else entity.canonical_name or target)
     if cfg.enable_scraping:
         BUS.emit(session_id, "phase", phase="breadth-survey", note="Layered DuckDuckGo: filings / IR / earnings / competitors")
+        logger.info("Phase 3 (Breadth Survey): Dispatching %d breadth queries for target '%s'",
+                    len(retrieval_plan.breadth_queries), canonical_label)
 
         def _on_query(q: str, status: str, count: int) -> None:
             BUS.emit(session_id, "query", query=q, status=status, count=count)
 
         try:
-            docs = await asyncio.wait_for(
-                search_layered(
-                    canonical_label,
-                    on_query=_on_query,
-                    queries=retrieval_plan.breadth_queries,
-                    preferred_domains=preferred_domains,
-                    entity=entity,
-                ),
-                timeout=cfg.breadth_search_timeout,
+            # Pass timeout_s directly to search_layered so it can return whatever docs are compiled so far
+            timeout_s = max(5.0, cfg.breadth_search_timeout - 2.0)
+            docs = await search_layered(
+                canonical_label,
+                on_query=_on_query,
+                queries=retrieval_plan.breadth_queries,
+                preferred_domains=preferred_domains,
+                entity=entity,
+                timeout_s=timeout_s,
             )
-        except asyncio.TimeoutError:
-            logger.warning("search_layered timed out")
-            BUS.emit(session_id, "warning", message=f"breadth-survey timed out after {cfg.breadth_search_timeout:.0f}s")
-            docs = []
+            logger.info("Phase 3 (Breadth Survey): Completed breadth survey | Scraped %d documents", len(docs))
         except Exception as exc:
             logger.warning("search_layered failed: %s", exc)
             BUS.emit(session_id, "warning", message=f"search failed: {exc}")
@@ -1499,6 +1398,7 @@ async def run_research_session(
     # ── Phase 4: deep-dive (multi-round iterative search) ─────────────────
     if cfg.enable_scraping and cfg.enable_deep_dive and step < cfg.max_steps:
         BUS.emit(session_id, "phase", phase="deep-dive", note="Iterative gap-driven queries")
+        logger.info("Phase 4 (Deep Dive): Starting iterative targeted follow-up queries | Step: %d/%d", step, cfg.max_steps)
 
         def _on_query(q: str, status: str, count: int) -> None:
             BUS.emit(session_id, "query", query=q, status=status, count=count)
@@ -1544,6 +1444,7 @@ async def run_research_session(
             followups = _build_followup_queries(canonical_label, docs, bundle.sec, round_index=round_index)
             if not followups:
                 continue
+            logger.info("Phase 4 (Deep Dive): Round %d | Generated follow-up queries: %s", round_index + 1, followups)
             BUS.emit(
                 session_id,
                 "phase",
@@ -1578,6 +1479,8 @@ async def run_research_session(
                     *(_dive_process(d, step + i + 1) for i, d in enumerate(new_docs_in_round))
                 )
                 step += len(new_docs_in_round)
+                logger.info("Phase 4 (Deep Dive): Round %d finished | Found %d new documents | Total documents: %d | Step: %d/%d",
+                            round_index + 1, len(new_docs_in_round), len(docs), step, cfg.max_steps)
 
             if not new_docs_in_round:
                 break
@@ -1598,6 +1501,7 @@ async def run_research_session(
             phase="reflection",
             note=f"Self-critique loop · target ≥{cfg.quality_threshold:.0f} quality",
         )
+        logger.info("Phase 4.5 (Reflection): Starting self-critique loop | Target Quality: >=%.1f", cfg.quality_threshold)
         step_ref: dict = {"v": step}
 
         async def _process_for_reflection(doc: ScrapedDoc, _i: int) -> None:
@@ -1649,6 +1553,7 @@ async def run_research_session(
             )
             step = step_ref["v"]
             reflection_payload = ref_result.to_dict()
+            logger.info("Phase 4.5 (Reflection): Critique loop finished | Final Quality Score: %.1f", reflection_payload.get("quality_score", 0.0))
             BUS.emit(session_id, "reflection_done", **reflection_payload)
         except Exception as exc:
             logger.warning("reflection loop failed: %s", exc)
@@ -1685,6 +1590,8 @@ async def run_research_session(
         try:
             allowed_agents = set(routing.selected_agents)
             roster = [agent for agent in default_roster() if agent.name in allowed_agents] or default_roster()
+            logger.info("Phase 4.7 (Multi-Agent): Running orchestrator with %d subagents: %s",
+                        len(roster), [a.name for a in roster])
             orchestrator = Orchestrator(
                 roster,
                 emit=_emit_event,
@@ -1693,6 +1600,8 @@ async def run_research_session(
             orch_result = await orchestrator.run(ctx)
             orchestration_findings = list(orch_result.findings)
             orchestration_payload = orch_result.to_dict()
+            logger.info("Phase 4.7 (Multi-Agent): Subagents returned %d findings | Merged %d new documents from specialists",
+                        len(orchestration_findings), len(orch_result.new_docs))
 
             # Merge new docs from subagents into the main pool +
             # process them through the citation log so they count toward
@@ -1749,6 +1658,7 @@ async def run_research_session(
                     seed_docs=docs,
                     top_n=6,
                 )
+                logger.info("Phase 4.7 (Multi-Agent): Blind-spot generation detected %d spots", len(spots))
                 blindspot_payload = {"blindspots": [s.to_dict() for s in spots]}
                 _emit_event(
                     "blindspot",
@@ -1772,6 +1682,8 @@ async def run_research_session(
                             fanout.append(q)
                         if len(fanout) >= cfg.blindspot_max_queries:
                             break
+                    logger.info("Phase 4.7 (Multi-Agent): Auto-dispatching %d blindspot queries: %s",
+                                len(fanout), fanout)
 
                     async def _bs_one(q: str):
                         _emit_event("query", query=q, status="running", count=0)
@@ -1815,6 +1727,8 @@ async def run_research_session(
                                 await _process_doc(doc, s, cp, harness, validator, session_id, enrichment_corroborates=(bundle.sec is not None))
                         await asyncio.gather(*(_bs_proc(d, step + i + 1) for i, d in enumerate(_bs_docs)))
                         step += bs_new
+                        logger.info("Phase 4.7 (Multi-Agent): Blindspot dispatch complete | Ingested %d new documents | Total step: %d",
+                                    bs_new, step)
                     blindspot_payload["new_docs"] = bs_new
                     _emit_event("blindspot_dispatched", new_docs=bs_new, queries=len(fanout))
             except Exception as exc:
@@ -1822,7 +1736,12 @@ async def run_research_session(
 
     # ── Phase 5: analysis ─────────────────────────────────────────────────
     BUS.emit(session_id, "phase", phase="analysis", note="Cross-source conflict detection")
+    logger.info("Phase 5 (Analysis): Starting conflict detection on %d documents", len(docs))
     conflicts = detect_conflicts(docs)
+    logger.info("Phase 5 (Analysis): Completed conflict detection | Found %d cross-source conflicts", len(conflicts))
+    for conflict in conflicts:
+        logger.info("  Conflict on metric '%s': spread %.1f%% | Note: %s",
+                    conflict.metric, conflict.spread_pct, conflict.note)
     for conflict in conflicts:
         BUS.emit(
             session_id,
@@ -1862,6 +1781,8 @@ async def run_research_session(
             phase="synthesis",
             note=f"Composing {output_mode.value.replace('_', ' ')} answer",
         )
+        logger.info("Phase 6 (Synthesis): Starting LLM memo synthesis | Output Mode: %s | Depth: %s",
+                    output_mode.value, response_depth.value)
 
         def _on_memo_token(chunk: str) -> None:
             BUS.emit(session_id, "memo_token", chunk=chunk)
@@ -1888,6 +1809,8 @@ async def run_research_session(
         memos_dir.mkdir(parents=True, exist_ok=True)
         memo_path = memos_dir / f"{session_id}.md"
         memo_path.write_text(synthesis.memo, encoding="utf-8")
+        logger.info("Phase 6 (Synthesis): Memo synthesis complete | Saved memo to %s | Length: %d chars | Final Research Quality Score: %.1f",
+                    memo_path, len(synthesis.memo), final_quality.score)
 
         BUS.emit(
             session_id,
@@ -1992,9 +1915,93 @@ async def run_research_session(
         BUS.close(session_id)
 
     logger.info(
-        "Session finished at step %s with %d citations; memo via %s",
+        "Session finished successfully at step %s with %d citations; memo via %s",
         cp.step,
         len(cp.citation_log),
         synthesis.via if synthesis else "suppressed",
     )
     return pl, cp
+
+
+async def run_finagent_session(
+    message: str,
+    cfg: AgentLoopConfig,
+) -> tuple[str, list[str], RichResponse | None]:
+    """Resolve entities, execute a research session, read the memo, and retrieve visual/agent results."""
+    from finagent.geo.entity_resolver import resolve_entities, resolve_entity
+    from finagent.rich_builder import RichResponse
+    from finagent.events import BUS
+    import json
+    
+    logger.info("Starting run_finagent_session for query: '%s' | Session ID: %s", message, cfg.session_id)
+    
+    # 1. Resolve entities from the message
+    try:
+        entities = resolve_entities(message)
+    except Exception as e:
+        logger.warning("resolve_entities failed: %s. Falling back to single resolve_entity.", e)
+        entities = []
+        
+    if entities:
+        target = entities[0].canonical_name
+        logger.info("Resolved target entity: %s", target)
+        if len(entities) > 1:
+            cfg.peer_targets = [e.canonical_name for e in entities[1:]]
+            logger.info("Resolved peer target entities: %s", cfg.peer_targets)
+    else:
+        try:
+            ent = resolve_entity(message)
+            target = ent.canonical_name
+            logger.info("Fallback resolved target entity: %s", target)
+        except Exception as e:
+            logger.error("Fallback resolve_entity failed: %s. Using message directly as target.", e)
+            target = message
+            
+    # 2. Run the research session
+    try:
+        await run_research_session(target, message, loop_config=cfg)
+    except Exception as e:
+        logger.error("Error during run_research_session execution: %s", e, exc_info=True)
+        raise e
+        
+    # 3. Read the final memo text from disk
+    memo_path = finagent_data_path("memos") / f"{cfg.session_id}.md"
+    reply = ""
+    if memo_path.exists():
+        try:
+            reply = memo_path.read_text(encoding="utf-8")
+            logger.info("Successfully loaded memo from %s (length: %d)", memo_path, len(reply))
+        except Exception as e:
+            logger.error("Failed to read memo file %s: %s", memo_path, e)
+            reply = "Failed to load generated memo."
+    else:
+        logger.warning("Memo file not found at %s", memo_path)
+        reply = "Research session completed, but memo was not saved."
+        
+    # 4. Scan BUS.history to recover agents_used and rich payload
+    agents_used = []
+    rich_payload = None
+    try:
+        history_events = BUS.history(cfg.session_id, limit=1000)
+        logger.info("Scanning %d events from session %s history to extract agents and rich visual data.", len(history_events), cfg.session_id)
+        for seq, ev in history_events:
+            if ev.type == "routing":
+                agents_used = ev.payload.get("selected_agents", [])
+                logger.info("Found agents_used in routing event: %s", agents_used)
+            elif ev.type == "final":
+                rich_payload = ev.payload.get("rich", None)
+                logger.info("Found rich visual payload in final event.")
+    except Exception as e:
+        logger.error("Failed to retrieve or scan BUS history: %s", e)
+        
+    # 5. Reconstruct the validated RichResponse model
+    rich = None
+    if rich_payload is not None:
+        try:
+            rich = RichResponse.model_validate(rich_payload)
+            logger.info("Successfully validated and reconstructed RichResponse model.")
+        except Exception as e:
+            logger.error("Failed to validate RichResponse from payload: %s", e, exc_info=True)
+            rich = None
+            
+    return reply, agents_used, rich

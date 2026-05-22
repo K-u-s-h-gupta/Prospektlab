@@ -6,7 +6,7 @@ AGENT_KEYWORDS: dict[str, tuple[str, ...]] = {
     "risk": ("risk", "lawsuit", "investigation", "fraud", "headwind"),
     "technical": ("technical", "chart", "momentum", "breakout", "moving average"),
     "news": ("news", "headline", "update", "earnings", "deal", "commentary", "forecast", "outlook", "catalyst"),
-    "community": ("sentiment", "reddit", "retail", "community", "stocktwits"),
+    "community": ("sentiment", "retail", "community", "buzz"),
     "competitor": ("compare", "competitor", "peer", "vs", "versus", "market share"),
     "macro": ("macro", "rates", "inflation", "fx", "commodity", "sector", "forecast", "outlook"),
     "governance": ("governance", "board", "management", "insider", "compensation"),

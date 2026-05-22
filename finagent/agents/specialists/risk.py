@@ -10,7 +10,7 @@ from finagent.agents.base import AgentTaskResult, BaseSubAgent, Finding, SubAgen
 
 _RISK_PATTERNS = (
     (re.compile(r"\bclass[- ]action\b|\blawsuit\b|\bcomplaint filed\b", re.I), "Litigation exposure"),
-    (re.compile(r"\bsubpoena\b|\binvestigation\b|\bprobe\b|\bDOJ\b|\bSEC charged\b", re.I), "Regulatory inquiry"),
+    (re.compile(r"\bsubpoena\b|\binvestigation\b|\bprobe\b|\bSEBI\b|\bexchange surveillance\b|\bregulatory action\b", re.I), "Regulatory inquiry"),
     (re.compile(r"\brecall\b|\bdefect\b|\bsafety issue\b", re.I), "Product safety"),
     (re.compile(r"\bbreach\b|\bhack\b|\bdata leak\b|\bransomware\b", re.I), "Cyber incident"),
     (re.compile(r"\bgoing concern\b|\baccount(ing|s) restate\b|\bmaterial weakness\b", re.I), "Accounting concern"),
@@ -26,7 +26,7 @@ class RiskAgent(BaseSubAgent):
         out = AgentTaskResult(agent_name=self.name)
         filing = ctx.bundle.filing if ctx.bundle else None
 
-        # Risk Factors digest from the most recent 10-K
+        # Risk Factors / management discussion digest from exchange filings.
         if filing and getattr(filing, "risk_factors", None):
             rf = filing.risk_factors.strip()
             preview = rf[:520].rsplit(" ", 1)[0]
@@ -43,7 +43,7 @@ class RiskAgent(BaseSubAgent):
             )
             out.claims.append(
                 Claim(
-                    text=f"10-K Item 1A (Risk Factors) is materially populated ({len(rf)} chars).",
+                    text=f"Risk factors section is materially populated ({len(rf)} chars).",
                     is_material=True,
                 )
             )
@@ -51,7 +51,7 @@ class RiskAgent(BaseSubAgent):
         # Search for active litigation / regulatory news
         queries = [
             f"{ctx.canonical_label} lawsuit settlement investigation",
-            f"{ctx.canonical_label} SEC DOJ FTC charged",
+            f"{ctx.canonical_label} SEBI exchange surveillance penalty regulatory action",
         ]
         docs, used = await search_and_dedupe(ctx, queries)
         out.new_docs = docs

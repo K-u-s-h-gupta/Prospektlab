@@ -133,6 +133,18 @@ class SEBIFiling:
         return any([self.business_overview, self.risk_factors,
                     self.financial_summary, self.management_discussion])
 
+    @property
+    def form(self) -> str:
+        return self.filing_type
+
+    @property
+    def business(self) -> str | None:
+        return self.business_overview
+
+    @property
+    def mdna(self) -> str | None:
+        return self.management_discussion
+
 
 # ── Screener.in ───────────────────────────────────────────────────────────────
 

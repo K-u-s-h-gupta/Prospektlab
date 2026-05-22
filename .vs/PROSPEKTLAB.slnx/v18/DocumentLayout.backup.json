@@ -3,166 +3,40 @@
   "WorkspaceRootPath": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\.copilot\\plans\\plan-phase-1-4-implementation-plan-rich-output-frontend-rendering.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}|MarkdownSecurePreview"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\WEB_SEARCH_ARCHITECTURE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:WEB_SEARCH_ARCHITECTURE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\.copilot\\plans\\plan-deep-marathon-modes-with-document-generation.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}|MarkdownSecurePreview"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPLETE_ARCHITECTURE_SUMMARY.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:COMPLETE_ARCHITECTURE_SUMMARY.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\output\\artifact_builder.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:finagent\\output\\artifact_builder.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\EVERYTHING_DELIVERED.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:EVERYTHING_DELIVERED.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\page.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\page.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPREHENSIVE_DOCUMENTATION_PACKAGE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:COMPREHENSIVE_DOCUMENTATION_PACKAGE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\ComparisonTable.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\ComparisonTable.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPLETE_API_REFERENCE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:COMPLETE_API_REFERENCE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\requirements.txt||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Backend\\requirements.txt||{8B382828-6202-11D1-8870-0000F87579D2}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\DEPLOYMENT-COMPLETE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:DEPLOYMENT-COMPLETE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\graph.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Backend\\graph.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\MASTER_INDEX_AND_NAVIGATION.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:MASTER_INDEX_AND_NAVIGATION.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\package.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\package.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\DATABASE_AND_STATE_SCHEMA.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:DATABASE_AND_STATE_SCHEMA.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\lib\\types.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\lib\\types.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\PartialDataBadge.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\PartialDataBadge.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\EntityHeader.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\EntityHeader.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\MetricCardGrid.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\MetricCardGrid.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\ComparisonHero.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\ComparisonHero.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\BarChart.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\Charts\\BarChart.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\MultiSeriesBarChart.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\Charts\\MultiSeriesBarChart.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\MultiSeriesLineChart.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\Charts\\MultiSeriesLineChart.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\RichResponse.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\RichResponse.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\ComparisonView.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\views\\ComparisonView.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\SnapshotView.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\views\\SnapshotView.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\ValuationView.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\views\\ValuationView.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\NewsView.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\views\\NewsView.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\FilingView.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\views\\FilingView.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\DocCompareView.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\views\\DocCompareView.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\StrengthsRisksDual.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\StrengthsRisksDual.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\GuidanceFooter.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\GuidanceFooter.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\DonutChart.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\Charts\\DonutChart.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\AreaChart.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\Charts\\AreaChart.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\GaugeChart.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\Charts\\GaugeChart.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\Sparkline.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\_components\\Charts\\Sparkline.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\globals.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Frontend\\app\\globals.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\output\\contracts.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:finagent\\output\\contracts.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\output\\renderer.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:finagent\\output\\renderer.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\prospektlab_adapter\\plugin.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:finagent\\prospektlab_adapter\\plugin.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\tools\\web\\search.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:finagent\\tools\\web\\search.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\tools\\mcp\\dynamic_loader.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:finagent\\tools\\mcp\\dynamic_loader.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\tools\\data\\news_feed.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:finagent\\tools\\data\\news_feed.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\agents\\base.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:finagent\\agents\\base.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\tools\\web\\scraper.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:finagent\\tools\\web\\scraper.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\tests\\test_rich_builder.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Backend\\tests\\test_rich_builder.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\rich_builder.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Backend\\rich_builder.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\intent.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Backend\\intent.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\SECURITY_AND_AUTH_GUIDE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:SECURITY_AND_AUTH_GUIDE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     }
   ],
   "DocumentGroupContainers": [
@@ -171,514 +45,139 @@
       "VerticalTabListWidth": 256,
       "DocumentGroups": [
         {
-          "DockedWidth": 200,
-          "SelectedChildIndex": 3,
-          "Children": [
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "artifact_builder.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\output\\artifact_builder.py",
-              "RelativeDocumentMoniker": "finagent\\output\\artifact_builder.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\output\\artifact_builder.py",
-              "RelativeToolTip": "finagent\\output\\artifact_builder.py",
-              "ViewState": "AgIAAFcAAAAAAAAAAAAgwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T06:54:17.86Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "page.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\page.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\page.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\page.tsx",
-              "RelativeToolTip": "Frontend\\app\\page.tsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:43:41.04Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "plan-phase-1-4-implementation-plan-rich-output-frontend-rendering.md [Preview]",
-              "DocumentMoniker": "C:\\Users\\kusha\\.copilot\\plans\\plan-phase-1-4-implementation-plan-rich-output-frontend-rendering.md",
-              "RelativeDocumentMoniker": "..\\..\\..\\.copilot\\plans\\plan-phase-1-4-implementation-plan-rich-output-frontend-rendering.md",
-              "ToolTip": "C:\\Users\\kusha\\.copilot\\plans\\plan-phase-1-4-implementation-plan-rich-output-frontend-rendering.md [Preview]",
-              "RelativeToolTip": "..\\..\\..\\.copilot\\plans\\plan-phase-1-4-implementation-plan-rich-output-frontend-rendering.md [Preview]",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
-              "WhenOpened": "2026-05-17T06:16:59.249Z",
-              "EditorCaption": " [Preview]"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "plan-deep-marathon-modes-with-document-generation.md [Preview]",
-              "DocumentMoniker": "C:\\Users\\kusha\\.copilot\\plans\\plan-deep-marathon-modes-with-document-generation.md",
-              "RelativeDocumentMoniker": "..\\..\\..\\.copilot\\plans\\plan-deep-marathon-modes-with-document-generation.md",
-              "ToolTip": "C:\\Users\\kusha\\.copilot\\plans\\plan-deep-marathon-modes-with-document-generation.md [Preview]",
-              "RelativeToolTip": "..\\..\\..\\.copilot\\plans\\plan-deep-marathon-modes-with-document-generation.md [Preview]",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
-              "WhenOpened": "2026-05-17T17:41:20.357Z",
-              "EditorCaption": " [Preview]"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 40,
-              "Title": "intent.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\intent.py",
-              "RelativeDocumentMoniker": "Backend\\intent.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\intent.py",
-              "RelativeToolTip": "Backend\\intent.py",
-              "ViewState": "AgIAAD0AAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T11:06:03.656Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 39,
-              "Title": "rich_builder.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\rich_builder.py",
-              "RelativeDocumentMoniker": "Backend\\rich_builder.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\rich_builder.py",
-              "RelativeToolTip": "Backend\\rich_builder.py",
-              "ViewState": "AgIAAB8AAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T07:06:14.009Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 4,
-              "Title": "ComparisonTable.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\ComparisonTable.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\ComparisonTable.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\ComparisonTable.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\ComparisonTable.tsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAADoAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:24:43.23Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 38,
-              "Title": "test_rich_builder.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\tests\\test_rich_builder.py",
-              "RelativeDocumentMoniker": "Backend\\tests\\test_rich_builder.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\tests\\test_rich_builder.py",
-              "RelativeToolTip": "Backend\\tests\\test_rich_builder.py",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAACEAAAAXAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T06:54:18.909Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 8,
-              "Title": "types.ts",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\lib\\types.ts",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\lib\\types.ts",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\lib\\types.ts",
-              "RelativeToolTip": "Frontend\\app\\_components\\lib\\types.ts",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAGkAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:18:00.129Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 16,
-              "Title": "RichResponse.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\RichResponse.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\RichResponse.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\RichResponse.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\RichResponse.tsx",
-              "ViewState": "AgIAACgAAAAAAAAAAIBJwCsAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:23:03.584Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 7,
-              "Title": "package.json",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\package.json",
-              "RelativeDocumentMoniker": "Frontend\\package.json",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\package.json",
-              "RelativeToolTip": "Frontend\\package.json",
-              "ViewState": "AgIAAA8AAAAAAAAAAABBwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2026-05-17T06:17:35.449Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 9,
-              "Title": "PartialDataBadge.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\PartialDataBadge.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\PartialDataBadge.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\PartialDataBadge.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\PartialDataBadge.tsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:18:45.186Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 37,
-              "Title": "scraper.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\tools\\web\\scraper.py",
-              "RelativeDocumentMoniker": "finagent\\tools\\web\\scraper.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\tools\\web\\scraper.py",
-              "RelativeToolTip": "finagent\\tools\\web\\scraper.py",
-              "ViewState": "AgIAANQAAAAAAAAAAEBVwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T06:43:40.779Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 36,
-              "Title": "base.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\agents\\base.py",
-              "RelativeDocumentMoniker": "finagent\\agents\\base.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\agents\\base.py",
-              "RelativeToolTip": "finagent\\agents\\base.py",
-              "ViewState": "AgIAAPgAAAAAAAAAAEBVwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T06:43:40.529Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 35,
-              "Title": "news_feed.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\tools\\data\\news_feed.py",
-              "RelativeDocumentMoniker": "finagent\\tools\\data\\news_feed.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\tools\\data\\news_feed.py",
-              "RelativeToolTip": "finagent\\tools\\data\\news_feed.py",
-              "ViewState": "AgIAAAAAAAAAAAAAAEBVwG4AAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T06:43:40.279Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 34,
-              "Title": "dynamic_loader.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\tools\\mcp\\dynamic_loader.py",
-              "RelativeDocumentMoniker": "finagent\\tools\\mcp\\dynamic_loader.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\tools\\mcp\\dynamic_loader.py",
-              "RelativeToolTip": "finagent\\tools\\mcp\\dynamic_loader.py",
-              "ViewState": "AgIAAAYAAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T06:43:40.029Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 33,
-              "Title": "search.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\tools\\web\\search.py",
-              "RelativeDocumentMoniker": "finagent\\tools\\web\\search.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\tools\\web\\search.py",
-              "RelativeToolTip": "finagent\\tools\\web\\search.py",
-              "ViewState": "AgIAAAEAAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T06:43:39.804Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 32,
-              "Title": "plugin.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\prospektlab_adapter\\plugin.py",
-              "RelativeDocumentMoniker": "finagent\\prospektlab_adapter\\plugin.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\prospektlab_adapter\\plugin.py",
-              "RelativeToolTip": "finagent\\prospektlab_adapter\\plugin.py",
-              "ViewState": "AgIAAAgAAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T06:43:39.582Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 31,
-              "Title": "renderer.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\output\\renderer.py",
-              "RelativeDocumentMoniker": "finagent\\output\\renderer.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\output\\renderer.py",
-              "RelativeToolTip": "finagent\\output\\renderer.py",
-              "ViewState": "AgIAAAEAAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T06:43:39.314Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 30,
-              "Title": "contracts.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\output\\contracts.py",
-              "RelativeDocumentMoniker": "finagent\\output\\contracts.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\finagent\\output\\contracts.py",
-              "RelativeToolTip": "finagent\\output\\contracts.py",
-              "ViewState": "AgIAAE4AAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T06:43:38.528Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 29,
-              "Title": "globals.css",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\globals.css",
-              "RelativeDocumentMoniker": "Frontend\\app\\globals.css",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\globals.css",
-              "RelativeToolTip": "Frontend\\app\\globals.css",
-              "ViewState": "AgIAAAYAAAAAAAAAAABBwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
-              "WhenOpened": "2026-05-17T06:27:26.344Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 28,
-              "Title": "Sparkline.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\Sparkline.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\Charts\\Sparkline.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\Sparkline.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\Charts\\Sparkline.tsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAABBwBcAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:26:33.479Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 27,
-              "Title": "GaugeChart.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\GaugeChart.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\Charts\\GaugeChart.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\GaugeChart.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\Charts\\GaugeChart.tsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAHIAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:26:22.315Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 26,
-              "Title": "AreaChart.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\AreaChart.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\Charts\\AreaChart.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\AreaChart.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\Charts\\AreaChart.tsx",
-              "ViewState": "AgIAAAoAAAAAAAAAAIBJwCQAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:26:04.969Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 25,
-              "Title": "DonutChart.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\DonutChart.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\Charts\\DonutChart.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\DonutChart.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\Charts\\DonutChart.tsx",
-              "ViewState": "AgIAAAEAAAAAAAAAAIBJwB0AAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:25:51.369Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 24,
-              "Title": "GuidanceFooter.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\GuidanceFooter.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\GuidanceFooter.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\GuidanceFooter.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\GuidanceFooter.tsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAC8AAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:25:11.83Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 23,
-              "Title": "StrengthsRisksDual.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\StrengthsRisksDual.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\StrengthsRisksDual.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\StrengthsRisksDual.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\StrengthsRisksDual.tsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAGcAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:24:59.598Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 22,
-              "Title": "DocCompareView.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\DocCompareView.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\views\\DocCompareView.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\DocCompareView.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\views\\DocCompareView.tsx",
-              "ViewState": "AgIAACIAAAAAAAAAAIBJwDQAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:24:30.264Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 21,
-              "Title": "FilingView.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\FilingView.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\views\\FilingView.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\FilingView.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\views\\FilingView.tsx",
-              "ViewState": "AgIAABgAAAAAAAAAAIBJwCgAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:24:17.442Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 20,
-              "Title": "NewsView.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\NewsView.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\views\\NewsView.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\NewsView.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\views\\NewsView.tsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAADUAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:24:06.977Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 19,
-              "Title": "ValuationView.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\ValuationView.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\views\\ValuationView.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\ValuationView.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\views\\ValuationView.tsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAEgAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:23:52.66Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 18,
-              "Title": "SnapshotView.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\SnapshotView.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\views\\SnapshotView.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\SnapshotView.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\views\\SnapshotView.tsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAFkAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:23:34.249Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 17,
-              "Title": "ComparisonView.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\ComparisonView.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\views\\ComparisonView.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\views\\ComparisonView.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\views\\ComparisonView.tsx",
-              "ViewState": "AgIAAE0AAAAAAAAAAIBJwFgAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:23:19.782Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 10,
-              "Title": "EntityHeader.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\EntityHeader.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\EntityHeader.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\EntityHeader.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\EntityHeader.tsx",
-              "ViewState": "AgIAACQAAAAAAAAAAIBJwGEAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:19:02.511Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 15,
-              "Title": "MultiSeriesLineChart.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\MultiSeriesLineChart.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\Charts\\MultiSeriesLineChart.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\MultiSeriesLineChart.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\Charts\\MultiSeriesLineChart.tsx",
-              "ViewState": "AgIAAAoAAAAAAAAAAIBJwCQAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:20:19.018Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 14,
-              "Title": "MultiSeriesBarChart.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\MultiSeriesBarChart.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\Charts\\MultiSeriesBarChart.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\MultiSeriesBarChart.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\Charts\\MultiSeriesBarChart.tsx",
-              "ViewState": "AgIAAAoAAAAAAAAAAIBJwCQAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:20:07.345Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 13,
-              "Title": "BarChart.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\BarChart.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\Charts\\BarChart.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\Charts\\BarChart.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\Charts\\BarChart.tsx",
-              "ViewState": "AgIAAAkAAAAAAAAAAIBJwCEAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:19:55.004Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 12,
-              "Title": "ComparisonHero.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\ComparisonHero.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\ComparisonHero.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\ComparisonHero.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\ComparisonHero.tsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAACEAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:19:35.589Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 11,
-              "Title": "MetricCardGrid.tsx",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\MetricCardGrid.tsx",
-              "RelativeDocumentMoniker": "Frontend\\app\\_components\\MetricCardGrid.tsx",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Frontend\\app\\_components\\MetricCardGrid.tsx",
-              "RelativeToolTip": "Frontend\\app\\_components\\MetricCardGrid.tsx",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
-              "WhenOpened": "2026-05-17T06:19:18.172Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 6,
-              "Title": "graph.py",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\graph.py",
-              "RelativeDocumentMoniker": "Backend\\graph.py",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\graph.py",
-              "RelativeToolTip": "Backend\\graph.py",
-              "ViewState": "AgIAABYBAAAAAAAAAEBVwAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
-              "WhenOpened": "2026-05-17T06:15:40.63Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 5,
-              "Title": "requirements.txt",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\requirements.txt",
-              "RelativeDocumentMoniker": "Backend\\requirements.txt",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\Backend\\requirements.txt",
-              "RelativeToolTip": "Backend\\requirements.txt",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABkAAAAtAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003109|",
-              "WhenOpened": "2026-05-17T06:13:54.471Z"
-            }
-          ]
-        },
-        {
-          "DockedWidth": 200,
+          "DockedWidth": 290,
           "SelectedChildIndex": -1,
           "Children": [
             {
               "$type": "Bookmark",
+              "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
+            }
+          ]
+        },
+        {
+          "DockedWidth": 110,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "WEB_SEARCH_ARCHITECTURE.md",
+              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\WEB_SEARCH_ARCHITECTURE.md",
+              "RelativeDocumentMoniker": "WEB_SEARCH_ARCHITECTURE.md",
+              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\WEB_SEARCH_ARCHITECTURE.md",
+              "RelativeToolTip": "WEB_SEARCH_ARCHITECTURE.md",
+              "ViewState": "AgIAANEDAAAAAAAAAAAAAKMEAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-21T05:35:25.37Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "COMPLETE_ARCHITECTURE_SUMMARY.md",
+              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPLETE_ARCHITECTURE_SUMMARY.md",
+              "RelativeDocumentMoniker": "COMPLETE_ARCHITECTURE_SUMMARY.md",
+              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPLETE_ARCHITECTURE_SUMMARY.md",
+              "RelativeToolTip": "COMPLETE_ARCHITECTURE_SUMMARY.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAOIEAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-21T05:15:09.464Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "EVERYTHING_DELIVERED.md",
+              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\EVERYTHING_DELIVERED.md",
+              "RelativeDocumentMoniker": "EVERYTHING_DELIVERED.md",
+              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\EVERYTHING_DELIVERED.md",
+              "RelativeToolTip": "EVERYTHING_DELIVERED.md",
+              "ViewState": "AgIAAFcCAAAAAAAAAAAAAFcCAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-21T05:11:48.118Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "COMPLETE_API_REFERENCE.md",
+              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPLETE_API_REFERENCE.md",
+              "RelativeDocumentMoniker": "COMPLETE_API_REFERENCE.md",
+              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPLETE_API_REFERENCE.md",
+              "RelativeToolTip": "COMPLETE_API_REFERENCE.md",
+              "ViewState": "AgIAAIAAAAAAAAAAAAAAAFsEAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-21T04:35:39.729Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Bookmark",
               "Name": "ST:0:0:{40ea2e6b-2121-4bb8-a43e-c83c04b51041}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "DEPLOYMENT-COMPLETE.md",
+              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\DEPLOYMENT-COMPLETE.md",
+              "RelativeDocumentMoniker": "DEPLOYMENT-COMPLETE.md",
+              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\DEPLOYMENT-COMPLETE.md",
+              "RelativeToolTip": "DEPLOYMENT-COMPLETE.md",
+              "ViewState": "AgIAAM8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-21T05:09:13.9Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "DATABASE_AND_STATE_SCHEMA.md",
+              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\DATABASE_AND_STATE_SCHEMA.md",
+              "RelativeDocumentMoniker": "DATABASE_AND_STATE_SCHEMA.md",
+              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\DATABASE_AND_STATE_SCHEMA.md",
+              "RelativeToolTip": "DATABASE_AND_STATE_SCHEMA.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAGoDAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-21T04:36:26.051Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "COMPREHENSIVE_DOCUMENTATION_PACKAGE.md",
+              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPREHENSIVE_DOCUMENTATION_PACKAGE.md",
+              "RelativeDocumentMoniker": "COMPREHENSIVE_DOCUMENTATION_PACKAGE.md",
+              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPREHENSIVE_DOCUMENTATION_PACKAGE.md",
+              "RelativeToolTip": "COMPREHENSIVE_DOCUMENTATION_PACKAGE.md",
+              "ViewState": "AgIAAHMBAAAAAAAAAAAAANwBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-21T04:37:44.317Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "SECURITY_AND_AUTH_GUIDE.md",
+              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\SECURITY_AND_AUTH_GUIDE.md",
+              "RelativeDocumentMoniker": "SECURITY_AND_AUTH_GUIDE.md",
+              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\SECURITY_AND_AUTH_GUIDE.md",
+              "RelativeToolTip": "SECURITY_AND_AUTH_GUIDE.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAOACAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-21T04:37:07.783Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "MASTER_INDEX_AND_NAVIGATION.md",
+              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\MASTER_INDEX_AND_NAVIGATION.md",
+              "RelativeDocumentMoniker": "MASTER_INDEX_AND_NAVIGATION.md",
+              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\MASTER_INDEX_AND_NAVIGATION.md",
+              "RelativeToolTip": "MASTER_INDEX_AND_NAVIGATION.md",
+              "ViewState": "AgIAAOkBAAAAAAAAAAAAAPsBAAAjAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-21T04:34:47.412Z",
+              "EditorCaption": ""
             }
           ]
         }

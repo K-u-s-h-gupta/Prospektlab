@@ -84,3 +84,22 @@ class ChatMemoryManager:
         else:
             with _RAM_LOCK:
                 return list(_RAM_STORE.get(session_id, []))
+
+    def delete_session(self, user_email: str | None, session_id: str) -> int:
+        """Delete chat history for a session."""
+        if user_email:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    '''
+                    DELETE FROM messages
+                    WHERE user_email = ? AND session_id = ?
+                    ''',
+                    (user_email, session_id),
+                )
+                conn.commit()
+                return int(cursor.rowcount or 0)
+        with _RAM_LOCK:
+            prior = len(_RAM_STORE.get(session_id, []))
+            _RAM_STORE.pop(session_id, None)
+            return prior

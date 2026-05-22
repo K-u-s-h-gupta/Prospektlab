@@ -6,7 +6,7 @@ Fallback: BSE India API (BSE-only listings / NSE down)
 Supplementary: Yahoo Finance (.NS/.BO tickers), Wikipedia, Google News RSS,
                Reddit (r/IndianStreetBets), Hacker News, StockTwits, FX rates.
 
-The SEC EDGAR data layer has been removed — this platform is India-only.
+This data layer is India-only at runtime.
 """
 
 from finagent.tools.data.cache import (
@@ -31,8 +31,17 @@ from finagent.tools.data.reddit import RedditPost, aggregate_sentiment, search_r
 from finagent.tools.data.stocktwits import StockTwit, StockTwitsSnapshot, fetch_stocktwits
 from finagent.tools.data.wikipedia import WikipediaSummary, fetch_wikipedia_summary
 from finagent.tools.data.yahoo_finance import YahooQuote, fetch_yahoo_quote
-from finagent.tools.data.sec_filings import FilingNarrative, fetch_filing_narrative
-from finagent.tools.data.sec_edgar import SECCompanySnapshot, SECTimeSeries, fetch_company_snapshot
+FilingNarrative = SEBIFiling
+SECCompanySnapshot = IndiaCompanySnapshot
+SECTimeSeries = dict
+
+
+async def fetch_company_snapshot(query: str, *args, **kwargs) -> IndiaCompanySnapshot | None:
+    return await fetch_india_snapshot(query)
+
+
+async def fetch_filing_narrative(*args, **kwargs):
+    return None
 
 __all__ = [
     # Cache helpers
@@ -70,7 +79,7 @@ __all__ = [
     # Market data
     "YahooQuote",
     "fetch_yahoo_quote",
-    # SEC Filings (India context via pre-parsed filings)
+    # Filing compatibility aliases
     "FilingNarrative",
     "fetch_filing_narrative",
     "SECCompanySnapshot",

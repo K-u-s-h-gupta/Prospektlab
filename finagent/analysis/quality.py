@@ -1,9 +1,8 @@
 """Research coverage / quality scoring.
 
 The score is intentionally heuristic. Its main job is not to be "correct" in
-an abstract sense, but to push reflection toward obvious gaps before the memo
-is written. The important nuance is that the score should not treat non-US
-companies as broken simply because SEC companyfacts are unavailable.
+an abstract sense, but to push reflection toward obvious India-market gaps
+before the memo is written.
 """
 
 from __future__ import annotations
@@ -41,7 +40,6 @@ _WEIGHTS: dict[str, float] = {
     "filing_narrative": 10,
     "live_quote": 6,
     "press_coverage": 10,
-    "community": 8,
     "web_diversity": 12,
     "citation_tiering": 10,
     "conflicts": 4,
@@ -99,19 +97,15 @@ def score_research(
     earned = 0.0
 
     country_code = (getattr(entity, "country_code", None) or "GLOBAL").upper()
-    is_us_like = country_code in {"US", "GLOBAL"}
+    is_us_like = False
 
     has_sec = bool(bundle and bundle.sec is not None)
     has_yahoo = bool(bundle and bundle.yahoo is not None)
     has_wiki = bool(bundle and bundle.wikipedia is not None)
-    # For Indian companies, the local India snapshot plays the role of SEC data.
-    has_india_snap = bool(
-        not is_us_like
-        and bundle
-        and getattr(bundle, "india_snap", None) is not None
-    )
-    # The "structured data" flag unifies SEC (US) and India-snap (IN) for scoring
-    has_structured = has_sec if is_us_like else has_india_snap
+    # The local India snapshot is the primary structured data source.
+    has_india_snap = bool(bundle and getattr(bundle, "india_snap", None) is not None)
+    # Keep the structured-data score anchored to India-sourced metrics.
+    has_structured = has_india_snap
 
     yahoo = getattr(bundle, "yahoo", None) if bundle else None
     yahoo_metrics = dict(getattr(yahoo, "financial_metrics", {}) or {})
@@ -136,7 +130,7 @@ def score_research(
         id_score = (has_sec * 0.6) + (has_yahoo * 0.25) + (has_wiki * 0.15)
         id_ok = id_score >= 0.6
         id_detail = f"sec={has_sec} yahoo={has_yahoo} wiki={has_wiki}"
-        id_gap = "Canonical entity not fully resolved across SEC + Yahoo + Wikipedia."
+        id_gap = "Canonical entity not fully resolved across primary exchange filings + Yahoo + Wikipedia."
     else:
         # For India: india_snap is the primary source; Yahoo and Wikipedia supplement
         id_score = (has_india_snap * 0.5) + (has_yahoo * 0.3) + (has_wiki * 0.2)
@@ -156,9 +150,9 @@ def score_research(
     # Financials — combine India snap metrics + Yahoo metrics for non-US
     if is_us_like and has_sec:
         metrics_n = len((bundle.sec.metrics if has_sec else {}) or {})
-        fin_detail = f"{metrics_n} SEC concept metrics resolved"
+        fin_detail = f"{metrics_n} primary filing metrics resolved"
         fin_queries = [
-            f"{target} latest 10-K revenue gross margin operating income",
+            f"{target} latest annual report revenue gross margin operating income SEBI LODR",
             f"{target} annual report fiscal year financial highlights",
         ]
     else:
@@ -208,7 +202,7 @@ def score_research(
     if not (rev_years >= history_target and ni_years >= history_target):
         rep.gaps.append(f"Multi-year history thin (rev={rev_years}, ni={ni_years}).")
 
-    # Filing narrative — check both SEC filing (US) and SEBI/Trendlyne filing (India)
+    # Filing narrative: check annual-report and SEBI/Trendlyne sections.
     fil = bundle.filing if bundle else None
     sebi_fil = getattr(bundle, "sebi_filing", None) if bundle else None
     has_risks = bool(
@@ -223,8 +217,8 @@ def score_research(
     if is_us_like:
         fn_ratio = (0.5 * has_risks) + (0.5 * has_mdna)
         fn_ok = has_risks and has_mdna
-        fn_gap = "Missing 10-K Item 1A and/or Item 7 narrative."
-        fn_query = f"{target} 10-K risk factors site:sec.gov"
+        fn_gap = "Missing annual-report risk factors and/or management discussion narrative."
+        fn_query = f"{target} annual report risk factors management discussion site:nseindia.com OR site:bseindia.com"
     else:
         # For Indian companies: no SEBI electronic parser yet, so give a 0.7 base
         # score to avoid unfairly failing quality gate. Full credit if we find narrative.
@@ -268,21 +262,6 @@ def score_research(
         rep.gaps.append(f"Press coverage thin (<{press_headline_target} headlines).")
         rep.suggested_queries.append(f"{target} latest news earnings analyst")
 
-    # Community
-    reddit_n = len((bundle.reddit if bundle else None) or [])
-    hn_n = len((bundle.hackernews if bundle else None) or [])
-    has_st = bool(bundle and bundle.stocktwits)
-    com_ratio = min(1.0, (reddit_n / 8.0) * 0.5 + (hn_n / 3.0) * 0.25 + 0.25 * has_st)
-    rep.dimensions["community"] = {
-        "weight": _WEIGHTS["community"],
-        "ratio": round(com_ratio, 2),
-        "ok": reddit_n + hn_n >= 4 or has_st,
-        "detail": f"reddit={reddit_n} hn={hn_n} stocktwits={has_st}",
-    }
-    earned += _WEIGHTS["community"] * com_ratio
-    if reddit_n + hn_n < 4 and not has_st:
-        rep.gaps.append("Community signal sparse.")
-
     # Web diversity
     domains: set[str] = set()
     for d in docs or []:
@@ -319,7 +298,7 @@ def score_research(
     if n_primary < primary_target:
         rep.gaps.append("Tier-1 (primary) citations under-represented.")
         if is_us_like:
-            rep.suggested_queries.append(f"{target} investor relations annual report SEC 10-K filing")
+            rep.suggested_queries.append(f"{target} SEBI LODR annual report NSE BSE filing")
         else:
             rep.suggested_queries.append(f"{target} annual report BSE NSE screener.in exchange filing")
 

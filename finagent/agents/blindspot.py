@@ -44,7 +44,10 @@ _TOPIC_RULES: list[dict] = [
         "needs_kind": ("financial", "risk"),
         "needs_keyword": ("customer", "concentration", "top customer"),
         "question": "Is revenue concentrated in a handful of customers? What % from the top 1–3?",
-        "queries": ["{label} customer concentration top customers percentage revenue", "{label} 10-K largest customer disclosure"],
+        "queries": [
+            "{label} customer concentration top customers percentage revenue",
+            "{label} annual report management discussion customer concentration SEBI LODR",
+        ],
         "severity": "high",
     },
     {
