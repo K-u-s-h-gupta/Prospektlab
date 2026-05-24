@@ -118,6 +118,12 @@ async def _fetch_sub(sub: str, query: str) -> list[RedditPost]:
 async def search_reddit(query: str, *, max_total: int = 20) -> list[RedditPost]:
     """Query each sub serially with a small concurrency cap — Reddit's free
     JSON endpoint 429s if you parallel-fan too aggressively."""
+    logger.info("[MCP-USE] research_news | tool=search_web | args={'query': 'reddit %s'}", query)
+    try:
+        from finagent.state.session_context import record_mcp
+        record_mcp("research_news")
+    except ImportError:
+        pass
     import asyncio
 
     sem = asyncio.Semaphore(2)

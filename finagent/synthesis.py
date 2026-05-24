@@ -471,49 +471,66 @@ Writing style and formatting rules — follow strictly:
 
 
 _LLM_STYLE_GUIDE = """
-You are an institutional equity research expert specializing in the Indian capital markets.
-Synthesize the gathered context into an insight-dense, premium conversational research memo.
+ROLE & IDENTITY:
+You are an elite institutional equity research director and conversational financial co-pilot for ProspektLab, specializing exclusively in the Indian capital markets. You operate with the conversational intelligence and adaptability of Claude and ChatGPT, combined with the extreme numerical precision of a chartered accountant.
 
-Do not output plain list items, thin summaries, generic placeholders, or loose numerical ranges.
-Use explicit cross-validated numbers, concrete fiscal anchors, SEBI LODR parameters, Ind-AS
-financial language, and clear citations. Present monetary values in INR crore first; only add
-foreign-currency equivalents when the source itself uses them.
+CORE MANDATES & FINANCIAL COMPLIANCE:
+1. GEOGRAPHY & ACCOUNTING: Base your reasoning entirely on Indian corporate parameters, SEBI LODR regulations, RBI monetary guidelines, and Ind-AS accounting standards. Never use US SEC/GAAP syntax (e.g., use "Shareholding Pattern" instead of "13F", "Concall Transcript" instead of "Earnings Call").
+2. CURRENCY & UNIT FORMATTING: Present all monetary figures in Indian Rupee (INR) FIRST, enforcing strict Indian-style comma grouping and Crore/Lakh notation (e.g., ₹3.45 Cr or ₹45.6 L). Never lead with USD or apply Western million/billion formatting to domestic assets.
+3. DATA GROUNDING: Do not invent or smooth numbers. If a financial variable or metric is absent from the provided facts, state "data unavailable" — never present an assumption as an verified fact.
 
-Mandatory layout for full company research:
+### CONDITIONAL ROUTING PROTOCOLS
 
-## Business Overview
-Write publication-grade prose on operating segments, engineering focus, corporate ancestry,
-group ownership, and listed-entity structure.
+Evaluate the active session intent state to determine your exact structural response layout:
 
-## Financial Performance Evaluation ([explicit fiscal anchor])
-Quote precise revenue, operating-profit metrics, consolidated profit, YoY growth percentages,
-margin changes, and multi-period trend links. Explain any unit-normalization or working-capital
-anomaly surfaced by the evidence.
+#### PROTOCOL A: INTENT IS 'comprehensive_profile'
+- OBJECTIVE: Generate a publication-grade, uncompromised, and comprehensive equity research report.
+- FORMATTING: Truncation or high-level summaries are strictly forbidden. Every single section below must be populated in full analytical depth (minimum 150 words per section) using clear Markdown headers, bold prose callouts, and clean markdown tables (`| HTML | Grids |`) for raw statements.
+- REQUIRED RESTRUCTURING TEMPLATE:
+  ## Business Overview
+  [Detailed corporate ancestry, business segments, group ownership, and manufacturing scale]
+  ## Financial Performance Evaluation
+  [Consolidated revenues, EBITDA, PAT margins, YoY growth trends, and Ind-AS metrics]
+  ## Strategic Initiatives & Capital Expenditure Catalysts
+  [Capacity additions, order-book execution milestones, joint ventures, and quantified capex dates]
+  ## Stock Valuation & Analyst Standings
+  [Trailing/Forward P/E, EV/EBITDA, P/B multiples, Nifty 50 peer comparisons, and institutional price targets]
+  ## Operational Strengths & Strategic Tail Risks
+  [Order-book execution visibility, promoter pledge loops, input-cost exposures, and SEBI regulatory actions]
+  ## Bottom Line Summary
+  [Growth-quality synthesis and investment visibility verdict, concluded with a SEBI-compliant informational disclaimer]
 
-## Strategic Initiatives & Capital Expenditure Catalysts
-Detail capacity additions, technology deployments, order-book conversion, subsidiaries,
-joint ventures, and capex milestones with dates and quantified ranges.
+#### PROTOCOL B: INTENT IS 'conversational_chat' OR ANY SPECIFIC CONVERSATIONAL FOLLOW-UP
+- OBJECTIVE: Provide a direct, natural, and context-aware conversational response matching the exact scope of the latest user question.
+- FORMATTING: Do NOT wrap your response in rigid template layouts, formal report sections, or fixed corporate headers. 
+- EXECUTION: Answer the user's question directly and comprehensively in the very first sentence. Use fluid, paragraph-driven prose. Integrate clean markdown bullet points or simple matrices natively ONLY if it directly clarifies the immediate answer. Maintain the context of prior turns smoothly without re-stating basic business overviews.
 
-## Stock Valuation & Analyst Standings
-Provide precise trailing/forward valuation multiples, market capitalization in INR crore,
-peer context, and analyst target/rating evidence when available.
+### QUANTILE FORECASTING INTERPRETATION RULES
+When the data package contains continuous forecasting arrays generated by our local TimesFM 2.5 time-series microservice, interpret them using these explicit narrative rules:
+- Refer to the 50th percentile baseline parameters natively as the "median projected trajectory" or "expected execution path".
+- Translate the shaded upper and lower quantile boundaries (the 10th and 90th percentile risk confidence corridors) into plain English text, describing them as the "conservative bear-case floor" and "optimized bull-case ceiling" to provide the user with clear risk variance insight.
 
-## Operational Strengths & Strategic Tail Risks
-Use bold inline highlights inside prose. Address order-book visibility, tariff or spectrum
-obligations, promoter pledge, subscriber churn, raw-material exposure, regulatory actions,
-or execution delays where relevant.
+### INLINE VERIFICATION MARKERS & CITATIONS
+You must continuously anchor your prose by injecting these explicit tracking markers immediately following every single statistic, metric, calculation, or claim:
+- `[SOURCE: Domain/Filing]` — Cite the source document index or root domain (e.g., [SOURCE: NSE/Annual Report] or [SOURCE: Screener.in]).
+- `[AS-OF: FYXX / QX]` — Pinpoint the precise accounting or reporting time horizon.
+- `[ESTIMATE]` — Explicitly label any forward-looking calculation, valuation multiple projection, or TimesFM transformer output path.
+- `[CONFLICT]` — Highlight instances where independent sources show contradictory or mismatched figures.
 
-## Bottom Line Summary
-State whether the current valuation premium is justified by growth quality and execution
-visibility, or whether downside risk dominates. End with a SEBI-compliant informational
-disclaimer.
-
-For narrow follow-up questions, keep the same institutional tone but answer only the latest
-operational focus. Do not repeat a comprehensive profile unless the user explicitly asks for one.
+Conclude every major distinct text block or section with an explicit visibility confidence assessment tag: **[CONFIDENCE: HIGH | MEDIUM | LOW | DERIVED]**.
 """
 
 
-_FOCUSED_OUTPUT_MODES = {"news_brief", "valuation_model", "direct_answer", "filing_analysis"}
+_FOCUSED_OUTPUT_MODES = {
+    "news_brief",
+    "valuation_model",
+    "direct_answer",
+    "filing_analysis",
+    # New dynamic modes from intent-based agent selection
+    "valuation_insights",      # Rich valuation output with TimesFM 2.5 projections + model_used
+    "forensic_insights",       # Forensic / anomaly detection output from AccountingAgent
+    "conversational_chat"
+}
 
 
 def _compact_chat_history(
@@ -549,6 +566,7 @@ async def _openai_memo(
     synth_model: str | None = None,
     chat_history: list[dict[str, str]] | None = None,
     output_mode: str | None = None,
+    force_non_stream: bool = False,
 ) -> str:
     cfg = resolve_openai_config()
     if cfg is None:
@@ -589,13 +607,30 @@ async def _openai_memo(
     focused_output = output_mode in _FOCUSED_OUTPUT_MODES
     focus_instruction = ""
     if focused_output:
-        focus_instruction = (
+        base_instruction = (
             f"Latest operational focus: {output_mode}. Answer this focus directly first, "
             "using the existing conversation only to resolve the entity. Do not reissue a full company profile.\n"
             "Use a tight structure: ## Direct Answer, ## Key Evidence, ## Why It Matters, ## Limitations. "
-            "For news briefs, list concrete dated headlines/developments first. For historical price requests, "
-            "lead with the price-window movement, high/low range, and data source before any business context.\n\n"
         )
+
+        if output_mode == "valuation_insights":
+            base_instruction += (
+                "This is a valuation-focused query. Prioritize and clearly present any TimesFM 2.5 revenue projections, "
+                "P50 / P10–P90 corridors, implied growth rates, and model_used (real TimesFM vs statistical fallback). "
+                "Include DCF-related insights if available from specialist agents. "
+                "Explicitly mention whether real TimesFM 2.5 forecasting was used.\n"
+            )
+        elif output_mode == "forensic_insights":
+            base_instruction += (
+                "This is a forensic accounting / anomaly detection query. "
+                "Highlight any anomalies flagged by TimesFM or statistical methods, along with confidence corridors and deviation magnitudes.\n"
+            )
+        elif output_mode == "news_brief":
+            base_instruction += "For news briefs, list concrete dated headlines/developments first.\n"
+        elif "price" in output_mode:
+            base_instruction += "Lead with the price-window movement, high/low range, and data source before any business context.\n"
+
+        focus_instruction = base_instruction + "\n"
     report_instruction = (
         "Produce a focused answer addressing only the objective above.\n\n"
         if focused_output
@@ -633,6 +668,60 @@ async def _openai_memo(
     ))
     _max_tokens = 8000 if _is_deep else 4000
 
+    # ============================================================
+    # DETAILED LLM CONTEXT LOGGING — what is actually sent to the model
+    # ============================================================
+    system_len = len(system_prompt)
+    user_len = len(user_prompt)
+    total_messages = len(messages)
+    chat_hist_len = len(chat_history) if chat_history else 0
+
+    logger.info("[LLM-CONTEXT] === FINAL SYNTHESIS PROMPT TO MODEL ===")
+    logger.info("[LLM-CONTEXT] model=%s | max_tokens=%d | temperature=0.2 | is_deep=%s", model_to_use, _max_tokens, _is_deep)
+    logger.info("[LLM-CONTEXT] system_prompt_len=%d | user_prompt_len=%d | total_messages=%d | chat_history_items=%d",
+                system_len, user_len, total_messages, chat_hist_len)
+    logger.info("[LLM-CONTEXT] target=%s | objective=%s | output_mode=%s", target, objective, output_mode)
+    logger.info("[LLM-CONTEXT] facts_block_len=%d | digest_len=%d | conflicts=%d",
+                len(facts), len(digest), len(conflicts))
+
+    # Log a safe preview (first 1200 chars) of the actual user prompt being sent
+    user_preview = user_prompt[:1200].replace("\n", " | ")
+    logger.info("[LLM-CONTEXT] USER_PROMPT_PREVIEW: %s ... (truncated)", user_preview)
+
+    # Log the beginning of the system prompt for verification
+    sys_preview = system_prompt[:600].replace("\n", " | ")
+    logger.info("[LLM-CONTEXT] SYSTEM_PROMPT_PREVIEW: %s ...", sys_preview)
+
+    # Full raw prompts (can be very long — only at DEBUG level to avoid flooding)
+    logger.debug("[LLM-CONTEXT] FULL_SYSTEM_PROMPT:\n%s", system_prompt)
+    logger.debug("[LLM-CONTEXT] FULL_USER_PROMPT:\n%s", user_prompt)
+
+    if force_non_stream:
+        logger.info("[LLM-CALL] Forcing non-streaming OpenAI call (post-timeout retry) | model=%s | max_tokens=%d", cfg.model, _max_tokens)
+        resp = await client.chat.completions.create(
+            model=cfg.model,
+            temperature=0.2,
+            max_tokens=_max_tokens,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        final = resp.choices[0].message.content or ""
+        if isinstance(final, list):
+            final = "".join(
+                part.get("text", "") if isinstance(part, dict) else getattr(part, "text", "")
+                for part in final
+            )
+        final = str(final).strip()
+        if final:
+            logger.info("[LLM-RESPONSE] Synthesis completed via FORCED NON-STREAM (retry) | model=%s | output_len=%d chars", cfg.model, len(final))
+            await _emit_token(on_token, final)
+        return final
+
+    # Normal path: try streaming first (with internal empty-response fallback to non-stream)
+    logger.info("[LLM-CALL] Starting OpenAI streaming call | model=%s | session_id=%s", model_to_use, "n/a-in-this-scope")
+
     stream = await client.chat.completions.create(
         model=model_to_use,
         temperature=0.2,
@@ -657,11 +746,15 @@ async def _openai_memo(
             await _emit_token(on_token, text)
         full = "".join(chunks).strip()
         if full:
+            logger.info("[LLM-RESPONSE] Synthesis completed via streaming | model=%s | output_len=%d chars", model_to_use, len(full))
             return full
+        logger.warning("[LLM-FALLBACK] Streaming returned empty — falling back to non-streaming call | model=%s", cfg.model)
+        logger.info("[LLM-CONTEXT] FALLBACK non-stream call | model=%s | user_prompt_len=%d", cfg.model, len(user_prompt))
+
         resp = await client.chat.completions.create(
             model=cfg.model,
             temperature=0.2,
-            max_tokens=4000,
+            max_tokens=_max_tokens,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -675,6 +768,7 @@ async def _openai_memo(
             )
         final = str(final).strip()
         if final:
+            logger.info("[LLM-RESPONSE] Synthesis completed via NON-STREAM fallback | model=%s | output_len=%d chars", cfg.model, len(final))
             await _emit_token(on_token, final)
         return final
     finally:
@@ -1188,6 +1282,45 @@ def _conflicts_prose(conflicts: list[ConflictReport]) -> str:
     return "\n\n".join(lines)
 
 
+def _build_specialist_findings_block(findings: list | None) -> str:
+    """Format all specialist-agent findings into a compact prose block for the LLM.
+
+    This ensures every agent's output (valuation, risk, forensic, etc.) reaches the
+    synthesis prompt, regardless of which agent actually ran for the query.
+    """
+    if not findings:
+        return ""
+    lines: list[str] = []
+    # Group by agent for readability
+    by_agent: dict[str, list] = {}
+    for f in findings:
+        agent_name = getattr(f, "agent", "unknown")
+        by_agent.setdefault(agent_name, []).append(f)
+
+    for agent_name, agent_findings in by_agent.items():
+        lines.append(f"--- Agent: {agent_name} ({len(agent_findings)} finding(s)) ---")
+        for f in agent_findings:
+            headline = getattr(f, "headline", "")
+            detail = getattr(f, "detail", "")
+            confidence = getattr(f, "confidence", "UNKNOWN")
+            metrics = getattr(f, "metrics", None)
+            evidence = getattr(f, "evidence", None)
+            if headline:
+                lines.append(f"  Headline: {headline}")
+            if detail:
+                # Indent detail for readability; keep under ~300 chars per line
+                detail_snippet = detail.replace("\n", " ")
+                lines.append(f"  Detail: {detail_snippet}")
+            lines.append(f"  Confidence: {confidence}")
+            if metrics and isinstance(metrics, dict):
+                metric_items = [f"{k}={v}" for k, v in metrics.items() if v is not None]
+                if metric_items:
+                    lines.append(f"  Metrics: {' | '.join(metric_items)}")
+            if evidence and isinstance(evidence, list) and evidence:
+                lines.append(f"  Evidence: {', '.join(str(e) for e in evidence[:3])}")
+            lines.append("")
+    return "\n".join(lines)
+
 
 def _financial_ratios_prose(bundle: EnrichmentBundle) -> str:
     """Build a clean financial ratios summary from Yahoo metrics."""
@@ -1418,7 +1551,7 @@ async def synthesize_memo(
     docs: list[ScrapedDoc],
     checkpoint: Checkpoint,
     *,
-    timeout_s: float = 75.0,
+    timeout_s: float | None = None,
     conflicts: list[ConflictReport] | None = None,
     on_token: TokenSink = None,
     enrichment: EnrichmentBundle | None = None,
@@ -1447,6 +1580,16 @@ async def synthesize_memo(
     # ── Force comparison mode if peer_targets provided ──
     if peer_targets and mode != OutputMode.COMPANY_COMPARISON:
         mode = OutputMode.COMPANY_COMPARISON
+
+    # ── Dynamic synthesis timeout (deep/marathon reports need more time) ──
+    _obj = (objective or "").lower()
+    _is_deep = (
+        (response_depth or "").lower() in {"deep", "marathon", "full"}
+        or any(kw in _obj for kw in ("deep_research_report", "synthesis", "investment-grade", "marathon", "full-scale"))
+    )
+    if timeout_s is None:
+        timeout_s = 180.0 if _is_deep else 90.0
+    logger.info("[SYNTH] effective timeout_s=%.0fs (deep=%s)", timeout_s, _is_deep)
 
     # ── Fetch RICH peer enrichment in parallel (yahoo + india + wiki + news) ──
     peer_bundles = await _load_peer_bundles(peer_targets or [], objective, target, entity, mode)
@@ -1572,6 +1715,10 @@ async def synthesize_memo(
                 on_token = _wrapped_sync_sink
 
     facts = _build_facts_block(bundle)
+    # ── Append specialist findings so the LLM sees agent outputs (valuation, risk, etc.) ──
+    specialist_block = _build_specialist_findings_block(specialist_findings)
+    if specialist_block:
+        facts += "\n\n=== SPECIALIST AGENT FINDINGS ===\n" + specialist_block
     # ── Append RICH peer data to facts block for comparison queries ──
     # Prefer peer_bundles (full enrichment) over peer_quotes (yahoo-only)
     if peer_bundles:
@@ -1579,6 +1726,9 @@ async def synthesize_memo(
     elif peer_quotes:
         facts += "\n" + _build_peer_quotes_only_block(peer_quotes)
     if resolve_openai_config() is not None:
+        memo: str | None = None
+
+        # Attempt 1: prefer streaming for best UX
         try:
             memo = await asyncio.wait_for(
                 _openai_memo(
@@ -1594,30 +1744,81 @@ async def synthesize_memo(
                 ),
                 timeout=timeout_s,
             )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "OpenAI synthesis timed out after %.0fs; retrying once with non-streaming call",
+                timeout_s,
+            )
+            # Attempt 2: non-streaming retry (often completes faster without SSE overhead)
+            try:
+                memo = await asyncio.wait_for(
+                    _openai_memo(
+                        target,
+                        objective,
+                        digest,
+                        facts,
+                        conflicts,
+                        on_token=on_token,
+                        synth_model=synth_model,
+                        chat_history=chat_history,
+                        output_mode=mode.value,
+                        force_non_stream=True,
+                    ),
+                    timeout=timeout_s,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "OpenAI synthesis timed out again after %.0fs (non-stream retry); falling back to structured prose builder",
+                    timeout_s,
+                )
+            except Exception as exc:
+                logger.warning("OpenAI synthesis retry failed (%s); using structured prose builder", exc)
+        except Exception as exc:
+            logger.warning("OpenAI synthesis failed (%s); using structured prose builder", exc)
+
+        if memo:
             rich = render_rich_json(artifact)
             # Try teammate's new rich_builder for richer structured output
+            # (NOW passing real bundle + specialist_findings so it can build
+            # runtime visuals instead of empty placeholders)
             try:
-                new_rich = teammate_rich_builder.build(objective, [], [], memo)
+                new_rich = teammate_rich_builder.build_from_native(
+                    objective, bundle, docs, specialist_findings, memo
+                )
                 if new_rich:
                     rich = new_rich.model_dump(mode="json")
+                    logger.info(
+                        "[VISUALS-RICH] build_from_native succeeded | mode=%s | metric_cards=%d | charts=%d",
+                        new_rich.mode,
+                        len(new_rich.metric_cards),
+                        len(new_rich.charts),
+                    )
+                else:
+                    logger.info("[VISUALS-RICH] build_from_native returned None — falling back to render_rich_json artifact")
             except Exception:
-                pass
+                logger.exception("[VISUALS-RICH] build_from_native failed; keeping artifact-based rich payload")
             # Safety net: ensure visuals are emitted even if no tokens streamed
             await _emit_visuals_once()
             return SynthesisResult(memo=memo, via="openai", used_sources=used, artifact=artifact, rich=rich)
-        except Exception as exc:
-            logger.warning("OpenAI synthesis failed (%s); using structured prose builder", exc)
-            
+
     # Fallback to the python-generated structured text if LLM fails
     memo = render_markdown(artifact)
     await _emit_token(on_token, memo)
     rich = render_rich_json(artifact)
     try:
-        new_rich = teammate_rich_builder.build(objective, [], [], memo)
+        new_rich = teammate_rich_builder.build_from_native(
+            objective, bundle, docs, specialist_findings, memo
+        )
         if new_rich:
             rich = new_rich.model_dump(mode="json")
+            logger.info(
+                "[VISUALS-RICH-FALLBACK] build_from_native succeeded | mode=%s | metric_cards=%d | charts=%d",
+                new_rich.mode,
+                len(new_rich.metric_cards),
+                len(new_rich.charts),
+            )
     except Exception:
-        pass
+        logger.exception("[VISUALS-RICH-FALLBACK] build_from_native failed; keeping artifact-based rich payload")
     # Safety net: emit visuals in fallback path too
     await _emit_visuals_once()
     return SynthesisResult(memo=memo, via=f"artifact:{mode.value}", used_sources=used, artifact=artifact, rich=rich)

@@ -16,6 +16,28 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Configure logging for finagent and oracle namespaces to print to stdout at INFO level
+# This ensures that all agent step execution logs show up in the terminal when running under uvicorn.
+def configure_logging():
+    _formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setFormatter(_formatter)
+
+    for logger_name in ["finagent", "oracle"]:
+        _logger = logging.getLogger(logger_name)
+        _logger.setLevel(logging.INFO)
+        # Clear existing handlers to avoid duplicates on hot-reloading
+        _logger.handlers = []
+        _logger.addHandler(_handler)
+        _logger.propagate = False
+        _logger.disabled = False
+
+configure_logging()
+
+
 # Load .env before any other finagent imports so OPENAI_API_KEY / TAVILY_API_KEY
 # are available when settings.py and runtime_provider.py are first imported.
 try:
@@ -43,6 +65,7 @@ from finagent.output.intent_classifier import extract_finance_entities, primary_
 from finagent.paths import finagent_data_path, finagent_home
 from finagent.run_agent import AgentLoopConfig, run_research_session
 from finagent.tools.web.http_fetcher import aclose_shared_client
+from finagent.router.intent_router import ContextualizerError, ContextualizeResult, LLMQueryContextualizer
 from finagent.memory.chat_memory import ChatMemoryManager
 from finagent.gateway import supabase_client as supabase
 import time
@@ -100,6 +123,12 @@ AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
 logger = logging.getLogger("finagent.gateway")
 
 app = FastAPI(title="ProspektLab Intelligence Gateway", version="0.5.0")
+
+@app.on_event("startup")
+async def startup_event():
+    configure_logging()
+    logger.info("FastAPI gateway startup: Logging configuration successfully applied to finagent and oracle namespaces.")
+
 
 # ── CORS Middleware Configuration ─────────────────────────────────────────
 from fastapi.middleware.cors import CORSMiddleware
@@ -339,34 +368,6 @@ async def update_google_mobile(req: UpdateMobileRequest, current_user: dict = De
     return {"message": "Mobile number updated successfully."}
 
 
-
-def _is_ambiguous_followup(query: str) -> bool:
-    text = (query or "").strip().lower()
-    if not text:
-        return False
-
-    # 1. GUARD: Explicit new commands are NEVER ambiguous follow-ups.
-    if re.search(r"\b(analyze|analyse|research|review)\b", text):
-        return False
-        
-    # 2. GUARD: Explicit two-item comparisons ("compare X and Y" or "X vs Y")
-    if re.search(r"\bcompare\b.*\band\b", text):
-        return False
-    if re.search(r"\w+\s+(vs\.?|versus)\s+\w+", text):
-        return False
-
-    # 3. Check for explicit follow-up pronouns
-    pronoun_ref = re.search(r"\b(it|its|they|their|them|that company|this company|same company)\b", text)
-    
-    # 4. Check for explicit entities (This handles "compare with TCS" or "vs TCS")
-    explicit_entities = extract_finance_entities(query, limit=2)
-    if explicit_entities:
-        if len(explicit_entities) == 1 and re.search(r"\b(compare|vs|versus)\s+(with|against|to)?\b", text):
-            return True
-        return False
-        
-    # 5. Only fall back to word count if it lacks both entities and intent verbs
-    return bool(pronoun_ref) or len(text.split()) <= 5
 
 _GATEWAY_DIR = Path(__file__).resolve().parent
 _WIDGET_PATH = _GATEWAY_DIR / "widget.html"
@@ -634,12 +635,12 @@ def capabilities():
                 "preferred_domain_rerank": True,
             },
             "browser": {
-                "playwright_installed": _has_module("playwright"),
+                "crawl4ai_installed": _has_module("crawl4ai"),
                 "pooled_chromium": True,
                 "fallback_enabled": os.getenv("FINAGENT_BROWSER_FALLBACK") == "1",
                 "http_fallback_enabled": os.getenv("FINAGENT_BROWSER_FALLBACK_HTTP") == "1",
                 "extract_tool": True,
-                "screenshot_tool": True,
+                "screenshot_tool": False,
             },
             "self_generated_skills": {
                 "enabled": True,
@@ -679,16 +680,25 @@ from finagent.memory.store import normalize_target
 
 @app.get("/memory/stats")
 def memory_stats(current_user: dict = Depends(get_current_user)):
-    """Overall memory statistics."""
+    """Overall memory statistics scoped to the authenticated user."""
     store = get_memory_store()
+    user_email = current_user.get("email")
     import sqlite3 as _sq
     c = _sq.connect(str(store.db_path))
     c.row_factory = _sq.Row
-    total = c.execute("SELECT COUNT(*) AS n FROM facts").fetchone()["n"]
-    targets = c.execute(
-        "SELECT target_key, COUNT(*) AS n FROM facts GROUP BY target_key ORDER BY n DESC LIMIT 20"
-    ).fetchall()
-    sessions = c.execute("SELECT COUNT(*) AS n FROM session_summaries").fetchone()["n"]
+    if user_email:
+        total = c.execute("SELECT COUNT(*) AS n FROM facts WHERE user_email = ?", (user_email,)).fetchone()["n"]
+        targets = c.execute(
+            "SELECT target_key, COUNT(*) AS n FROM facts WHERE user_email = ? GROUP BY target_key ORDER BY n DESC LIMIT 20",
+            (user_email,),
+        ).fetchall()
+        sessions = c.execute("SELECT COUNT(*) AS n FROM session_summaries WHERE user_email = ?", (user_email,)).fetchone()["n"]
+    else:
+        total = c.execute("SELECT COUNT(*) AS n FROM facts").fetchone()["n"]
+        targets = c.execute(
+            "SELECT target_key, COUNT(*) AS n FROM facts GROUP BY target_key ORDER BY n DESC LIMIT 20"
+        ).fetchall()
+        sessions = c.execute("SELECT COUNT(*) AS n FROM session_summaries").fetchone()["n"]
     c.close()
     return {
         "total_facts": total,
@@ -700,15 +710,26 @@ def memory_stats(current_user: dict = Depends(get_current_user)):
 
 @app.get("/memory/facts")
 def memory_facts(target: str = "", limit: int = 50, current_user: dict = Depends(get_current_user)):
-    """Browse facts — optionally filtered by target company."""
+    """Browse facts — optionally filtered by target company, scoped to the authenticated user."""
     store = get_memory_store()
+    user_email = current_user.get("email")
     import sqlite3 as _sq
     c = _sq.connect(str(store.db_path))
     c.row_factory = _sq.Row
-    if target:
+    if target and user_email:
+        rows = c.execute(
+            "SELECT * FROM facts WHERE target_key = ? AND user_email = ? ORDER BY created_at DESC LIMIT ?",
+            (normalize_target(target), user_email, limit),
+        ).fetchall()
+    elif target:
         rows = c.execute(
             "SELECT * FROM facts WHERE target_key = ? ORDER BY created_at DESC LIMIT ?",
             (normalize_target(target), limit),
+        ).fetchall()
+    elif user_email:
+        rows = c.execute(
+            "SELECT * FROM facts WHERE user_email = ? ORDER BY created_at DESC LIMIT ?",
+            (user_email, limit),
         ).fetchall()
     else:
         rows = c.execute(
@@ -722,6 +743,7 @@ def memory_facts(target: str = "", limit: int = 50, current_user: dict = Depends
                 "id": r["id"], "target_key": r["target_key"], "kind": r["kind"],
                 "body": r["body"], "confidence": r["confidence"],
                 "source_url": r["source_url"], "session_id": r["session_id"],
+                "user_email": r["user_email"] if "user_email" in r.keys() else None,
                 "created_at": r["created_at"],
             }
             for r in rows
@@ -731,15 +753,26 @@ def memory_facts(target: str = "", limit: int = 50, current_user: dict = Depends
 
 @app.get("/memory/sessions")
 def memory_sessions(target: str = "", current_user: dict = Depends(get_current_user)):
-    """List session summaries from memory."""
+    """List session summaries from memory, scoped to the authenticated user."""
     store = get_memory_store()
+    user_email = current_user.get("email")
     import sqlite3 as _sq
     c = _sq.connect(str(store.db_path))
     c.row_factory = _sq.Row
-    if target:
+    if target and user_email:
+        rows = c.execute(
+            "SELECT * FROM session_summaries WHERE target_key = ? AND user_email = ? ORDER BY created_at DESC LIMIT 20",
+            (normalize_target(target), user_email),
+        ).fetchall()
+    elif target:
         rows = c.execute(
             "SELECT * FROM session_summaries WHERE target_key = ? ORDER BY created_at DESC LIMIT 20",
             (normalize_target(target),),
+        ).fetchall()
+    elif user_email:
+        rows = c.execute(
+            "SELECT * FROM session_summaries WHERE user_email = ? ORDER BY created_at DESC LIMIT 20",
+            (user_email,),
         ).fetchall()
     else:
         rows = c.execute("SELECT * FROM session_summaries ORDER BY created_at DESC LIMIT 20").fetchall()
@@ -752,6 +785,7 @@ def memory_sessions(target: str = "", current_user: dict = Depends(get_current_u
                 "target_display": r["target_display"],
                 "summary": r["summary"][:300], "quality_score": r["quality_score"],
                 "citation_count": r["citation_count"], "created_at": r["created_at"],
+                "user_email": r["user_email"] if "user_email" in r.keys() else None,
             }
             for r in rows
         ],
@@ -760,10 +794,11 @@ def memory_sessions(target: str = "", current_user: dict = Depends(get_current_u
 
 @app.delete("/memory/clear/{target}")
 def memory_clear(target: str, current_user: dict = Depends(get_current_user)):
-    """Delete all stored facts for a specific target."""
+    """Delete all stored facts for a specific target scoped to the authenticated user."""
     store = get_memory_store()
-    deleted = store.clear_target(target)
-    return {"target": target, "deleted": deleted}
+    user_email = current_user.get("email")
+    deleted = store.clear_target(target, user_email=user_email)
+    return {"target": target, "deleted": deleted, "user_email": user_email}
 
 
 # ── Static page handlers ────────────────────────────────────────────────
@@ -1051,27 +1086,56 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
     if req.session_id:
         verify_session_ownership(session_id, current_user)
         
-    BUS.open(session_id)
     raw_query = req.target.strip()
     user_email = current_user["email"]
     
-    # Preserve the prior target only for truly ambiguous follow-ups. If the
-    # user names a new company/ticker, resolve the current query normally.
+    # ── Pure-LLM follow-up contextualization ─────────────────────────────
+    # The LLM decides whether this is a follow-up to the prior conversation,
+    # rewrites pronouns into self-contained queries, and extracts the target.
+    # If both OpenAI and xAI fail, we raise HTTPException 503.
     meta = _load_session_meta(session_id)
     prior_target = meta.get("target_display") or meta.get("target")
-    if req.session_id and prior_target and _is_ambiguous_followup(raw_query):
-        target = prior_target
-    else:
-        target = primary_target_from_query(raw_query)
-        # ── Session isolation: if the resolved target differs from the prior
-        # session's target, mint a fresh session_id so the old entity's
-        # enrichment data, caches, and tool outputs don't leak into the new query.
-        if req.session_id and prior_target and target and prior_target.lower() != target.lower():
-            session_id = uuid.uuid4().hex[:12]
-            BUS.open(session_id)
-            logger.info("Target changed from %r to %r — new session %s", prior_target, target, session_id)
-        
+    is_followup = False
+    target = None
     objective = (req.objective or raw_query).strip()
+
+    if req.session_id and prior_target:
+        chat_history = _MEMORY_MANAGER.get_history(user_email, session_id)
+        try:
+            contextualizer = LLMQueryContextualizer()
+            result = await contextualizer.contextualize(raw_query, prior_target, chat_history)
+            is_followup = result.is_followup
+
+            if is_followup:
+                target = prior_target
+                if result.contextualized_query and result.contextualized_query.strip():
+                    objective = result.contextualized_query.strip()
+            else:
+                # New topic — LLM may have extracted a target, otherwise fall back
+                target = result.target or primary_target_from_query(raw_query)
+                if result.contextualized_query and result.contextualized_query.strip():
+                    objective = result.contextualized_query.strip()
+
+                # ── Session isolation: if the resolved target differs from the prior
+                # session's target, mint a fresh session_id so the old entity's
+                # enrichment data, caches, and tool outputs don't leak into the new query.
+                if prior_target and target and prior_target.lower() != target.lower():
+                    session_id = uuid.uuid4().hex[:12]
+                    BUS.open(session_id, reset=True)
+                    logger.info("Target changed from %r to %r — new session %s", prior_target, target, session_id)
+        except ContextualizerError as exc:
+            logger.error("Contextualizer failed for session %s: %s", session_id, exc)
+            raise HTTPException(status_code=503, detail="Context service unavailable")
+        except Exception as exc:
+            logger.error("Unexpected contextualizer error for session %s: %s", session_id, exc)
+            raise HTTPException(status_code=503, detail="Context service unavailable")
+    else:
+        # No prior context — resolve normally
+        target = primary_target_from_query(raw_query)
+
+    # Always start a fresh event history for this research execution (prevents
+    # replay of previous run's "memo"/"final" events into the new turn's UI).
+    BUS.open(session_id, reset=True)
     mode = (req.mode or "chat").strip().lower()
     if mode not in {"chat", "standard", "deep", "marathon"}:
         mode = "chat"
@@ -1111,6 +1175,7 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
             await run_research_session(
                 target,
                 objective,
+                is_followup=is_followup,
                 loop_config=AgentLoopConfig(
                     max_steps=base_steps,
                     session_id=session_id,
@@ -1127,29 +1192,34 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
                     enable_deep_dive=True,
                     quality_threshold=(60.0 if is_fast_mode else (70.0 if is_deep_mode else 75.0)),
                     # ── Tight timeouts for fast modes
-                    breadth_search_timeout=(45.0 if is_fast_mode else (90.0 if is_deep_mode else 150.0)) * (2.0 if sys.platform == "win32" else 1.0),
-                    followup_search_timeout=(25.0 if is_fast_mode else (45.0 if is_deep_mode else 70.0)) * (2.0 if sys.platform == "win32" else 1.0),
+                    breadth_search_timeout=(45.0 if is_fast_mode else (90.0 if is_deep_mode else 150.0)) * (3.0 if sys.platform == "win32" else 1.0),
+                    followup_search_timeout=(25.0 if is_fast_mode else (45.0 if is_deep_mode else 70.0)) * (3.0 if sys.platform == "win32" else 1.0),
                     reflection_per_query_timeout=(18.0 if is_fast_mode else (35.0 if is_deep_mode else 55.0)),
                     blindspot_per_query_timeout=(15.0 if is_fast_mode else (30.0 if is_deep_mode else 45.0)),
                     news_timeout=(15.0 if is_fast_mode else (25.0 if is_deep_mode else 40.0)),
                     # ── Comparison: pass peer targets so synthesis has parallel enrichment
                     peer_targets=comparison_targets[1:] if len(comparison_targets) >= 2 else [],
                     chat_history=chat_history,
+                    user_email=user_email,
                 ),
             )
             
-            # Save the final memo to the memory layer
-            memo_path = _MEMOS_DIR / f"{session_id}.md"
-            if memo_path.is_file():
-                final_memo = memo_path.read_text(encoding="utf-8")
-                _MEMORY_MANAGER.append_message(user_email, session_id, "user", raw_query)
-                _MEMORY_MANAGER.append_message(user_email, session_id, "assistant", final_memo)
-                
         except Exception as exc:
             logger.exception("session %s crashed", session_id)
             BUS.emit(session_id, "error", message=str(exc))
             BUS.close(session_id)
         finally:
+            # Persist chat history even if the run crashed or timed out.
+            # The user query is always saved; the assistant response is
+            # saved only if a memo was successfully written to disk.
+            _MEMORY_MANAGER.append_message(user_email, session_id, "user", raw_query)
+            memo_path = _MEMOS_DIR / f"{session_id}.md"
+            if memo_path.is_file():
+                try:
+                    final_memo = memo_path.read_text(encoding="utf-8")
+                    _MEMORY_MANAGER.append_message(user_email, session_id, "assistant", final_memo)
+                except Exception:
+                    pass
             _TASKS.pop(session_id, None)
 
     _TASKS[session_id] = asyncio.create_task(_runner())
@@ -1263,10 +1333,46 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
     if req.session_id:
         verify_session_ownership(master_session, current_user)
         
-    BUS.open(master_session)
     raw_query = req.target.strip()
-    target = primary_target_from_query(raw_query)
     user_email = current_user["email"]
+
+    # ── Pure-LLM follow-up detection for deep/marathon runs ───────────────
+    meta = _load_session_meta(master_session)
+    prior_target = meta.get("target_display") or meta.get("target")
+    is_followup_deep = False
+    target = None
+    objective_for_deep = (getattr(req, "objective", None) or raw_query).strip()
+
+    if req.session_id and prior_target:
+        chat_history = _MEMORY_MANAGER.get_history(user_email, master_session)
+        try:
+            contextualizer = LLMQueryContextualizer()
+            result = await contextualizer.contextualize(raw_query, prior_target, chat_history)
+            is_followup_deep = result.is_followup
+
+            if is_followup_deep:
+                target = prior_target
+                if result.contextualized_query and result.contextualized_query.strip():
+                    objective_for_deep = result.contextualized_query.strip()
+            else:
+                target = result.target or primary_target_from_query(raw_query)
+                if result.contextualized_query and result.contextualized_query.strip():
+                    objective_for_deep = result.contextualized_query.strip()
+
+                if prior_target and target and prior_target.lower() != target.lower():
+                    master_session = uuid.uuid4().hex[:12]
+                    BUS.open(master_session, reset=True)
+                    logger.info("Target changed from %r to %r — new deep session %s", prior_target, target, master_session)
+        except ContextualizerError as exc:
+            logger.error("Deep contextualizer failed for session %s: %s", master_session, exc)
+            raise HTTPException(status_code=503, detail="Context service unavailable")
+        except Exception as exc:
+            logger.error("Unexpected deep contextualizer error for session %s: %s", master_session, exc)
+            raise HTTPException(status_code=503, detail="Context service unavailable")
+    else:
+        target = primary_target_from_query(raw_query)
+
+    BUS.open(master_session, reset=True)
     
     _session_record(master_session, mode="deep", target=target, objective=raw_query, user_email=user_email)
 
@@ -1304,6 +1410,7 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                 await run_research_session(
                     target,
                     pass_objective,
+                    is_followup=is_followup_deep,
                     loop_config=AgentLoopConfig(
                         max_steps=req.pass_depth,
                         session_id=master_session,
@@ -1319,14 +1426,15 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                         emit_memo=is_last,
                         close_bus_on_finish=False,
                         chat_history=chat_history if (i == 0 or is_last) else None,
-                        breadth_search_timeout=(240.0 if is_marathon else 180.0) * (2.0 if sys.platform == "win32" else 1.0),
-                        followup_search_timeout=(100.0 if is_marathon else 75.0) * (2.0 if sys.platform == "win32" else 1.0),
+                        breadth_search_timeout=(240.0 if is_marathon else 180.0) * (3.0 if sys.platform == "win32" else 1.0),
+                        followup_search_timeout=(100.0 if is_marathon else 75.0) * (3.0 if sys.platform == "win32" else 1.0),
                         reflection_per_query_timeout=(75.0 if is_marathon else 60.0),
                         blindspot_per_query_timeout=(60.0 if is_marathon else 50.0),
                         news_timeout=(60.0 if is_marathon else 45.0),
                         enable_blindspot=True,
                         # ── Peer targets ensure synthesis fetches BOTH companies' enrichment
                         peer_targets=peer_targets_list,
+                        user_email=user_email,
                     ),
                 )
                 
@@ -1406,7 +1514,7 @@ def delete_session(session_id: str, current_user: dict = Depends(get_current_use
     _SESSION_META.pop(session_id, None)
     BUS.forget_memory(session_id)
     deleted_history = _MEMORY_MANAGER.delete_session(current_user["email"], session_id)
-    memory_cleanup = get_memory_store().delete_session(session_id)
+    memory_cleanup = get_memory_store().delete_session(session_id, user_email=current_user["email"])
 
     return JSONResponse({
         "session_id": session_id,

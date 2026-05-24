@@ -59,6 +59,12 @@ async def fetch_news(
     gl: str = "IN",
     ceid: str = "IN:en",
 ) -> list[NewsItem]:
+    logger.info("[MCP-USE] research_news | tool=search_news | args={'query': '%s'}", query)
+    try:
+        from finagent.state.session_context import record_mcp
+        record_mcp("research_news")
+    except ImportError:
+        pass
     # ProspektLab is India-focused: append "NSE" for cleaner Indian results
     india_query = f"{query} NSE" if gl == "IN" and "nse" not in query.lower() else query
     url = _RSS_URL.format(q=quote_plus(india_query), hl=hl, gl=gl, ceid=ceid)

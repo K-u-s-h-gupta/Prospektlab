@@ -57,11 +57,14 @@ class AccountingAgent(BaseSubAgent):
         return True, ""
 
     async def execute(self, ctx: SubAgentContext) -> AgentTaskResult:
+        logger.info("[ACCOUNTING-START] AccountingAgent starts anomaly detection...")
         out = AgentTaskResult(agent_name=self.name)
         yahoo = ctx.bundle.yahoo if ctx.bundle else None
         sec = ctx.bundle.sec if ctx.bundle else None
 
         # ── Import forecasting module ──────────────────────────────────
+        # Note: Forecasting can also be called as an MCP tool (port 8006).
+        # Agents currently use the fast in-process implementation.
         try:
             from finagent.tools.mcp.forecasting import detect_anomalies
         except ImportError:
@@ -179,6 +182,7 @@ class AccountingAgent(BaseSubAgent):
         if not out.findings:
             out.status = "partial"
 
+        logger.info("[ACCOUNTING-DONE] AccountingAgent completed | anomalies_found=%d | clean_series=%d | status=%s", anomaly_count, clean_count, out.status)
         return out
 
     async def _check_series(
@@ -200,17 +204,34 @@ class AccountingAgent(BaseSubAgent):
         historical = values[:-1]
         new_value = [values[-1]]
         latest_date = dates[-1] if dates else "latest period"
+        logger.info("[ACCOUNTING-CHECK] Checking series '%s' with %d values...", series_name, len(values))
 
         result = None
         if detect_fn is not None:
+            logger.info("[TIMESFM] AccountingAgent -> calling detect_anomalies on series '%s' (real TimesFM or fallback)", series_name)
             try:
                 result = await detect_fn(historical, new_value, freq=2)
             except Exception as exc:
                 logger.warning("Anomaly detection failed for %s: %s", series_name, exc)
 
         if result is None:
-            # In-line z-score fallback.
-            result = self._zscore_check(historical, new_value)
+            # Lightweight statistical fallback (duplicates logic in forecasting.py for isolation)
+            mu = statistics.mean(historical) if historical else 0.0
+            sigma = statistics.stdev(historical) if len(historical) >= 2 else (abs(mu) * 0.05 or 1.0)
+            lo, hi = mu - 2 * sigma, mu + 2 * sigma
+            v = new_value[0]
+            is_out = v < lo or v > hi
+            dev = (v - mu) / sigma if sigma > 0 else 0.0
+
+            class _MiniResult:
+                def __init__(self):
+                    self.is_anomaly = [is_out]
+                    self.lower_bound = [lo]
+                    self.upper_bound = [hi]
+                    self.deviations = [dev]
+                    self.model_used = "fallback_zscore"
+
+            result = _MiniResult()
 
         is_anomaly = result.is_anomaly[0] if result.is_anomaly else False
         model_used = result.model_used
@@ -221,11 +242,12 @@ class AccountingAgent(BaseSubAgent):
         if is_anomaly:
             anomaly_count += 1
             severity = "significant" if abs(deviation) > 3.0 else "moderate"
+            logger.info("[ACCOUNTING-ANOMALY] Anomaly detected in series '%s' at %s | deviation=%.2f sigma | model=%s", series_name, latest_date, deviation, model_used)
             out.findings.append(
                 Finding(
                     agent=self.name,
                     kind="risk",
-                    headline=f"⚠ {series_name} anomaly detected ({latest_date})",
+                    headline=f"WARNING: {series_name} anomaly detected ({latest_date})",
                     detail=(
                         f"The latest {series_name} value of {values[-1]:,.2f} "
                         f"falls OUTSIDE the model's P10–P90 confidence corridor "
@@ -251,47 +273,9 @@ class AccountingAgent(BaseSubAgent):
             )
         else:
             clean_count += 1
+            logger.info("[ACCOUNTING-PASS] Series '%s' passed anomaly check | model=%s", series_name, model_used)
 
         return anomaly_count, clean_count
-
-    @staticmethod
-    def _zscore_check(historical: list[float], new_values: list[float]):
-        """Inline z-score fallback when both forecasting module and detect_anomalies fail."""
-        from dataclasses import dataclass, field as dc_field
-
-        @dataclass
-        class _SimpleResult:
-            is_anomaly: list[bool]
-            lower_bound: list[float]
-            upper_bound: list[float]
-            deviations: list[float]
-            model_used: str = "inline_zscore"
-
-        if len(historical) < 3:
-            return _SimpleResult(
-                is_anomaly=[False] * len(new_values),
-                lower_bound=[0.0] * len(new_values),
-                upper_bound=[0.0] * len(new_values),
-                deviations=[0.0] * len(new_values),
-            )
-
-        mu = statistics.mean(historical)
-        sigma = statistics.stdev(historical)
-        if sigma == 0:
-            sigma = abs(mu) * 0.01 or 1.0
-
-        lo = mu - 2.0 * sigma
-        hi = mu + 2.0 * sigma
-
-        flags = [v < lo or v > hi for v in new_values]
-        devs = [(v - mu) / sigma for v in new_values]
-
-        return _SimpleResult(
-            is_anomaly=flags,
-            lower_bound=[lo] * len(new_values),
-            upper_bound=[hi] * len(new_values),
-            deviations=devs,
-        )
 
     @staticmethod
     def _check_ratio_flags(

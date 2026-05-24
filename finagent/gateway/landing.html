@@ -103,6 +103,15 @@
 
     a[href^="#"] { scroll-behavior: smooth; }
     html { scroll-behavior: smooth; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
   </style>
 </head>
 
@@ -629,10 +638,10 @@
       ProspektLab — Research, not signals.
     </div>
     <div class="flex items-center gap-6">
-      <a href="/landing" class="hover:text-text">Home</a>
-      <a href="/app" class="hover:text-text">App</a>
-      <a href="/login" class="hover:text-text">Sign in</a>
-      <a href="/profile" class="hover:text-text">Profile</a>
+      <a href="/landing" class="hover:text-text focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded px-1">Home</a>
+      <a href="/app" class="hover:text-text focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded px-1">App</a>
+      <a href="/login" class="hover:text-text focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded px-1">Sign in</a>
+      <a href="/profile" class="hover:text-text focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded px-1">Profile</a>
     </div>
     <div class="label-mono text-xs tracking-wide">© 2026 ProspektLab</div>
   </div>
@@ -692,5 +701,15 @@
   }, { passive: true });
 </script>
 
+  <!-- Auto a11y: hide decorative icon ligatures from screen readers -->
+  <script>
+    (function(){ try {
+      document.querySelectorAll('.material-symbols-outlined').forEach(function(s){
+        if (!s.hasAttribute('aria-hidden') && !s.getAttribute('aria-label') && !s.closest('[role="button"],button,a')) {
+          s.setAttribute('aria-hidden','true');
+        }
+      });
+    } catch(e){} })();
+  </script>
 </body>
 </html>

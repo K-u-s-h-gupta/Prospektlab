@@ -375,6 +375,12 @@ def _safe_float(v: Any) -> float | None:
 
 async def fetch_shareholding_pattern(symbol: str) -> dict | None:
     """Fetch latest shareholding pattern: Promoter / FII / DII / Public."""
+    logger.info("[MCP-USE] nse_india | tool=nse_get_shareholding | args={'symbol': '%s'}", symbol)
+    try:
+        from finagent.state.session_context import record_mcp
+        record_mcp("nse_india")
+    except ImportError:
+        pass
     cached = cache_get("shareholding", symbol)
     if cached is not None:
         return cached
@@ -422,6 +428,12 @@ async def fetch_sebi_filing(symbol: str, filing_type: str = "annual") -> SEBIFil
     For now we pull from Trendlyne's structured JSON endpoints which give
     us the key financial highlights without needing to parse SEBI PDFs.
     """
+    logger.info("[MCP-USE] nse_india | tool=nse_get_announcements | args={'symbol': '%s'}", symbol)
+    try:
+        from finagent.state.session_context import record_mcp
+        record_mcp("nse_india")
+    except ImportError:
+        pass
     cached = cache_get("sebi_filing", f"{symbol}:{filing_type}")
     if cached is not None:
         return cached
@@ -483,6 +495,12 @@ async def fetch_india_snapshot(symbol: str) -> IndiaCompanySnapshot | None:
     Results merged: first successful source wins, subsequent sources
     backfill any missing numeric fields.
     """
+    logger.info("[MCP-USE] fundamentals | tool=profile | args={'symbol': '%s'}", symbol)
+    try:
+        from finagent.state.session_context import record_mcp
+        record_mcp("fundamentals")
+    except ImportError:
+        pass
     sym = symbol.upper().strip()
 
     async def _do_fetch() -> IndiaCompanySnapshot | None:
@@ -526,6 +544,12 @@ async def fetch_india_snapshot(symbol: str) -> IndiaCompanySnapshot | None:
 
 async def fetch_nse_snapshot(symbol: str) -> IndiaCompanySnapshot | None:
     """NSE-first fetch (used as an explicit NSE-direct call, bypasses Screener)."""
+    logger.info("[MCP-USE] nse_india | tool=nse_get_quote | args={'symbol': '%s'}", symbol)
+    try:
+        from finagent.state.session_context import record_mcp
+        record_mcp("nse_india")
+    except ImportError:
+        pass
     sym = symbol.upper().strip()
 
     async def _do() -> IndiaCompanySnapshot | None:

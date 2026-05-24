@@ -35,6 +35,15 @@
     .toast.visible { transform: translate(-50%, 0); }
     .strength-bar { height: 4px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; }
     .strength-bar > div { height: 100%; transition: width 0.2s, background 0.2s; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
   </style>
 </head>
 <body class="min-h-screen overflow-x-hidden">
@@ -157,14 +166,6 @@
             </div>
           </div>
           <div>
-            <label class="label-mono text-[11px] text-muted tracking-wider uppercase block mb-1.5">Mobile number</label>
-            <div class="relative">
-              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">phone</span>
-              <input id="mobile" type="tel" required placeholder="+91 99999 99999" autocomplete="tel"
-                     class="w-full bg-card border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm focus:border-primary outline-none" />
-            </div>
-          </div>
-          <div>
             <label class="label-mono text-[11px] text-muted tracking-wider uppercase block mb-1.5">Email Verification Code</label>
             <div class="flex gap-2">
               <div class="relative flex-1">
@@ -178,6 +179,14 @@
                   <svg class="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                 </span>
               </button>
+            </div>
+          </div>
+          <div>
+            <label class="label-mono text-[11px] text-muted tracking-wider uppercase block mb-1.5">Mobile number</label>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">phone</span>
+               <input id="mobile" type="tel" required placeholder="99999 99999" autocomplete="tel"
+                      class="w-full bg-card border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm focus:border-primary outline-none" />
             </div>
           </div>
           <div>
@@ -200,7 +209,7 @@
 
           <label class="flex items-start gap-2 text-xs text-muted cursor-pointer pt-1 select-none">
             <input id="terms" type="checkbox" required class="rounded border-white/10 bg-card text-primary focus:ring-primary/30 mt-0.5" />
-            <span>I agree to the <a href="#" class="text-primary hover:underline">Terms</a> and <a href="#" class="text-primary hover:underline">Privacy Policy</a>. ProspektLab is a research tool, not financial advice.</span>
+             <span>I agree to the <button type="button" id="termsLink" class="text-primary hover:underline bg-transparent border-0 p-0 cursor-pointer">Terms</button> and <button type="button" id="privacyLink" class="text-primary hover:underline bg-transparent border-0 p-0 cursor-pointer">Privacy Policy</button>. ProspektLab is a research tool, not financial advice.</span>
           </label>
 
           <button type="submit" id="signupBtn" class="w-full bg-primary text-bg font-semibold py-3 rounded-lg hover:opacity-90 transition flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
@@ -348,6 +357,8 @@
           try {
             localStorage.setItem('prospektlab_user', JSON.stringify(userData));
             localStorage.setItem("prospektlab_new_user", "1");
+            localStorage.removeItem('prospektlab_session_id');
+            sessionStorage.removeItem('prospektlab_session_id');
           } catch (_) {}
           setTimeout(() => {
             modal.remove();
@@ -384,6 +395,8 @@
         } else {
           try { localStorage.setItem('prospektlab_user', JSON.stringify(res.body)); } catch (_) {}
           try { localStorage.setItem("prospektlab_new_user", "1"); } catch (_) {}
+          try { localStorage.removeItem('prospektlab_session_id'); } catch (_) {}
+          try { sessionStorage.removeItem('prospektlab_session_id'); } catch (_) {}
           showToast("Welcome! Launching workspace...", "success");
           setTimeout(() => { window.location.href = workspaceLaunchUrl(res.body.token); }, 500);
         }
@@ -416,8 +429,8 @@
         });
         googleInitialized = true;
       }
-    } catch (err) {
-      console.error("Google sign-in initialization failed", err);
+      } catch (err) {
+      /* Google init failed — fallback button will show error toast */
     }
   }
 
@@ -546,6 +559,8 @@
         const stored = { ...data.user, token: data.token };
         localStorage.setItem("prospektlab_user", JSON.stringify(stored));
         sessionStorage.removeItem("prospektlab_user");
+        localStorage.removeItem('prospektlab_session_id');
+        sessionStorage.removeItem('prospektlab_session_id');
       } catch (_) {}
       // Mark new user so the tour shows
       try { localStorage.setItem("prospektlab_new_user", "1"); } catch (_) {}
@@ -559,7 +574,22 @@
       $("signupBtnSpinner").classList.add("hidden");
     }
   });
+
+  // Legal links — show notice (no real pages yet)
+  const legalNotice = () => showToast("Legal documents will be published soon.", "success");
+  if ($("termsLink")) $("termsLink").addEventListener("click", legalNotice);
+  if ($("privacyLink")) $("privacyLink").addEventListener("click", legalNotice);
 </script>
 
+  <!-- Auto a11y: hide decorative icon ligatures from screen readers -->
+  <script>
+    (function(){ try {
+      document.querySelectorAll('.material-symbols-outlined').forEach(function(s){
+        if (!s.hasAttribute('aria-hidden') && !s.getAttribute('aria-label') && !s.closest('[role="button"],button,a')) {
+          s.setAttribute('aria-hidden','true');
+        }
+      });
+    } catch(e){} })();
+  </script>
 </body>
 </html>

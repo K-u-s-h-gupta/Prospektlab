@@ -164,6 +164,12 @@ class BaseSubAgent(abc.ABC):
                     error=reason,
                     elapsed_ms=0,
                 )
+        logger.info("[SUBAGENT-START] Specialist '%s' (%s) started | priority=%d", self.name, self.display, self.priority)
+        try:
+            from finagent.state.session_context import record_agent
+            record_agent(self.display)
+        except ImportError:
+            pass
         emit(
             "subagent_started",
             agent=self.name,
@@ -184,10 +190,12 @@ class BaseSubAgent(abc.ABC):
                 display=self.display,
                 **result.summary_dict(),
             )
+            logger.info("[SUBAGENT-DONE] Specialist '%s' completed | status=%s | findings=%d | new_docs=%d | elapsed=%dms",
+                        self.name, result.status, len(result.findings), len(result.new_docs), result.elapsed_ms)
             return result
         except asyncio.TimeoutError:
             elapsed = int((time.perf_counter() - t0) * 1000)
-            logger.warning("subagent %s timed out after %dms", self.name, elapsed)
+            logger.warning("[SUBAGENT-TIMEOUT] Specialist '%s' (%s) timed out after %dms", self.name, self.display, elapsed)
             emit(
                 "subagent_done",
                 agent=self.name,
@@ -204,7 +212,7 @@ class BaseSubAgent(abc.ABC):
             )
         except Exception as exc:  # noqa: BLE001
             elapsed = int((time.perf_counter() - t0) * 1000)
-            logger.warning("subagent %s failed: %s", self.name, exc)
+            logger.error("[SUBAGENT-FAILURE] Specialist '%s' (%s) failed after %dms: %s", self.name, self.display, elapsed, exc, exc_info=True)
             emit(
                 "subagent_done",
                 agent=self.name,

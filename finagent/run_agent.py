@@ -99,8 +99,8 @@ class AgentLoopConfig:
     reflection_per_query_limit: int = 6
     reflection_per_query_timeout: float = 25.0
     reflection_max_new_docs: int = 80
-    breadth_search_timeout: float = 180.0 if sys.platform == "win32" else 90.0
-    followup_search_timeout: float = 90.0 if sys.platform == "win32" else 45.0
+    breadth_search_timeout: float = 270.0 if sys.platform == "win32" else 90.0
+    followup_search_timeout: float = 135.0 if sys.platform == "win32" else 45.0
     news_timeout: float = 25.0
     # ── Multi-agent orchestration ──
     enable_multi_agent: bool = True
@@ -116,6 +116,8 @@ class AgentLoopConfig:
     emit_memo: bool = True
     close_bus_on_finish: bool = True
     chat_history: list[dict[str, str]] | None = None
+    # ── User isolation for per-user memory recall / persist ──
+    user_email: str | None = None
     # ── Comparison: when set, synthesis fetches rich enrichment for peers ──
     peer_targets: list[str] = field(default_factory=list)
 
@@ -1061,6 +1063,7 @@ def _persist_session_memory(
     cp: Checkpoint,
     conflicts: list,
     quality_score: float,
+    user_email: str | None = None,
 ) -> None:
     """Extract durable facts from this run and store them under the
     canonical target key so the next run starts smarter.
@@ -1086,6 +1089,7 @@ def _persist_session_memory(
                 confidence="HIGH",
                 source_url=sec.source_url if sec.source_url else f"https://www.screener.in/company/{sec.ticker}/",
                 session_id=session_id,
+                user_email=user_email,
             )
         )
         # Financial facts from the latest metrics
@@ -1108,6 +1112,7 @@ def _persist_session_memory(
                     confidence="HIGH",
                     source_url=sec.source_url if sec.source_url else f"https://www.screener.in/company/{sec.ticker}/",
                     session_id=session_id,
+                    user_email=user_email,
                 )
             )
     if bundle.filing and getattr(bundle.filing, "risk_factors", None):
@@ -1121,6 +1126,7 @@ def _persist_session_memory(
                 confidence="HIGH",
                 source_url=bundle.filing.source_url,
                 session_id=session_id,
+                user_email=user_email,
             )
         )
     if bundle.yahoo:
@@ -1137,6 +1143,7 @@ def _persist_session_memory(
                 confidence="MEDIUM",
                 source_url=f"https://finance.yahoo.com/quote/{getattr(y, 'symbol', target)}",
                 session_id=session_id,
+                user_email=user_email,
             )
         )
     if bundle.news:
@@ -1161,6 +1168,7 @@ def _persist_session_memory(
                     confidence="MEDIUM",
                     source_url=_n_link,
                     session_id=session_id,
+                    user_email=user_email,
                 )
             )
     for c in conflicts or []:
@@ -1181,6 +1189,7 @@ def _persist_session_memory(
                 confidence="MEDIUM",
                 source_url=None,
                 session_id=session_id,
+                user_email=user_email,
             )
         )
     memory_store.remember_many(new_facts)
@@ -1210,6 +1219,7 @@ def _persist_session_memory(
         metrics=metrics_dict,
         citation_count=len(cp.citation_log),
         quality_score=quality_score,
+        user_email=user_email,
     )
 
 
@@ -1219,7 +1229,13 @@ async def run_research_session(
     *,
     plan: ResearchPlan | None = None,
     loop_config: AgentLoopConfig | None = None,
+    is_followup: bool = False,
 ) -> tuple[ResearchPlan, Checkpoint]:
+    try:
+        from finagent.state.session_context import init_session_context
+        init_session_context()
+    except ImportError:
+        pass
     _ = default_system_prompt()
     pl = plan or build_default_plan(target, objective)
     cfg = loop_config or AgentLoopConfig()
@@ -1246,7 +1262,20 @@ async def run_research_session(
         objective,
         entity,
         playbook_agents=(playbook.selected_agents if playbook else None),
+        has_prior_entity=is_followup,
     )
+
+    # Always enable multi-agent specialists (and scraping) for every query.
+    # This implements Option A (force for valuation/DCF) + extends to ALL cases.
+    # Previously fast "chat"/"standard" modes in the gateway set enable_multi_agent=False,
+    # which skipped the entire orchestrator block, resulting in "AGENTS: None" and
+    # no calls to forecasting/valuation_engine MCPs even when the router selected them.
+    # By forcing True here (after routing), selected agents (e.g. valuation for
+    # "TCS valuation and DCF intrinsic value") will run, call TimesFM forecasting,
+    # run DCF via valuation_engine, and record the MCPs in the session summary.
+    cfg.enable_multi_agent = True
+    cfg.enable_scraping = True
+
     response_depth = normalize_depth(cfg.response_depth)
     output_mode = classify_output_mode(
         query=objective,
@@ -1259,6 +1288,16 @@ async def run_research_session(
         cfg.max_steps = max(cfg.max_steps, 80)
         cfg.reflection_max_rounds = max(cfg.reflection_max_rounds, 6)
         cfg.blindspot_max_queries = max(cfg.blindspot_max_queries, 10)
+
+    # ============================================================
+    # DETAILED AGENT STEP LOGGING — every major decision point
+    # ============================================================
+    logger.info("[AGENT-START] run_research_session BEGIN | session_id=%s | target=%s | objective=%s",
+                session_id, target, objective)
+    logger.info("[AGENT-CONFIG] max_steps=%d | enable_enrichment=%s | enable_scraping=%s | enable_reflection=%s | enable_multi_agent=%s | depth=%s",
+                cfg.max_steps, cfg.enable_enrichment, cfg.enable_scraping, cfg.enable_reflection, cfg.enable_multi_agent, cfg.response_depth)
+
+    logger.info("[AGENT-PLAN] ResearchPlan: %s", pl.to_prompt_block()[:800] if pl else "default")
 
     BUS.emit(session_id, "session_started", target=target, objective=objective, plan=pl.to_prompt_block())
     BUS.emit(
@@ -1289,6 +1328,13 @@ async def run_research_session(
         preferred_domains=preferred_domains[:8],
         deep_research=routing.deep_research,
     )
+
+    logger.info("[AGENT-ROUTING] Selected agents: %s | deep_research=%s | country=%s | preferred_domains=%s",
+                routing.selected_agents, routing.deep_research, entity.country_code, preferred_domains[:8])
+
+    logger.info("[AGENT-RETRIEVAL-PLAN] Breadth queries (%d): %s",
+                len(retrieval_plan.breadth_queries), retrieval_plan.breadth_queries[:6])
+
     t0 = time.perf_counter()
 
     last_compression_step = 0
@@ -1302,8 +1348,8 @@ async def run_research_session(
     if memory_store is not None:
         BUS.emit(session_id, "phase", phase="memory", note="Recalling prior facts and last session summary")
         try:
-            recalled_facts = memory_store.recall(target, limit=cfg.memory_recall_limit)
-            last_summary = memory_store.last_summary(target)
+            recalled_facts = memory_store.recall(target, limit=cfg.memory_recall_limit, user_email=cfg.user_email)
+            last_summary = memory_store.last_summary(target, user_email=cfg.user_email)
         except Exception as exc:
             logger.warning("memory recall failed: %s", exc)
             recalled_facts = []
@@ -1340,17 +1386,19 @@ async def run_research_session(
 
     bundle = EnrichmentBundle()
     if cfg.enable_enrichment:
-        logger.info("Phase 1 & 2 (Enrichment): Starting parallel enrichment API fetches for target '%s'", target)
+        logger.info("[AGENT-PHASE] === PHASE: ENRICHMENT (Yahoo + Wiki + India/SEC) ===")
+        logger.info("[AGENT-ENRICH] Starting parallel enrichment for target=%s", target)
         bundle = await _run_enrichment(target, session_id, entity=entity, news_timeout=cfg.news_timeout)
-        logger.info("Phase 1 & 2 (Enrichment): Completed enrichment bundle | Yahoo: %s | Wiki: %s | News items: %d | India snap / SEC: %s",
+        logger.info("[AGENT-ENRICH] Done | Yahoo=%s | Wiki=%s | News=%d | India/SEC=%s",
                     bundle.yahoo is not None, bundle.wikipedia is not None, len(bundle.news), bundle.sec is not None)
 
     # ── Phase 3: breadth survey ───────────────────────────────────────────
     canonical_label = bundle.sec.name if bundle.sec else (bundle.yahoo.name if bundle.yahoo and bundle.yahoo.name else entity.canonical_name or target)
     if cfg.enable_scraping:
         BUS.emit(session_id, "phase", phase="breadth-survey", note="Layered DuckDuckGo: filings / IR / earnings / competitors")
-        logger.info("Phase 3 (Breadth Survey): Dispatching %d breadth queries for target '%s'",
-                    len(retrieval_plan.breadth_queries), canonical_label)
+        logger.info("[AGENT-PHASE] === PHASE: BREADTH SURVEY (search_layered) ===")
+        logger.info("[AGENT-SEARCH] Dispatching %d breadth queries for %s | preferred_domains=%s",
+                    len(retrieval_plan.breadth_queries), canonical_label, preferred_domains[:6])
 
         def _on_query(q: str, status: str, count: int) -> None:
             BUS.emit(session_id, "query", query=q, status=status, count=count)
@@ -1366,7 +1414,7 @@ async def run_research_session(
                 entity=entity,
                 timeout_s=timeout_s,
             )
-            logger.info("Phase 3 (Breadth Survey): Completed breadth survey | Scraped %d documents", len(docs))
+            logger.info("[AGENT-SEARCH] Breadth survey COMPLETE | docs_returned=%d", len(docs))
         except Exception as exc:
             logger.warning("search_layered failed: %s", exc)
             BUS.emit(session_id, "warning", message=f"search failed: {exc}")
@@ -1398,7 +1446,8 @@ async def run_research_session(
     # ── Phase 4: deep-dive (multi-round iterative search) ─────────────────
     if cfg.enable_scraping and cfg.enable_deep_dive and step < cfg.max_steps:
         BUS.emit(session_id, "phase", phase="deep-dive", note="Iterative gap-driven queries")
-        logger.info("Phase 4 (Deep Dive): Starting iterative targeted follow-up queries | Step: %d/%d", step, cfg.max_steps)
+        logger.info("[AGENT-PHASE] === PHASE: DEEP DIVE (iterative follow-ups) ===")
+        logger.info("[AGENT-DEEP] Starting deep-dive | current_step=%d | max_steps=%d", step, cfg.max_steps)
 
         def _on_query(q: str, status: str, count: int) -> None:
             BUS.emit(session_id, "query", query=q, status=status, count=count)
@@ -1553,7 +1602,8 @@ async def run_research_session(
             )
             step = step_ref["v"]
             reflection_payload = ref_result.to_dict()
-            logger.info("Phase 4.5 (Reflection): Critique loop finished | Final Quality Score: %.1f", reflection_payload.get("quality_score", 0.0))
+            logger.info("[AGENT-PHASE] === PHASE: REFLECTION COMPLETE ===")
+            logger.info("[AGENT-REFLECTION] QualityScore=%.1f | rounds=%s", reflection_payload.get("quality_score", 0.0), reflection_payload.get("rounds", 0))
             BUS.emit(session_id, "reflection_done", **reflection_payload)
         except Exception as exc:
             logger.warning("reflection loop failed: %s", exc)
@@ -1570,6 +1620,7 @@ async def run_research_session(
             phase="multi-agent",
             note="Dispatching specialist subagents in parallel + verifier pass",
         )
+        logger.info("[AGENT-PHASE] === PHASE: MULTI-AGENT SPECIALISTS (orchestrator) ===")
 
         def _emit_event(event_type: str, **payload) -> None:
             BUS.emit(session_id, event_type, **payload)
@@ -1590,8 +1641,8 @@ async def run_research_session(
         try:
             allowed_agents = set(routing.selected_agents)
             roster = [agent for agent in default_roster() if agent.name in allowed_agents] or default_roster()
-            logger.info("Phase 4.7 (Multi-Agent): Running orchestrator with %d subagents: %s",
-                        len(roster), [a.name for a in roster])
+            logger.info("[AGENT-SPECIALISTS] Running %d specialists: %s | allowed_from_router=%s",
+                        len(roster), [a.name for a in roster], list(allowed_agents))
             orchestrator = Orchestrator(
                 roster,
                 emit=_emit_event,
@@ -1600,8 +1651,8 @@ async def run_research_session(
             orch_result = await orchestrator.run(ctx)
             orchestration_findings = list(orch_result.findings)
             orchestration_payload = orch_result.to_dict()
-            logger.info("Phase 4.7 (Multi-Agent): Subagents returned %d findings | Merged %d new documents from specialists",
-                        len(orchestration_findings), len(orch_result.new_docs))
+            logger.info("[AGENT-SPECIALISTS] Orchestrator DONE | findings=%d | new_docs_from_specialists=%d | waves=%d",
+                        len(orchestration_findings), len(orch_result.new_docs), orch_result.waves)
 
             # Merge new docs from subagents into the main pool +
             # process them through the citation log so they count toward
@@ -1763,6 +1814,7 @@ async def run_research_session(
         )
 
     # ── Phase 6: synthesis ────────────────────────────────────────────────
+    logger.info("[AGENT-PHASE] === PHASE: SYNTHESIS (final LLM memo generation) ===")
     final_quality = score_research(
         target=canonical_label,
         bundle=bundle,
@@ -1781,8 +1833,10 @@ async def run_research_session(
             phase="synthesis",
             note=f"Composing {output_mode.value.replace('_', ' ')} answer",
         )
-        logger.info("Phase 6 (Synthesis): Starting LLM memo synthesis | Output Mode: %s | Depth: %s",
-                    output_mode.value, response_depth.value)
+        logger.info("[AGENT-SYNTH] Starting final LLM synthesis | docs=%d | specialist_findings=%d | conflicts=%d | quality=%.1f",
+                    len(docs), len(orchestration_findings), len(conflicts), final_quality.score)
+        logger.info("[AGENT-SYNTH] Passing to synthesize_memo: specialist_findings_count=%d | peer_targets=%s",
+                    len(orchestration_findings), cfg.peer_targets)
 
         def _on_memo_token(chunk: str) -> None:
             BUS.emit(session_id, "memo_token", chunk=chunk)
@@ -1809,8 +1863,8 @@ async def run_research_session(
         memos_dir.mkdir(parents=True, exist_ok=True)
         memo_path = memos_dir / f"{session_id}.md"
         memo_path.write_text(synthesis.memo, encoding="utf-8")
-        logger.info("Phase 6 (Synthesis): Memo synthesis complete | Saved memo to %s | Length: %d chars | Final Research Quality Score: %.1f",
-                    memo_path, len(synthesis.memo), final_quality.score)
+        logger.info("[AGENT-SYNTH] Memo synthesis COMPLETE | via=%s | length=%d chars | quality=%.1f | path=%s",
+                    synthesis.via, len(synthesis.memo), final_quality.score, memo_path)
 
         BUS.emit(
             session_id,
@@ -1845,6 +1899,7 @@ async def run_research_session(
                 cp=cp,
                 conflicts=conflicts,
                 quality_score=final_quality.score,
+                user_email=cfg.user_email,
             )
         except Exception as exc:
             logger.warning("memory persist failed: %s", exc)
@@ -1920,6 +1975,21 @@ async def run_research_session(
         len(cp.citation_log),
         synthesis.via if synthesis else "suppressed",
     )
+    try:
+        from finagent.state.session_context import active_agents, active_mcps, active_websites
+        agents_list = sorted(list(active_agents.get() or set()))
+        mcps_list = sorted(list(active_mcps.get() or set()))
+        websites_list = sorted(list(active_websites.get() or set()))
+
+        logger.info("================================================================================")
+        logger.info("[SESSION-SUMMARY] Resources Used for Generated Output:")
+        logger.info("  AGENTS:   %s", ", ".join(agents_list) if agents_list else "None")
+        logger.info("  MCPS:     %s", ", ".join(mcps_list) if mcps_list else "None")
+        logger.info("  WEBSITES: %s", ", ".join(websites_list) if websites_list else "None")
+        logger.info("================================================================================")
+    except Exception as exc:
+        logger.warning("Failed to print session summary: %s", exc)
+
     return pl, cp
 
 
@@ -1933,7 +2003,8 @@ async def run_finagent_session(
     from finagent.events import BUS
     import json
     
-    logger.info("Starting run_finagent_session for query: '%s' | Session ID: %s", message, cfg.session_id)
+    logger.info("[AGENT-ENTRY] run_finagent_session called | session_id=%s | user_query=%r", cfg.session_id, message)
+    logger.info("[AGENT-ENTRY] Full user message length=%d chars", len(message))
     
     # 1. Resolve entities from the message
     try:

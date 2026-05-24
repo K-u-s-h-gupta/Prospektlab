@@ -1,37 +1,27 @@
-"""Bundled specialist subagents.
+"""Specialist sub-agents (Hermes multi-agent system).
 
-Importable as:
-    from finagent.agents.specialists import default_roster
+Each specialist answers one narrow question (financials, risk, news, etc.)
+and returns structured AgentTaskResult + Findings.
+
+Public API:
+    default_roster() -> list[BaseSubAgent]
+    Individual agent classes (for advanced use / testing)
 """
 
-from finagent.agents.specialists.accounting import AccountingAgent
-from finagent.agents.specialists.competitor import CompetitorAgent
-from finagent.agents.specialists.financials import FinancialsAgent
-from finagent.agents.specialists.governance import GovernanceAgent
-from finagent.agents.specialists.macro import MacroAgent
-from finagent.agents.specialists.news import NewsAgent
-from finagent.agents.specialists.risk import RiskAgent
-from finagent.agents.specialists.technical import TechnicalAgent
-from finagent.agents.specialists.valuation import ValuationAgent
-
-
-def default_roster():
-    """The standard India-market specialist roster used by run_research_session."""
-    return [
-        FinancialsAgent(),
-        RiskAgent(),
-        TechnicalAgent(),
-        NewsAgent(),
-        CompetitorAgent(),
-        MacroAgent(),
-        GovernanceAgent(),
-        ValuationAgent(),
-        AccountingAgent(),
-    ]
-
+from .community import CommunityAgent
+from .competitor import CompetitorAgent
+from .financials import FinancialsAgent
+from .governance import GovernanceAgent
+from .macro import MacroAgent
+from .news import NewsAgent
+from .risk import RiskAgent
+from .technical import TechnicalAgent
+from .valuation import ValuationAgent
+from .accounting import AccountingAgent
 
 __all__ = [
     "AccountingAgent",
+    "CommunityAgent",
     "CompetitorAgent",
     "FinancialsAgent",
     "GovernanceAgent",
@@ -42,3 +32,22 @@ __all__ = [
     "ValuationAgent",
     "default_roster",
 ]
+
+
+def default_roster():
+    """Return the default roster of specialist agents (sorted by priority)."""
+    agents = [
+        FinancialsAgent(),   # priority 10
+        RiskAgent(),         # 20
+        NewsAgent(),         # 20
+        TechnicalAgent(),    # 30
+        CommunityAgent(),    # 30
+        CompetitorAgent(),   # 40
+        ValuationAgent(),    # 40  ← TimesFM revenue projection
+        AccountingAgent(),   # 45  ← TimesFM anomaly / forensic
+        MacroAgent(),        # 50
+        GovernanceAgent(),   # 60
+    ]
+    # Stable sort by declared priority (lower = earlier in waves)
+    agents.sort(key=lambda a: getattr(a, "priority", 50))
+    return agents

@@ -16,6 +16,9 @@ class OutputMode(str, Enum):
     INVESTMENT_VIEW = "investment_view"
     MARKET_EXPLAINER = "market_explainer"
     DEEP_RESEARCH_REPORT = "deep_research_report"
+    VALUATION_INSIGHTS = "valuation_insights"
+    FORENSIC_INSIGHTS = "forensic_insights"
+    CONVERSATIONAL_CHAT = "conversational_chat"
 
 
 class ResponseDepth(str, Enum):

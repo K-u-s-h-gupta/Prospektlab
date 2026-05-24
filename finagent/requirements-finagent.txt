@@ -1,19 +1,20 @@
-# FinAgent runtime — install into same venv as Prospektlab_intelligence Backend
-openai>=2.36.0
+# Core runtime
 python-dotenv>=1.0.0
-fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
-httpx>=0.27.0
-beautifulsoup4>=4.12.0
-pdfplumber>=0.11.0
-# playwright>=1.49.0  # managed by crawl4ai-setup (crawl4ai installs its own Playwright)
-crawl4ai>=0.4.0
+pydantic>=2.0.0
+fastapi>=0.100.0
+uvicorn>=0.23.0
+httpx>=0.24.0
+aiohttp>=3.8.0
 
-matplotlib
+# LLM + tools
+openai>=1.0.0
+langchain>=0.2.0
+langgraph>=0.1.0
 
-# Document generation (only used in Marathon mode)
-reportlab>=4.0.0
-python-docx>=1.1.0
+# Data & finance
+yfinance>=0.2.40
+pandas>=2.0.0
+numpy>=1.24.0
 openpyxl>=3.1.0
 
 PyJWT>=2.0.0
@@ -22,6 +23,25 @@ PyJWT>=2.0.0
 yfinance>=0.2.40
 tavily-python>=0.5.0
 
-# Time-series foundation model (optional — graceful fallback if missing)
-# pip install timesfm
-# timesfm>=2.0.0
+# Time-series foundation model (TimesFM 2.5 200M PyTorch — Google Research)
+# Modern recommended installation (avoids the ancient JAX-pinned 1.0.0 PyPI package):
+#
+#   python -m venv .venv-finagent
+#   .\.venv-finagent\Scripts\Activate.ps1
+#   python -m pip install --upgrade pip setuptools wheel
+#   python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+#   python -m pip install git+https://github.com/google-research/timesfm.git
+#   python -m pip install safetensors einshape huggingface_hub
+#
+# Then test:
+#   python scripts/test_timesfm_standalone.py
+#
+# If the model is gated:
+#   huggingface-cli login   (after accepting terms on HF)
+
+# Optional deep web scraper (Crawl4AI)
+# Falls back to httpx if not present; include here so Docker image has full capability
+crawl4ai>=0.4.0
+
+# Chart generation for memos (used in output/chart_generator.py)
+matplotlib>=3.8.0

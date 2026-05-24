@@ -32,6 +32,12 @@ class HNStory:
 
 
 async def search_hackernews(query: str, *, min_points: int = 3) -> list[HNStory]:
+    logger.info("[MCP-USE] research_news | tool=search_web | args={'query': 'hackernews %s'}", query)
+    try:
+        from finagent.state.session_context import record_mcp
+        record_mcp("research_news")
+    except ImportError:
+        pass
     url = _HN_API.format(q=quote_plus(query))
     try:
         res = await fetch(url, respect_robots=False, timeout_s=10.0)

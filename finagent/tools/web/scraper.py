@@ -29,7 +29,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import re
 import sys
+import time
 
 # Programmatically reconfigure stdout/stderr to utf-8 to prevent charmap codec errors on Windows
 try:
@@ -37,9 +40,6 @@ try:
     sys.stderr.reconfigure(encoding='utf-8')
 except AttributeError:
     pass
-
-import os
-import re
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 from urllib.parse import quote_plus, urlparse
@@ -270,6 +270,18 @@ async def fetch_and_parse(url: str, *, use_browser: bool = False) -> ScrapedDoc:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Deep domain crawl (DFS) — Playwright-based link exploration
+# ──────────────────────────────────────────────────────────────────────────────
+
+# NOTE: deep_crawl_domain is temporarily disabled because its DFS dependency
+# (playwright_backend + deep_crawler) was removed during the Crawl4AI migration.
+# The original code is preserved in browser/deep_crawler.py.bak.
+# Re-enable after implementing a Crawl4AI-based DFS crawler if needed.
+
+# async def deep_crawl_domain(...)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Search backends — URL discovery layer
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -298,36 +310,23 @@ def _unwrap_ddg_redirector(href: str) -> str:
 
 
 async def _search_ddg(query: str, *, max_results: int) -> list[tuple[str, str]]:
+    """DuckDuckGo HTML SERP — best-effort only.
+
+    DDG + Bing are strictly secondary sources (Tavily is primary).
+    We no longer fall back to browser rendering here because it is slow,
+    fragile on Windows (SelectorEventLoop + Playwright subprocess), and
+    rarely adds value when Tavily already returned results.
+    """
     url = DUCKDUCKGO_HTML.format(q=quote_plus(query))
     res = None
     try:
         logger.info("Performing standard HTTP fetch for DDG search query: '%s'", query)
         res = await fetch(url, respect_robots=False, timeout_s=25.0)
     except Exception as exc:
-        logger.warning("Standard HTTP fetch for DDG search query '%s' failed: %s. Falling back to browser-based fetch.", query, exc)
-    
-    # Check if standard fetch is blocked, empty, or failed
-    should_fallback = False
-    if res is None:
-        should_fallback = True
-    elif not res.text or res.status != 200:
-        should_fallback = True
-        logger.warning("DDG HTTP search returned status %s with empty/blocked content. Falling back to browser-based fetch.", res.status if res else None)
-    
-    if should_fallback:
-        try:
-            logger.info("Performing browser-based fetch (use_browser=True) for DDG search query: '%s'", query)
-            res = await fetch(url, respect_robots=False, timeout_s=30.0, use_browser=True)
-            if res and res.status == 200:
-                logger.info("Browser-based fetch for DDG search query '%s' SUCCEEDED (status=%d, length=%d)", query, res.status, len(res.text or ""))
-            else:
-                logger.warning("Browser-based fetch for DDG search query '%s' FAILED/EMPTY (status=%s)", query, res.status if res else None)
-        except Exception as exc:
-            logger.error("Browser-based fetch for DDG search query '%s' ERROR: %s", query, exc)
-            res = None
+        logger.warning("Standard HTTP fetch for DDG search query '%s' failed: %s", query, exc)
 
-    if not res or not res.text:
-        logger.warning("DDG search query '%s' yielded no content after both standard and browser attempts.", query)
+    if not res or not res.text or res.status != 200:
+        logger.warning("DDG search query '%s' yielded no usable content (status=%s). Relying on Tavily.", query, res.status if res else None)
         return []
 
     out: list[tuple[str, str]] = []
@@ -337,21 +336,6 @@ async def _search_ddg(query: str, *, max_results: int) -> list[tuple[str, str]]:
         out.append((href, title))
         if len(out) >= max_results:
             break
-
-    # If parsing yields zero results, it might mean the HTML format changed or we got anti-bot/empty pages. Try browser.
-    if not out and not should_fallback:
-        logger.warning("DDG standard HTTP search returned 0 parsed results. Retrying with browser-based fetch (use_browser=True).")
-        try:
-            res = await fetch(url, respect_robots=False, timeout_s=30.0, use_browser=True)
-            if res and res.text:
-                for m in _DDG_LINK_RE.finditer(res.text):
-                    href = _unwrap_ddg_redirector(m.group("href"))
-                    title = _WS_RE.sub(" ", _TAG_RE.sub("", m.group("title"))).strip()
-                    out.append((href, title))
-                    if len(out) >= max_results:
-                        break
-        except Exception as exc:
-            logger.error("Browser-based retry for DDG search query '%s' failed: %s", query, exc)
 
     logger.info("DDG search query '%s' returned %d results.", query, len(out))
     return out
@@ -396,36 +380,21 @@ def _unwrap_bing_redirector(href: str) -> str:
 
 async def _search_bing(query: str, *, max_results: int) -> list[tuple[str, str]]:
     """Bing HTML SERP. Best-effort — returns [] if Bing blocks or
-    rewrites the response (e.g. an interstitial)."""
+    rewrites the response (e.g. an interstitial).
+
+    DDG + Bing are strictly secondary sources. We deliberately no longer
+    attempt browser-based fetching here (see DDG comment for rationale).
+    """
     url = _BING_URL.format(q=quote_plus(query))
     res = None
     try:
         logger.info("Performing standard HTTP fetch for Bing search query: '%s'", query)
         res = await fetch(url, respect_robots=False, timeout_s=20.0)
     except Exception as exc:
-        logger.warning("Standard HTTP fetch for Bing search query '%s' failed: %s. Falling back to browser-based fetch.", query, exc)
+        logger.warning("Standard HTTP fetch for Bing search query '%s' failed: %s", query, exc)
 
-    should_fallback = False
-    if res is None:
-        should_fallback = True
-    elif not res.text or res.status != 200:
-        should_fallback = True
-        logger.warning("Bing HTTP search returned status %s with empty/blocked content. Falling back to browser-based fetch.", res.status if res else None)
-
-    if should_fallback:
-        try:
-            logger.info("Performing browser-based fetch (use_browser=True) for Bing search query: '%s'", query)
-            res = await fetch(url, respect_robots=False, timeout_s=25.0, use_browser=True)
-            if res and res.status == 200:
-                logger.info("Browser-based fetch for Bing search query '%s' SUCCEEDED (status=%d, length=%d)", query, res.status, len(res.text or ""))
-            else:
-                logger.warning("Browser-based fetch for Bing search query '%s' FAILED/EMPTY (status=%s)", query, res.status if res else None)
-        except Exception as exc:
-            logger.error("Browser-based fetch for Bing search query '%s' ERROR: %s", query, exc)
-            res = None
-
-    if not res or not res.text:
-        logger.warning("Bing search query '%s' yielded no content after both attempts.", query)
+    if not res or not res.text or res.status != 200:
+        logger.warning("Bing search query '%s' yielded no usable content (status=%s). Relying on Tavily.", query, res.status if res else None)
         return []
 
     out: list[tuple[str, str]] = []
@@ -440,25 +409,6 @@ async def _search_bing(query: str, *, max_results: int) -> list[tuple[str, str]]
         out.append((href, title))
         if len(out) >= max_results:
             break
-
-    # If parsing yields zero results, retry with browser if we haven't already.
-    if not out and not should_fallback:
-        logger.warning("Bing standard HTTP search returned 0 parsed results. Retrying with browser-based fetch (use_browser=True).")
-        try:
-            res = await fetch(url, respect_robots=False, timeout_s=25.0, use_browser=True)
-            if res and res.text:
-                for m in _BING_RESULT_RE.finditer(res.text):
-                    href = m.group("href").strip()
-                    href = _unwrap_bing_redirector(href)
-                    title = _WS_RE.sub(" ", _TAG_RE.sub("", m.group("title"))).strip()
-                    if not href or href in seen or href.startswith("https://www.bing.com/"):
-                        continue
-                    seen.add(href)
-                    out.append((href, title))
-                    if len(out) >= max_results:
-                        break
-        except Exception as exc:
-            logger.error("Browser-based retry for Bing search query '%s' failed: %s", query, exc)
 
     logger.info("Bing search query '%s' returned %d results.", query, len(out))
     return out
@@ -605,6 +555,58 @@ def _crawl4ai_to_scraped_doc(
     )
 
 
+# Adaptive concurrency: conservative for regulatory/exchange sites, aggressive for news
+_DOMAIN_CONCURRENCY: dict[str, int] = {
+    "sebi.gov.in": 3,
+    "nseindia.com": 3,
+    "bseindia.com": 3,
+    "rbi.org.in": 3,
+    "mca.gov.in": 3,
+}
+_DEFAULT_CONCURRENCY = 8
+_NEWS_CONCURRENCY = 12
+
+
+def _concurrency_for_urls(urls: list[str]) -> int:
+    """Return semaphore count based on primary domain in URL list."""
+    if not urls:
+        return _DEFAULT_CONCURRENCY
+    hosts = [_domain_of(u) for u in urls[:5]]
+    for h in hosts:
+        if h in _DOMAIN_CONCURRENCY:
+            return _DOMAIN_CONCURRENCY[h]
+    # Heuristic: news/media domains get higher concurrency
+    news_domains = {"moneycontrol.com", "economictimes.indiatimes.com", "livemint.com",
+                    "businesstoday.in", "ndtvprofit.com", "thehindubusinessline.com"}
+    if any(h in news_domains for h in hosts):
+        return _NEWS_CONCURRENCY
+    return _DEFAULT_CONCURRENCY
+
+
+def _effective_crawl4ai_concurrency(base: int) -> int:
+    """Apply env override + optional memory-based cap for 2GB ECS etc."""
+    env_max = os.getenv("CRAWL4AI_MAX_CONCURRENCY")
+    if env_max:
+        try:
+            cap = max(1, int(env_max))
+            return min(base, cap)
+        except ValueError:
+            pass
+
+    # Optional memory-aware cap (psutil not required)
+    try:
+        import psutil  # type: ignore
+        mem = psutil.virtual_memory()
+        available_gb = mem.available / (1024 ** 3)
+        # Very conservative: ~500MB per Chromium tab
+        mem_cap = max(2, int(available_gb * 2))
+        return min(base, mem_cap)
+    except Exception:
+        pass
+
+    return base
+
+
 async def _crawl4ai_fetch_batch_inner(
     urls: list[str],
     *,
@@ -682,12 +684,29 @@ async def _crawl4ai_fetch_batch_inner(
         remove_consent_popups=True,
     )
 
+    # Apply domain-specific extraction overrides for known Indian market sites
+    try:
+        from finagent.tools.web.crawl4ai_sites import apply_domain_override
+        run_cfg = apply_domain_override(run_cfg, urls)
+    except Exception:
+        pass  # Graceful if crawl4ai_sites import fails or merging errors
+
+    try:
+        from finagent.state.session_context import record_website
+        for url in urls:
+            record_website(url)
+    except ImportError:
+        pass
+
     logger.info("Crawl4AI batch starting for %d URL(s)...", len(urls))
     docs: list[ScrapedDoc] = []
     try:
         async with _get_crawler_semaphore():
             async with AsyncWebCrawler(config=browser_cfg) as crawler:
-                dispatcher = SemaphoreDispatcher(semaphore_count=8) if SemaphoreDispatcher else None
+                base_sem = _concurrency_for_urls(urls)
+                sem_count = _effective_crawl4ai_concurrency(base_sem)
+                logger.info("Crawl4AI adaptive concurrency selected: semaphore_count=%d (base=%d)", sem_count, base_sem)
+                dispatcher = SemaphoreDispatcher(semaphore_count=sem_count) if SemaphoreDispatcher else None
                 if dispatcher:
                     results = await crawler.arun_many(urls=urls, config=run_cfg, dispatcher=dispatcher)
                 else:
@@ -701,52 +720,62 @@ async def _crawl4ai_fetch_batch_inner(
                             success_count += 1
                             logger.info("  Crawl4AI successfully fetched: %s", doc.url)
                     else:
-                        # Per-URL failure: degrade to httpx/Playwright for this specific URL
+                        # Per-URL failure: httpx fallback → Crawl4AI single-page retry
                         err_url = getattr(result, "url", "")
                         err_msg = getattr(result, "error_message", "unknown")
                         logger.info(
-                            "  Crawl4AI failed for %r (%s) — falling back to httpx/Playwright...",
+                            "  Crawl4AI batch failed for %r (%s) — attempting httpx fallback + Crawl4AI retry...",
                             err_url, err_msg,
                         )
                         if err_url:
                             try:
-                                logger.info("  Attempting standard HTTP fallback for failed Crawl4AI URL: %s", err_url)
+                                logger.info("  [FALLBACK] httpx fetch for: %s", err_url)
                                 fallback_doc = await fetch_and_parse(err_url)
                                 if fallback_doc.status != 200 or fallback_doc.blocked_reason or fallback_doc.text_len < 200:
                                     logger.warning(
-                                        "  Standard HTTP fallback for %r returned status %s (len=%d, blocked=%s). "
-                                        "Activating browser-based Playwright fallback...",
+                                        "  httpx insufficient for %r (status=%s len=%d blocked=%s). "
+                                        "Retrying with Crawl4AI single-page (2× timeout, enhanced stealth)...",
                                         err_url, fallback_doc.status, fallback_doc.text_len, fallback_doc.blocked_reason
                                     )
-                                    fallback_doc = await fetch_and_parse(err_url, use_browser=True)
+                                    from finagent.tools.web.http_fetcher import _fetch_via_crawl4ai_single
+                                    retry_res = await _fetch_via_crawl4ai_single(err_url, timeout_s=timeout_s * 2)
+                                    if retry_res.text and retry_res.status == 200:
+                                        # Re-parse the Crawl4AI retry result into ScrapedDoc
+                                        domain = _domain_of(retry_res.final_url or err_url)
+                                        title, text = _extract(retry_res.text) if retry_res.text else ("", "")
+                                        fallback_doc = ScrapedDoc(
+                                            url=err_url,
+                                            final_url=retry_res.final_url or err_url,
+                                            domain=domain,
+                                            tier=_tier_for(domain),
+                                            title=title[:300],
+                                            excerpt=text[:600],
+                                            text_len=len(text),
+                                            status=retry_res.status,
+                                            via="crawl4ai-retry",
+                                            is_social=domain in SOCIAL_DOMAINS,
+                                        )
                                 # Patch in title from search if couldn't extract one
                                 if not fallback_doc.title and title_by_url:
                                     fallback_doc.title = (title_by_url.get(err_url, ""))[:300]
                                 docs.append(fallback_doc)
-                                logger.info("    Fallback fetch completed for: %s (via=%s)", err_url, fallback_doc.via)
+                                logger.info("    Fallback completed for: %s (via=%s)", err_url, fallback_doc.via)
                             except Exception as fe:
-                                logger.warning("    Fallback fetch also failed for %r: %s", err_url, fe)
+                                logger.warning("    Fallback completely failed for %r: %s", err_url, fe)
                 logger.info("Crawl4AI batch finished: %d/%d fetched successfully via browser.", success_count, len(urls))
     except Exception as exc:
         logger.warning(
-            "Crawl4AI batch session failed: %s — falling back to httpx/Playwright for all %d URL(s)",
+            "Crawl4AI batch session failed: %s — falling back to httpx for all %d URL(s)",
             exc, len(urls),
         )
         for url in urls:
             try:
-                logger.info("  Attempting standard HTTP fallback for URL: %s", url)
+                logger.info("  [BATCH FALLBACK] httpx fetch for URL: %s", url)
                 fallback_doc = await fetch_and_parse(url)
-                if fallback_doc.status != 200 or fallback_doc.blocked_reason or fallback_doc.text_len < 200:
-                    logger.warning(
-                        "  Standard HTTP fallback for %r returned status %s (len=%d, blocked=%s). "
-                        "Activating browser-based Playwright fallback...",
-                        url, fallback_doc.status, fallback_doc.text_len, fallback_doc.blocked_reason
-                    )
-                    fallback_doc = await fetch_and_parse(url, use_browser=True)
                 docs.append(fallback_doc)
-                logger.info("    Fallback fetch completed for: %s (via=%s)", url, fallback_doc.via)
+                logger.info("    Batch fallback completed for: %s (via=%s)", url, fallback_doc.via)
             except Exception as fe:
-                logger.warning("    Fallback fetch failed for %r: %s", url, fe)
+                logger.warning("    Batch fallback failed for %r: %s", url, fe)
 
     return docs
 
@@ -812,13 +841,7 @@ def _dedup_by_domain(
     max_per_domain: int = 2,
     max_total: int = 20,
 ) -> list[tuple[str, str]]:
-    """Filter syndicated press-release noise from candidate URL lists.
-
-    Allows at most `max_per_domain` URLs per registrable domain so that one
-    BSE announcement mirrored across 10 news aggregators doesn't flood the
-    batch. Preserves the interleaved ordering so both DDG and Bing results
-    contribute proportionally.
-    """
+    logger.info("SEARCH-STEP:dedup_enter raw=%d max_per_domain=%d max_total=%d", len(candidates), max_per_domain, max_total)
     domain_count: dict[str, int] = {}
     seen_url: set[str] = set()
     out: list[tuple[str, str]] = []
@@ -834,6 +857,7 @@ def _dedup_by_domain(
         out.append((href, title))
         if len(out) >= max_total:
             break
+    logger.info("SEARCH-STEP:dedup_exit kept=%d", len(out))
     return out
 
 
@@ -849,52 +873,67 @@ async def search_web(
     entity: ResolvedEntity | None = None,
     query_cache: dict[str, list[ScrapedDoc]] | None = None,
 ) -> list[ScrapedDoc]:
-    """Multi-backend search with Crawl4AI as the primary content extraction engine.
+    """Search with **Crawl4AI as the PRIMARY heavy content extraction engine**.
 
-    Pipeline:
-    1. Stage 1 Candidate Sourcing: Tavily + DDG + Bing execute concurrently,
-       widening the pre-crawl pool to 40-60 links.
-       Tavily results are used directly (no browser re-crawl — snippets are sufficient).
-    2. Domain Dedup:   DDG + Bing URLs are interleaved and capped at 2 per domain
-                       to suppress syndicated press-release noise.
-    3. Crawl4AI Crawl: Headless Chromium batch-renders candidate URLs,
-                       producing clean fit_markdown with tables as markdown grids.
-    4. Rerank:         All docs scored by domain tier, BM25 relevance, and recency.
+    For analysis, deep news, follow-ups, and any "heavy searching" queries,
+    Crawl4AI (via its managed headless Chromium) is the main workhorse for
+    high-quality, rendered, markdown-extracted content.
 
-    Graceful degradation:
-    - If Crawl4AI is not installed → httpx fetch_and_parse per URL
-    - If a URL's browser session fails → httpx per-URL fallback
-    - If Tavily key is absent → DDG + Bing fill the pool
+    Pipeline (Crawl4AI-centric):
+    1. Candidate Sourcing: Primarily Tavily (high quality). DDG + Bing are used
+       sparingly as supplements to avoid fragile scraping and timeouts.
+    2. Deduplication & Prioritization of good domains.
+    3. **Crawl4AI Batch Crawl** (Primary Step): Deep browser rendering + cleaning
+       of the best candidate URLs. This produces rich fit_markdown, tables, etc.
+    4. Rerank and return.
+
+    Crawl4AI is deliberately the primary for heavy work (analysis, news articles,
+    filings, competitor research, etc.).
     """
+    logger.info("[MCP-USE] research_news | tool=search_web | args={'query': '%s'}", query)
     query = _normalize_india_query(query)
     if query_cache is not None and query in query_cache:
         return query_cache[query]
 
+    logger.info("SEARCH-STEP:00 start query=%s max_results=%d", query[:80], max_results)
+
+    logger.info("[SEARCH] Starting heavy search for: '%s' — Crawl4AI will be primary extractor for deep content", query[:80])
+
     stage1_target = min(60, max(40, max_results * 12))
     crawl_budget = min(30, max(6, max_results * 2))
 
-    # ── Phase 1: Fan-out search ───────────────────────────────────────────────
-    tavily_task = asyncio.create_task(_search_tavily(query, max_results=stage1_target))
-    ddg_task    = asyncio.create_task(_search_ddg(query, max_results=stage1_target))
-    bing_task   = asyncio.create_task(_search_bing(query, max_results=stage1_target))
+    logger.info("SEARCH-STEP:01 targets_computed stage1_target=%d crawl_budget=%d", stage1_target, crawl_budget)
 
-    tavily_raw, ddg_raw, bing_raw = await asyncio.gather(
-        tavily_task, ddg_task, bing_task, return_exceptions=True
-    )
+    # ── Phase 1: Candidate Sourcing (Crawl4AI is the primary heavy engine) ─────
+    # Tavily is preferred for high-quality candidates. DDG/Bing are used as
+    # supplementary sources only when needed (they are fragile and cause timeouts).
+    tavily_task = asyncio.create_task(_search_tavily(query, max_results=stage1_target))
+
+    # Only run DDG and Bing if we need more candidates (to reduce fragile scraping load)
+    tavily_results_raw = await tavily_task
     tavily_results: list[tuple[str, str, str]] = (
-        [] if isinstance(tavily_raw, Exception) else (tavily_raw or [])
+        [] if isinstance(tavily_results_raw, Exception) else (tavily_results_raw or [])
     )
-    ddg_results:   list[tuple[str, str]] = (
-        [] if isinstance(ddg_raw, Exception) else (ddg_raw or [])
-    )
-    bing_results:  list[tuple[str, str]] = (
-        [] if isinstance(bing_raw, Exception) else (bing_raw or [])
-    )
+
+    ddg_results: list[tuple[str, str]] = []
+    bing_results: list[tuple[str, str]] = []
+
+    # Use DDG/Bing only as backup for heavy searches when Tavily is weak
+    if len(tavily_results) < (stage1_target // 2):
+        ddg_task = asyncio.create_task(_search_ddg(query, max_results=stage1_target))
+        bing_task = asyncio.create_task(_search_bing(query, max_results=stage1_target))
+        ddg_raw, bing_raw = await asyncio.gather(ddg_task, bing_task, return_exceptions=True)
+        ddg_results = [] if isinstance(ddg_raw, Exception) else (ddg_raw or [])
+        bing_results = [] if isinstance(bing_raw, Exception) else (bing_raw or [])
+
+    logger.info("SEARCH-STEP:03 backup_sources_completed ddg=%d bing=%d", len(ddg_results), len(bing_results))
 
     logger.info(
-        "Stage 1 candidate sourcing hits: Tavily=%d DDG=%d Bing=%d target=%d",
-        len(tavily_results), len(ddg_results), len(bing_results), stage1_target
+        "Stage 1 candidate sourcing hits: Tavily=%d DDG=%d Bing=%d (Crawl4AI will be primary extractor)",
+        len(tavily_results), len(ddg_results), len(bing_results)
     )
+
+    logger.info("SEARCH-STEP:02 tavily_completed count=%d", len(tavily_results))
 
     # Tavily docs: use snippets directly — pre-enriched, no browser session needed
     tavily_docs: list[ScrapedDoc] = []
@@ -905,8 +944,16 @@ async def search_web(
             seen_urls.add(key)
             tavily_docs.append(_tavily_to_scraped_doc(url, title, snippet))
 
-    # ── Phase 2: Build deduplicated candidate pool from DDG + Bing ───────────
+    if tavily_docs:
+        logger.info("[TAVILY] Using %d direct snippets (lightweight path, no Crawl4AI)", len(tavily_docs))
+    else:
+        logger.info("[TAVILY] No direct Tavily results — will rely on Crawl4AI for content")
+
+    logger.info("SEARCH-STEP:04 tavily_docs_built count=%d", len(tavily_docs))
+
+    # ── Phase 2: Build candidate pool (Crawl4AI will do the heavy lifting) ─────
     raw_candidates: list[tuple[str, str]] = []
+
     for pair in _zip_longest_pairs(ddg_results, bing_results):
         for href, title in pair:
             if not href:
@@ -917,7 +964,9 @@ async def search_web(
             seen_urls.add(key)
             raw_candidates.append((href, title))
 
-    logger.info("Raw candidate URLs before domain deduplication: %d", len(raw_candidates))
+    logger.info("Raw candidate URLs before domain deduplication (Crawl4AI primary): %d", len(raw_candidates))
+
+    logger.info("SEARCH-STEP:05 raw_candidates_built count=%d", len(raw_candidates))
 
     # Cap at 2 URLs per domain — eliminates syndicated press-release floods
     candidates = _dedup_by_domain(
@@ -928,23 +977,32 @@ async def search_web(
 
     logger.info("Stage 1 candidates after domain deduplication: %d", len(candidates))
 
+    logger.info("SEARCH-STEP:06 dedup_done candidates=%d", len(candidates))
+
     # Prioritise preferred domains by sorting them to the front
     if preferred_domains:
         pref_set = {d.lower().removeprefix("www.") for d in preferred_domains if d}
         candidates.sort(key=lambda hd: 0 if _domain_of(hd[0]) in pref_set else 1)
 
+    logger.info("SEARCH-STEP:07 preferred_sort_done count=%d", len(candidates))
+
     # ── Phase 3: Crawl4AI batch — browser-render candidate URLs ──────────────
-    # Filter out PDF links to prevent browser hangs and empty extraction crashes
     crawl_urls = [
         h for h, _ in candidates[:crawl_budget]
         if not h.lower().split("?")[0].endswith(".pdf")
     ]
     title_by_url = {h: t for h, t in candidates}
 
-    logger.info(
-        "Stage 2 Crawl4AI batch selected %d URL(s) from %d candidate(s)",
-        len(crawl_urls), len(candidates),
-    )
+    logger.info("SEARCH-STEP:08 crawl_urls_prepared count=%d budget=%d", len(crawl_urls), crawl_budget)
+
+
+    if crawl_urls:
+        logger.info(
+            "[CRAWL4AI PRIMARY] Starting deep browser extraction for %d URLs (heavy analysis/news path)",
+            len(crawl_urls)
+        )
+    else:
+        logger.info("[CRAWL4AI] No URLs selected for deep extraction — using only Tavily snippets")
 
     crawl4ai_docs = await _crawl4ai_fetch_batch(
         crawl_urls,
@@ -953,16 +1011,31 @@ async def search_web(
         timeout_s=25.0,
     )
 
+    logger.info("SEARCH-STEP:09 crawl4ai_batch_returned docs=%d", len(crawl4ai_docs))
+
+    logger.info("[CRAWL4AI] Completed deep extraction: %d documents successfully processed", len(crawl4ai_docs))
+
     # Patch in search title for docs where Crawl4AI couldn't extract one
     for doc in crawl4ai_docs:
         if not doc.title:
             doc.title = (title_by_url.get(doc.url, "") or title_by_url.get(doc.final_url, ""))[:300]
 
+    logger.info("SEARCH-STEP:10 titles_patched crawl_docs=%d", len(crawl4ai_docs))
+
     # ── Phase 4: Merge and rerank ─────────────────────────────────────────────
     all_docs: list[ScrapedDoc] = [*tavily_docs, *crawl4ai_docs]
-    logger.info("Merging %d Tavily doc(s) and %d Crawl4AI doc(s) for reranking.", len(tavily_docs), len(crawl4ai_docs))
+    if crawl4ai_docs and not tavily_docs:
+        logger.info("[RESULT] Answer will be built primarily from CRAWL4AI deep extraction")
+    elif tavily_docs and not crawl4ai_docs:
+        logger.info("[RESULT] Answer will be built primarily from TAVILY direct snippets")
+    else:
+        logger.info("[RESULT] Answer built from TAVILY (%d) + CRAWL4AI (%d)", len(tavily_docs), len(crawl4ai_docs))
+
+    logger.info("SEARCH-STEP:11 docs_merged total=%d", len(all_docs))
+
     final_docs = rerank_docs(query, all_docs, entity=entity, preferred_domains=preferred_domains)
     final_docs = final_docs[:max_results]
+    logger.info("SEARCH-STEP:12 rerank_complete final=%d", len(final_docs))
     logger.info("Reranking completed. Slicing to top %d results.", len(final_docs))
 
     if query_cache is not None:
@@ -994,6 +1067,7 @@ async def search_layered(
     All queries fan out concurrently (~6× faster). Under timeout constraints,
     completed queries are returned, while lagging tasks are cancelled.
     """
+    logger.info("[MCP-USE] research_news | tool=search_web | args={'query': '%s'}", target)
     queries = queries or [
         f"{target} SEBI LODR Regulation 30 corporate announcements NSE BSE",
         f"{target} SEBI LODR Regulation 33 financial results NSE BSE",
@@ -1017,7 +1091,7 @@ async def search_layered(
                 on_query(q, "done", len(docs))
             return q, docs
         except asyncio.CancelledError:
-            logger.warning("query %r cancelled by outer timeout", q)
+            logger.warning("query %r cancelled", q)
             if on_query:
                 on_query(q, "timeout", 0)
             raise
@@ -1027,30 +1101,34 @@ async def search_layered(
                 on_query(q, "error", 0)
             return q, []
 
-    tasks = [asyncio.create_task(_one(q)) for q in queries]
-    
-    if timeout_s is not None:
-        logger.info("Fanning out %d queries with timeout of %.1f seconds", len(queries), timeout_s)
-        done, pending = await asyncio.wait(tasks, timeout=timeout_s)
-        # Cancel any lagging tasks
-        if pending:
-            logger.warning("%d search queries timed out and will be cancelled.", len(pending))
-            for task in pending:
-                task.cancel()
-            # Wait for cancellation to propagate (best effort)
-            await asyncio.gather(*pending, return_exceptions=True)
-    else:
-        logger.info("Fanning out %d queries with no timeout limit", len(queries))
-        done, pending = await asyncio.wait(tasks)
+    # NEW TIMEOUT STRATEGY (Option A):
+    # - Per-query timeout (prevents one slow backend from killing everything)
+    # - Global budget: stop *launching* new queries after budget exhausted
+    # - Never mass-cancel already-running queries (the old destructive pattern)
+    per_query_timeout = float(os.getenv("SEARCH_PER_QUERY_TIMEOUT", "30.0"))
+    results: list[tuple[str, list[ScrapedDoc]]] = []
+    start = time.monotonic()
+    budget_exhausted = False
 
-    results = []
-    for task in done:
+    for q in queries:
+        if timeout_s is not None and (time.monotonic() - start) > timeout_s:
+            budget_exhausted = True
+            logger.info("Global search budget (%.1fs) exhausted; skipping remaining queries", timeout_s)
+            break
         try:
-            res = task.result()
-            if res:
-                results.append(res)
+            res = await asyncio.wait_for(_one(q), timeout=per_query_timeout)
+            results.append(res)
+        except asyncio.TimeoutError:
+            logger.warning("query %r timed out after %.1fs", q, per_query_timeout)
+            if on_query:
+                on_query(q, "timeout", 0)
+            results.append((q, []))
         except Exception as e:
-            logger.error("Failed to retrieve result from search task: %s", e)
+            logger.error("query %r error: %s", q, e)
+            results.append((q, []))
+
+    if budget_exhausted:
+        logger.info("search_layered: %d/%d queries executed before budget exhaustion", len(results), len(queries))
 
     seen_urls: set[str] = set()
     all_docs: list[ScrapedDoc] = []

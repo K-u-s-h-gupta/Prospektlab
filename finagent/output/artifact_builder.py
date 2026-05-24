@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from typing import Any
 from urllib.parse import urlparse
 
 from finagent.output.contracts import (
@@ -18,6 +20,8 @@ from finagent.output.contracts import (
 )
 from finagent.output.templates import SECTION_TEMPLATES
 
+logger = logging.getLogger("finagent.output.artifact_builder")
+
 
 _TEXT_ONLY_MODES = {OutputMode.NEWS_BRIEF, OutputMode.FILING_ANALYSIS, OutputMode.DIRECT_ANSWER}
 _VISUAL_QUERY_TERMS = (
@@ -33,9 +37,390 @@ def _objective_wants_visuals(objective: str, mode: OutputMode) -> bool:
         return True
     if mode == OutputMode.NEWS_BRIEF:
         return False
-    if mode in {OutputMode.COMPANY_SNAPSHOT, OutputMode.VALUATION_MODEL, OutputMode.INVESTMENT_VIEW, OutputMode.DEEP_RESEARCH_REPORT}:
+    if mode in {OutputMode.COMPANY_SNAPSHOT, OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS, OutputMode.FORENSIC_INSIGHTS, OutputMode.INVESTMENT_VIEW, OutputMode.DEEP_RESEARCH_REPORT}:
         return True
     return any(term in lower for term in _VISUAL_QUERY_TERMS)
+
+
+def _detect_visual_intent(objective: str, mode: OutputMode) -> str:
+    """Lightweight query intent classification for dynamic visuals."""
+    q = (objective or "").lower()
+    if mode == OutputMode.COMPANY_COMPARISON:
+        return "competitor"
+    if any(k in q for k in ["competitor", "peer", "market share", "vs ", "versus", "compare", "comparison"]):
+        return "competitor"
+    if any(k in q for k in ["sebi", "risk", "regulatory", "lod r", "regulation", "compliance"]):
+        return "risk"
+    if any(k in q for k in ["quarterly", "q1", "q2", "q3", "q4", "earnings", "results", "concall"]):
+        return "quarterly"
+    if any(k in q for k in ["guidance", "outlook", "management", "forecast", "concall"]):
+        return "guidance"
+    if mode in {OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS}:
+        return "valuation"
+    if mode == OutputMode.FORENSIC_INSIGHTS:
+        return "forensic"
+    return "snapshot"
+
+
+# ---------------------------------------------------------------------------
+#  Finding helpers — extract structured agent outputs for runtime visuals
+# ---------------------------------------------------------------------------
+
+
+def _findings_by_agent(findings: list[Any] | None, agent_name: str) -> list[Any]:
+    """Return all findings whose .agent matches agent_name (case-insensitive)."""
+    if not findings:
+        return []
+    return [f for f in findings if getattr(f, "agent", "").lower() == agent_name.lower()]
+
+
+def _first_metric(findings: list[Any], key: str, default: Any = None) -> Any:
+    """Return the first non-None value for `key` across findings' .metrics dicts."""
+    for f in findings:
+        metrics = getattr(f, "metrics", None)
+        if isinstance(metrics, dict) and key in metrics and metrics[key] is not None:
+            return metrics[key]
+    return default
+
+
+def _collect_projection_series(findings: list[Any]) -> dict[str, Any]:
+    """Extract forecast projection arrays from ValuationAgent findings."""
+    out: dict[str, Any] = {"point_forecast": None, "p10": None, "p90": None, "labels": []}
+    for f in findings:
+        metrics = getattr(f, "metrics", None)
+        if not isinstance(metrics, dict):
+            continue
+        # Look for projected_terminal_revenue (single scalar) or point_forecast (list)
+        if "point_forecast" in metrics and isinstance(metrics["point_forecast"], list):
+            out["point_forecast"] = metrics["point_forecast"]
+        if "p10" in metrics and isinstance(metrics["p10"], list):
+            out["p10"] = metrics["p10"]
+        if "p90" in metrics and isinstance(metrics["p90"], list):
+            out["p90"] = metrics["p90"]
+        if "horizon_years" in metrics:
+            out["horizon"] = metrics["horizon_years"]
+        if "model_used" in metrics:
+            out["model_used"] = metrics["model_used"]
+    return out
+
+
+# ---------------------------------------------------------------------------
+#  Mode-aware metric cards — generate cards based on query intent
+# ---------------------------------------------------------------------------
+
+
+def _build_mode_aware_metric_cards(
+    bundle,
+    entity,
+    mode: OutputMode,
+    findings: list[Any] | None,
+    objective: str = "",
+) -> list[MetricCard]:
+    """Build metric cards that match the user's query intent.
+
+    Instead of always showing the same 6 snapshot cards, we pick cards that are
+    relevant to the query: valuation queries show DCF outputs, forensic queries
+    show anomaly stats, competitor queries show peer context, etc.
+    """
+    y = getattr(bundle, "yahoo", None)
+    metrics = getattr(y, "financial_metrics", {}) or {} if y else {}
+    currency = getattr(y, "currency", None) or "INR" if y else "INR"
+    india = getattr(bundle, "india_snap", None)
+
+    # -- VALUATION mode -----------------------------------------------------
+    if mode in {OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS}:
+        val_findings = _findings_by_agent(findings, "valuation")
+        intrinsic = _first_metric(val_findings, "intrinsic_value")
+        current_price = _first_metric(val_findings, "current_price")
+        upside = _first_metric(val_findings, "upside_pct")
+        growth = _first_metric(val_findings, "implied_growth_rate")
+        model_used = _first_metric(val_findings, "model_used", "n/a")
+        fcf = _first_metric(val_findings, "fcf")
+
+        cards: list[MetricCard] = []
+        cards.append(MetricCard(
+            label="Current Price",
+            value=_money(current_price, currency) if current_price else (_price(y) if y else "n/a"),
+            icon="trending-up",
+            is_partial=current_price is None and (y is None or getattr(y, "price", None) is None),
+        ))
+        cards.append(MetricCard(
+            label="DCF Intrinsic Value",
+            value=_money(intrinsic, currency) if intrinsic else "n/a",
+            change=f"{upside:+.1f}%" if upside is not None else None,
+            change_type="positive" if (upside or 0) > 0 else "negative" if (upside or 0) < 0 else "neutral",
+            icon="scale",
+            tooltip="Discounted Cash Flow fair value per share",
+            is_partial=intrinsic is None,
+        ))
+        cards.append(MetricCard(
+            label="Implied Growth",
+            value=f"{growth*100:.1f}%" if growth else "n/a",
+            icon="percent",
+            tooltip="Revenue growth rate implied by the forecast model",
+            is_partial=growth is None,
+        ))
+        cards.append(MetricCard(
+            label="FCF (TTM)",
+            value=_money(fcf, currency) if fcf else _money(metrics.get("free_cashflow"), currency),
+            icon="currency-dollar",
+            tooltip="Trailing twelve-month Free Cash Flow",
+            is_partial=fcf is None and metrics.get("free_cashflow") is None,
+        ))
+        cards.append(MetricCard(
+            label="Forecast Model",
+            value=str(model_used),
+            icon="chip",
+            tooltip="Model that generated the projection (timesfm_2.5 = real model)",
+            is_partial=model_used in (None, "n/a", "fallback_cagr", "fallback_statistical"),
+        ))
+        # Market cap for context
+        market_cap = getattr(y, "market_cap", None) if y else None
+        cards.append(MetricCard(
+            label="Market Cap",
+            value=_money(market_cap, currency),
+            icon="chart-pie",
+            is_partial=market_cap is None,
+        ))
+        return cards
+
+    # -- FORENSIC mode ------------------------------------------------------
+    if mode == OutputMode.FORENSIC_INSIGHTS:
+        acct_findings = _findings_by_agent(findings, "accounting")
+        anomaly_count = sum(
+            1 for f in acct_findings
+            if isinstance(getattr(f, "metrics", None), dict)
+            and getattr(f, "metrics", {}).get("is_anomaly")
+        )
+        total_checked = _first_metric(acct_findings, "total_checked", 0)
+        confidence = _first_metric(acct_findings, "confidence", "MEDIUM")
+        cards = []
+        cards.append(MetricCard(
+            label="Anomalies Flagged",
+            value=str(anomaly_count),
+            change_type="negative" if anomaly_count > 0 else "positive",
+            icon="alert-triangle",
+            tooltip="Number of data points outside the P10–P90 confidence corridor",
+        ))
+        cards.append(MetricCard(
+            label="Data Points Checked",
+            value=str(total_checked) if total_checked else "n/a",
+            icon="database",
+            tooltip="Total historical observations screened",
+            is_partial=total_checked == 0,
+        ))
+        cards.append(MetricCard(
+            label="Screen Confidence",
+            value=str(confidence),
+            icon="shield",
+            tooltip="Confidence level of the forensic screen",
+        ))
+        # Append snapshot basics for context
+        if y:
+            cards.append(MetricCard(
+                label="P/E Ratio",
+                value=_num(metrics.get("trailing_pe"), "x"),
+                icon="scale",
+                is_partial=metrics.get("trailing_pe") is None,
+            ))
+            cards.append(MetricCard(
+                label="ROE",
+                value=_pct(metrics.get("return_on_equity")),
+                icon="trending-up",
+                is_partial=metrics.get("return_on_equity") is None,
+            ))
+        return cards
+
+    # -- NEWS mode ----------------------------------------------------------
+    if mode == OutputMode.NEWS_BRIEF:
+        news_items = getattr(bundle, "news", []) or []
+        cards = []
+        cards.append(MetricCard(
+            label="Headlines",
+            value=str(len(news_items)),
+            icon="newspaper",
+            tooltip="Total news articles retrieved",
+        ))
+        if news_items:
+            sources = len({getattr(n, "source", "") for n in news_items})
+            cards.append(MetricCard(
+                label="Sources",
+                value=str(sources),
+                icon="rss",
+                tooltip="Unique news outlets",
+            ))
+        return cards
+
+    # -- DEFAULT / SNAPSHOT / INVESTMENT / DEEP_RESEARCH ---------------------
+    intent = _detect_visual_intent(objective, mode)
+    if intent == "competitor":
+        # Return a lightweight competitor-oriented set if we have peer data later
+        return _build_metric_cards(bundle, entity)
+    if intent in ("risk", "quarterly", "guidance"):
+        # For these, still start with core snapshot but synthesis will enrich
+        return _build_metric_cards(bundle, entity)
+    return _build_metric_cards(bundle, entity)
+
+
+def _build_mode_aware_charts(
+    bundle,
+    mode: OutputMode,
+    findings: list[Any] | None,
+    objective: str = "",
+) -> list[AnswerChart]:
+    """Build charts that match the user's query intent.
+
+    Instead of always emitting the same price + revenue charts, we generate
+    runtime charts from the specialist findings + query intent.
+    """
+    y = getattr(bundle, "yahoo", None)
+    currency = getattr(y, "currency", None) or "INR" if y else "INR"
+    charts: list[AnswerChart] = []
+
+    # -- VALUATION mode: DCF projection line chart --------------------------
+    if mode in {OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS}:
+        val_findings = _findings_by_agent(findings, "valuation")
+        proj = _collect_projection_series(val_findings)
+        point = proj.get("point_forecast")
+        if point and isinstance(point, list) and len(point) >= 2:
+            labels = [f"Y{i+1}" for i in range(len(point))]
+            data_points = [ChartDataPoint(label=l, value=float(v)) for l, v in zip(labels, point)]
+            series = [ChartSeries(
+                name="Projected Revenue",
+                color="#10b981",
+                data=data_points,
+                unit=currency,
+                chart_type="line",
+            )]
+            # Add P10/P90 corridor if available
+            p10 = proj.get("p10")
+            p90 = proj.get("p90")
+            if p10 and p90 and len(p10) == len(point) and len(p90) == len(point):
+                series.append(ChartSeries(
+                    name="P10 (Conservative)",
+                    color="#f59e0b",
+                    data=[ChartDataPoint(label=l, value=float(v)) for l, v in zip(labels, p10)],
+                    unit=currency,
+                    chart_type="line",
+                ))
+                series.append(ChartSeries(
+                    name="P90 (Optimistic)",
+                    color="#8b5cf6",
+                    data=[ChartDataPoint(label=l, value=float(v)) for l, v in zip(labels, p90)],
+                    unit=currency,
+                    chart_type="line",
+                ))
+            charts.append(AnswerChart(
+                id="dcf-projection",
+                title="Revenue Projection (DCF Input)",
+                subtitle=f"Model: {proj.get('model_used', 'statistical fallback')}",
+                chart_type="line",
+                series=series,
+                labels=labels,
+                dimensions={"width": 700, "height": 350},
+                is_partial=proj.get("model_used") in (None, "fallback_cagr", "fallback_statistical"),
+            ))
+        # Intrinsic value vs current price bar
+        intrinsic = _first_metric(val_findings, "intrinsic_value")
+        current_price = _first_metric(val_findings, "current_price")
+        if intrinsic and current_price:
+            charts.append(AnswerChart(
+                id="iv-vs-price",
+                title="Intrinsic Value vs Market Price",
+                subtitle=currency,
+                chart_type="bar",
+                series=[ChartSeries(
+                    name="Value",
+                    color="#3b82f6",
+                    data=[
+                        ChartDataPoint(label="Market Price", value=float(current_price)),
+                        ChartDataPoint(label="DCF Intrinsic", value=float(intrinsic)),
+                    ],
+                    unit=currency,
+                    chart_type="bar",
+                )],
+                labels=["Market Price", "DCF Intrinsic"],
+                dimensions={"width": 400, "height": 300},
+                is_partial=False,
+            ))
+        return charts
+
+    # -- FORENSIC mode: anomaly corridor chart ------------------------------
+    if mode == OutputMode.FORENSIC_INSIGHTS:
+        acct_findings = _findings_by_agent(findings, "accounting")
+        # If AccountingAgent populated historical/predicted arrays in metrics
+        for f in acct_findings:
+            metrics = getattr(f, "metrics", None)
+            if not isinstance(metrics, dict):
+                continue
+            hist = metrics.get("historical")
+            pred = metrics.get("predicted")
+            lower = metrics.get("lower_bound")
+            upper = metrics.get("upper_bound")
+            if hist and pred and isinstance(hist, list) and isinstance(pred, list):
+                labels = [f"T{i}" for i in range(len(hist))]
+                series: list[ChartSeries] = [
+                    ChartSeries(
+                        name="Actual",
+                        color="#3b82f6",
+                        data=[ChartDataPoint(label=l, value=float(v)) for l, v in zip(labels, hist)],
+                        unit=currency,
+                        chart_type="line",
+                    ),
+                    ChartSeries(
+                        name="Predicted",
+                        color="#10b981",
+                        data=[ChartDataPoint(label=l, value=float(v)) for l, v in zip(labels, pred)],
+                        unit=currency,
+                        chart_type="line",
+                    ),
+                ]
+                if lower and upper and len(lower) == len(labels) and len(upper) == len(labels):
+                    series.append(ChartSeries(
+                        name="Lower Bound (P10)",
+                        color="#f59e0b",
+                        data=[ChartDataPoint(label=l, value=float(v)) for l, v in zip(labels, lower)],
+                        unit=currency,
+                        chart_type="line",
+                    ))
+                    series.append(ChartSeries(
+                        name="Upper Bound (P90)",
+                        color="#f59e0b",
+                        data=[ChartDataPoint(label=l, value=float(v)) for l, v in zip(labels, upper)],
+                        unit=currency,
+                        chart_type="line",
+                    ))
+                charts.append(AnswerChart(
+                    id="anomaly-corridor",
+                    title="Forecast vs Actual with Confidence Corridor",
+                    subtitle="P10–P90 anomaly detection band",
+                    chart_type="line",
+                    series=series,
+                    labels=labels,
+                    dimensions={"width": 700, "height": 350},
+                    is_partial=False,
+                ))
+                break  # one chart is enough
+        return charts
+
+    # -- DEFAULT / SNAPSHOT: standard charts + intent-aware extensions ------
+    intent = _detect_visual_intent(objective, mode)
+    price_chart = _build_price_chart(bundle)
+    if price_chart:
+        charts.append(price_chart)
+    revenue_chart = _build_revenue_chart(bundle)
+    if revenue_chart:
+        charts.append(revenue_chart)
+
+    # Intent-specific lightweight charts (only if we have the underlying data)
+    y = getattr(bundle, "yahoo", None)
+    if intent == "competitor" and y:
+        # Placeholder: actual competitor comparison chart is built in _build_comparison_charts
+        pass
+    if intent == "quarterly":
+        # Could add quarterly bar chart if quarterly series present in bundle
+        pass
+    return charts
 
 
 def _build_metric_cards(bundle, entity) -> list[MetricCard]:
@@ -446,27 +831,31 @@ def build_answer_artifact(
 
     wants_visuals = _objective_wants_visuals(objective, mode)
 
-    # Build metric cards only when the user asked for a visual/metric style
-    # response. News and text-only direct answers should stay prose-first.
-    # Comparison mode uses the head-to-head scoreboard instead; single-entity
-    # metric cards (Key Metrics grid) would be confusing and misleading.
-    metric_cards = [] if is_comparison or not wants_visuals else _build_metric_cards(bundle, entity)
+    # ------------------------------------------------------------------
+    # Mode-aware runtime visuals — metric cards & charts are generated
+    # based on the query intent and available specialist findings,
+    # not a hardcoded snapshot set.
+    # ------------------------------------------------------------------
+    metric_cards: list[MetricCard] = []
+    charts: list[AnswerChart] = []
 
-    # Build single-entity charts only for non-comparison modes.
-    # Price History and Revenue Trend charts are meaningless for a "TCS vs Infosys"
-    # query — they only show data for the primary entity and would mislead the user.
-    charts = []
-    if not is_comparison and wants_visuals:
-        price_chart = _build_price_chart(bundle)
-        if price_chart:
-            charts.append(price_chart)
-        revenue_chart = _build_revenue_chart(bundle)
-        if revenue_chart:
-            charts.append(revenue_chart)
+    if wants_visuals and not is_comparison:
+        metric_cards = _build_mode_aware_metric_cards(bundle, entity, mode, specialist_findings, objective=objective)
+        charts = _build_mode_aware_charts(bundle, mode, specialist_findings, objective=objective)
+        logger.info(
+            "[VISUALS] mode=%s | metric_cards=%d | charts=%d | findings=%d",
+            mode.value, len(metric_cards), len(charts), len(specialist_findings or []),
+        )
+    elif is_comparison and peer_quotes:
+        # Comparison mode keeps its own scoreboard; we still append any
+        # valuation-specific charts if the query was valuation-focused.
+        if mode in {OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS}:
+            metric_cards = _build_mode_aware_metric_cards(bundle, entity, mode, specialist_findings, objective=objective)
+            charts = _build_mode_aware_charts(bundle, mode, specialist_findings, objective=objective)
 
     # Build comparison elements if in comparison mode
-    comparison_charts = []
-    comparison_results = []
+    comparison_charts: list[AnswerChart] = []
+    comparison_results: list[ComparisonResult] = []
     if is_comparison and peer_quotes:
         comparison_charts = _build_comparison_charts(AnswerArtifact(mode=mode, depth=depth, title=title, summary=summary), bundle, peer_quotes or {})
         charts.extend(comparison_charts)
@@ -495,8 +884,10 @@ def build_answer_artifact(
 
     if mode == OutputMode.COMPANY_COMPARISON:
         _fill_comparison(artifact, bundle, peer_quotes or {}, specialist_findings or [], docs)
-    elif mode == OutputMode.VALUATION_MODEL:
+    elif mode in {OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS}:
         _fill_valuation(artifact, bundle, specialist_findings or [])
+    elif mode == OutputMode.FORENSIC_INSIGHTS:
+        _fill_forensic_insights(artifact, bundle, specialist_findings or [], docs)
     elif mode == OutputMode.NEWS_BRIEF:
         _fill_news(artifact, bundle, docs)
     elif mode in {OutputMode.FILING_ANALYSIS, OutputMode.DOCUMENT_VERSION_COMPARISON}:
@@ -507,7 +898,7 @@ def build_answer_artifact(
         _fill_market_explainer(artifact, objective, docs, specialist_findings or [])
     elif mode == OutputMode.DEEP_RESEARCH_REPORT:
         _fill_deep_report(artifact, bundle, docs, specialist_findings or [], conflicts or [], quality_report)
-    elif mode == OutputMode.DIRECT_ANSWER:
+    elif mode in {OutputMode.DIRECT_ANSWER, OutputMode.CONVERSATIONAL_CHAT}:
         _fill_direct_answer(artifact, objective, bundle, docs)
     else:
         _fill_snapshot(artifact, bundle, docs, specialist_findings or [])
@@ -519,8 +910,10 @@ def _title_for(mode: OutputMode, target: str, entity) -> str:
     label = getattr(entity, "canonical_name", None) or target
     if mode == OutputMode.COMPANY_COMPARISON:
         return f"{label} comparison"
-    if mode == OutputMode.VALUATION_MODEL:
+    if mode in {OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS}:
         return f"{label} valuation"
+    if mode == OutputMode.FORENSIC_INSIGHTS:
+        return f"{label} forensic audit screen"
     if mode == OutputMode.NEWS_BRIEF:
         return f"{label} news brief"
     if mode == OutputMode.DEEP_RESEARCH_REPORT:
@@ -534,8 +927,10 @@ def _summary_for(mode: OutputMode, target: str, bundle, entity, quality_report) 
         return f"This report synthesizes multi-source evidence for {label}, with explicit confidence and limitations."
     if mode == OutputMode.COMPANY_COMPARISON:
         return f"Here is a side-by-side finance-focused comparison using available market, fundamentals, news, and specialist findings."
-    if mode == OutputMode.VALUATION_MODEL:
+    if mode in {OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS}:
         return f"Here is the valuation view for {label}. Figures are based on retrieved market/fundamental data and should be treated as an analytical estimate, not investment advice."
+    if mode == OutputMode.FORENSIC_INSIGHTS:
+        return f"Here is the forensic accounting and anomaly screening view for {label} using TimesFM probabilistic corridors."
     if mode == OutputMode.NEWS_BRIEF:
         return f"Here are the latest retrieved developments for {label} and why they matter."
     if mode == OutputMode.MARKET_EXPLAINER:
@@ -551,10 +946,15 @@ def _followups_for(mode: OutputMode, target: str) -> list[str]:
             f"Compare {target} against another named peer on margins and valuation.",
             "Run a deep mode peer comparison with segment-level growth and risks.",
         ]
-    if mode == OutputMode.VALUATION_MODEL:
+    if mode in {OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS}:
         return [
             "Run a DCF sensitivity table with WACC and terminal-growth assumptions.",
             "Compare valuation multiples against listed peers.",
+        ]
+    if mode == OutputMode.FORENSIC_INSIGHTS:
+        return [
+            "Inspect promoter pledging and shareholding updates.",
+            "Compare recent quarterly margins YoY.",
         ]
     if mode == OutputMode.DOCUMENT_VERSION_COMPARISON:
         return [
@@ -625,6 +1025,21 @@ def _fill_valuation(artifact: AnswerArtifact, bundle, findings) -> None:
             ResponseSection("Model Output", body, "MEDIUM"),
             ResponseSection("Assumptions To Confirm", "Revenue growth, EBIT/FCF margin, reinvestment needs, cost of equity/WACC, terminal growth, and net cash/debt.", "MEDIUM"),
             ResponseSection("Sensitivity", "Run a sensitivity grid around WACC and terminal growth before relying on a single fair value.", "MEDIUM"),
+        ]
+    )
+
+
+def _fill_forensic_insights(artifact: AnswerArtifact, bundle, findings, docs) -> None:
+    artifact.tables.append(_metrics_table(bundle))
+    accounting_findings = [f for f in findings if getattr(f, "agent", "") == "accounting"]
+    body = _findings_text(accounting_findings)
+    if not body:
+        body = "No structural accounting anomalies detected in recent financial series. The company passed standard forensic checks."
+    artifact.sections.extend(
+        [
+            ResponseSection("Forensic Screen Output", body, "MEDIUM"),
+            ResponseSection("Key Accounting Risks", _risk_text(bundle, docs, findings), "MEDIUM"),
+            ResponseSection("Governance & Audit Focus", "Verify board auditor reports, promoter pledging history, and footnotes in official filings for complete assurance.", "MEDIUM"),
         ]
     )
 

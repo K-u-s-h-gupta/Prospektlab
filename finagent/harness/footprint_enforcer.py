@@ -8,6 +8,7 @@ TOOL_RISK_LEVELS: dict[str, int] = {
     "web_search": 1,
     "web_fetch": 1,
     "browser_navigate": 2,
+    "deep_crawl_domain": 3,
     "file_read": 2,
     "file_write": 3,
     "enrich_business": 3,

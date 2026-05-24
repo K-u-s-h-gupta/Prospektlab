@@ -102,6 +102,11 @@ class Orchestrator:
 
         waves = _waves(self.agents)
         out.waves = len(waves)
+
+        logger.info("[ORCHESTRATOR] Starting | total_agents=%d | waves=%d | agents=%s",
+                    len(self.agents), len(waves), [a.name for a in self.agents])
+        logger.info("[ORCHESTRATOR] Wave plan: %s", [[a.name for a in w] for w in waves])
+
         self.emit(
             "orchestrator_started",
             agents=[a.name for a in self.agents],
@@ -111,14 +116,18 @@ class Orchestrator:
 
         for wave_idx, wave in enumerate(waves):
             if getattr(ctx, "budget_exceeded", None) and ctx.budget_exceeded():
-                logger.info("orchestrator stopping wave %s: time budget", wave_idx + 1)
+                logger.info("[ORCHESTRATOR] Stopping wave %s: time budget exceeded", wave_idx + 1)
                 break
+
+            logger.info("[ORCHESTRATOR] === WAVE %d/%d === agents=%s", wave_idx + 1, len(waves), [a.name for a in wave])
+
             self.emit(
                 "orchestrator_wave",
                 wave=wave_idx + 1,
                 wave_total=len(waves),
                 agents=[a.name for a in wave],
             )
+
             results = await asyncio.gather(
                 *(a.run(ctx) for a in wave),
                 return_exceptions=False,
@@ -127,7 +136,11 @@ class Orchestrator:
                 out.results[r.agent_name] = r
                 out.findings.extend(r.findings)
                 out.new_docs.extend(r.new_docs)
+                logger.info("[ORCHESTRATOR] Agent %s finished | status=%s | findings=%d | new_docs=%d",
+                            r.agent_name, r.status, len(r.findings), len(r.new_docs))
 
         out.elapsed_ms = int((time.perf_counter() - t0) * 1000)
+        logger.info("[ORCHESTRATOR] ALL WAVES COMPLETE | total_findings=%d | total_new_docs=%d | elapsed_ms=%d",
+                    len(out.findings), len(out.new_docs), out.elapsed_ms)
         self.emit("orchestrator_done", **out.to_dict())
         return out

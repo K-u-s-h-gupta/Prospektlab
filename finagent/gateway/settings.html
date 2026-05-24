@@ -21,6 +21,15 @@
     .toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
     .toggle.on { background: #7da8ff; }
     .toggle.on::after { transform: translateX(18px); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
   </style>
 </head>
 <body class="min-h-screen">
@@ -93,14 +102,14 @@
               <div class="font-medium text-sm">Include community signal</div>
               <div class="text-xs text-muted mt-0.5">Reddit + StockTwits + Hacker News.</div>
             </div>
-            <div id="tgCommunity" class="toggle on"></div>
+            <button type="button" id="tgCommunity" class="toggle on" role="switch" aria-checked="true" aria-label="Include community signal"></button>
           </div>
           <div class="flex items-center justify-between">
             <div>
               <div class="font-medium text-sm">Pump-and-dump heuristic</div>
               <div class="text-xs text-muted mt-0.5">Auto-downgrades hype-heavy social posts to LOW confidence.</div>
             </div>
-            <div id="tgViral" class="toggle on"></div>
+            <button type="button" id="tgViral" class="toggle on" role="switch" aria-checked="true" aria-label="Pump-and-dump heuristic"></button>
           </div>
         </div>
       </section>
@@ -135,7 +144,7 @@
               <div class="font-medium text-sm">Streaming memo</div>
               <div class="text-xs text-muted mt-0.5">Token-by-token render while OpenAI composes.</div>
             </div>
-            <div id="tgStreaming" class="toggle on"></div>
+            <button type="button" id="tgStreaming" class="toggle on" role="switch" aria-checked="true" aria-label="Streaming memo"></button>
           </div>
         </div>
       </section>
@@ -177,6 +186,19 @@
 <script>
   const $ = (id) => document.getElementById(id);
   const TOGGLES = ["tgCommunity", "tgViral", "tgStreaming"];
+
+  function setToggle(id, on) {
+    const el = $(id);
+    if (!el) return;
+    if (on) {
+      el.classList.add("on");
+      el.setAttribute("aria-checked", "true");
+    } else {
+      el.classList.remove("on");
+      el.setAttribute("aria-checked", "false");
+    }
+  }
+
   function loadPrefs() {
     try {
       const p = JSON.parse(localStorage.getItem("prospektlab_prefs") || "{}");
@@ -187,17 +209,39 @@
       if (p.openaiKey) $("openaiKey").value = p.openaiKey;
       TOGGLES.forEach((id) => {
         const key = id.replace("tg", "tg_");
-      TOGGLES.forEach((id) => {
-        const key = id.replace("tg", "tg_");
-        if (p[key] === false) $(id).classList.remove("on");
-        if (p[key] === true) $(id).classList.add("on");
+        if (p[key] === false) setToggle(id, false);
+        else if (p[key] === true) setToggle(id, true);
       });
     } catch (_) {}
   }
-  TOGGLES.forEach((id) => $(id).addEventListener("click", () => $(id).classList.toggle("on")));
+
+  TOGGLES.forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener("click", () => {
+      const isOn = el.classList.toggle("on");
+      el.setAttribute("aria-checked", isOn ? "true" : "false");
+    });
+    // Keyboard support (Space/Enter already works for buttons, but ensure aria)
+    el.addEventListener("keydown", (e) => {
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        const isOn = el.classList.toggle("on");
+        el.setAttribute("aria-checked", isOn ? "true" : "false");
+      }
+    });
+  });
+
   $("saveBtn").addEventListener("click", () => {
+    const maxStepsVal = parseInt($("maxSteps").value, 10);
+    if (isNaN(maxStepsVal) || maxStepsVal < 1 || maxStepsVal > 50) {
+      $("maxSteps").classList.add("!border-error");
+      $("maxSteps").focus();
+      setTimeout(() => $("maxSteps").classList.remove("!border-error"), 1800);
+      return;
+    }
     const prefs = {
-      maxSteps: parseInt($("maxSteps").value, 10) || 14,
+      maxSteps: maxStepsVal || 14,
       rounds: parseInt($("rounds").value, 10) || 2,
       currency: $("currency").value,
       fxOverride: $("fxOverride").value || null,
@@ -208,16 +252,30 @@
     $("saveMsg").classList.remove("hidden");
     setTimeout(() => $("saveMsg").classList.add("hidden"), 2200);
   });
+
   $("clearLocal").addEventListener("click", () => {
     if (!confirm("Clear all local ProspektLab data from this browser?")) return;
     localStorage.removeItem("prospektlab_user");
     sessionStorage.removeItem("prospektlab_user");
     localStorage.removeItem("prospektlab_prefs");
     localStorage.removeItem("prospektlab_watchlist");
+    localStorage.removeItem("prospektlab_session_id");
+    sessionStorage.removeItem("prospektlab_session_id");
     window.location.href = "/landing";
   });
+
   loadPrefs();
 </script>
 
+  <!-- Auto a11y: hide decorative icon ligatures from screen readers -->
+  <script>
+    (function(){ try {
+      document.querySelectorAll('.material-symbols-outlined').forEach(function(s){
+        if (!s.hasAttribute('aria-hidden') && !s.getAttribute('aria-label') && !s.closest('[role="button"],button,a')) {
+          s.setAttribute('aria-hidden','true');
+        }
+      });
+    } catch(e){} })();
+  </script>
 </body>
 </html>

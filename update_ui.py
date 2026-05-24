@@ -1,4 +1,19 @@
 """
+⚠️  DESTRUCTIVE UI REWRITE TOOL — USE WITH EXTREME CAUTION
+This script BLINDLY overwrites the body of widget.html while preserving
+only the <head> (up to first </style>) and the final big <script> block.
+
+It will discard any manual UI/UX fixes, accessibility improvements,
+mobile drawer, focus traps, aria-live regions, etc. that have been
+applied to the current widget.html.
+
+RECOMMENDED: Do not run this unless you have a full git commit or backup.
+It exists only for historical reference / one-off experiments.
+
+Original docstring preserved below for archaeology.
+"""
+
+"""
 Cleanly rewrites widget.html:
 - Keeps: <head> + tailwind config + fonts + the big JS <script> block
 - Replaces: everything between </style> and the big <script> at the end

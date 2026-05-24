@@ -22,6 +22,15 @@
     .scroll-thin::-webkit-scrollbar-thumb { background: rgba(125,168,255,0.18); border-radius: 999px; }
     input { transition: border-color 0.15s, box-shadow 0.15s; }
     input:focus { box-shadow: 0 0 0 3px rgba(125,168,255,0.18); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
   </style>
 </head>
 <body class="min-h-screen">
@@ -331,6 +340,8 @@
   $("signOutBtn").addEventListener("click", () => {
     localStorage.removeItem("prospektlab_user");
     sessionStorage.removeItem("prospektlab_user");
+    localStorage.removeItem("prospektlab_session_id");
+    sessionStorage.removeItem("prospektlab_session_id");
     window.location.href = "/landing";
   });
 
@@ -339,5 +350,15 @@
   loadWatchlist();
 </script>
 
+  <!-- Auto a11y: hide decorative icon ligatures from screen readers -->
+  <script>
+    (function(){ try {
+      document.querySelectorAll('.material-symbols-outlined').forEach(function(s){
+        if (!s.hasAttribute('aria-hidden') && !s.getAttribute('aria-label') && !s.closest('[role="button"],button,a')) {
+          s.setAttribute('aria-hidden','true');
+        }
+      });
+    } catch(e){} })();
+  </script>
 </body>
 </html>

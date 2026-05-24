@@ -10,11 +10,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import sys
+import threading
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
+# Serialize all Crawl4AI single-page browser launches on Windows to avoid
+# NotImplementedError from SelectorEventLoop + subprocess.
+_SINGLE_CRAWLER_THREAD_LOCK = threading.Lock()
+
 logger = logging.getLogger("finagent.http_fetcher")
+
+
 
 DESKTOP_HEADER_PROFILES = [
     {
@@ -187,6 +195,12 @@ async def fetch(
     timeout_s: float = 20.0,
     referer: str | None = None,
 ) -> FetchResult:
+    try:
+        from finagent.state.session_context import record_website
+        record_website(url)
+    except ImportError:
+        pass
+
     if respect_robots:
         allowed = await _can_fetch_async(url)
         if not allowed:
@@ -194,9 +208,9 @@ async def fetch(
 
     if use_browser:
         try:
-            return await _fetch_via_browser(url, timeout_s=timeout_s)
+            return await _fetch_via_crawl4ai_single(url, timeout_s=timeout_s)
         except Exception as exc:
-            logger.warning("browser fetch failed (%s); falling back to httpx", exc)
+            logger.warning("crawl4ai single-page fetch failed: %s; falling back to plain httpx", repr(exc))
 
     return await _fetch_via_httpx(url, timeout_s=timeout_s, referer=referer)
 
@@ -236,39 +250,75 @@ async def _fetch_via_httpx(url: str, *, timeout_s: float, referer: str | None) -
     return FetchResult(url, url, 0, "", blocked_reason="all attempts failed")
 
 
-async def _fetch_via_browser(url: str, *, timeout_s: float) -> FetchResult:
-    try:
-        from playwright.async_api import async_playwright
-    except ImportError:
-        raise RuntimeError("playwright not installed")
-    
-    try:
-        from playwright_stealth import stealth_async
-    except ImportError:
-        stealth_async = None
-        logger.warning("playwright_stealth not installed, proceeding without stealth injections")
+# ──────────────────────────────────────────────────────────────────────────────
+# Crawl4AI Single-Page Browser Fetch (replaces Playwright)
+# ──────────────────────────────────────────────────────────────────────────────
 
-    logger.info("launching browser via Playwright for %s", url)
-    async with async_playwright() as pw:
-        args = ["--disable-blink-features=AutomationControlled", "--no-sandbox"]
-        browser = await pw.chromium.launch(headless=True, args=args)
+async def _crawl4ai_single_inner(url: str, *, timeout_s: float) -> FetchResult:
+    """Actual Crawl4AI single-page logic (must be called on a Proactor loop on Windows)."""
+    try:
+        from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+    except ImportError:
+        raise RuntimeError("crawl4ai not installed. Run: pip install crawl4ai")
+
+    browser_cfg = BrowserConfig(
+        headless=True,
+        browser_type="chromium",
+        enable_stealth=True,
+        verbose=False,
+    )
+
+    run_cfg = CrawlerRunConfig(
+        cache_mode=CacheMode.BYPASS,
+        page_timeout=int(timeout_s * 1000),
+        magic=True,
+        simulate_user=True,
+        override_navigator=True,
+        remove_consent_popups=True,
+    )
+
+    logger.info("Crawl4AI single-page fetch starting for %s", url)
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
+        result = await crawler.arun(url, config=run_cfg)
+        html = result.html if hasattr(result, "html") else str(result)
+        status = 200 if html else 0
+        return FetchResult(
+            url=url,
+            final_url=result.url or url,
+            status=status,
+            text=html,
+            via="crawl4ai",
+        )
+
+
+def _run_crawl4ai_single_in_proactor_thread(url: str, timeout_s: float) -> FetchResult:
+    """Run the single-page crawl in a fresh ProactorEventLoop (Windows only)."""
+    if sys.platform == "win32":
         try:
-            ctx = await browser.new_context(
-                user_agent=random.choice(UA_POOL),
-                viewport={"width": 1920, "height": 1080},
-                device_scale_factor=1,
-                is_mobile=False,
-                has_touch=False,
-                locale="en-IN",
-                timezone_id="Asia/Kolkata",
-            )
-            page = await ctx.new_page()
-            if stealth_async:
-                await stealth_async(page)
-            resp = await page.goto(url, wait_until="domcontentloaded", timeout=int(timeout_s * 1000))
-            html = await page.content()
-            status = resp.status if resp else 0
-            final_url = page.url
-            return FetchResult(url=url, final_url=final_url, status=status, text=html, via="playwright")
-        finally:
-            await browser.close()
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        except Exception:
+            pass
+    new_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(new_loop)
+    try:
+        return new_loop.run_until_complete(
+            _crawl4ai_single_inner(url, timeout_s=timeout_s)
+        )
+    finally:
+        new_loop.close()
+
+
+async def _fetch_via_crawl4ai_single(url: str, *, timeout_s: float = 20.0) -> FetchResult:
+    """Fetch a single URL via Crawl4AI's headless Chromium with built-in stealth.
+
+    On Windows this is always executed in a dedicated thread with ProactorEventLoop
+    to avoid NotImplementedError when the caller is using SelectorEventLoop
+    (common under uvicorn reload=True).
+    """
+    if sys.platform == "win32":
+        def run_with_lock():
+            with _SINGLE_CRAWLER_THREAD_LOCK:
+                return _run_crawl4ai_single_in_proactor_thread(url, timeout_s)
+        return await asyncio.to_thread(run_with_lock)
+    else:
+        return await _crawl4ai_single_inner(url, timeout_s=timeout_s)

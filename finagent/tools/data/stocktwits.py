@@ -52,6 +52,12 @@ class StockTwitsSnapshot:
 async def fetch_stocktwits(ticker: str) -> StockTwitsSnapshot | None:
     if not ticker:
         return None
+    logger.info("[MCP-USE] research_news | tool=search_web | args={'query': 'stocktwits %s'}", ticker)
+    try:
+        from finagent.state.session_context import record_mcp
+        record_mcp("research_news")
+    except ImportError:
+        pass
     url = _STREAM_URL.format(ticker=ticker.upper())
     try:
         res = await fetch(url, respect_robots=False, timeout_s=10.0)

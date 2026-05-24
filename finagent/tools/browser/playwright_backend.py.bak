@@ -1,0 +1,100 @@
+"""Playwright browser backend for finagent.
+
+Provides a hardened, Windows-friendly Chromium launcher with stealth and safe flags
+to avoid hardware/GPU crashes and detection.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import random
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
+from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+
+logger = logging.getLogger("finagent.browser")
+
+# Safe launch args proven to work on Windows (including machines with problematic GPUs)
+SAFE_LAUNCH_ARGS = [
+    "--disable-blink-features=AutomationControlled",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",                 # Prevents crashes on many Intel/VM GPUs
+    "--disable-software-rasterizer",
+    "--disable-setuid-sandbox",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-background-networking",
+]
+
+DESKTOP_UAS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0",
+]
+
+
+@asynccontextmanager
+async def launch_browser(
+    *,
+    headless: bool = True,
+    stealth: bool = True,
+) -> AsyncIterator[BrowserContext]:
+    """Launch a real browser context ready for deep crawling or screenshots.
+
+    Usage:
+        async with launch_browser() as ctx:
+            page = await ctx.new_page()
+            await page.goto(...)
+    """
+    _stealth_fn = None
+    if stealth:
+        try:
+            # playwright-stealth >=1.x
+            from playwright_stealth import stealth_async as _stealth_fn
+        except ImportError:
+            try:
+                # playwright-stealth 2.x uses Stealth class
+                from playwright_stealth import Stealth
+                _stealth_obj = Stealth()
+                _stealth_fn = _stealth_obj.apply_stealth_async
+            except ImportError:
+                logger.warning("playwright-stealth not available (or incompatible version), proceeding without extra stealth injections")
+
+    async with async_playwright() as p:
+        browser: Browser = await p.chromium.launch(
+            headless=headless,
+            args=SAFE_LAUNCH_ARGS,
+        )
+        try:
+            ctx: BrowserContext = await browser.new_context(
+                user_agent=random.choice(DESKTOP_UAS),
+                viewport={"width": 1920, "height": 1080},
+                device_scale_factor=1,
+                is_mobile=False,
+                has_touch=False,
+                locale="en-IN",
+                timezone_id="Asia/Kolkata",
+                ignore_https_errors=True,
+            )
+            if stealth and _stealth_fn:
+                # Apply stealth to all new pages in this context
+                ctx.on("page", lambda page: asyncio.create_task(_stealth_fn(page)))  # type: ignore
+
+            logger.info("Playwright Chromium context launched (headless=%s)", headless)
+            yield ctx
+        finally:
+            await browser.close()
+            logger.debug("Playwright browser closed")
+
+
+# Synchronous convenience for scripts that cannot easily use async context
+async def get_page(url: str, *, timeout_ms: int = 30000) -> tuple[Page, BrowserContext]:
+    """Quick helper: launch, open one page, navigate, return (page, ctx) for further use."""
+    import asyncio
+    ctx_cm = launch_browser()
+    ctx = await ctx_cm.__aenter__()
+    page = await ctx.new_page()
+    await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+    return page, ctx

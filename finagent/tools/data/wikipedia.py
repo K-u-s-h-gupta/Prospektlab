@@ -44,6 +44,12 @@ async def _search_title(query: str, timeout_s: float) -> str | None:
 
 async def fetch_wikipedia_summary(query: str, *, timeout_s: float = 12.0) -> WikipediaSummary | None:
     """Try direct title; if 404, opensearch then retry."""
+    logger.info("[MCP-USE] research_news | tool=search_web | args={'query': 'wikipedia %s'}", query)
+    try:
+        from finagent.state.session_context import record_mcp
+        record_mcp("research_news")
+    except ImportError:
+        pass
     # First try the query as-is (covers exact matches like "Apple Inc.")
     title_candidates = [query]
     direct = await fetch(

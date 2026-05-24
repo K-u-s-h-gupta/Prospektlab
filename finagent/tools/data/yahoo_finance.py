@@ -9,6 +9,30 @@ Supports Indian tickers with .NS (NSE) and .BO (BSE) suffixes natively.
 
 from __future__ import annotations
 
+# ---------------------------------------------------------------------------
+# Fix: curl_cffi (used by yfinance) cannot encode CA cert paths containing
+# non-ASCII characters (e.g. Hindi directory names on Windows).
+# ---------------------------------------------------------------------------
+import os
+import shutil
+import tempfile
+try:
+    import certifi
+    _safe_cacert = os.path.join(tempfile.gettempdir(), "cacert.pem")
+    try:
+        _safe_cacert.encode('ascii')
+    except UnicodeEncodeError:
+        _safe_cacert = "C:\\temp\\cacert.pem"
+        os.makedirs("C:\\temp", exist_ok=True)
+    if not os.path.exists(_safe_cacert):
+        shutil.copy2(certifi.where(), _safe_cacert)
+    os.environ["CURL_CA_BUNDLE"] = _safe_cacert
+    os.environ["REQUESTS_CA_BUNDLE"] = _safe_cacert
+    os.environ["SSL_CERT_FILE"] = _safe_cacert
+except Exception:
+    pass
+# ---------------------------------------------------------------------------
+
 import asyncio
 import logging
 import time
@@ -119,7 +143,7 @@ def _fetch_yfinance_sync(ticker: str) -> YahooQuote | None:
         series_dates: list[str] = []
         series_closes: list[float] = []
         try:
-            hist = t.history(period="1mo", interval="1d", auto_adjust=True)
+            hist = t.history(period="5y", interval="1d", auto_adjust=True)
             if hist is not None and not hist.empty:
                 for ts, row in hist.iterrows():
                     try:
@@ -203,6 +227,12 @@ async def fetch_yahoo_quote(ticker: str, *, timeout_s: float = 30.0) -> YahooQuo
     """Async wrapper: runs yfinance in a thread executor to avoid blocking."""
     if not ticker:
         return None
+    logger.info("[MCP-USE] fundamentals | tool=profile | args={'symbol': '%s'}", ticker)
+    try:
+        from finagent.state.session_context import record_mcp
+        record_mcp("fundamentals")
+    except ImportError:
+        pass
     try:
         result = await asyncio.wait_for(
             asyncio.get_event_loop().run_in_executor(None, _fetch_yfinance_sync, ticker),

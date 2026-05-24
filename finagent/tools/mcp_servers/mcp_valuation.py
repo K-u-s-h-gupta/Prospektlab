@@ -11,8 +11,24 @@ import tempfile
 from functools import lru_cache
 
 import certifi
-from fastmcp import FastMCP
+
+# Match the fundamentals server's Windows-safe TLS handling for yfinance.
+_safe_cacert = os.path.join(tempfile.gettempdir(), "cacert.pem")
+try:
+    _safe_cacert.encode('ascii')
+except UnicodeEncodeError:
+    _safe_cacert = "C:\\temp\\cacert.pem"
+    os.makedirs("C:\\temp", exist_ok=True)
+if not os.path.exists(_safe_cacert):
+    shutil.copy2(certifi.where(), _safe_cacert)
+os.environ["CURL_CA_BUNDLE"] = _safe_cacert
+os.environ["REQUESTS_CA_BUNDLE"] = _safe_cacert
+os.environ["SSL_CERT_FILE"] = _safe_cacert
+
 import yfinance as yf
+yf.set_tz_cache_location(os.path.join(tempfile.gettempdir(), "yfinance_cache"))
+
+from fastmcp import FastMCP
 from finagent.tools import valuation_engine
 from finagent.tools.valuation_engine import (
     dcf_valuation, graham_valuation, pe_valuation, ddm_valuation,
@@ -20,15 +36,6 @@ from finagent.tools.valuation_engine import (
     calculate_wacc, calculate_cost_of_equity_capm, dupont_analysis,
     calculate_cagr, analyze_ratios, full_valuation,
 )
-
-# Match the fundamentals server's Windows-safe TLS handling for yfinance.
-_safe_cacert = os.path.join(tempfile.gettempdir(), "cacert.pem")
-if not os.path.exists(_safe_cacert):
-    shutil.copy2(certifi.where(), _safe_cacert)
-os.environ["CURL_CA_BUNDLE"] = _safe_cacert
-os.environ["REQUESTS_CA_BUNDLE"] = _safe_cacert
-os.environ["SSL_CERT_FILE"] = _safe_cacert
-yf.set_tz_cache_location(os.path.join(tempfile.gettempdir(), "yfinance_cache"))
 
 mcp = FastMCP("ORACLE Valuation Engine")
 

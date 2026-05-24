@@ -34,4 +34,8 @@ MCP_SERVERS = {
         "url": _mcp_url("MCP_VALUATION_URL", 8005),
         "transport": "streamable_http",
     },
+    "forecasting": {
+        "url": _mcp_url("MCP_FORECASTING_URL", 8006),
+        "transport": "streamable_http",
+    },
 }

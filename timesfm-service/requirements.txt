@@ -1,0 +1,22 @@
+# Standalone TimesFM 2.5 200M PyTorch CPU Service
+# Minimal dependencies — no Crawl4AI, no browser libs, no full finagent stack
+
+# Core serving
+torch==2.6.0+cpu; platform_system != "Darwin"
+torch==2.6.0; platform_system == "Darwin"
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+pydantic>=2.0.0
+numpy>=1.24.0
+httpx>=0.28.0
+
+# HuggingFace model download + weight loading
+huggingface-hub>=0.24.0
+safetensors>=0.4.0
+einshape>=0.1.0
+
+# MCP protocol server
+fastmcp>=2.0.0
+
+# Utilities
+python-dotenv>=1.0.0

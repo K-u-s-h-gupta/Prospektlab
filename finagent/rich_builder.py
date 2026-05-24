@@ -1489,7 +1489,367 @@ def _assemble_doc_compare(message: str, outputs: list[ToolOutput], markdown_body
 
 
 # ---------------------------------------------------------------------------
-# Public entrypoint
+# Native bridge — build RichResponse from agent findings + enrichment bundle
+# ---------------------------------------------------------------------------
+
+
+def _native_entity_from_bundle(bundle: Any) -> Optional[Entity]:
+    """Build an Entity from bundle.yahoo or bundle.india_snap."""
+    y = getattr(bundle, "yahoo", None)
+    india = getattr(bundle, "india_snap", None)
+
+    if y and hasattr(y, "ticker"):
+        currency = getattr(y, "currency", None) or "INR"
+        return Entity(
+            label=getattr(y, "name", getattr(y, "ticker", "Company")),
+            ticker=getattr(y, "ticker", None),
+            exchange=getattr(y, "exchange", None),
+            currency=currency.upper(),
+            market_cap=_to_float(getattr(y, "market_cap", None)),
+            current_price=_to_float(getattr(y, "price", None)),
+            change_pct=_to_float(getattr(y, "change_pct", None)),
+            fifty_two_week_high=_to_float(getattr(y, "fifty_two_week_high", None)),
+            fifty_two_week_low=_to_float(getattr(y, "fifty_two_week_low", None)),
+            pe=_to_float(getattr(y, "financial_metrics", {}).get("trailing_pe")) if hasattr(y, "financial_metrics") else None,
+            pb=_to_float(getattr(y, "financial_metrics", {}).get("price_to_book")) if hasattr(y, "financial_metrics") else None,
+            roe=_to_float(getattr(y, "financial_metrics", {}).get("return_on_equity")) if hasattr(y, "financial_metrics") else None,
+            profit_margin=_to_float(getattr(y, "financial_metrics", {}).get("profit_margins")) if hasattr(y, "financial_metrics") else None,
+            operating_margin=_to_float(getattr(y, "financial_metrics", {}).get("operating_margins")) if hasattr(y, "financial_metrics") else None,
+            revenue_growth=_to_float(getattr(y, "financial_metrics", {}).get("revenue_growth")) if hasattr(y, "financial_metrics") else None,
+            debt_to_equity=_to_float(getattr(y, "financial_metrics", {}).get("debt_to_equity")) if hasattr(y, "financial_metrics") else None,
+            dividend_yield=_to_float(getattr(y, "financial_metrics", {}).get("dividend_yield")) if hasattr(y, "financial_metrics") else None,
+        )
+
+    if india and hasattr(india, "symbol"):
+        return Entity(
+            label=getattr(india, "company_name", getattr(india, "symbol", "Company")),
+            ticker=getattr(india, "symbol", None),
+            exchange=getattr(india, "exchange", "NSE"),
+            sector=getattr(india, "sector", None),
+            industry=getattr(india, "industry", None),
+            currency="INR",
+            market_cap=_to_float(getattr(india, "market_cap_cr", None)),
+            current_price=_to_float(getattr(india, "current_price", None)),
+            change_pct=_to_float(getattr(india, "change_pct", None)),
+            pe=_to_float(getattr(india, "pe_ratio", None)),
+            pb=_to_float(getattr(india, "pb_ratio", None)),
+            roe=_to_float(getattr(india, "roe", None)),
+            debt_to_equity=_to_float(getattr(india, "debt_to_equity", None)),
+            dividend_yield=_to_float(getattr(india, "dividend_yield", None)),
+        )
+
+    return None
+
+
+def _native_valuation_assemble(
+    bundle: Any,
+    findings: list[Any] | None,
+    memo: str,
+) -> Optional[RichResponse]:
+    """Assemble a valuation-mode RichResponse from native agent findings."""
+    entity = _native_entity_from_bundle(bundle)
+    if not entity:
+        return None
+
+    currency = entity.currency or "INR"
+    val_findings = [f for f in (findings or []) if getattr(f, "agent", "").lower() == "valuation"]
+
+    intrinsic: Optional[float] = None
+    current_price: Optional[float] = entity.current_price
+    upside_pct: Optional[float] = None
+    growth_rate: Optional[float] = None
+    model_used: Optional[str] = None
+    fcf: Optional[float] = None
+    wacc_val: Optional[float] = None
+    iv_by_model: dict[str, Any] = {}
+
+    for f in val_findings:
+        metrics = getattr(f, "metrics", None)
+        if not isinstance(metrics, dict):
+            continue
+        if "intrinsic_value" in metrics and metrics["intrinsic_value"] is not None:
+            intrinsic = _to_float(metrics["intrinsic_value"])
+        if "current_price" in metrics and metrics["current_price"] is not None:
+            current_price = _to_float(metrics["current_price"])
+        if "upside_pct" in metrics and metrics["upside_pct"] is not None:
+            upside_pct = _to_float(metrics["upside_pct"])
+        if "implied_growth_rate" in metrics and metrics["implied_growth_rate"] is not None:
+            growth_rate = _to_float(metrics["implied_growth_rate"])
+        if "model_used" in metrics:
+            model_used = str(metrics["model_used"])
+        if "fcf" in metrics and metrics["fcf"] is not None:
+            fcf = _to_float(metrics["fcf"])
+
+    # Infer verdict
+    verdict: Optional[str] = None
+    if intrinsic and current_price:
+        if intrinsic > current_price * 1.15:
+            verdict = "UNDERVALUED"
+        elif intrinsic < current_price * 0.85:
+            verdict = "OVERVALUED"
+        else:
+            verdict = "FAIRLY VALUED"
+        iv_by_model["DCF"] = intrinsic
+
+    cards: list[MetricCard] = []
+    cards.append(MetricCard(
+        label="Current price",
+        value=_price(current_price, currency) if current_price else "n/a",
+        icon="trending-up",
+        is_partial=current_price is None,
+    ))
+    cards.append(MetricCard(
+        label="DCF intrinsic",
+        value=_price(intrinsic, currency) if intrinsic else "n/a",
+        change=f"{upside_pct:+.1f}%" if upside_pct is not None else None,
+        change_type=_change_type(upside_pct),
+        icon="scale",
+        tooltip="Discounted Cash Flow fair value per share",
+        is_partial=intrinsic is None,
+    ))
+    cards.append(MetricCard(
+        label="Verdict",
+        value=verdict or "n/a",
+        change_type="positive" if verdict == "UNDERVALUED" else "negative" if verdict == "OVERVALUED" else "neutral",
+        icon="percent",
+        is_partial=verdict is None,
+    ))
+    cards.append(MetricCard(
+        label="Implied growth",
+        value=f"{growth_rate*100:.1f}%" if growth_rate else "n/a",
+        icon="percent",
+        tooltip="Revenue growth rate implied by the forecast model",
+        is_partial=growth_rate is None,
+    ))
+    cards.append(MetricCard(
+        label="Forecast model",
+        value=model_used or "n/a",
+        icon="chip",
+        tooltip="timesfm_2.5 = real model; fallback = statistical",
+        is_partial=model_used in (None, "fallback_cagr", "fallback_statistical"),
+    ))
+    if fcf:
+        cards.append(MetricCard(
+            label="FCF (TTM)",
+            value=_money(fcf, currency),
+            icon="currency-dollar",
+            tooltip="Trailing twelve-month Free Cash Flow",
+        ))
+
+    # Charts
+    charts: list[Chart] = []
+    if iv_by_model and current_price:
+        charts.append(Chart(
+            id="iv-by-model",
+            kind="bar",
+            title="Intrinsic value vs market price",
+            subtitle=currency,
+            x_labels=["Market Price", "DCF Intrinsic"],
+            series=[ChartSeries(
+                name="Value",
+                color="#8b5cf6",
+                values=[current_price, intrinsic] if intrinsic else [current_price, 0],
+                unit=currency,
+            )],
+            currency=currency,
+            y_unit=currency,
+        ))
+
+    # Projection line chart from findings
+    proj_points: Optional[list[float]] = None
+    p10_points: Optional[list[float]] = None
+    p90_points: Optional[list[float]] = None
+    for f in val_findings:
+        metrics = getattr(f, "metrics", None)
+        if isinstance(metrics, dict) and "projected_terminal_revenue" in metrics:
+            # If we have a point_forecast list, use it; otherwise make a 2-point
+            # placeholder from historical → terminal.
+            pt = metrics.get("point_forecast")
+            if isinstance(pt, list) and len(pt) >= 2:
+                proj_points = [_to_float(v) for v in pt]
+            else:
+                # Build synthetic trajectory
+                hist_cagr = metrics.get("historical_cagr")
+                terminal = _to_float(metrics.get("projected_terminal_revenue"))
+                if terminal:
+                    proj_points = [terminal * 0.8, terminal]  # placeholder
+            p10_points = metrics.get("p10_terminal")
+            p90_points = metrics.get("p90_terminal")
+            break
+
+    if proj_points and len(proj_points) >= 2:
+        labels = [f"Y{i+1}" for i in range(len(proj_points))]
+        series = [ChartSeries(
+            name="Projected Revenue",
+            color="#10b981",
+            values=proj_points,
+            unit="Cr" if currency == "INR" else "B",
+        )]
+        if isinstance(p10_points, list) and len(p10_points) == len(proj_points):
+            series.append(ChartSeries(
+                name="P10 (Conservative)",
+                color="#f59e0b",
+                values=[_to_float(v) for v in p10_points],
+                unit="Cr" if currency == "INR" else "B",
+            ))
+        if isinstance(p90_points, list) and len(p90_points) == len(proj_points):
+            series.append(ChartSeries(
+                name="P90 (Optimistic)",
+                color="#8b5cf6",
+                values=[_to_float(v) for v in p90_points],
+                unit="Cr" if currency == "INR" else "B",
+            ))
+        charts.append(Chart(
+            id="dcf-projection",
+            kind="line",
+            title="Revenue projection",
+            subtitle=f"Model: {model_used or 'statistical fallback'}",
+            x_labels=labels,
+            series=series,
+            currency=currency,
+            y_unit="Cr" if currency == "INR" else "B",
+            is_partial=model_used in (None, "fallback_cagr", "fallback_statistical"),
+        ))
+
+    valuation_summary: Optional[dict[str, Any]] = None
+    if intrinsic or verdict:
+        valuation_summary = {
+            "intrinsic_values_by_model": iv_by_model,
+            "average_intrinsic_value": intrinsic,
+            "current_price": current_price,
+            "upside_pct": upside_pct,
+            "verdict": verdict,
+        }
+
+    title = f"Valuation: {entity.label}"
+    return RichResponse(
+        mode=RICH_MODE_VALUATION,
+        title=title,
+        subtitle=f"Multi-model intrinsic value vs current price ({currency})",
+        primary_entity=entity,
+        metric_cards=cards,
+        charts=charts,
+        valuation_summary=valuation_summary,
+        markdown_body=memo,
+        data_sources=_default_sources(currency == "INR"),
+        is_partial=any(c.is_partial for c in cards),
+    )
+
+
+def _native_snapshot_assemble(
+    bundle: Any,
+    findings: list[Any] | None,
+    memo: str,
+) -> Optional[RichResponse]:
+    """Assemble a snapshot-mode RichResponse from native agent findings."""
+    entity = _native_entity_from_bundle(bundle)
+    if not entity:
+        return None
+
+    currency = entity.currency or "INR"
+    cards: list[MetricCard] = []
+    cards.append(MetricCard(
+        label="Market cap",
+        value=_money(entity.market_cap, currency),
+        tooltip="Total market value of outstanding shares",
+        icon="briefcase",
+        is_partial=entity.market_cap is None,
+    ))
+    cards.append(MetricCard(
+        label="52-wk high",
+        value=_price(entity.fifty_two_week_high, currency),
+        tooltip="Highest traded price in the past 52 weeks",
+        icon="trending-up",
+        is_partial=entity.fifty_two_week_high is None,
+    ))
+    cards.append(MetricCard(
+        label="52-wk low",
+        value=_price(entity.fifty_two_week_low, currency),
+        tooltip="Lowest traded price in the past 52 weeks",
+        icon="trending-down",
+        is_partial=entity.fifty_two_week_low is None,
+    ))
+    cards.append(MetricCard(
+        label="Div. yield",
+        value=_pct(entity.dividend_yield, assume_fraction=False) if (
+            entity.dividend_yield is not None and entity.dividend_yield > 1
+        ) else _pct(entity.dividend_yield),
+        tooltip="Annual dividend per share / current price",
+        icon="percent",
+        is_partial=entity.dividend_yield is None,
+    ))
+    de_val = entity.debt_to_equity
+    de_str = "n/a"
+    if de_val is not None:
+        de_str = f"{de_val / 100:.2f}x" if de_val > 5 else f"{de_val:.2f}x"
+    cards.append(MetricCard(
+        label="Debt/Equity",
+        value=de_str,
+        tooltip="Total debt divided by shareholders' equity",
+        icon="scale",
+        change_type="negative" if de_val and de_val > 1.5 * 100 else "neutral",
+        is_partial=de_val is None,
+    ))
+    cards.append(MetricCard(
+        label="ROE",
+        value=_pct(entity.roe),
+        tooltip="Net income / shareholders' equity",
+        icon="trending-up",
+        change_type=_change_type(entity.roe),
+        is_partial=entity.roe is None,
+    ))
+
+    # Strengths / risks from findings
+    sr = _derive_strengths_risks(entity)
+    sr_blocks: list[StrengthsRisksBlock] = []
+    if sr:
+        sr_blocks.append(StrengthsRisksBlock(entity_label=entity.label, **sr))
+
+    return RichResponse(
+        mode=RICH_MODE_SNAPSHOT,
+        title=entity.label,
+        subtitle=" | ".join(filter(None, [entity.exchange, entity.ticker, entity.sector])),
+        primary_entity=entity,
+        metric_cards=cards,
+        charts=[],
+        strengths_risks=sr_blocks,
+        markdown_body=memo,
+        data_sources=_default_sources(currency == "INR"),
+        is_partial=any(c.is_partial for c in cards),
+    )
+
+
+def build_from_native(
+    objective: str,
+    bundle: Any,
+    docs: Any,
+    specialist_findings: list[Any] | None,
+    memo: str,
+) -> Optional[RichResponse]:
+    """Build a RichResponse directly from agent findings + enrichment bundle.
+
+    This is the native-data equivalent of `build()` which expects LangGraph
+    ToolOutput lists.  Use this when the pipeline has already run the
+    multi-agent orchestrator and produced specialist_findings.
+    """
+    if not bundle:
+        return None
+    mode = classify_rich_mode(objective)
+    try:
+        if mode == RICH_MODE_VALUATION:
+            return _native_valuation_assemble(bundle, specialist_findings, memo) \
+                or _native_snapshot_assemble(bundle, specialist_findings, memo)
+        if mode == RICH_MODE_SNAPSHOT:
+            return _native_snapshot_assemble(bundle, specialist_findings, memo)
+        # Comparison, news, filing modes not yet bridged — fallback to snapshot
+        return _native_snapshot_assemble(bundle, specialist_findings, memo)
+    except Exception:
+        logger.exception("rich_builder native bridge failed; falling back to markdown-only")
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Public entrypoint (LangGraph ToolOutput style)
 # ---------------------------------------------------------------------------
 
 
@@ -1526,6 +1886,7 @@ __all__ = [
     "RichResponse",
     "ToolOutput",
     "build",
+    "build_from_native",
     "Entity",
     "MetricCard",
     "Chart",

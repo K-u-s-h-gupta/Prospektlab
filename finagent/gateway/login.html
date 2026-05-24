@@ -33,6 +33,15 @@
     .grid-bg { background-image: linear-gradient(rgba(125,168,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(125,168,255,0.04) 1px, transparent 1px); background-size: 56px 56px; }
     .toast { position: fixed; top: 1rem; left: 50%; right: auto; padding: 12px 16px; border-radius: 12px; font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); transform: translate(-50%, -150%); transition: transform 0.3s ease; z-index: 100; }
     .toast.visible { transform: translate(-50%, 0); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
   </style>
 </head>
 <body class="min-h-screen overflow-x-hidden">
@@ -153,7 +162,7 @@
             <div>
               <div class="flex items-center justify-between mb-1.5">
                 <label class="label-mono text-[11px] text-muted tracking-wider uppercase">Password</label>
-                <a href="#" id="forgotPwLink" class="text-[11px] text-primary hover:underline">Forgot?</a>
+                <button type="button" id="forgotPwLink" class="text-[11px] text-primary hover:underline bg-transparent border-0 p-0 cursor-pointer">Forgot?</button>
               </div>
               <div class="relative">
                 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">lock</span>
@@ -212,7 +221,7 @@
               <label class="label-mono text-[11px] text-muted tracking-wider uppercase block mb-1.5">6-Digit Reset Code</label>
               <div class="relative">
                 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[18px]">verified_user</span>
-                <input id="resetCode" type="text" required placeholder="6-digit code"
+                <input id="resetCode" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" required placeholder="6-digit code"
                        class="w-full bg-card border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm focus:border-primary outline-none" />
               </div>
             </div>
@@ -376,6 +385,8 @@
               sessionStorage.setItem('prospektlab_user', JSON.stringify(userData));
               localStorage.removeItem('prospektlab_user');
             }
+            localStorage.removeItem('prospektlab_session_id');
+            sessionStorage.removeItem('prospektlab_session_id');
           } catch (_) {}
           setTimeout(() => {
             modal.remove();
@@ -419,6 +430,8 @@
               sessionStorage.setItem('prospektlab_user', JSON.stringify(res.body));
               localStorage.removeItem('prospektlab_user');
             }
+            localStorage.removeItem('prospektlab_session_id');
+            sessionStorage.removeItem('prospektlab_session_id');
           } catch (_) {}
           showToast("Signed in. Redirecting...", "success");
           setTimeout(() => { window.location.href = workspaceLaunchUrl(res.body.token); }, 400);
@@ -452,8 +465,8 @@
         });
         googleInitialized = true;
       }
-    } catch (err) {
-      console.error("Google sign-in initialization failed", err);
+      } catch (err) {
+      /* Google init failed — fallback button will show error toast */
     }
   }
 
@@ -503,6 +516,8 @@
           sessionStorage.setItem("prospektlab_user", JSON.stringify(stored));
           localStorage.removeItem("prospektlab_user");
         }
+        localStorage.removeItem("prospektlab_session_id");
+        sessionStorage.removeItem("prospektlab_session_id");
       } catch (_) {}
       showToast("Signed in. Redirecting…", "success");
       setTimeout(() => { window.location.href = workspaceLaunchUrl(data.token); }, 400);
@@ -516,8 +531,7 @@
   });
 
   // Toggle Forgot Password sections
-  $("forgotPwLink").addEventListener("click", (e) => {
-    e.preventDefault();
+  $("forgotPwLink").addEventListener("click", () => {
     $("loginFormSection").classList.add("hidden");
     $("forgotPasswordSection").classList.remove("hidden");
   });
@@ -591,5 +605,15 @@
   });
 </script>
 
+  <!-- Auto a11y: hide decorative icon ligatures from screen readers -->
+  <script>
+    (function(){ try {
+      document.querySelectorAll('.material-symbols-outlined').forEach(function(s){
+        if (!s.hasAttribute('aria-hidden') && !s.getAttribute('aria-label') && !s.closest('[role="button"],button,a')) {
+          s.setAttribute('aria-hidden','true');
+        }
+      });
+    } catch(e){} })();
+  </script>
 </body>
 </html>

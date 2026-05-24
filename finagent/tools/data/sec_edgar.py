@@ -430,6 +430,12 @@ def _parse_submissions(payload: dict[str, Any]) -> tuple[list[SECFiling], str | 
 
 async def fetch_company_snapshot(query: str, *, timeout_s: float = 20.0) -> SECCompanySnapshot | None:
     """Resolve `query` then fetch submissions + companyfacts JSON in parallel."""
+    logger.info("[MCP-USE] fundamentals | tool=sec_company_snapshot | args={'ticker': '%s'}", query)
+    try:
+        from finagent.state.session_context import record_mcp
+        record_mcp("fundamentals")
+    except ImportError:
+        pass
     resolved = await resolve_ticker_or_name(query)
     if not resolved:
         return None

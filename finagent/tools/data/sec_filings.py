@@ -193,6 +193,12 @@ async def fetch_filing_narrative(
     timeout_s: float = 30.0,
 ) -> FilingNarrative | None:
     """Download a 10-K / 10-Q HTML and pull the narrative sections."""
+    logger.info("[MCP-USE] docs_pipeline | tool=fetch_filing_narrative | args={'form': '%s'}", form)
+    try:
+        from finagent.state.session_context import record_mcp
+        record_mcp("docs_pipeline")
+    except ImportError:
+        pass
     if not url:
         return None
     # Only forms that actually have Item 1A / Item 7. DEF 14A and 8-K don't.

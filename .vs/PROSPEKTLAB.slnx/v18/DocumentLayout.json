@@ -1,41 +1,45 @@
 {
   "Version": 1,
-  "WorkspaceRootPath": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\",
+  "WorkspaceRootPath": "D:\\PROSPEKTLAB\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\WEB_SEARCH_ARCHITECTURE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\PROSPEKTLAB\\COMPLETE_ARCHITECTURE_STEP_BY_STEP.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:COMPLETE_ARCHITECTURE_STEP_BY_STEP.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\PROSPEKTLAB\\WEB_SEARCH_ARCHITECTURE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:WEB_SEARCH_ARCHITECTURE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPLETE_ARCHITECTURE_SUMMARY.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\PROSPEKTLAB\\COMPLETE_ARCHITECTURE_SUMMARY.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:COMPLETE_ARCHITECTURE_SUMMARY.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\EVERYTHING_DELIVERED.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\PROSPEKTLAB\\EVERYTHING_DELIVERED.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:EVERYTHING_DELIVERED.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPREHENSIVE_DOCUMENTATION_PACKAGE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\PROSPEKTLAB\\COMPREHENSIVE_DOCUMENTATION_PACKAGE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:COMPREHENSIVE_DOCUMENTATION_PACKAGE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPLETE_API_REFERENCE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\PROSPEKTLAB\\COMPLETE_API_REFERENCE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:COMPLETE_API_REFERENCE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\DEPLOYMENT-COMPLETE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\PROSPEKTLAB\\DEPLOYMENT-COMPLETE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:DEPLOYMENT-COMPLETE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\MASTER_INDEX_AND_NAVIGATION.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\PROSPEKTLAB\\MASTER_INDEX_AND_NAVIGATION.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:MASTER_INDEX_AND_NAVIGATION.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\DATABASE_AND_STATE_SCHEMA.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\PROSPEKTLAB\\DATABASE_AND_STATE_SCHEMA.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:DATABASE_AND_STATE_SCHEMA.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\SECURITY_AND_AUTH_GUIDE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\PROSPEKTLAB\\SECURITY_AND_AUTH_GUIDE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:SECURITY_AND_AUTH_GUIDE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
     }
   ],
@@ -61,35 +65,35 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "WEB_SEARCH_ARCHITECTURE.md",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\WEB_SEARCH_ARCHITECTURE.md",
-              "RelativeDocumentMoniker": "WEB_SEARCH_ARCHITECTURE.md",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\WEB_SEARCH_ARCHITECTURE.md",
-              "RelativeToolTip": "WEB_SEARCH_ARCHITECTURE.md",
-              "ViewState": "AgIAANEDAAAAAAAAAAAAAKMEAAAAAAAAAAAAAA==",
+              "Title": "COMPLETE_ARCHITECTURE_STEP_BY_STEP.md",
+              "DocumentMoniker": "D:\\PROSPEKTLAB\\COMPLETE_ARCHITECTURE_STEP_BY_STEP.md",
+              "RelativeDocumentMoniker": "COMPLETE_ARCHITECTURE_STEP_BY_STEP.md",
+              "ToolTip": "D:\\PROSPEKTLAB\\COMPLETE_ARCHITECTURE_STEP_BY_STEP.md",
+              "RelativeToolTip": "COMPLETE_ARCHITECTURE_STEP_BY_STEP.md",
+              "ViewState": "AgIAAEMAAAAAAAAAAAApwFUAAAAPAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
-              "WhenOpened": "2026-05-21T05:35:25.37Z",
+              "WhenOpened": "2026-05-23T07:12:38.595Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "EVERYTHING_DELIVERED.md",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\EVERYTHING_DELIVERED.md",
-              "RelativeDocumentMoniker": "EVERYTHING_DELIVERED.md",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\EVERYTHING_DELIVERED.md",
-              "RelativeToolTip": "EVERYTHING_DELIVERED.md",
-              "ViewState": "AgIAAFcCAAAAAAAAAAAAAFcCAAAAAAAAAAAAAA==",
+              "DocumentIndex": 1,
+              "Title": "WEB_SEARCH_ARCHITECTURE.md",
+              "DocumentMoniker": "D:\\PROSPEKTLAB\\WEB_SEARCH_ARCHITECTURE.md",
+              "RelativeDocumentMoniker": "WEB_SEARCH_ARCHITECTURE.md",
+              "ToolTip": "D:\\PROSPEKTLAB\\WEB_SEARCH_ARCHITECTURE.md",
+              "RelativeToolTip": "WEB_SEARCH_ARCHITECTURE.md",
+              "ViewState": "AgIAANEDAAAAAAAAAAAAAKMEAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
-              "WhenOpened": "2026-05-21T05:11:48.118Z"
+              "WhenOpened": "2026-05-21T05:35:25.37Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 5,
               "Title": "COMPLETE_API_REFERENCE.md",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPLETE_API_REFERENCE.md",
+              "DocumentMoniker": "D:\\PROSPEKTLAB\\COMPLETE_API_REFERENCE.md",
               "RelativeDocumentMoniker": "COMPLETE_API_REFERENCE.md",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPLETE_API_REFERENCE.md",
+              "ToolTip": "D:\\PROSPEKTLAB\\COMPLETE_API_REFERENCE.md",
               "RelativeToolTip": "COMPLETE_API_REFERENCE.md",
               "ViewState": "AgIAAIAAAAAAAAAAAAAAAFsEAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
@@ -97,27 +101,23 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 6,
               "Title": "DEPLOYMENT-COMPLETE.md",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\DEPLOYMENT-COMPLETE.md",
+              "DocumentMoniker": "D:\\PROSPEKTLAB\\DEPLOYMENT-COMPLETE.md",
               "RelativeDocumentMoniker": "DEPLOYMENT-COMPLETE.md",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\DEPLOYMENT-COMPLETE.md",
+              "ToolTip": "D:\\PROSPEKTLAB\\DEPLOYMENT-COMPLETE.md",
               "RelativeToolTip": "DEPLOYMENT-COMPLETE.md",
               "ViewState": "AgIAAM8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
               "WhenOpened": "2026-05-21T05:09:13.9Z"
             },
             {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{40ea2e6b-2121-4bb8-a43e-c83c04b51041}"
-            },
-            {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "COMPLETE_ARCHITECTURE_SUMMARY.md",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPLETE_ARCHITECTURE_SUMMARY.md",
+              "DocumentMoniker": "D:\\PROSPEKTLAB\\COMPLETE_ARCHITECTURE_SUMMARY.md",
               "RelativeDocumentMoniker": "COMPLETE_ARCHITECTURE_SUMMARY.md",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPLETE_ARCHITECTURE_SUMMARY.md",
+              "ToolTip": "D:\\PROSPEKTLAB\\COMPLETE_ARCHITECTURE_SUMMARY.md",
               "RelativeToolTip": "COMPLETE_ARCHITECTURE_SUMMARY.md",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAOIEAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
@@ -125,11 +125,23 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 3,
+              "Title": "EVERYTHING_DELIVERED.md",
+              "DocumentMoniker": "D:\\PROSPEKTLAB\\EVERYTHING_DELIVERED.md",
+              "RelativeDocumentMoniker": "EVERYTHING_DELIVERED.md",
+              "ToolTip": "D:\\PROSPEKTLAB\\EVERYTHING_DELIVERED.md",
+              "RelativeToolTip": "EVERYTHING_DELIVERED.md",
+              "ViewState": "AgIAAFcCAAAAAAAAAAAAAFcCAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-21T05:11:48.118Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
               "Title": "DATABASE_AND_STATE_SCHEMA.md",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\DATABASE_AND_STATE_SCHEMA.md",
+              "DocumentMoniker": "D:\\PROSPEKTLAB\\DATABASE_AND_STATE_SCHEMA.md",
               "RelativeDocumentMoniker": "DATABASE_AND_STATE_SCHEMA.md",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\DATABASE_AND_STATE_SCHEMA.md",
+              "ToolTip": "D:\\PROSPEKTLAB\\DATABASE_AND_STATE_SCHEMA.md",
               "RelativeToolTip": "DATABASE_AND_STATE_SCHEMA.md",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAGoDAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
@@ -137,11 +149,11 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 4,
               "Title": "COMPREHENSIVE_DOCUMENTATION_PACKAGE.md",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPREHENSIVE_DOCUMENTATION_PACKAGE.md",
+              "DocumentMoniker": "D:\\PROSPEKTLAB\\COMPREHENSIVE_DOCUMENTATION_PACKAGE.md",
               "RelativeDocumentMoniker": "COMPREHENSIVE_DOCUMENTATION_PACKAGE.md",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\COMPREHENSIVE_DOCUMENTATION_PACKAGE.md",
+              "ToolTip": "D:\\PROSPEKTLAB\\COMPREHENSIVE_DOCUMENTATION_PACKAGE.md",
               "RelativeToolTip": "COMPREHENSIVE_DOCUMENTATION_PACKAGE.md",
               "ViewState": "AgIAAHMBAAAAAAAAAAAAANwBAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
@@ -149,11 +161,11 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 9,
               "Title": "SECURITY_AND_AUTH_GUIDE.md",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\SECURITY_AND_AUTH_GUIDE.md",
+              "DocumentMoniker": "D:\\PROSPEKTLAB\\SECURITY_AND_AUTH_GUIDE.md",
               "RelativeDocumentMoniker": "SECURITY_AND_AUTH_GUIDE.md",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\SECURITY_AND_AUTH_GUIDE.md",
+              "ToolTip": "D:\\PROSPEKTLAB\\SECURITY_AND_AUTH_GUIDE.md",
               "RelativeToolTip": "SECURITY_AND_AUTH_GUIDE.md",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAOACAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
@@ -161,15 +173,19 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 7,
               "Title": "MASTER_INDEX_AND_NAVIGATION.md",
-              "DocumentMoniker": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\MASTER_INDEX_AND_NAVIGATION.md",
+              "DocumentMoniker": "D:\\PROSPEKTLAB\\MASTER_INDEX_AND_NAVIGATION.md",
               "RelativeDocumentMoniker": "MASTER_INDEX_AND_NAVIGATION.md",
-              "ToolTip": "C:\\Users\\kusha\\OneDrive\\\u0921\u0947\u0938\u094D\u0915\u091F\u0949\u092A\\PROSPEKTLAB\\MASTER_INDEX_AND_NAVIGATION.md",
+              "ToolTip": "D:\\PROSPEKTLAB\\MASTER_INDEX_AND_NAVIGATION.md",
               "RelativeToolTip": "MASTER_INDEX_AND_NAVIGATION.md",
               "ViewState": "AgIAAOkBAAAAAAAAAAAAAPsBAAAjAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
               "WhenOpened": "2026-05-21T04:34:47.412Z"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{40ea2e6b-2121-4bb8-a43e-c83c04b51041}"
             }
           ]
         }

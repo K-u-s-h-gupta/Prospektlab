@@ -24,6 +24,26 @@ _STOP_PHRASES = {
     "news", "valuation", "metrics", "fundamentals", "show", "provide",
     "give", "me", "its", "their", "and", "with", "against", "versus", "vs",
 }
+
+# Words that must NEVER be resolved as tickers by the uppercase regex in resolve_entities.
+# This prevents "it", "its", "of", "to", "IT", "ME", "WE", "US", "IS", "BE", etc.
+# from being misinterpreted as company tickers in follow-up queries.
+PRONOUN_AND_COMMON_WORDS: set[str] = {
+    "IT", "ITS", "THE", "AND", "FOR", "OF", "TO", "IN", "ON", "AT", "BY",
+    "AS", "IS", "BE", "OR", "NO", "UP", "SO", "IF", "GO", "ME", "MY", "WE",
+    "US", "HE", "SHE", "AM", "AN", "DO", "DID", "HAS", "HAD", "WAS", "WERE",
+    "BEEN", "HAVE", "ARE", "WILL", "SHALL", "MAY", "MIGHT", "CAN", "COULD",
+    "SHOULD", "WOULD", "MUST", "NOT", "NOW", "HOW", "ALL", "ANY", "BUT",
+    "GET", "GOT", "HIM", "HER", "THEY", "THEM", "THEIR", "THIS", "THAT",
+    "THAN", "THEN", "THESE", "THOSE", "WITH", "FROM", "INTO", "OVER",
+    "UNDER", "AGAIN", "FURTHER", "ONCE", "HERE", "THERE", "WHEN", "WHERE",
+    "WHY", "WHAT", "WHO", "WHOM", "WHOSE", "WHICH", "WHILE", "BECAUSE",
+    "ABOUT", "BEFORE", "AFTER", "ABOVE", "BELOW", "BETWEEN", "THROUGH",
+    "DURING", "BEFORE", "AFTER", "ABOVE", "BELOW", "UP", "DOWN", "OUT",
+    "OFF", "OVER", "UNDER", "AGAIN", "FURTHER", "THEN", "ONCE",
+    # finance/acronyms that were previously skipped
+    "NSE", "BSE", "SEBI", "RBI", "DCF", "WACC", "CAGR", "FY",
+}
 _KNOWN_COUNTRIES = {
     "tcs": "IN",
     "tata consultancy services": "IN",
@@ -446,7 +466,7 @@ def resolve_entities(query: str, *, limit: int = 4) -> list[ResolvedEntity]:
             candidates.append((match.start(), alias))
     for match in re.finditer(r"\b[A-Z][A-Z&-]{1,14}(?:\.(?:NS|BO|NSE|BSE))?\b", text):
         token = match.group(0)
-        if token.upper() in {"NSE", "BSE", "SEBI", "RBI", "DCF", "WACC", "CAGR", "FY"}:
+        if token.upper() in PRONOUN_AND_COMMON_WORDS:
             continue
         candidates.append((match.start(), token))
     if not candidates:

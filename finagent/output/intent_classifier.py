@@ -14,6 +14,7 @@ _FILING_TERMS = ("drhp", "rhp", "prospectus", "annual report", "filing", "risk f
 _VERSION_TERMS = ("changes", "changed", "compare documents", "from drhp to rhp", "version")
 _INVESTMENT_TERMS = ("should i buy", "buy", "sell", "hold", "invest", "recommendation")
 _MARKET_TERMS = ("rbi", "nifty", "sensex", "sector", "market", "bond", "yield", "rupee", "inflation", "fii", "dii")
+_FORENSIC_TERMS = ("forensic", "anomaly", "anomalies", "manipulation", "earnings quality", "accounting check", "red flag", "restatement")
 
 
 def normalize_depth(value: str | None) -> ResponseDepth:
@@ -34,7 +35,7 @@ def classify_output_mode(
     explicit_mode: str | None = None,
 ) -> OutputMode:
     if explicit_mode == "chat":
-        return OutputMode.DIRECT_ANSWER
+        return OutputMode.CONVERSATIONAL_CHAT
         
     if explicit_mode:
         try:
@@ -53,21 +54,23 @@ def classify_output_mode(
         return OutputMode.DEEP_RESEARCH_REPORT
 
     if any(term in lower for term in _PRICE_HISTORY_TERMS):
-        return OutputMode.DIRECT_ANSWER
+        return OutputMode.CONVERSATIONAL_CHAT
     if any(term in lower for term in _FILING_TERMS):
         filing_versions = sum(1 for term in ("drhp", "rhp", "prospectus") if term in lower)
         if filing_versions >= 2 or (any(term in lower for term in _VERSION_TERMS) and ("drhp" in lower or "rhp" in lower)):
             return OutputMode.DOCUMENT_VERSION_COMPARISON
         return OutputMode.FILING_ANALYSIS
+    if any(term in lower for term in _FORENSIC_TERMS):
+        return OutputMode.FORENSIC_INSIGHTS
     if any(term in lower for term in _VALUATION_TERMS):
-        return OutputMode.VALUATION_MODEL
+        return OutputMode.VALUATION_INSIGHTS
     if any(term in lower for term in _NEWS_TERMS):
         return OutputMode.NEWS_BRIEF
     if any(term in lower for term in _INVESTMENT_TERMS):
         return OutputMode.INVESTMENT_VIEW
     if any(term in lower for term in _MARKET_TERMS) and not _looks_like_bare_company(target):
         return OutputMode.MARKET_EXPLAINER
-    return OutputMode.COMPANY_SNAPSHOT if _looks_like_bare_company(target) or entity else OutputMode.DIRECT_ANSWER
+    return OutputMode.COMPANY_SNAPSHOT if _looks_like_bare_company(target) or entity else OutputMode.CONVERSATIONAL_CHAT
 
 
 def extract_finance_entities(query: str, *, limit: int = 4) -> list[ResolvedEntity]:

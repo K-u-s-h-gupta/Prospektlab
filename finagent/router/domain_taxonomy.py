@@ -10,4 +10,6 @@ AGENT_KEYWORDS: dict[str, tuple[str, ...]] = {
     "competitor": ("compare", "competitor", "peer", "vs", "versus", "market share"),
     "macro": ("macro", "rates", "inflation", "fx", "commodity", "sector", "forecast", "outlook"),
     "governance": ("governance", "board", "management", "insider", "compensation"),
+    "valuation": ("valuation", "dcf", "intrinsic value", "target price", "upside", "undervalued", "overvalued"),
+    "accounting": ("accounting", "anomaly", "forensic", "earnings quality", "restatement", "red flag", "manipulation"),
 }

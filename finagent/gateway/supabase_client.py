@@ -39,16 +39,22 @@ async def create_admin_user(email: str, password: str, full_name: str, mobile: s
         
         if res.status_code == 422:
             try:
-                msg = res.json().get("msg", "")
+                data = res.json()
+                msg = data.get("msg", "") or data.get("message", "")
                 if "already registered" in msg.lower() or "already exists" in msg.lower():
                     raise HTTPException(status_code=409, detail="An account with that email already exists.")
+                raise HTTPException(status_code=422, detail=msg or "Invalid user data.")
             except HTTPException:
                 raise
             except Exception:
                 pass
                 
         if not res.is_success:
-            err = res.json().get("message", "Failed to create user in Supabase")
+            try:
+                data = res.json()
+                err = data.get("message") or data.get("msg") or "Failed to create user in Supabase"
+            except Exception:
+                err = "Failed to create user in Supabase"
             raise HTTPException(status_code=res.status_code, detail=err)
             
         return res.json()

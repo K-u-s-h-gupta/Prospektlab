@@ -983,6 +983,46 @@
       margin-right: 6px;
     }
 
+    /* ═══ SUGGESTION CHIPS ════════════════════════════════════════════ */
+    .suggestion-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .suggestion-chip {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      text-align: left;
+      padding: 14px 16px;
+      background: linear-gradient(145deg, var(--surface-2), var(--surface-1));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      color: var(--text);
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.25s var(--ease);
+      font-family: inherit;
+    }
+    .suggestion-chip:hover {
+      border-color: var(--border-strong);
+      background: linear-gradient(145deg, var(--surface-3), var(--surface-2));
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.25);
+    }
+    .suggestion-chip:active {
+      transform: translateY(0);
+    }
+    .suggestion-chip .material-symbols-outlined {
+      font-size: 18px;
+      color: var(--research);
+      flex-shrink: 0;
+    }
+
     /* ═══ CONFIDENCE PILLS ══════════════════════════════════════════════ */
     .conf-pill {
       display: inline-block;
@@ -1144,6 +1184,54 @@
         display: flex;
       }
     }
+
+    /* Mobile drawer for session sidebar */
+    @media (max-width: 1023px) {
+      .session-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 280px;
+        max-width: 85vw;
+        z-index: 200;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease-out;
+        display: flex;
+        background: var(--surface-1);
+        border-right: 1px solid var(--border);
+      }
+      body.sidebar-open .session-sidebar {
+        transform: translateX(0);
+      }
+      .sidebar-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.6);
+        z-index: 150;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+      body.sidebar-open .sidebar-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+      }
+    }
+
+    /* Respect reduced motion preference globally */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .marathon-loader .orbit,
+      .marathon-loader .core {
+        animation: none !important;
+      }
+    }
   </style>
 </head>
 
@@ -1155,6 +1243,9 @@
   ════════════════════════════════════════════════════════════════════ -->
   <header class="h-14 flex items-center justify-between px-6 shrink-0 anim-fade-in">
     <div class="flex items-center gap-3">
+      <button id="mobileSidebarToggle" class="icon-btn lg:hidden" title="Open history" aria-label="Open session history">
+        <span class="material-symbols-outlined">menu</span>
+      </button>
       <button id="newRunBtn" class="icon-btn" title="New thread">
         <span class="material-symbols-outlined">add</span>
       </button>
@@ -1178,7 +1269,7 @@
 
     <div class="flex items-center gap-2">
       <button id="activityToggle" class="icon-btn" title="Activity stream">
-        <span class="material-symbols-outlined">bolt</span>
+        <span class="material-symbols-outlined">history</span>
       </button>
       <div id="authControls" class="flex items-center gap-2 text-xs"></div>
     </div>
@@ -1204,7 +1295,7 @@
             <a href="/signup" class="text-[11px] text-white bg-white/10 hover:bg-white/15 px-3 py-1.5 rounded-full transition-colors">Sign up</a>
           `;
         }
-      } catch (e) { console.error(e); }
+      } catch (e) { /* silent user load error */ }
     })();
   </script>
 
@@ -1233,13 +1324,37 @@
 
         <!-- ── STATE: COMMAND (Initial empty / hero state) ─────────────── -->
         <div id="stateCommand" class="min-h-full flex flex-col items-center justify-center p-8">
-          <div class="text-center max-w-md anim-fade-up">
+          <div class="text-center max-w-lg anim-fade-up">
             <div class="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-600 mb-3">Intelligence engine</div>
-            <h1 class="text-4xl font-semibold text-white mb-3 tracking-tight gradient-text">Ask anything.</h1>
-            <p class="text-sm text-zinc-500 leading-relaxed">
+            <h1 class="text-3xl font-semibold text-white mb-2 tracking-tight gradient-text">What would you like to research?</h1>
+            <p class="text-sm text-zinc-500 leading-relaxed mb-6">
               Choose <span class="text-zinc-300">Research</span> for focused analysis,
               or <span class="text-zinc-300">Marathon</span> for a full-scale multi-pass report.
             </p>
+
+            <!-- Predefined query suggestions -->
+            <div class="suggestion-grid">
+              <button class="suggestion-chip" data-query="Analyze Reliance Industries stock outlook" type="button">
+                <span class="material-symbols-outlined">trending_up</span>
+                <span>Analyze Reliance Industries</span>
+              </button>
+              <button class="suggestion-chip" data-query="Compare HDFC Bank vs ICICI Bank investment case" type="button">
+                <span class="material-symbols-outlined">compare_arrows</span>
+                <span>HDFC Bank vs ICICI Bank</span>
+              </button>
+              <button class="suggestion-chip" data-query="Top performing Nifty 50 stocks this quarter" type="button">
+                <span class="material-symbols-outlined">leaderboard</span>
+                <span>Top Nifty 50 performers</span>
+              </button>
+              <button class="suggestion-chip" data-query="Is TCS a good long-term investment?" type="button">
+                <span class="material-symbols-outlined">query_stats</span>
+                <span>TCS long-term outlook</span>
+              </button>
+              <button class="suggestion-chip" data-query="Impact of current RBI monetary policy on Indian markets" type="button">
+                <span class="material-symbols-outlined">account_balance</span>
+                <span>RBI policy market impact</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1252,9 +1367,9 @@
               </h2>
               <span id="processingPercent" class="label-mono text-zinc-500"></span>
             </div>
-            <div id="processingPhaseLabel" class="label-mono text-zinc-500 mb-3">Connecting…</div>
-            <div class="progress-track">
-              <div id="processingBar" class="progress-fill"></div>
+            <div id="processingPhaseLabel" role="status" aria-live="polite" class="label-mono text-zinc-500 mb-3">Connecting…</div>
+            <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Research progress">
+              <div id="processingBar" class="progress-fill" aria-hidden="true"></div>
             </div>
             <div id="processingTitle" class="hidden"></div>
           </div>
@@ -1268,7 +1383,7 @@
               <h1 id="resultTitle"></h1>
               <p id="resultBreadcrumb"></p>
             </div>
-            <div id="chatThread" class="chat-thread">
+            <div id="chatThread" role="log" aria-live="polite" aria-relevant="additions" class="chat-thread">
               <!-- Turns appended dynamically by appendConversationTurn() -->
             </div>
           </div>
@@ -1327,7 +1442,7 @@
         </div>
         <div class="px-5 py-4 border-t border-white/5">
           <div class="label-mono text-zinc-600 mb-2">Events</div>
-          <div id="activityStream" class="flex flex-col gap-1 text-[11px]"></div>
+          <div id="activityStream" role="log" aria-live="polite" aria-relevant="additions" class="flex flex-col gap-1 text-[11px]"></div>
         </div>
         <div class="px-5 py-4 border-t border-white/5">
           <div class="label-mono text-zinc-600 mb-2">Sources</div>
@@ -1337,11 +1452,10 @@
     </aside>
   </main>
 
-  <!-- ═══ STUB IDs ═════════════════════════════════════════════════════
-       These remain as zero-size offscreen anchors so the existing JS
-       engine (renderIntel, resetCounters, etc.) keeps functioning while
-       the visible UI is minimized. Anything visually meaningful in the
-       new design is rendered into the inline chat thread on demand.
+  <!-- ═══ LEGACY STUB IDs (safe to keep) ═══════════════════════════════
+       Zero-size hidden anchors required by fallback render paths and
+       older helper functions. They are inert and off-DOM for screen readers.
+       Do not remove without auditing all $(id) references in the JS below.
   ═══════════════════════════════════════════════════════════════════ -->
   <div class="hidden" aria-hidden="true">
     <div id="mainSidebar"></div><div id="topAppBar"></div><div id="ctrSources"></div>
@@ -1406,7 +1520,9 @@
       result: $("stateResult"),
     };
     let eventSource = null;
-    let sessionId = null;
+    let sessionId = (() => {
+      try { return localStorage.getItem('prospektlab_session_id') || null; } catch (e) { return null; }
+    })();
     let startedAt = 0;
     let tickHandle = null;
     let counters = { sources: 0, primary: 0 };
@@ -1829,7 +1945,7 @@
                 <div class="turn-progress-text">
                   <div class="turn-progress-phase" style="color:${modeColor}">${modeLabel}</div>
                   <div class="turn-progress-detail">Starting...</div>
-                  <div class="turn-progress-bar"><div class="turn-progress-fill ${fillClass}" style="width:0%"></div></div>
+                  <div class="turn-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Turn progress"><div class="turn-progress-fill ${fillClass}" style="width:0%" aria-hidden="true"></div></div>
                 </div>
               </div>
             </div>
@@ -1858,6 +1974,9 @@
         visualEl,
         marathonExportRendered: false,
       };
+      // Always start with a clean visual dashboard for this new query
+      // (prevents stale Reliance / previous-query cards from persisting)
+      if (visualEl) visualEl.innerHTML = "";
       conversationTurns.push(turn);
       activeTurnId = turnId;
       showState("result");
@@ -1887,8 +2006,17 @@
     function shouldShowVisuals(query, outputMode) {
       const q = (query || "").toLowerCase();
       const textOnlyModes = new Set(["news_brief", "direct_answer", "filing_analysis"]);
+      if (textOnlyModes.has(outputMode)) return false;
+
+      // Rich structured modes always get visuals (prevents "same static cards" feeling
+      // when the query text lacks obvious keywords like "chart" or "revenue")
+      const alwaysVisualModes = new Set([
+        "company_snapshot", "company_comparison", "valuation_model",
+        "investment_view", "deep_research_report", "forensic_insights"
+      ]);
+      if (alwaysVisualModes.has(outputMode)) return true;
+
       const explicitChart = /\b(chart|graph|historical|history|trend|valuation|financials?|revenue|profit|margin|market.?cap|shareholding|performance|pe.?ratio|p\/e|roe|roce|ebitda|earnings|quarterly|annual|price history|historical price|return|dividend|debt|cash.?flow|capex)\b/.test(q);
-      if (textOnlyModes.has(outputMode) && !explicitChart) return false;
       // Comparison queries — always show visuals
       const isComparison = /\bvs\.?\b|\bversus\b|\bcompare\b|\bcomparison\b/.test(q)
         || (q.includes(" vs ") || q.includes(" vs."));
@@ -1899,14 +2027,7 @@
       // Finance / analytics keywords
       const explicitVisual = /\b(stats|statistics|financials?|chart|graph|historical|history|trend|valuation|revenue|profit|margin|market.?cap|shareholding|performance|pe.?ratio|p\/e|roe|roce|ebitda|earnings|quarterly|annual|report|price|return|dividend|debt|cash.?flow|capex)\b/.test(q);
       if (explicitVisual) return true;
-      // Mode-based gate (only for modes that have structured visual data)
-      const visualModes = new Set([
-        "company_snapshot", "company_comparison", "valuation_model",
-        "investment_view", "deep_research_report"
-      ]);
-      const hiddenModes = new Set(["news_brief", "direct_answer"]);
-      if (hiddenModes.has(outputMode)) return false;
-      return visualModes.has(outputMode);
+      return false;
     }
 
     function currentUserEmail() {
@@ -1945,6 +2066,9 @@
       try {
         localStorage.removeItem("prospektlab_user");
         sessionStorage.removeItem("prospektlab_user");
+        localStorage.removeItem("prospektlab_session_id");
+        sessionStorage.removeItem("prospektlab_session_id");
+        sessionId = null;
       } catch (_) { }
       window.location.href = "/login";
     }
@@ -3086,12 +3210,24 @@
       return false;
     }
 
+    // Special exemption: this email has unlimited queries (no 10-query free tier limit)
+    function isUnlimitedUser() {
+      try {
+        const email = (currentUserEmail() || "").toLowerCase().trim();
+        return email === "kushgupta2019@gmail.com";
+      } catch (e) {
+        return false;
+      }
+    }
+
     function queryCountKey() {
       const email = currentUserEmail();
       return email ? `prospektlab_query_count:${email.toLowerCase()}` : "";
     }
 
+    let _lastFocusBeforeModal = null;
     function showPricingModal() {
+      _lastFocusBeforeModal = document.activeElement;
       const modal = document.getElementById("pricingModal");
       if (modal) {
         modal.classList.remove("hidden", "pointer-events-none");
@@ -3102,6 +3238,7 @@
           if (card) {
             card.classList.remove("scale-95");
             card.classList.add("scale-100");
+            card.focus();
           }
         }, 10);
       }
@@ -3119,6 +3256,10 @@
         }
         setTimeout(() => {
           modal.classList.add("hidden", "pointer-events-none");
+          if (_lastFocusBeforeModal && typeof _lastFocusBeforeModal.focus === "function") {
+            _lastFocusBeforeModal.focus();
+          }
+          _lastFocusBeforeModal = null;
         }, 300);
       }
     }
@@ -3133,9 +3274,7 @@
     }
 
     async function startRun() {
-      console.log("[DEBUG] startRun() called");
       const target = readUnifiedQueryInput();
-      console.log("[DEBUG] target =", target);
 
       if (!target) {
         ($("targetInput") || $("activeInput") || $("heroSearchInput"))?.focus();
@@ -3148,7 +3287,8 @@
       }
 
       // Enforce 10-query limit for free users.
-      if (!isProUser()) {
+      // kushgupta2019@gmail.com is exempt (unlimited queries)
+      if (!isProUser() && !isUnlimitedUser()) {
         const key = queryCountKey();
         if (!key) {
           window.location.href = "/login";
@@ -3212,6 +3352,7 @@
               payload.session_id = sessionId;
             }
 
+            let retryAttempt = false;
             try {
               resp = await fetch(API_BASE + endpoint, {
                 method: "POST",
@@ -3223,9 +3364,31 @@
               pushActivity("error", "Gateway", "Could not reach /research/start: " + e.message, "error");
               return;
             }
+            // Defensive: stale session_id from a previous user causes 403 ownership mismatch.
+            // Clear it and retry once without the conflicting session_id.
+            if (resp.status === 403 && payload.session_id) {
+              retryAttempt = true;
+              delete payload.session_id;
+              try { localStorage.removeItem('prospektlab_session_id'); } catch (_) {}
+              try { sessionStorage.removeItem('prospektlab_session_id'); } catch (_) {}
+              sessionId = null;
+              if (turn) turn.sessionId = null;
+              try {
+                resp = await fetch(API_BASE + endpoint, {
+                  method: "POST",
+                  headers: getAuthHeaders({ "Content-Type": "application/json" }),
+                  body: JSON.stringify(payload),
+                });
+              } catch (e) {
+                if (runToken !== activeRunToken) return;
+                pushActivity("error", "Gateway", "Could not reach /research/start: " + e.message, "error");
+                return;
+              }
+            }
             if (!resp.ok) {
               if (runToken !== activeRunToken) return;
-              pushActivity("error", "Gateway", "Failed to start: HTTP " + resp.status, "error");
+              const detail = retryAttempt ? " (retried after clearing stale session)" : "";
+              pushActivity("error", "Gateway", "Failed to start: HTTP " + resp.status + detail, "error");
               return;
             }
             const { session_id, stream } = await resp.json();
@@ -3294,7 +3457,6 @@
               } catch (err) {
                 if (!_sseActive || runToken !== activeRunToken) return;
                 if (err && err.name === "AbortError") return; // proactive reconnect
-                console.warn("SSE fetch error, retrying in 2 s:", err);
                 clearTimeout(_sseReconnectTimer);
                 _sseReconnectTimer = setTimeout(_connectSSE, 2000);
                 return;
@@ -3302,7 +3464,6 @@
 
               if (!resp.ok) {
                 if (!_sseActive || runToken !== activeRunToken) return;
-                console.warn("SSE HTTP", resp.status, "— retrying in 3 s");
                 clearTimeout(_sseReconnectTimer);
                 _sseReconnectTimer = setTimeout(_connectSSE, 3000);
                 return;
@@ -3334,7 +3495,6 @@
               } catch (err) {
                 if (!_sseActive || runToken !== activeRunToken) return;
                 if (err && err.name === "AbortError") return; // proactive reconnect in progress
-                console.warn("SSE read error, retrying in 2 s:", err);
                 clearTimeout(_sseReconnectTimer);
                 _sseReconnectTimer = setTimeout(_connectSSE, 2000);
               }
@@ -3663,6 +3823,29 @@
                   if (pc) pc.remove();
                 }
                 pushActivity("flag", "Final", `${d.steps} steps · ${d.citations} citations · ${d.primary_citations} primary · ${(d.elapsed_ms / 1000).toFixed(1)}s`, "done", d.canonical || "");
+                // Show generation timing at the very end of the answer block
+                if (turn) {
+                  const assistantCard = turn.root.querySelector('.assistant-card');
+                  if (assistantCard) {
+                    assistantCard.querySelectorAll('.turn-timing').forEach(el => el.remove());
+                    const elapsed = d.elapsed_ms || 0;
+                    let timeText;
+                    if (elapsed < 1000) {
+                      timeText = `Generated in ${elapsed}ms`;
+                    } else if (elapsed < 60000) {
+                      timeText = `Generated in ${(elapsed / 1000).toFixed(1)}s`;
+                    } else {
+                      const mins = Math.floor(elapsed / 60000);
+                      const secs = ((elapsed % 60000) / 1000).toFixed(1);
+                      timeText = `Generated in ${mins}m ${secs}s`;
+                    }
+                    const timingEl = document.createElement('div');
+                    timingEl.className = 'turn-timing anim-fade-up';
+                    timingEl.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-faint);margin-top:12px;text-align:right;letter-spacing:0.04em;";
+                    timingEl.textContent = timeText;
+                    assistantCard.appendChild(timingEl);
+                  }
+                }
                 if (tickHandle) clearInterval(tickHandle);
                 tickHandle = null;
                 loadMemoLibrary();
@@ -3694,7 +3877,7 @@
             // This stub is kept for compatibility if anything still references it.
             eventSource.onerror = (err) => {
               if (runToken !== activeRunToken) return;
-              console.warn("SSE error (handled by Fetch reader):", err);
+              // SSE errors handled by retry logic above
             };
           }
 
@@ -3734,9 +3917,11 @@
                     <button id="marathonBackBtn" style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;padding:10px 24px;border-radius:10px;cursor:pointer;background:rgba(255,255,255,0.06);color:var(--text);border:1px solid rgba(255,255,255,0.1);transition:all 0.15s">← Back to Research</button>
                   </div>`;
                 document.body.appendChild(overlay);
-                overlay.querySelector('#marathonBackBtn').addEventListener('click', () => {
+                const backBtn = overlay.querySelector('#marathonBackBtn');
+                backBtn.addEventListener('click', () => {
                   document.getElementById('modeDeep')?.click();
                 });
+                setTimeout(() => backBtn.focus(), 50);
               }
             } else {
               if (input) { input.disabled = false; input.placeholder = "Ask anything about any public company…"; }
@@ -3773,7 +3958,7 @@
             if (!sessionId) return;
             try {
               await fetch(`${API_BASE}/sessions/${sessionId}/stop`, { method: "POST", headers: getAuthHeaders() });
-            } catch (e) { console.warn("Stop request failed:", e); }
+            } catch (e) { /* ignore stop errors */ }
             if (eventSource) { eventSource.close(); eventSource = null; }
             if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
             $("processingPhaseLabel").innerHTML = `<span style="color: var(--error);">Generation stopped</span>`;
@@ -3819,6 +4004,18 @@
 
           $("executeBtn").addEventListener("click", startRun);
           $("targetInput").addEventListener("keydown", (e) => { if (e.key === "Enter") startRun(); });
+
+          // ── Suggestion chips: auto-fill input and execute ─────────────
+          document.querySelectorAll(".suggestion-chip").forEach((chip) => {
+            chip.addEventListener("click", () => {
+              const q = chip.dataset.query || "";
+              $("targetInput").value = q;
+              $("activeInput").value = q;
+              $("heroSearchInput").value = q;
+              startRun();
+            });
+          });
+
           // Hero search input (Perplexity-style centered)
           if ($("heroExecuteBtn")) {
             $("heroExecuteBtn").addEventListener("click", startRun);
@@ -3847,7 +4044,7 @@
               ($("heroSearchInput") || $("targetInput")).focus();
             });
           }
-          $("newRunBtn").addEventListener("click", () => {
+           $("newRunBtn").addEventListener("click", () => {
             showState("command");
             clearConversation();
             sessionId = null;
@@ -3858,6 +4055,26 @@
             if (hero) hero.classList.remove("brand-exit");
             ($("heroSearchInput") || $("targetInput")).focus();
           });
+
+          // Mobile sidebar drawer toggle
+          const mobileToggle = $("mobileSidebarToggle");
+          if (mobileToggle) {
+            mobileToggle.addEventListener("click", () => {
+              document.body.classList.toggle("sidebar-open");
+              // Create one-time backdrop if not present
+              let backdrop = document.querySelector(".sidebar-backdrop");
+              if (!backdrop) {
+                backdrop = document.createElement("div");
+                backdrop.className = "sidebar-backdrop";
+                document.body.appendChild(backdrop);
+                backdrop.addEventListener("click", () => {
+                  document.body.classList.remove("sidebar-open");
+                  backdrop.remove();
+                });
+              }
+            });
+          }
+
           document.querySelectorAll(".hist-tab").forEach((b) => {
             b.addEventListener("click", () => renderHistoryBars(b.dataset.hist));
           });
@@ -4336,52 +4553,11 @@
             if (turn) renderChartsIntoTurn(turn, charts);
           }
 
-          // ── Original dead-code Chart.js block (kept compiling for safety) ──
-          function _legacyRenderCharts(charts) {
-            const container = document.getElementById("visualDashboard") || document.getElementById("memoBody");
-            if (!container) return;
-            let dashboard = document.getElementById("visualDashboard");
-            if (!dashboard) {
-              dashboard = document.createElement("div");
-              dashboard.id = "visualDashboard";
-              dashboard.className = "visual-dashboard";
-              container.insertBefore(dashboard, container.firstChild);
-            }
-            charts.forEach((chart, index) => {
-              const chartId = `chartCanvas_${Date.now()}_${index}`;
-
-              let html = `
-          <div class="claude-card">
-            <div class="claude-header">
-              <span>${chart.title}</span>
-              ${chart.subtitle ? `<span style="text-transform:none; font-size: 0.7rem; color: #6b7280;">${chart.subtitle}</span>` : ""}
-            </div>
-            <div class="chart-container-native">
-              <canvas id="${chartId}"></canvas>
-            </div>
-          </div>
-        `;
-              dashboard.insertAdjacentHTML("beforeend", html);
-
-              // Render Chart.js
-              setTimeout(() => {
-                const ctx = document.getElementById(chartId);
-                if (!ctx) return;
-
-                const isLine = chart.chart_type === "line";
-                const datasets = (chart.series || []).map(s => {
-                  const dataValues = s.data ? s.data.map(d => d.value) : [];
-                  const color = s.color || (isLine ? "#3fb950" : "#3b82f6");
-                  return {
-                    label: s.name,
-                    data: dataValues,
-                    borderColor: color,
-                    backgroundColor: isLine ?
-                      (() => {
-                        let ctx2d = ctx.getContext("2d");
-                        let grad = ctx2d.createLinearGradient(0, 0, 0, 300);
-                        grad.addColorStop(0, color + '66'); // 40% opacity
-                        grad.addColorStop(1, color + '00'); // 0% opacity
+          /* REMOVED: orphaned legacy Chart.js code from previous cleanup.
+             The active path is renderChartsIntoTurn. This block is commented
+             to keep the file valid while we finish the UI/UX fixes.
+          */
+          /*
                         return grad;
                       })() : color,
                     fill: isLine,
@@ -4507,7 +4683,8 @@
             dashboard.insertAdjacentHTML("beforeend", html);
           }
 
-          // ════════════════════════════════════════════════════════════════════
+            // ════════════════════════════════════════════════════════════════════
+          */
           // First-time-user tutorial — spotlight coachmarks over key UI areas.
           // Auto-shows once (gated on localStorage). Re-launchable from the
           // sidebar "Tutorial" button. Keyboard: Esc closes, ←/→ navigates.
@@ -4942,8 +5119,7 @@
               const filename = reportTitle.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 50) + '_report.pdf';
               doc.save(filename);
             } catch (e) {
-              console.error("PDF Export failed:", e);
-              alert("PDF Export failed: " + e.message);
+              alert("PDF Export failed: " + (e && e.message ? e.message : e));
             }
           };
 
@@ -4999,8 +5175,7 @@
               a.remove();
               setTimeout(() => URL.revokeObjectURL(url), 2000);
             } catch (e) {
-              console.error("Word export failed:", e);
-              alert("Word export failed: " + e.message);
+              alert("Word export failed: " + (e && e.message ? e.message : e));
             }
           };
 
@@ -5027,14 +5202,14 @@
   </script>
 
   <!-- Pricing exhausted limit modal -->
-  <div id="pricingModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md hidden transition-opacity duration-300 opacity-0 pointer-events-none">
-    <div class="relative w-full max-w-md p-8 mx-4 border border-white/10 rounded-2xl bg-[#111114] shadow-2xl transition-transform duration-300 scale-95 flex flex-col items-center text-center">
+  <div id="pricingModal" role="dialog" aria-modal="true" aria-labelledby="pricingModalTitle" class="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 backdrop-blur-md hidden transition-opacity duration-300 opacity-0 pointer-events-none">
+    <div class="relative w-full max-w-md p-8 mx-4 border border-white/10 rounded-2xl bg-[#111114] shadow-2xl transition-transform duration-300 scale-95 flex flex-col items-center text-center" tabindex="-1">
       <!-- Premium icon -->
       <div class="w-16 h-16 mb-5 rounded-full bg-warn/10 text-warn border border-warn/20 flex items-center justify-center">
         <span class="material-symbols-outlined text-[32px] select-none">workspace_premium</span>
       </div>
       <!-- Header -->
-      <h3 class="text-xl font-bold tracking-tight text-white mb-2">Free Limit Reached</h3>
+      <h3 id="pricingModalTitle" class="text-xl font-bold tracking-tight text-white mb-2">Free Limit Reached</h3>
       <!-- Copy Writing -->
       <p class="text-sm text-muted mb-6 leading-relaxed">
         You have used all 10 free queries. Subscribe to unlock a higher limit and keep researching.
@@ -5050,6 +5225,17 @@
       </div>
     </div>
   </div>
+
+  <!-- Auto a11y: hide decorative icon ligatures from screen readers -->
+  <script>
+    (function(){ try {
+      document.querySelectorAll('.material-symbols-outlined').forEach(function(s){
+        if (!s.hasAttribute('aria-hidden') && !s.getAttribute('aria-label') && !s.closest('[role="button"],button,a')) {
+          s.setAttribute('aria-hidden','true');
+        }
+      });
+    } catch(e){} })();
+  </script>
 </body>
 
 </html>

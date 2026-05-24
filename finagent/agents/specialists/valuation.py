@@ -20,19 +20,9 @@ from finagent.agents.base import (
     Finding,
     SubAgentContext,
 )
+from finagent.tools.mcp.forecasting import cagr as _cagr   # shared implementation
 
 logger = logging.getLogger("finagent.agents.specialists.valuation")
-
-
-def _cagr(values: list[float]) -> float | None:
-    """Compound annual growth rate (oldest-first list)."""
-    if len(values) < 2 or values[0] <= 0 or values[-1] <= 0:
-        return None
-    n = len(values) - 1
-    try:
-        return (values[-1] / values[0]) ** (1.0 / n) - 1
-    except (ZeroDivisionError, ValueError):
-        return None
 
 
 def _fmt_compact(value: float) -> str:
@@ -73,6 +63,7 @@ class ValuationAgent(BaseSubAgent):
         return True, ""
 
     async def execute(self, ctx: SubAgentContext) -> AgentTaskResult:
+        logger.info("[VALUATION-START] valuation agent starts processing...")
         out = AgentTaskResult(agent_name=self.name)
         yahoo = ctx.bundle.yahoo if ctx.bundle else None
         sec = ctx.bundle.sec if ctx.bundle else None
@@ -110,6 +101,9 @@ class ValuationAgent(BaseSubAgent):
             return out
 
         # ── 2. Run TimesFM forecast ────────────────────────────────────
+        # Note: The forecasting logic can also be called via the dedicated
+        # MCP server (mcp_forecasting.py on port 8006) for external clients.
+        # Inside the agent we currently use the fast in-process version.
         try:
             from finagent.tools.mcp.forecasting import generate_zero_shot_forecast
         except ImportError:
@@ -120,6 +114,7 @@ class ValuationAgent(BaseSubAgent):
         horizon = min(8, max(4, len(revenue_values)))  # 4-8 periods
 
         if generate_zero_shot_forecast is not None:
+            logger.info("[TIMESFM] ValuationAgent -> calling generate_zero_shot_forecast (real or fallback)")
             try:
                 forecast_result = await generate_zero_shot_forecast(
                     revenue_values,
@@ -157,29 +152,39 @@ class ValuationAgent(BaseSubAgent):
         else:
             implied_growth = _cagr(revenue_values) or 0.05
 
+        logger.info("[VALUATION-FORECAST] forecast generated using model: %s | projected_values_len=%d | implied_growth=%.2f%%", model_used, len(projected), implied_growth * 100)
+
         historical_cagr = _cagr(revenue_values)
 
         # ── 5. Emit projection finding ─────────────────────────────────
         p10_terminal = q10[-1] if q10 else terminal_rev * 0.85
         p90_terminal = q90[-1] if q90 else terminal_rev * 1.15
 
+        is_real_timesfm = model_used == "timesfm_2.5"
+        headline = (
+            f"TimesFM 2.5 Revenue Projection: {_fmt_compact(terminal_rev)} in {years_out}yr"
+            if is_real_timesfm else
+            f"Revenue Projection (statistical fallback): {_fmt_compact(terminal_rev)} in {years_out}yr"
+        )
+
+        detail = (
+            f"TimesFM 2.5 zero-shot forecast (real model) based on {len(revenue_values)} historical points. "
+            f"Projected {currency} revenue in {years_out} years: {_fmt_compact(terminal_rev)} (P50). "
+            f"Risk corridor: {_fmt_compact(p10_terminal)} (P10) – {_fmt_compact(p90_terminal)} (P90). "
+            f"Implied CAGR from TimesFM: {implied_growth * 100:+.1f}%."
+            if is_real_timesfm else
+            f"Statistical fallback (CAGR-based) used because TimesFM 2.5 was unavailable. "
+            f"Projected {currency} revenue in {years_out} years: {_fmt_compact(terminal_rev)} (P50). "
+            f"Implied CAGR: {implied_growth * 100:+.1f}%."
+        )
+
         out.findings.append(
             Finding(
                 agent=self.name,
                 kind="financial",
-                headline=f"Revenue projection: {_fmt_compact(terminal_rev)} in {years_out}yr ({model_used})",
-                detail=(
-                    f"Based on {len(revenue_values)} historical data points, "
-                    f"projected {currency} revenue in {years_out} years is "
-                    f"{_fmt_compact(terminal_rev)} (P50). "
-                    f"Risk corridor: {_fmt_compact(p10_terminal)} (P10) – "
-                    f"{_fmt_compact(p90_terminal)} (P90). "
-                    f"Implied CAGR: {implied_growth * 100:+.1f}%. "
-                    f"Historical CAGR: {historical_cagr * 100:+.1f}%."
-                    if historical_cagr is not None
-                    else f"Implied CAGR: {implied_growth * 100:+.1f}%."
-                ),
-                confidence="MEDIUM" if model_used == "timesfm_2.5" else "LOW",
+                headline=headline,
+                detail=detail,
+                confidence="MEDIUM" if is_real_timesfm else "LOW",
                 evidence=[yahoo.source_url] if yahoo else [],
                 metrics={
                     "projected_terminal_revenue": terminal_rev,
@@ -189,6 +194,7 @@ class ValuationAgent(BaseSubAgent):
                     "horizon_years": years_out,
                     "p10_terminal": p10_terminal,
                     "p90_terminal": p90_terminal,
+                    "timesfm_active": is_real_timesfm,
                 },
             )
         )
@@ -211,6 +217,14 @@ class ValuationAgent(BaseSubAgent):
                 # Cap growth rates at reasonable bounds.
                 high_growth = max(0.03, min(0.35, implied_growth))
                 stable_growth = max(0.03, min(0.12, high_growth * 0.5))
+
+                ticker_str = yahoo.ticker if yahoo else (sec.ticker if (sec and hasattr(sec, "ticker")) else "UNKNOWN")
+                logger.info("[MCP-USE] valuation_engine | tool=run_dcf_valuation | args={'symbol': '%s'}", ticker_str)
+                try:
+                    from finagent.state.session_context import record_mcp
+                    record_mcp("valuation_engine")
+                except ImportError:
+                    pass
 
                 dcf_result = dcf_valuation(
                     free_cash_flow=fcf,
@@ -316,4 +330,8 @@ class ValuationAgent(BaseSubAgent):
         if not out.findings:
             out.status = "partial"
 
+        intrinsic_str = "None"
+        if dcf_result and "intrinsic_value_per_share" in dcf_result:
+            intrinsic_str = f"{dcf_result['intrinsic_value_per_share']:.2f}"
+        logger.info("[VALUATION-DONE] ValuationAgent completed | intrinsic_value=%s | status=%s", intrinsic_str, out.status)
         return out

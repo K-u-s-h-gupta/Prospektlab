@@ -234,6 +234,8 @@ def rerank_docs(
     if not docs:
         return []
 
+    logger.info("RANK-STEP:01 rerank_enter query=%s docs=%d", query[:60], len(docs))
+
     sanitized_query = sanitize_search_query(query)
     query_terms = _tokens(sanitized_query)
     query_term_set = set(query_terms)
@@ -242,6 +244,8 @@ def rerank_docs(
     texts = [_doc_text(doc) for doc in docs]
     doc_terms = [_tokens(text) for text in texts]
     bm25 = _bm25_scores(query_terms, doc_terms)
+
+    logger.info("RANK-STEP:02 bm25_computed num_docs=%d terms=%d", len(bm25), len(query_terms))
 
     scored_docs = []
     for idx, doc in enumerate(docs):
@@ -262,7 +266,11 @@ def rerank_docs(
             "total": total,
         })
 
+    logger.info("RANK-STEP:03 scoring_loop_done scored=%d (BM25+domain_tier+time_decay)", len(scored_docs))
+
     ranked_scored = sorted(scored_docs, key=lambda x: x["total"], reverse=True)
+
+    logger.info("RANK-STEP:04 sort_complete top_total=%.4f", ranked_scored[0]["total"] if ranked_scored else 0.0)
 
     logger.info("Document ranking completed. Query: '%s'", query)
     logger.info("Top %d ranked documents breakdown:", min(10, len(ranked_scored)))
@@ -282,4 +290,5 @@ def rerank_docs(
             getattr(doc, "url", "N/A"),
         )
 
+    logger.info("RANK-STEP:05 rerank_exit returning=%d", len(ranked_scored))
     return [item["doc"] for item in ranked_scored]
