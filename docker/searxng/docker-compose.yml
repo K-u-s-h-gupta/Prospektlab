@@ -1,0 +1,58 @@
+version: '3.8'
+
+# Local SearXNG development setup
+# Usage: docker-compose up -d
+# Access: http://localhost:8888
+
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: finagent-searxng
+    restart: unless-stopped
+    ports:
+      - "8888:8080"
+    environment:
+      # SearXNG configuration
+      SEARXNG_BASE_URL: http://localhost:8888/
+      SEARXNG_INSTANCE_NAME: "FinAgent Local Search"
+      
+      # Search engines to enable
+      # Disable slow/blocked engines; keep DDG, Bing, Google, Startpage
+      SEARXNG_GOOGLE_ENABLE: "true"
+      SEARXNG_DDG_ENABLE: "true"
+      SEARXNG_BING_ENABLE: "true"
+      SEARXNG_STARTPAGE_ENABLE: "true"
+      
+      # Disable known problematic engines
+      SEARXNG_QWANT_ENABLE: "false"
+      SEARXNG_BING_NEWS_ENABLE: "false"
+    volumes:
+      # Optional: persist SearXNG settings
+      - searxng_data:/etc/searxng
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    networks:
+      - finagent
+
+  # Optional: Crawl4AI for snippet extraction (Phase 2 enhancement)
+  # Uncomment to enable local Crawl4AI service
+  # crawl4ai:
+  #   image: unclecode/crawl4ai:latest
+  #   container_name: finagent-crawl4ai
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11235:11235"
+  #   networks:
+  #     - finagent
+
+networks:
+  finagent:
+    driver: bridge
+
+volumes:
+  searxng_data:
+    driver: local

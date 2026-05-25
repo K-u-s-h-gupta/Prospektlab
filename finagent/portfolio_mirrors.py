@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+import re
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
@@ -11,6 +12,12 @@ from finagent.portfolio.sectors import enrich_position
 
 _DEFAULT_DB = finagent_data_path("memory.sqlite3")
 
+
+def _looks_like_isin(symbol: str) -> bool:
+    """Check if a symbol looks like an ISIN code (12-13 char alphanumeric starting with IN)."""
+    s = str(symbol or "").strip().upper()
+    return bool(s.startswith("IN") and len(s) >= 10 and len(s) <= 13 and re.match(r"^IN[A-Z0-9]+$", s))
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS position_mirrors (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,6 +26,7 @@ CREATE TABLE IF NOT EXISTS position_mirrors (
     exchange TEXT NOT NULL DEFAULT 'NSE',
     quantity REAL NOT NULL DEFAULT 0,
     market_value REAL NOT NULL DEFAULT 0,
+    cost_basis REAL NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     name TEXT,
@@ -65,6 +73,8 @@ class PositionMirror:
         exchange = (self.exchange or "NSE").strip().upper()
         if not base:
             return ""
+        if exchange == "AMFI":
+            return base
         if exchange in {"BSE", "BO", ".BO"}:
             return f"{base}.BO"
         return f"{base}.NS"
@@ -72,6 +82,8 @@ class PositionMirror:
 
 def normalize_exchange(exchange: str | None) -> str:
     value = (exchange or "NSE").strip().upper()
+    if value in {"AMFI", "MF", "MUTUALFUND", "MUTUAL FUND"}:
+        return "AMFI"
     if value in {"BSE", "BOMBAY", "BO", ".BO"}:
         return "BSE"
     return "NSE"
@@ -80,6 +92,10 @@ def normalize_exchange(exchange: str | None) -> str:
 def normalize_symbol(symbol: str, exchange: str | None = None) -> str:
     value = (symbol or "").strip().upper()
     value = value.replace(" ", "").replace("_EQ", "")
+    exchange_norm = normalize_exchange(exchange)
+    if exchange_norm == "AMFI":
+        value = re.sub(r"[^A-Z0-9]", "", value)
+        return value[:32]
 
     # Strip common corporate suffixes that appeared in old sandbox data
     for suffix in ("LIMITED", "LTD.", "LTD"):
@@ -96,8 +112,28 @@ def normalize_symbol(symbol: str, exchange: str | None = None) -> str:
 
     if value.endswith(".NS") or value.endswith(".BO"):
         return value
-    suffix = ".BO" if normalize_exchange(exchange) == "BSE" else ".NS"
+    suffix = ".BO" if exchange_norm == "BSE" else ".NS"
     return f"{value.removesuffix('.NSE').removesuffix('.BSE')}{suffix}"
+
+
+def clean_position_name(name: str) -> str:
+    if not name:
+        return ""
+    # Replace newlines, tabs, carriage returns with spaces
+    name = re.sub(r"[\r\n\t]+", " ", name)
+    # Remove Devanagari (Hindi) characters (range \u0900-\u097F)
+    name = re.sub(r"[\u0900-\u097F]+", " ", name)
+    # Replace multiple spaces with a single space
+    name = re.sub(r"\s+", " ", name)
+    name = name.strip()
+    # Strip trailing ISINs or codes from the name if merged
+    name = re.sub(r"\s+IN[A-Z0-9]{10}\d\b", "", name, flags=re.IGNORECASE)
+    # Strip residual header noise
+    for junk in ("profit/loss", "loss(%)", "dividend", "valuation", "value"):
+        name = re.sub(rf"\b{re.escape(junk)}\b", "", name, flags=re.IGNORECASE)
+    # Re-normalize spacing
+    name = re.sub(r"\s+", " ", name).strip()
+    return name
 
 
 def _migrate_columns(conn) -> None:
@@ -124,7 +160,7 @@ def _purge_corrupted_rows(conn) -> int:
     """One-time cleanup of pre-fix sandbox data containing malformed symbols.
     Returns number of rows deleted.
     """
-    # Corruption signatures observed from old CASParser sandbox responses
+    # Corruption signatures observed from legacy parser/sandbox responses.
     where_clauses = [
         "LENGTH(symbol) > 16",
         "symbol LIKE '%,%'",
@@ -143,55 +179,11 @@ def _purge_corrupted_rows(conn) -> int:
     return deleted
 
 
-def _purge_stale_rows(conn) -> int:
-    """Aggressive purge of stale rows (name=NULL OR cost_basis=0 AND isin IS NULL).
-    Uses _meta_state version table to run only once per version.
-    Returns number of rows deleted.
-    """
-    try:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS _meta_state (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )
-            """
-        )
-    except Exception:
-        pass
-
-    row = conn.execute("SELECT value FROM _meta_state WHERE key = 'purge_v'").fetchone()
-    current_v = int(row[0]) if row else 0
-    target_v = 2  # bump when purge criteria change
-
-    if current_v >= target_v:
-        return 0
-
-    cur = conn.execute(
-        """
-        DELETE FROM position_mirrors
-        WHERE name IS NULL
-           OR (cost_basis = 0 AND isin IS NULL)
-        """
-    )
-    deleted = cur.rowcount
-    conn.execute(
-        "INSERT INTO _meta_state(key, value) VALUES ('purge_v', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-        (str(target_v),),
-    )
-    if deleted > 0:
-        logging.getLogger("finagent.portfolio_mirrors").info(
-            "Purged %d stale rows (name=NULL or cost_basis=0+isin=NULL) from position_mirrors", deleted
-        )
-    return deleted
-
-
 def init_position_mirrors(db_path: str | Path | None = None) -> None:
     with connect_wal(db_path or _DEFAULT_DB) as conn:
         conn.executescript(_SCHEMA)
         _migrate_columns(conn)
         _purge_corrupted_rows(conn)
-        _purge_stale_rows(conn)
 
 
 def load_active_positions(
@@ -248,32 +240,56 @@ def replace_active_positions(
     init_position_mirrors(db_path)
     prepared: list[PositionMirror] = []
     for item in positions:
-        raw = item if isinstance(item, dict) else item.__dict__
+        raw = item if isinstance(item, dict) else asdict(item)
         exchange = normalize_exchange(raw.get("exchange"))
-        symbol = normalize_symbol(str(raw.get("symbol") or ""), exchange)
+        symbol = normalize_symbol(str(raw.get("symbol") or raw.get("isin") or raw.get("amfi") or ""), exchange)
         if not symbol:
             continue
-        # Reject sandbox-like inserts (empty name, zero cost, no ISIN)
-        name = str(raw.get("name") or "").strip()
+        # Reject only rows with neither identity nor numeric holdings evidence.
+        name = clean_position_name(str(raw.get("name") or "").strip())
         cost = float(raw.get("cost_basis") or raw.get("cost") or 0.0)
         isin = str(raw.get("isin") or "").strip()
-        if not name and cost == 0.0 and not isin:
+        quantity = float(raw.get("quantity") or 0.0)
+        market_value = float(raw.get("market_value") or 0.0)
+        if not name and not isin and quantity <= 0 and market_value <= 0:
             logging.getLogger("finagent.portfolio_mirrors").debug(
-                "Skipping sandbox-like insert for symbol=%s", symbol
+                "Skipping position without identity/numeric evidence for symbol=%s", symbol
             )
             continue
+
+        # Prepare a cleaned dict for enrichment
+        raw_copy = dict(raw)
+        raw_copy["name"] = name
+        raw_copy["symbol"] = symbol
+        raw_copy["isin"] = isin
+
         # Enrich with sector/name from bundled + cache
-        enriched = enrich_position(raw)
+        enriched = enrich_position(raw_copy)
+        final_name = clean_position_name(enriched.get("name") or name)
+        
+        # Prefer enriched symbol; if still an ISIN, try live ISIN resolution
+        enriched_symbol = enriched.get("symbol") or symbol
+        if enriched_symbol and _looks_like_isin(enriched_symbol):
+            try:
+                from finagent.ingestion.isin_resolver import resolve_isin
+                resolution = resolve_isin(enriched_symbol, kind_hint=raw_copy.get("kind", "equity"))
+                if resolution and resolution.get("symbol"):
+                    enriched_symbol = resolution["symbol"]
+            except Exception:
+                pass  # Keep original if resolution fails
+        
+        final_symbol = normalize_symbol(enriched_symbol, exchange)
+
         prepared.append(
             PositionMirror(
                 tenant_id=tenant_id,
-                symbol=symbol,
+                symbol=final_symbol,
                 exchange=exchange,
                 quantity=float(enriched.get("quantity") or 0.0),
                 market_value=float(enriched.get("market_value") or 0.0),
                 cost_basis=float(enriched.get("cost_basis") or enriched.get("cost") or 0.0),
                 active=bool(enriched.get("active", True)),
-                name=str(enriched.get("name") or ""),
+                name=final_name,
                 isin=str(enriched.get("isin") or ""),
                 amfi=str(enriched.get("amfi") or ""),
                 kind=str(enriched.get("kind") or "equity"),

@@ -99,35 +99,44 @@ def fetch_portfolio_news(
 
     # Fetch per-holding news in parallel
     def _fetch_for_holding(pos: PositionMirror) -> list[dict[str, Any]]:
-        items = fetch_all_sources(
-            symbol=pos.normalized_symbol,
-            name=pos.name,
-            kind=pos.kind,
-            isin=pos.isin,
-            scrip_code=pos.symbol,  # best-effort BSE scrip code
-            amfi=pos.amfi,
-            max_per_source=per_holding_limit,
-        )
-        # Tag with holding info
-        total_value = sum(p.market_value for p in positions if p.market_value > 0)
-        weight_pct = (pos.market_value / total_value * 100) if total_value else 0.0
-        for item in items:
-            item["related_holding"] = {
-                "symbol": pos.exchange_symbol,
-                "name": pos.name,
-                "kind": pos.kind,
-                "weight_pct": round(weight_pct, 2),
-            }
-        return items
+        try:
+            items = fetch_all_sources(
+                symbol=pos.normalized_symbol,
+                name=pos.name,
+                kind=pos.kind,
+                isin=pos.isin,
+                scrip_code=pos.symbol,
+                amfi=pos.amfi,
+                max_per_source=per_holding_limit,
+            )
+            total_value = sum(p.market_value for p in positions if p.market_value > 0)
+            weight_pct = (pos.market_value / total_value * 100) if total_value else 0.0
+            for item in items:
+                item["related_holding"] = {
+                    "symbol": pos.exchange_symbol,
+                    "name": pos.name,
+                    "kind": pos.kind,
+                    "weight_pct": round(weight_pct, 2),
+                }
+            return items
+        except Exception as e:
+            logger.warning("News fetch failed for %s: %s", pos.symbol, e)
+            return []
 
     with ThreadPoolExecutor(max_workers=min(len(top), 8)) as executor:
         futures = {executor.submit(_fetch_for_holding, pos): pos for pos in top}
         for future in as_completed(futures):
-            items = future.result()
-            all_items.extend(items)
+            try:
+                items = future.result()
+                all_items.extend(items)
+            except Exception as e:
+                logger.warning("News future failed: %s", e)
 
-    # Add market context
-    all_items.extend(fetch_market_context(max_results=6))
+    # Add market context (already resilient)
+    try:
+        all_items.extend(fetch_market_context(max_results=6))
+    except Exception as e:
+        logger.warning("Market context news failed: %s", e)
 
     # ── Pipeline: filter, score, dedupe, sort ──────────────────────────────
     filtered: list[dict[str, Any]] = []

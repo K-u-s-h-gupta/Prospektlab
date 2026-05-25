@@ -33,6 +33,7 @@ import os
 import re
 import sys
 import time
+import tempfile
 
 # Programmatically reconfigure stdout/stderr to utf-8 to prevent charmap codec errors on Windows
 try:
@@ -58,6 +59,19 @@ logger = logging.getLogger("finagent.scraper")
 _LOOP_SEMAPHORES = {}
 _LOOP_SEMAPHORES_LOCK = threading.Lock()
 _CRAWLER_THREAD_LOCK = threading.Lock()
+
+
+def _ensure_crawl4ai_base_dir() -> str:
+    base = (
+        os.getenv("CRAWL4_AI_BASE_DIRECTORY")
+        or os.getenv("CRAWL4AI_BASE_DIRECTORY")
+        or os.path.join(tempfile.gettempdir(), "prospektlab-crawl4ai")
+    )
+    os.environ["CRAWL4_AI_BASE_DIRECTORY"] = base
+    os.environ["CRAWL4AI_BASE_DIRECTORY"] = base
+    os.makedirs(base, exist_ok=True)
+    os.makedirs(os.path.join(base, "cache"), exist_ok=True)
+    return base
 
 def _get_crawler_semaphore() -> asyncio.Semaphore:
     loop = asyncio.get_running_loop()
@@ -439,7 +453,7 @@ async def _search_tavily(query: str, *, max_results: int) -> list[tuple[str, str
         results = resp.get("results", []) if isinstance(resp, dict) else []
         return [(r.get("url", ""), r.get("title", ""), r.get("content", "")) for r in results if r.get("url")]
     except Exception as exc:
-        logger.debug("Tavily search failed for %r: %s", query, exc)
+        logger.warning("Tavily search failed for %r, will fall back to DDG/Bing: %s", query, exc)
         return []
 
 
@@ -563,8 +577,9 @@ _DOMAIN_CONCURRENCY: dict[str, int] = {
     "rbi.org.in": 3,
     "mca.gov.in": 3,
 }
-_DEFAULT_CONCURRENCY = 8
-_NEWS_CONCURRENCY = 12
+_MAX_CRAWL4AI_CONCURRENCY = 5
+_DEFAULT_CONCURRENCY = 5
+_NEWS_CONCURRENCY = 5
 
 
 def _concurrency_for_urls(urls: list[str]) -> int:
@@ -589,7 +604,7 @@ def _effective_crawl4ai_concurrency(base: int) -> int:
     if env_max:
         try:
             cap = max(1, int(env_max))
-            return min(base, cap)
+            return min(base, cap, _MAX_CRAWL4AI_CONCURRENCY)
         except ValueError:
             pass
 
@@ -600,11 +615,11 @@ def _effective_crawl4ai_concurrency(base: int) -> int:
         available_gb = mem.available / (1024 ** 3)
         # Very conservative: ~500MB per Chromium tab
         mem_cap = max(2, int(available_gb * 2))
-        return min(base, mem_cap)
+        return min(base, mem_cap, _MAX_CRAWL4AI_CONCURRENCY)
     except Exception:
         pass
 
-    return base
+    return min(base, _MAX_CRAWL4AI_CONCURRENCY)
 
 
 async def _crawl4ai_fetch_batch_inner(
@@ -630,6 +645,7 @@ async def _crawl4ai_fetch_batch_inner(
     if not urls:
         return []
 
+    _ensure_crawl4ai_base_dir()
     try:
         from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
         from crawl4ai.content_filter_strategy import PruningContentFilter
@@ -648,7 +664,11 @@ async def _crawl4ai_fetch_batch_inner(
             "Falling back to httpx fetcher for %d URL(s).",
             len(urls),
         )
-        fallback_tasks = [fetch_and_parse(u) for u in urls]
+        fallback_sem = asyncio.Semaphore(_MAX_CRAWL4AI_CONCURRENCY)
+        async def _bounded_fallback(url: str) -> ScrapedDoc:
+            async with fallback_sem:
+                return await fetch_and_parse(url)
+        fallback_tasks = [_bounded_fallback(u) for u in urls]
         return list(await asyncio.gather(*fallback_tasks, return_exceptions=False))
 
     sanitized_query = sanitize_search_query(query) if query else ""
@@ -905,21 +925,37 @@ async def search_web(
     logger.info("SEARCH-STEP:01 targets_computed stage1_target=%d crawl_budget=%d", stage1_target, crawl_budget)
 
     # ── Phase 1: Candidate Sourcing (Crawl4AI is the primary heavy engine) ─────
-    # Tavily is preferred for high-quality candidates. DDG/Bing are used as
-    # supplementary sources only when needed (they are fragile and cause timeouts).
+    # SearXNG (primary) + Tavily (optional fallback) for high-quality candidates.
+    # DDG/Bing used as supplementary sources only when needed (fragile, slower).
+    
+    # Try SearXNG first (primary backend)
+    from finagent.tools.web.searxng_client import SearXNGClient
+    searxng_client = SearXNGClient()
+    
+    searxng_task = asyncio.create_task(searxng_client.search(query, num_results=stage1_target))
     tavily_task = asyncio.create_task(_search_tavily(query, max_results=stage1_target))
 
-    # Only run DDG and Bing if we need more candidates (to reduce fragile scraping load)
+    # Get SearXNG results
+    searxng_results_raw = await searxng_task
+    searxng_results: list[tuple[str, str, str]] = (
+        [(r["url"], r["title"], r["snippet"]) for r in searxng_results_raw]
+        if not isinstance(searxng_results_raw, Exception) else []
+    )
+    
+    # Get Tavily results (fallback)
     tavily_results_raw = await tavily_task
     tavily_results: list[tuple[str, str, str]] = (
         [] if isinstance(tavily_results_raw, Exception) else (tavily_results_raw or [])
     )
 
+    # Combine SearXNG + Tavily, preferring SearXNG
+    combined_results = searxng_results + tavily_results
+
     ddg_results: list[tuple[str, str]] = []
     bing_results: list[tuple[str, str]] = []
 
-    # Use DDG/Bing only as backup for heavy searches when Tavily is weak
-    if len(tavily_results) < (stage1_target // 2):
+    # Use DDG/Bing only as backup when combined results are weak
+    if len(combined_results) < (stage1_target // 2):
         ddg_task = asyncio.create_task(_search_ddg(query, max_results=stage1_target))
         bing_task = asyncio.create_task(_search_bing(query, max_results=stage1_target))
         ddg_raw, bing_raw = await asyncio.gather(ddg_task, bing_task, return_exceptions=True)
@@ -929,27 +965,27 @@ async def search_web(
     logger.info("SEARCH-STEP:03 backup_sources_completed ddg=%d bing=%d", len(ddg_results), len(bing_results))
 
     logger.info(
-        "Stage 1 candidate sourcing hits: Tavily=%d DDG=%d Bing=%d (Crawl4AI will be primary extractor)",
-        len(tavily_results), len(ddg_results), len(bing_results)
+        "Stage 1 candidate sourcing hits: SearXNG=%d Tavily=%d DDG=%d Bing=%d (Crawl4AI will be primary extractor)",
+        len(searxng_results), len(tavily_results), len(ddg_results), len(bing_results)
     )
 
-    logger.info("SEARCH-STEP:02 tavily_completed count=%d", len(tavily_results))
+    logger.info("SEARCH-STEP:02 searxng_tavily_completed count=%d", len(combined_results))
 
-    # Tavily docs: use snippets directly — pre-enriched, no browser session needed
-    tavily_docs: list[ScrapedDoc] = []
+    # SearXNG/Tavily docs: use snippets directly — pre-enriched, no browser session needed
+    combined_docs: list[ScrapedDoc] = []
     seen_urls: set[str] = set()
-    for url, title, snippet in tavily_results:
+    for url, title, snippet in combined_results:
         key = url.split("#", 1)[0]
         if key not in seen_urls:
             seen_urls.add(key)
-            tavily_docs.append(_tavily_to_scraped_doc(url, title, snippet))
+            combined_docs.append(_tavily_to_scraped_doc(url, title, snippet))
 
-    if tavily_docs:
-        logger.info("[TAVILY] Using %d direct snippets (lightweight path, no Crawl4AI)", len(tavily_docs))
+    if combined_docs:
+        logger.info("[SEARCH] Using %d direct snippets from SearXNG/Tavily (lightweight path, no Crawl4AI)", len(combined_docs))
     else:
-        logger.info("[TAVILY] No direct Tavily results — will rely on Crawl4AI for content")
+        logger.info("[SEARCH] No SearXNG/Tavily results — will rely on Crawl4AI for content")
 
-    logger.info("SEARCH-STEP:04 tavily_docs_built count=%d", len(tavily_docs))
+    logger.info("SEARCH-STEP:04 combined_docs_built count=%d", len(combined_docs))
 
     # ── Phase 2: Build candidate pool (Crawl4AI will do the heavy lifting) ─────
     raw_candidates: list[tuple[str, str]] = []
@@ -1023,13 +1059,13 @@ async def search_web(
     logger.info("SEARCH-STEP:10 titles_patched crawl_docs=%d", len(crawl4ai_docs))
 
     # ── Phase 4: Merge and rerank ─────────────────────────────────────────────
-    all_docs: list[ScrapedDoc] = [*tavily_docs, *crawl4ai_docs]
-    if crawl4ai_docs and not tavily_docs:
+    all_docs: list[ScrapedDoc] = [*combined_docs, *crawl4ai_docs]
+    if crawl4ai_docs and not combined_docs:
         logger.info("[RESULT] Answer will be built primarily from CRAWL4AI deep extraction")
-    elif tavily_docs and not crawl4ai_docs:
-        logger.info("[RESULT] Answer will be built primarily from TAVILY direct snippets")
+    elif combined_docs and not crawl4ai_docs:
+        logger.info("[RESULT] Answer will be built primarily from SearXNG/Tavily direct snippets")
     else:
-        logger.info("[RESULT] Answer built from TAVILY (%d) + CRAWL4AI (%d)", len(tavily_docs), len(crawl4ai_docs))
+        logger.info("[RESULT] Answer built from SearXNG/Tavily (%d) + CRAWL4AI (%d)", len(combined_docs), len(crawl4ai_docs))
 
     logger.info("SEARCH-STEP:11 docs_merged total=%d", len(all_docs))
 

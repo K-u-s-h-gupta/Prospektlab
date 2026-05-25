@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import random
 import sys
+import tempfile
 import threading
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
@@ -21,6 +23,19 @@ from urllib.robotparser import RobotFileParser
 _SINGLE_CRAWLER_THREAD_LOCK = threading.Lock()
 
 logger = logging.getLogger("finagent.http_fetcher")
+
+
+def _ensure_crawl4ai_base_dir() -> str:
+    base = (
+        os.getenv("CRAWL4_AI_BASE_DIRECTORY")
+        or os.getenv("CRAWL4AI_BASE_DIRECTORY")
+        or os.path.join(tempfile.gettempdir(), "prospektlab-crawl4ai")
+    )
+    os.environ["CRAWL4_AI_BASE_DIRECTORY"] = base
+    os.environ["CRAWL4AI_BASE_DIRECTORY"] = base
+    os.makedirs(base, exist_ok=True)
+    os.makedirs(os.path.join(base, "cache"), exist_ok=True)
+    return base
 
 
 
@@ -256,6 +271,7 @@ async def _fetch_via_httpx(url: str, *, timeout_s: float, referer: str | None) -
 
 async def _crawl4ai_single_inner(url: str, *, timeout_s: float) -> FetchResult:
     """Actual Crawl4AI single-page logic (must be called on a Proactor loop on Windows)."""
+    _ensure_crawl4ai_base_dir()
     try:
         from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
     except ImportError:

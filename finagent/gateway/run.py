@@ -67,7 +67,9 @@ from finagent.run_agent import AgentLoopConfig, run_research_session
 from finagent.tools.web.http_fetcher import aclose_shared_client
 from finagent.router.intent_router import ContextualizerError, ContextualizeResult, LLMQueryContextualizer, is_portfolio_scope_query
 from finagent.memory.chat_memory import ChatMemoryManager
-from finagent.ingestion.ecas import parse_ecas_pdf, positions_from_ecas_payload
+from finagent.ingestion.image_ingestion import PortfolioImageExtractionError, extract_portfolio_from_image
+from finagent.ingestion.portfolio_document import extraction_to_position_dicts, parse_portfolio_document
+from finagent.ingestion.portfolio_schema import PortfolioExtractionConfirmRequest, PortfolioExtractionSchema
 from finagent.portfolio_mirrors import load_active_positions, replace_active_positions, summarize_positions
 from finagent.portfolio.analytics import compute_portfolio_analytics
 from finagent.portfolio.news import fetch_portfolio_news
@@ -105,6 +107,75 @@ class InMemSlidingWindowRateLimiter:
 research_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=5, window_seconds=60)
 auth_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=10, window_seconds=60)
 default_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=100, window_seconds=60)
+_PENDING_EXTRACTIONS: dict[str, dict[str, Any]] = {}
+
+
+def _ingestion_db_path() -> Path:
+    return finagent_data_path("memory.sqlite3")
+
+
+def _ensure_ingestion_state_table() -> None:
+    from finagent.storage.sqlite import connect_wal
+
+    with connect_wal(_ingestion_db_path()) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS portfolio_ingestion_state (
+                tenant_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                message TEXT,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+
+def _set_ingestion_state(tenant_id: str | None, status: str, message: str = "") -> None:
+    if not tenant_id:
+        return
+    from finagent.storage.sqlite import connect_wal
+
+    _ensure_ingestion_state_table()
+    with connect_wal(_ingestion_db_path()) as conn:
+        conn.execute(
+            """
+            INSERT INTO portfolio_ingestion_state (tenant_id, status, message, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(tenant_id) DO UPDATE SET
+                status=excluded.status,
+                message=excluded.message,
+                updated_at=excluded.updated_at
+            """,
+            (tenant_id, status, message),
+        )
+
+
+def _get_ingestion_state(tenant_id: str | None) -> dict[str, str]:
+    if not tenant_id:
+        return {"status": "IDLE", "message": ""}
+    from finagent.storage.sqlite import connect_wal
+
+    _ensure_ingestion_state_table()
+    with connect_wal(_ingestion_db_path()) as conn:
+        row = conn.execute(
+            "SELECT status, COALESCE(message, '') FROM portfolio_ingestion_state WHERE tenant_id = ?",
+            (tenant_id,),
+        ).fetchone()
+    if not row:
+        return {"status": "IDLE", "message": ""}
+    return {"status": str(row[0]), "message": str(row[1] or "")}
+
+
+def _require_no_active_ingestion(tenant_id: str | None) -> None:
+    state = _get_ingestion_state(tenant_id)
+    if state["status"] in {"INGESTING", "REVIEW_REQUIRED"}:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "status": "INGESTION_IN_PROGRESS",
+                "message": state["message"] or "Finish portfolio document ingestion before starting chat or research.",
+            },
+        )
 
 _COMPARISON_RE = re.compile(
     r"\b(?:compare|comparison|compares|comparing|vs\.?|versus|against|head[\s-]to[\s-]head)\b",
@@ -351,8 +422,6 @@ _PAGE_PATHS = {
     "settings": _GATEWAY_DIR / "settings.html",
 }
 _MEMOS_DIR = finagent_data_path("memos")
-_USERS_DIR = finagent_data_path("users")
-_USERS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class StartResearchRequest(BaseModel):
@@ -407,6 +476,15 @@ class PositionMirrorInput(BaseModel):
     quantity: float = Field(default=0.0, ge=0)
     market_value: float = Field(default=0.0, ge=0)
     cost_basis: float = Field(default=0.0, ge=0)
+    name: str = Field(default="", max_length=180)
+    isin: str = Field(default="", max_length=16)
+    amfi: str = Field(default="", max_length=24)
+    kind: str = Field(default="equity", max_length=12)
+    sector: str = Field(default="", max_length=80)
+    industry: str = Field(default="", max_length=120)
+    avg_cost: float = Field(default=0.0, ge=0)
+    last_price: float = Field(default=0.0, ge=0)
+    as_of: str = Field(default="", max_length=40)
     active: bool = True
 
 
@@ -586,17 +664,6 @@ def _session_status(session_id: str) -> dict[str, Any]:
 # ──────────────────────────────────────────────────────────────────────────
 
 
-def _user_path(email: str) -> Path:
-    safe = hashlib.sha1(email.lower().strip().encode("utf-8")).hexdigest()
-    return _USERS_DIR / f"{safe}.json"
-
-
-def _hash_pw(password: str, *, salt: str | None = None) -> tuple[str, str]:
-    salt = salt or secrets.token_hex(16)
-    h = hashlib.scrypt(password.encode("utf-8"), salt=salt.encode("utf-8"), n=2**14, r=8, p=1, dklen=64).hex()
-    return h, salt
-
-
 @app.on_event("shutdown")
 async def _shutdown() -> None:
     for task in list(_TASKS.values()):
@@ -692,10 +759,12 @@ def get_portfolio_mirror(current_user: dict = Depends(get_current_user)):
 @app.post("/portfolio/mirror")
 def replace_portfolio_mirror(req: PositionMirrorReplaceRequest, current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
+    _require_no_active_ingestion(tenant_id)
     positions = replace_active_positions(
         tenant_id,
         [item.model_dump() for item in req.positions if item.active],
     )
+    _set_ingestion_state(tenant_id, "MIRROR_SYNCHRONIZED" if positions else "MIRROR_EMPTY", "Manual portfolio mirror updated.")
     return summarize_positions(positions)
 
 
@@ -710,71 +779,206 @@ def _require_synchronized_portfolio(tenant_id: str | None) -> None:
             status_code=409,
             detail={
                 "status": "MIRROR_REQUIRED",
-                "message": "Upload and synchronize your eCAS PDF or broker CSV before running a portfolio audit.",
+                "message": "Upload and synchronize your eCAS, CSV, Excel, or screenshot holdings before running portfolio research.",
             },
         )
 
 
 @app.post("/api/portfolio/upload-cas")
+@app.post("/api/portfolio/upload-document")
 @app.post("/portfolio/mirror/ecas")
-async def upload_ecas_pdf(
+async def upload_portfolio_document(
     file: UploadFile = File(...),
-    password: str = Form(...),
+    password: str = Form(default=""),
     current_user: dict = Depends(get_current_user),
 ):
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Upload an encrypted eCAS PDF.")
-    pdf_bytes = await file.read()
-    payload = await parse_ecas_pdf(pdf_bytes, file.filename, password)
+    filename = file.filename or "portfolio-upload"
+    if not filename.lower().endswith((".pdf", ".csv", ".xls", ".xlsx")):
+        raise HTTPException(status_code=400, detail="Upload a PDF, CSV, XLS, or XLSX portfolio document.")
+    tenant_id = current_user.get("tenant_id")
+    _set_ingestion_state(tenant_id, "INGESTING", "Transforming uploaded portfolio document.")
+    try:
+        payload_bytes = await file.read()
+        extraction = await parse_portfolio_document(payload_bytes, filename, password)
+    except Exception as exc:
+        _set_ingestion_state(tenant_id, "FAILED", str(exc))
+        raise
 
-    # New envelope format: always returns a dict with ok, code, severity, etc.
-    if not payload.get("ok"):
+    if extraction.status == "INGESTION_FAILED":
+        _set_ingestion_state(tenant_id, "FAILED", extraction.warnings[0] if extraction.warnings else "Ingestion failed.")
+        code = extraction.diagnostics.get("code", "DOCUMENT_PARSE_ERROR")
+        # Tailored, helpful guidance for the exact memory/complexity cases we now detect
+        if code in {"DOCUMENT_TOO_COMPLEX", "DOCUMENT_TOO_LARGE", "LOW_MEMORY"}:
+            action_hint = (
+                "This PDF is too large or complex for reliable parsing with current memory. "
+                "Please upload the CSV or XLSX export from your broker instead (most reliable), "
+                "or a clear screenshot of the holdings page."
+            )
+        else:
+            action_hint = "Upload a current holdings statement/export, or try screenshot upload if this file is scanned."
+
         raise HTTPException(
             status_code=422,
             detail={
                 "ok": False,
-                "code": payload.get("code", "CAS_PARSE_ERROR"),
-                "severity": payload.get("severity", "error"),
-                "message": payload.get("message", "CAS parse failed"),
-                "action_hint": payload.get("action_hint", ""),
-                "diagnostics": payload.get("diagnostics", {}),
+                "code": code,
+                "severity": "error",
+                "message": extraction.warnings[0] if extraction.warnings else "Document parse failed.",
+                "action_hint": action_hint,
+                "diagnostics": extraction.diagnostics,
             },
         )
 
-    parsed_positions = positions_from_ecas_payload(payload)
-    if not parsed_positions:
-        # Empty-but-valid case (warning, not error)
+    if not extraction.positions:
+        _set_ingestion_state(tenant_id, "MIRROR_EMPTY", "Document parsed, but no active holdings were found.")
         return {
             "ok": True,
             "code": "EMPTY_BUT_VALID",
             "severity": "warning",
-            "message": payload.get("message", "No active holdings found in this statement."),
-            "action_hint": payload.get("action_hint", ""),
-            "diagnostics": payload.get("diagnostics", {}),
-            "investor": payload.get("investor", {}),
-            "cas_meta": payload.get("meta", {}),
+            "message": "Document parsed, but no active holdings were found.",
+            "action_hint": "Upload a current eCAS/broker export or use screenshot upload.",
+            "diagnostics": extraction.diagnostics,
+            "investor": extraction.investor,
+            "cas_meta": {"source_type": extraction.source_type, "transformer": extraction.diagnostics.get("transformer")},
         }
 
-    tenant_id = current_user.get("tenant_id")
-    positions = replace_active_positions(tenant_id, parsed_positions)
+    if extraction.status == "REVIEW_REQUIRED":
+        review_id = uuid.uuid4().hex[:16]
+        _PENDING_EXTRACTIONS[review_id] = {
+            "tenant_id": tenant_id,
+            "source_type": extraction.source_type,
+            "extraction": extraction.model_dump(),
+        }
+        _set_ingestion_state(tenant_id, "REVIEW_REQUIRED", "Review extracted holdings before syncing.")
+        return {
+            "ok": True,
+            "code": "REVIEW_REQUIRED",
+            "status": "REVIEW_REQUIRED",
+            "sync_status": "REVIEW_REQUIRED",
+            "review_id": review_id,
+            "message": "Review extracted holdings before syncing.",
+            **extraction.model_dump(),
+        }
+
+    positions = replace_active_positions(tenant_id, extraction_to_position_dicts(extraction))
     summary = summarize_positions(positions)
+    _set_ingestion_state(tenant_id, "MIRROR_SYNCHRONIZED", f"{summary['count']} holdings synchronized.")
     summary["ok"] = True
     summary["code"] = "MIRROR_SYNCHRONIZED"
     summary["severity"] = "info"
-    summary["source"] = "ecas_pdf"
+    summary["source"] = extraction.source_type
     summary["status"] = "MIRROR_SYNCHRONIZED"
     summary["sync_status"] = "MIRROR_SYNCHRONIZED"
-    summary["cas_meta"] = payload.get("meta", {})
-    summary["investor"] = payload.get("investor", {})
-    summary["diagnostics"] = payload.get("diagnostics", {})
+    summary["cas_meta"] = {"source_type": extraction.source_type, "transformer": extraction.diagnostics.get("transformer")}
+    summary["investor"] = extraction.investor
+    summary["diagnostics"] = extraction.diagnostics
     return summary
 
 
+@app.post("/api/portfolio/upload-screenshot")
+async def upload_portfolio_screenshot(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    filename = file.filename or "holdings-screenshot.png"
+    if not filename.lower().endswith((".jpg", ".jpeg", ".png")):
+        raise HTTPException(status_code=400, detail="Upload a JPG, JPEG, or PNG broker holdings screenshot.")
+    tenant_id = current_user.get("tenant_id")
+    _set_ingestion_state(tenant_id, "INGESTING", "Extracting holdings from screenshot.")
+    try:
+        extraction = await extract_portfolio_from_image(await file.read(), filename)
+    except PortfolioImageExtractionError as exc:
+        _set_ingestion_state(tenant_id, "FAILED", str(exc))
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "ok": False,
+                "code": "SCREENSHOT_EXTRACTION_FAILED",
+                "message": str(exc),
+                "action_hint": "Upload a clearer broker screenshot or use eCAS/CSV/XLSX.",
+            },
+        ) from exc
+
+    review_id = uuid.uuid4().hex[:16]
+    _PENDING_EXTRACTIONS[review_id] = {
+        "tenant_id": tenant_id,
+        "source_type": "image",
+        "extraction": extraction.model_dump(),
+    }
+    _set_ingestion_state(tenant_id, "REVIEW_REQUIRED", "Review screenshot-extracted holdings before syncing.")
+    return {
+        "ok": True,
+        "code": "REVIEW_REQUIRED",
+        "status": "REVIEW_REQUIRED",
+        "sync_status": "REVIEW_REQUIRED",
+        "review_id": review_id,
+        "message": "Review extracted holdings before syncing.",
+        **extraction.model_dump(),
+    }
+
+
+@app.post("/api/portfolio/confirm-extraction")
+async def confirm_portfolio_extraction(
+    req: PortfolioExtractionConfirmRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = current_user.get("tenant_id")
+    pending = _PENDING_EXTRACTIONS.get(req.review_id or "") if req.review_id else None
+    if req.review_id and not pending:
+        raise HTTPException(status_code=404, detail="Review payload expired or not found.")
+    if pending and pending.get("tenant_id") != tenant_id:
+        raise HTTPException(status_code=403, detail="Review payload belongs to a different tenant.")
+
+    positions = req.positions
+    source_type = req.source_type
+    if not positions and pending:
+        extraction = PortfolioExtractionSchema.model_validate(pending["extraction"])
+        positions = extraction.positions
+        source_type = pending.get("source_type", source_type)
+    if not positions:
+        raise HTTPException(status_code=422, detail="No reviewed holdings were supplied.")
+
+    _set_ingestion_state(tenant_id, "INGESTING", "Synchronizing reviewed holdings.")
+    extraction = PortfolioExtractionSchema(
+        status="MIRROR_SYNCHRONIZED",
+        source_type=source_type if source_type in {"pdf", "csv", "xlsx", "image"} else "unknown",
+        positions=positions,
+        confidence=sum(p.confidence for p in positions) / len(positions),
+    )
+    mirrored = replace_active_positions(tenant_id, extraction_to_position_dicts(extraction))
+    summary = summarize_positions(mirrored)
+    _set_ingestion_state(tenant_id, "MIRROR_SYNCHRONIZED", f"{summary['count']} holdings synchronized.")
+    if req.review_id:
+        _PENDING_EXTRACTIONS.pop(req.review_id, None)
+    summary.update({"ok": True, "code": "MIRROR_SYNCHRONIZED", "source": source_type})
+    return summary
+
+
+@app.post("/api/portfolio/cancel-extraction")
+async def cancel_portfolio_extraction(current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    for review_id, payload in list(_PENDING_EXTRACTIONS.items()):
+        if payload.get("tenant_id") == tenant_id:
+            _PENDING_EXTRACTIONS.pop(review_id, None)
+    _set_ingestion_state(tenant_id, "IDLE", "")
+    return {"ok": True, "status": "IDLE"}
+
+
 @app.get("/portfolio/analytics")
-def get_portfolio_analytics(current_user: dict = Depends(get_current_user)):
+def get_portfolio_analytics(
+    current_user: dict = Depends(get_current_user),
+    benchmark: str = "NIFTY50",
+    period: str = "1y",
+):
+    """Compute portfolio analytics with optional benchmark and period.
+    
+    Args:
+        benchmark: Benchmark ticker (default: NIFTY50)
+        period: Period string (1M, 3M, 1Y, YTD, default 1y)
+    """
     tenant_id = current_user.get("tenant_id")
     positions = load_active_positions(tenant_id)
-    return compute_portfolio_analytics(positions)
+    return compute_portfolio_analytics(positions, benchmark=benchmark, period=period)
 
 
 @app.delete("/portfolio/mirror")
@@ -788,6 +992,7 @@ def delete_portfolio_mirror(current_user: dict = Depends(get_current_user)):
     db_path = finagent_data_path("memory.sqlite3")
     with connect_wal(db_path) as conn:
         cur = conn.execute("DELETE FROM position_mirrors WHERE tenant_id = ?", (tenant_id,))
+    _set_ingestion_state(tenant_id, "IDLE", "")
     return {"ok": True, "deleted": cur.rowcount}
 
 
@@ -862,16 +1067,19 @@ def get_dividends(current_user: dict = Depends(get_current_user)):
     }
 
 
+class StressTestRequest(BaseModel):
+    scenario: str = "nifty_down_20"
+    custom_shocks: dict[str, float] | None = None
+
 @app.post("/portfolio/stress-test")
 def post_stress_test(
-    scenario: str = "nifty_down_20",
-    custom_shocks: dict[str, float] | None = None,
+    body: StressTestRequest,
     current_user: dict = Depends(get_current_user),
 ):
     tenant_id = current_user.get("tenant_id")
     positions = load_active_positions(tenant_id)
     from finagent.portfolio.stress_test import run_stress_test
-    return run_stress_test(positions, scenario=scenario, custom_shocks=custom_shocks)
+    return run_stress_test(positions, scenario=body.scenario, custom_shocks=body.custom_shocks)
 
 
 @app.get("/portfolio/mf-analytics")
@@ -896,21 +1104,39 @@ def get_today_queue(current_user: dict = Depends(get_current_user)):
 
 @app.get("/portfolio/brief")
 def get_portfolio_brief(current_user: dict = Depends(get_current_user)):
+    """Return a brief text summary of the portfolio."""
     tenant_id = current_user.get("tenant_id")
     positions = load_active_positions(tenant_id)
     if not positions:
         return {"brief": "No portfolio data available."}
-    from finagent.synthesis import SynthesisEngine
+    
     analytics = compute_portfolio_analytics(positions)
-    facts = (
-        f"Portfolio value: ₹{analytics['total_market_value']:,.0f}. "
-        f"Holdings: {analytics['count']}. "
-        f"Unrealized P/L: {analytics['unrealized_pnl_pct']*100:+.1f}%. "
-        f"Beta: {analytics['risk']['beta_vs_nifty']}. "
-        f"Top sector: {max(analytics['sector_breakdown'], key=analytics['sector_breakdown'].get, default='Unknown')}. "
-        f"Top 5 concentration: {sum(p['weight_pct'] for p in analytics['risk']['top5_concentration']):.1f}%. "
+    
+    # Build enhanced brief with key insights
+    count = len(positions)
+    total_value = analytics.get('total_market_value', 0)
+    pnl_pct = analytics.get('unrealized_pnl_pct', 0) * 100
+    pnl_amount = analytics.get('unrealized_pnl', 0)
+    beta = analytics.get('risk', {}).get('beta_vs_nifty', None)
+    kind_breakdown = analytics.get('kind_breakdown', {})
+    equity_pct = kind_breakdown.get('equity', 0) * 100
+    mf_pct = kind_breakdown.get('mf', 0) * 100
+    
+    # Top holdings
+    enriched = analytics.get('positions', [])
+    top_holdings = sorted(enriched, key=lambda p: p.get('weight', 0), reverse=True)[:3]
+    top_names = ', '.join(p.get('name', p.get('symbol', 'N/A')) for p in top_holdings)
+    
+    risk_str = f"{beta:.2f}" if beta is not None else "N/A"
+
+    brief_text = (
+        f"Portfolio of {count} holdings worth ₹{total_value:,.0f}. "
+        f"Unrealized P/L: ₹{pnl_amount:,.0f} ({pnl_pct:+.1f}%). "
+        f"Asset allocation: {equity_pct:.0f}% equity, {mf_pct:.0f}% MF. "
+        f"Risk (vs NIFTY50): {risk_str}. "
+        f"Top holdings: {top_names}."
     )
-    return {"brief": f"{facts} Summary generated for your review."}
+    return {"brief": brief_text}
 
 
 from finagent.memory import get_memory_store
@@ -1112,8 +1338,6 @@ def auth_logout() -> JSONResponse:
 
 # ── Auth endpoints ──────────────────────────────────────────────────────
 
-
-import time
 
 _VERIFICATION_CODES: dict[str, tuple[str, float]] = {}
 _RESET_CODES: dict[str, tuple[str, float]] = {}
@@ -1328,6 +1552,7 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
     raw_query = req.target.strip()
     user_email = current_user["email"]
     tenant_id = current_user["tenant_id"]
+    _require_no_active_ingestion(tenant_id)
     if is_portfolio_scope_query(raw_query):
         _require_synchronized_portfolio(tenant_id)
     
@@ -1374,6 +1599,10 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
     else:
         # No prior context — resolve normally
         target = primary_target_from_query(raw_query)
+
+    # Re-check portfolio scope on contextualized objective (follow-ups may become portfolio queries)
+    if is_portfolio_scope_query(objective):
+        _require_synchronized_portfolio(tenant_id)
 
     # Always start a fresh event history for this research execution (prevents
     # replay of previous run's "memo"/"final" events into the new turn's UI).
@@ -1579,6 +1808,7 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
     raw_query = req.target.strip()
     user_email = current_user["email"]
     tenant_id = current_user["tenant_id"]
+    _require_no_active_ingestion(tenant_id)
     if is_portfolio_scope_query(raw_query):
         _require_synchronized_portfolio(tenant_id)
 
@@ -1772,15 +2002,6 @@ def delete_session(session_id: str, current_user: dict = Depends(get_current_use
     })
 
 
-# ── Mode instruction helper (from teammate's Backend/api.py) ────────────
-
-def _mode_instruction(mode: str) -> str:
-    """Return system-level instruction text based on analysis depth mode."""
-    return (
-        "User selected Deep mode. Provide an in-depth but concise analysis covering ratios, sector context, "
-        "risks, recent events/news, and forward-looking insights. Structured sections, comprehensive but focused."
-    )
-
 
 @app.post("/chat/research", dependencies=[Depends(research_rate_limiter)])
 async def chat_research(req: ChatResearchRequest, current_user: dict = Depends(get_current_user)):
@@ -1795,6 +2016,7 @@ async def chat_research(req: ChatResearchRequest, current_user: dict = Depends(g
         
     target = (req.target or req.message).strip()
     mode = (req.mode or "standard").strip().lower()
+    _require_no_active_ingestion(current_user.get("tenant_id"))
     if is_portfolio_scope_query(target):
         _require_synchronized_portfolio(current_user.get("tenant_id"))
     if mode == "marathon":

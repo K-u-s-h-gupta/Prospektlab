@@ -99,18 +99,45 @@ def _yahoo_lookup(symbol: str) -> dict[str, str] | None:
 
 
 def lookup_by_isin(isin: str) -> dict[str, str] | None:
-    """Resolve ISIN to {symbol, exchange, name, sector, industry}."""
-    isin = isin.strip().upper()
+    """Resolve ISIN to {symbol, exchange, name, sector, industry}.
+    
+    Priority:
+    1. Bundled nifty500_sectors.json (legacy)
+    2. Cache
+    3. New isin_resolver (hybrid bundle + live NSE/AMFI lookup)
+    """
+    isin = isin.strip().upper().split(".")[0]
     if not isin:
         return None
-    # 1) bundled
+
+    # 1) Try legacy bundled (nifty500_sectors.json)
     bundled = _load_bundled()
     if isin in bundled:
         return bundled[isin]
-    # 2) cache (by ISIN)
+
+    # 2) Try cache
     cached = _cache_get(f"isin:{isin}")
     if cached:
         return cached
+
+    # 3) Try new isin_resolver (hybrid approach: bundle + live lookup)
+    try:
+        from finagent.ingestion.isin_resolver import resolve_isin
+        resolution = resolve_isin(isin)
+        if resolution and resolution.get("symbol"):
+            # Convert resolver output to sectors.py format
+            data = {
+                "symbol": resolution["symbol"],
+                "exchange": resolution.get("exchange", "NSE"),
+                "name": resolution.get("name", ""),
+                "sector": resolution.get("sector", ""),
+                "industry": resolution.get("industry", ""),  # may be empty; symbol lookup will fill it
+            }
+            _cache_set(f"isin:{isin}", data)
+            return data
+    except Exception as exc:
+        logger.debug("isin_resolver failed for %s: %s", isin, exc)
+
     return None
 
 
@@ -136,7 +163,7 @@ def lookup_by_symbol(symbol: str, exchange: str = "NSE") -> dict[str, str] | Non
 def enrich_position(position: dict[str, Any]) -> dict[str, Any]:
     """Add name/sector/industry to a position dict if missing."""
     pos = dict(position)
-    isin = pos.get("isin", "").strip().upper()
+    isin = pos.get("isin", "").strip().upper().split(".")[0]
     symbol = pos.get("symbol", "").strip().upper()
     exchange = pos.get("exchange", "NSE")
 
@@ -144,19 +171,24 @@ def enrich_position(position: dict[str, Any]) -> dict[str, Any]:
     if isin:
         data = lookup_by_isin(isin)
         if data:
-            pos.setdefault("name", data.get("name", ""))
+            if data.get("name"):
+                pos["name"] = data["name"]
             pos.setdefault("sector", data.get("sector", ""))
             pos.setdefault("industry", data.get("industry", ""))
-            if not symbol:
+            clean_sym = symbol.split(".")[0]
+            # Only overwrite symbol if it looks like an ISIN or is missing
+            is_isin_like = len(clean_sym) >= 10 and clean_sym[:2] == "IN" and clean_sym[2:].isalnum()
+            if not symbol or clean_sym == isin or is_isin_like or len(clean_sym) >= 12:
                 pos["symbol"] = data.get("symbol", symbol)
             if not exchange or exchange == "NSE":
                 pos["exchange"] = data.get("exchange", exchange)
 
-    # Then try symbol
-    if not pos.get("sector") and symbol:
+    # Then try symbol (for sector or industry if either is still missing)
+    if exchange.upper() != "AMFI" and symbol and (not pos.get("sector") or not pos.get("industry")):
         data = lookup_by_symbol(symbol, exchange)
         if data:
-            pos.setdefault("name", data.get("name", ""))
+            if data.get("name") and (not pos.get("name") or len(pos.get("name", "")) < 3):
+                pos["name"] = data["name"]
             pos.setdefault("sector", data.get("sector", ""))
             pos.setdefault("industry", data.get("industry", ""))
 

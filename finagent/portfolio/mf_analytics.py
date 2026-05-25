@@ -101,5 +101,5 @@ def compute_mf_analytics(positions: list[PositionMirror]) -> dict[str, Any] | No
         "category_breakdown": category_breakdown,
         "amc_concentration": amc_concentration,
         "scheme_type_counts": scheme_types,
-        "lookthrough_exposure": None,  # De-scoped for now
+        "lookthrough_exposure": {},  # Placeholder; Phase 2 enhancement
     }

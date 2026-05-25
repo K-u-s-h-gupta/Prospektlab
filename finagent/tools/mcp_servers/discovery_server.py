@@ -64,6 +64,8 @@ class TTLCache:
         self.lock = threading.Lock()
         self.cache = {}          # key -> (value, expire_at)
         self.fetching = {}       # key -> threading.Lock()
+        self.async_lock = asyncio.Lock()
+        self.async_fetching = {} # key -> asyncio.Future
 
     def get(self, key: str) -> tuple[bool, Any]:
         """Returns (found, value) if key exists and is not expired."""
@@ -131,10 +133,37 @@ class TTLCache:
             logger.info("Cache HIT for key: %s", key)
             return val
 
-        val = await fetch_fn()
-        if isinstance(val, dict) and not val.get("error"):
-            self.set(key, val, ttl)
-        return val
+        loop = asyncio.get_running_loop()
+        first_fetcher = False
+        async with self.async_lock:
+            found, val = self.get(key)
+            if found:
+                return val
+            fut = self.async_fetching.get(key)
+            if fut is None:
+                fut = loop.create_future()
+                self.async_fetching[key] = fut
+                first_fetcher = True
+
+        if not first_fetcher:
+            logger.info("Cache WAIT/COALESCE for key: %s", key)
+            return await fut
+
+        try:
+            logger.info("Cache MISS/FETCH for key: %s", key)
+            val = await fetch_fn()
+            if isinstance(val, dict) and not val.get("error"):
+                self.set(key, val, ttl)
+            if not fut.done():
+                fut.set_result(val)
+            return val
+        except Exception as exc:
+            if not fut.done():
+                fut.set_exception(exc)
+            raise
+        finally:
+            async with self.async_lock:
+                self.async_fetching.pop(key, None)
 
 _mcp_cache = TTLCache()
 _nse_throttle_lock = asyncio.Lock()

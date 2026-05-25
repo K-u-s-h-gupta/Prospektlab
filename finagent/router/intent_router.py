@@ -42,17 +42,33 @@ _MODERATE_PATTERNS = (
 
 _FOLLOWUP_PRONOUNS = ("it", "its", "that company", "this company", "same company", "they", "their")
 _PORTFOLIO_SCOPE_PATTERNS = (
-    "my portfolio",
-    "our portfolio",
-    "portfolio risk",
-    "portfolio audit",
-    "risk audit",
-    "our holdings",
-    "my holdings",
-    "holdings audit",
-    "portfolio concentration",
-    "concentration risk",
-    "asset allocation",
+    # Core portfolio identity
+    "my portfolio", "our portfolio", "my investments", "our investments",
+    "my holdings", "our holdings", "my stocks", "my shares",
+    "my schemes", "my funds", "my mutual fund", "my mutual funds",
+    "my sip", "my sips", "my elss", "my equity",
+    # Portfolio actions
+    "portfolio risk", "portfolio audit", "holdings audit",
+    "portfolio concentration", "concentration risk",
+    "asset allocation", "portfolio allocation",
+    "portfolio diversification", "portfolio performance",
+    "portfolio returns", "portfolio return",
+    "portfolio analysis", "portfolio overview",
+    "portfolio summary", "portfolio health",
+    "portfolio check", "portfolio review",
+    "portfolio status", "how is my portfolio",
+    "how are my holdings", "how are my investments",
+    "rebalance my portfolio", "portfolio rebalancing",
+    "what should i sell", "what should i buy",
+    # MF / fund specific
+    "mutual fund", "mutual funds", "mf holdings", "fund holdings",
+    "sip performance", "sip returns", "elss returns",
+    "fund analysis", "fund review",
+    # General portfolio intent
+    "analyze my portfolio", "analyze my holdings",
+    "show my portfolio", "show my holdings",
+    "tell me about my portfolio", "tell me about my holdings",
+    "tell me about my mutual", "tell me about my fund",
 )
 _FOCUS_PATTERNS = {
     "news": ("latest news", "recent news", "news", "headlines", "updates"),

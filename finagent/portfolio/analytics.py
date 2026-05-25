@@ -22,17 +22,64 @@ logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
 
 def _is_valid_ticker(symbol: str) -> bool:
-    """Reject symbols that are clearly malformed (old sandbox data)."""
+    """Reject symbols that are clearly malformed (old sandbox data) or ISIN codes.
+    
+    ISINs look like 'INE123A01234' (starts with IN, 12 chars total).
+    MF codes might be numeric ISINs. Both should be rejected for yfinance lookup.
+    """
     if not symbol:
         return False
     s = symbol.strip().upper()
+    
+    # Reject ISIN codes (start with IN, ~12 chars, alphanumeric pattern)
+    # Pattern: IN followed by 10 alphanumeric chars = typical ISIN
+    import re
+    if re.match(r"^IN[A-Z0-9]{10}$", s):
+        return False
+    
+    # Reject numeric AMFI codes (e.g., 120308)
+    if s.isdigit() and len(s) == 6:
+        return False
+    
+    # Reject symbols with obvious malformations
     if len(s) > 16:
         return False
     if "," in s or ".." in s:
         return False
     if "LIMITED" in s or "LTD." in s or "LTD " in s:
         return False
+    
     return True
+
+
+# Period normalization: widget sends "1M"/"3M" but yfinance needs "1mo"/"3mo"
+_PERIOD_MAP = {
+    "1M": "1mo", "3M": "3mo", "6M": "6mo",
+    "1Y": "1y", "2Y": "2y", "5Y": "5y",
+    "YTD": "ytd", "MAX": "max",
+}
+
+
+def _normalize_period(period: str) -> str:
+    """Convert frontend period strings to yfinance-valid strings."""
+    return _PERIOD_MAP.get(period.upper(), period.lower())
+
+
+# In-process TTL cache for yfinance calls (5 minutes)
+import time
+_FETCH_CACHE: dict[tuple, tuple[float, dict]] = {}
+_CACHE_TTL = 300  # seconds
+
+
+def _fetch_history_cached(ticker: str, period: str = "1y") -> dict[str, Any]:
+    """Fetch yfinance history with 5-minute in-process TTL cache."""
+    key = (ticker, period)
+    cached = _FETCH_CACHE.get(key)
+    if cached and (time.time() - cached[0]) < _CACHE_TTL:
+        return cached[1]
+    result = _fetch_history(ticker, period)
+    _FETCH_CACHE[key] = (time.time(), result)
+    return result
 
 
 def _fetch_history(ticker: str, period: str = "1y") -> dict[str, Any]:
@@ -42,7 +89,8 @@ def _fetch_history(ticker: str, period: str = "1y") -> dict[str, Any]:
     try:
         import yfinance as yf
         t = yf.Ticker(ticker)
-        hist = t.history(period=period, auto_adjust=True)
+        norm_period = _normalize_period(period)
+        hist = t.history(period=norm_period, auto_adjust=True)
         if hist.empty:
             return {}
         return {
@@ -51,7 +99,7 @@ def _fetch_history(ticker: str, period: str = "1y") -> dict[str, Any]:
             "currency": t.info.get("currency", "INR"),
         }
     except Exception as exc:
-        logger.debug("Yahoo history fetch failed for %s: %s", ticker, exc)
+        logger.debug("Yahoo history fetch failed for %s (period=%s): %s", ticker, period, exc)
         return {}
 
 
@@ -94,7 +142,7 @@ def _weighted_nav_history(
         if pos.market_value <= 0:
             continue
         ticker = pos.exchange_symbol
-        hist = _fetch_history(ticker, period)
+        hist = _fetch_history_cached(ticker, period)
         if hist and hist.get("prices"):
             histories.append(hist)
             weights.append(pos.market_value / total_value)
@@ -102,21 +150,27 @@ def _weighted_nav_history(
     if not histories:
         return {"dates": [], "prices": []}
 
+    # Renormalize weights after excluding MFs/invalid tickers
+    total_weight = sum(weights)
+    if total_weight > 0 and total_weight < 1.0:
+        weights = [w / total_weight for w in weights]
+
     # Align by date intersection
     date_sets = [set(h["dates"]) for h in histories]
     common_dates = sorted(date_sets[0].intersection(*date_sets[1:]))
     if not common_dates:
         return {"dates": [], "prices": []}
 
+    # Build fast lookup dicts: {date -> index} per history
+    date_index_maps = [{d: i for i, d in enumerate(h["dates"])} for h in histories]
+
     navs: list[float] = []
     for d in common_dates:
         nav = 0.0
-        for h, w in zip(histories, weights):
-            try:
-                idx = h["dates"].index(d)
+        for h, w, dim in zip(histories, weights, date_index_maps):
+            idx = dim.get(d)
+            if idx is not None:
                 nav += h["prices"][idx] * w
-            except ValueError:
-                pass
         navs.append(nav)
 
     return {"dates": common_dates, "prices": navs}
@@ -162,7 +216,7 @@ def _compute_correlation_matrix(
 
     histories: dict[str, list[float]] = {}
     for pos in top:
-        hist = _fetch_history(pos.exchange_symbol, period=period)
+        hist = _fetch_history_cached(pos.exchange_symbol, period=period)
         if hist and hist.get("prices") and len(hist["prices"]) > 10:
             histories[pos.exchange_symbol] = hist["prices"]
 
@@ -265,7 +319,7 @@ def compute_portfolio_analytics(
 
     # Portfolio NAV history vs benchmark
     port_hist = _weighted_nav_history(positions, period=period)
-    bench_hist = _fetch_history(benchmark_ticker, period=period)
+    bench_hist = _fetch_history_cached(benchmark_ticker, period=period)
 
     # Risk metrics
     beta = 0.0

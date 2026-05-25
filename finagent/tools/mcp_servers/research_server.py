@@ -1,7 +1,8 @@
 """
-ORACLE FIOS - Research & News MCP Server (Tavily)
-===================================================
-Powered by Tavily API — web search, news, URL extraction, and research.
+ORACLE FIOS - Research & News MCP Server (SearXNG + Tavily fallback)
+====================================================================
+Primary: SearXNG (self-hosted web search)
+Fallback: Tavily API (if available) — web search, news, URL extraction, and research.
 
 Exposes MCP tools:
   - search_web           : general web search with AI-generated answers
@@ -11,11 +12,12 @@ Exposes MCP tools:
   - research_company     : deep multi-query research on a company
 
 Tavily free tier: 1,000 credits/month. Each basic search = 1 credit.
-Get your key at: https://app.tavily.com
+Get your key at: https://app.tavily.com (optional)
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -24,7 +26,14 @@ from typing import Any
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
-from tavily import TavilyClient
+
+# Optional Tavily import
+try:
+    from tavily import TavilyClient
+    _TAVILY_AVAILABLE = True
+except ImportError:
+    _TAVILY_AVAILABLE = False
+    TavilyClient = None  # type: ignore
 
 # ---------------------------------------------------------------------------
 # Config
@@ -54,9 +63,11 @@ mcp = FastMCP(
 )
 
 # ---------------------------------------------------------------------------
-# Tavily client (lazy init)
+# Search clients (SearXNG primary, Tavily optional fallback)
 # ---------------------------------------------------------------------------
 _tavily: TavilyClient | None = None
+_searxng_client = None
+
 TRANSIENT_ERROR_MARKERS = (
     "connection",
     "timeout",
@@ -71,15 +82,22 @@ TRANSIENT_ERROR_MARKERS = (
 )
 
 
-def _get_tavily() -> TavilyClient:
-    """Get or create the Tavily client."""
+def _get_searxng():
+    """Get SearXNG client (primary)."""
+    global _searxng_client
+    if _searxng_client is None:
+        from finagent.tools.web.searxng_client import SearXNGClient
+        _searxng_client = SearXNGClient()
+    return _searxng_client
+
+
+def _get_tavily() -> TavilyClient | None:
+    """Get or create the Tavily client (optional fallback)."""
+    if not _TAVILY_AVAILABLE or not TAVILY_API_KEY:
+        return None
+    
     global _tavily
     if _tavily is None:
-        if not TAVILY_API_KEY:
-            raise ValueError(
-                "TAVILY_API_KEY is not configured. "
-                "Set it in your .env file (get one at https://app.tavily.com)"
-            )
         _tavily = TavilyClient(api_key=TAVILY_API_KEY)
     return _tavily
 
@@ -111,6 +129,70 @@ def _search_with_retries(client: TavilyClient, *, retries: int = 2, **kwargs) ->
     if last_exc is not None:
         raise last_exc
     raise RuntimeError("Tavily search failed without returning a response.")
+
+
+def _google_news_rss_search(query: str, max_results: int) -> dict[str, Any]:
+    """Fallback search using Google News RSS."""
+    import urllib.parse
+    import urllib.request
+    import xml.etree.ElementTree as ET
+    import re
+
+    encoded_query = urllib.parse.quote_plus(query)
+    url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-IN&gl=IN&ceid=IN:en"
+    articles = []
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        )
+        with urllib.request.urlopen(req, timeout=10.0) as response:
+            xml_data = response.read()
+
+        root = ET.fromstring(xml_data)
+        channel = root.find("channel")
+        if channel is not None:
+            for item in channel.findall("item")[:max_results]:
+                title_elem = item.find("title")
+                link_elem = item.find("link")
+                pub_date_elem = item.find("pubDate")
+                desc_elem = item.find("description")
+
+                raw_title = title_elem.text if title_elem is not None else ""
+                url_val = link_elem.text if link_elem is not None else ""
+                published_val = pub_date_elem.text if pub_date_elem is not None else ""
+                snippet_val = desc_elem.text if desc_elem is not None else ""
+
+                source_name = "googlenews"
+                title_val = raw_title
+                if " - " in raw_title:
+                    parts = raw_title.rsplit(" - ", 1)
+                    title_val = parts[0]
+                    source_name = parts[1].strip()
+
+                clean_snippet = re.sub(r"<[^>]+>", "", snippet_val)[:240]
+
+                articles.append({
+                    "title": title_val,
+                    "url": url_val,
+                    "content": clean_snippet,
+                    "score": 0.9,
+                    "published_date": published_val,
+                })
+    except Exception as exc:
+        logger.warning("Google News RSS fallback failed for '%s': %s", query, exc)
+
+    return {
+        "query": query,
+        "answer": f"Web results for: {query} (fetched via Google News RSS)",
+        "total_results": len(articles),
+        "results": articles,
+        "response_time": 0.1,
+        "articles": articles,
+        "total_articles": len(articles),
+        "time_range": "recent",
+        "strategy_used": "google_news_rss",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -171,8 +253,12 @@ def search_web(
         return {"error": False, "data": output}
 
     except Exception as exc:
-        logger.error("search_web failed: %s", exc)
-        return {"error": True, "message": str(exc)}
+        logger.error("search_web failed, trying RSS fallback: %s", exc)
+        try:
+            fallback = _google_news_rss_search(query, max_results)
+            return {"error": False, "data": fallback}
+        except Exception as fallback_exc:
+            return {"error": True, "message": f"Search failed: {exc}. Fallback also failed: {fallback_exc}"}
 
 
 # ---------------------------------------------------------------------------
@@ -278,8 +364,12 @@ def search_news(
         return {"error": True, "message": last_error or "Unknown Tavily search failure."}
 
     except Exception as exc:
-        logger.error("search_news failed: %s", exc)
-        return {"error": True, "message": str(exc)}
+        logger.error("search_news failed, trying RSS fallback: %s", exc)
+        try:
+            fallback = _google_news_rss_search(query, max_results)
+            return {"error": False, "data": fallback}
+        except Exception as fallback_exc:
+            return {"error": True, "message": f"News search failed: {exc}. Fallback also failed: {fallback_exc}"}
 
 
 # ---------------------------------------------------------------------------
@@ -383,8 +473,23 @@ def get_latest_company_news(
         return {"error": False, "data": {"companies": output, "time_range": time_range}}
 
     except Exception as exc:
-        logger.error("get_latest_company_news failed: %s", exc)
-        return {"error": True, "message": str(exc)}
+        logger.error("get_latest_company_news failed, trying RSS fallback: %s", exc)
+        try:
+            output = {}
+            for company in companies[:5]:
+                name = company.strip()
+                if not name:
+                    continue
+                fallback_res = _google_news_rss_search(f"{name} latest news", max_results_per_company)
+                output[name] = {
+                    "company": name,
+                    "strategy_used": "google_news_rss",
+                    "results": fallback_res["articles"],
+                    "answer": fallback_res["answer"],
+                }
+            return {"error": False, "data": {"companies": output, "time_range": time_range}}
+        except Exception as fallback_exc:
+            return {"error": True, "message": f"Company news failed: {exc}. Fallback also failed: {fallback_exc}"}
 
 
 # ---------------------------------------------------------------------------
@@ -460,8 +565,13 @@ def search_financial(
         return {"error": False, "data": output}
 
     except Exception as exc:
-        logger.error("search_financial failed: %s", exc)
-        return {"error": True, "message": str(exc)}
+        logger.error("search_financial failed, trying RSS fallback: %s", exc)
+        try:
+            fallback = _google_news_rss_search(query, max_results)
+            fallback["sources_prioritised"] = include_domains or []
+            return {"error": False, "data": fallback}
+        except Exception as fallback_exc:
+            return {"error": True, "message": f"Financial search failed: {exc}. Fallback also failed: {fallback_exc}"}
 
 
 # ---------------------------------------------------------------------------
@@ -594,8 +704,41 @@ def research_company(symbol: str, company_name: str | None = None) -> dict:
         }
 
     except Exception as exc:
-        logger.error("research_company failed: %s", exc)
-        return {"error": True, "message": str(exc)}
+        logger.error("research_company failed, trying RSS fallback: %s", exc)
+        try:
+            queries = {
+                "recent_news": f"{name} {symbol} latest news India stock market",
+                "quarterly_results": f"{name} {symbol} quarterly results earnings 2026",
+                "analyst_views": f"{name} {symbol} analyst target price buy sell recommendation",
+                "management": f"{name} {symbol} management commentary guidance outlook",
+                "sector_outlook": f"{name} sector industry outlook India 2026",
+            }
+            research = {}
+            for category, q in queries.items():
+                fallback_res = _google_news_rss_search(q, 3)
+                research[category] = {
+                    "query": q,
+                    "answer": fallback_res["answer"],
+                    "sources": [
+                        {
+                            "title": art["title"],
+                            "url": art["url"],
+                            "snippet": art["content"],
+                        }
+                        for art in fallback_res["articles"]
+                    ],
+                }
+            return {
+                "error": False,
+                "data": {
+                    "symbol": symbol,
+                    "company_name": name,
+                    "research_date": datetime.now().isoformat(),
+                    "categories": research,
+                },
+            }
+        except Exception as fallback_exc:
+            return {"error": True, "message": f"Research failed: {exc}. Fallback also failed: {fallback_exc}"}
 
 
 # ---------------------------------------------------------------------------

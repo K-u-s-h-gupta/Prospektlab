@@ -28,20 +28,13 @@ def compute_alerts(positions: list[PositionMirror], analytics: dict[str, Any]) -
     equity_value = sum(p.market_value for p in positions if p.market_value > 0 and p.kind == "equity")
     equity_pct = (equity_value / total_value) if total_value else 0.0
 
-    # Per-holding alerts
-    for pos in positions:
-        if pos.market_value <= 0:
-            continue
-        weight = pos.market_value / total_value if total_value else 0
-        if weight > 0.15:
-            alerts.append({
-                "severity": "warning" if weight < 0.25 else "danger",
-                "code": "SINGLE_NAME_CONCENTRATION",
-                "message": f"{pos.name or pos.symbol} is {weight*100:.1f}% of portfolio",
-                "symbol": pos.exchange_symbol,
-                "threshold": 15,
-                "actual": round(weight * 100, 1),
-            })
+    # Per-holding alerts (single-name concentration disabled per user request)
+    # for pos in positions:
+    #     if pos.market_value <= 0:
+    #         continue
+    #     weight = pos.market_value / total_value if total_value else 0
+    #     if weight > 0.15:
+    #         alerts.append({...})
 
     # Sector alerts
     sector_totals: dict[str, float] = {}

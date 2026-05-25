@@ -42,8 +42,8 @@ VERIFIED_DOMAINS: dict[str, int] = {
     "hindustantimes.com": 2,
     "indiatoday.in": 2,
 
-    # T3: Aggregators / blogs
-    "tavily.com": 3,
+    # T3: SearXNG (meta-search results)
+    # Tavily removed (replaced by SearXNG)
 }
 
 IMPORTANCE_KEYWORDS: dict[str, float] = {

@@ -4,12 +4,34 @@ import base64
 import io
 from typing import Any
 
-import matplotlib
-import matplotlib.pyplot as plt
-import numpy as np
+# Lazy matplotlib import — do not pull it at module load time.
+# This allows the gateway to start even if matplotlib is not installed.
+_matplotlib = None
+_plt = None
+_np = None
 
-# Use non-interactive backend for server-side rendering
-matplotlib.use("Agg")
+
+def _ensure_matplotlib():
+    """Import matplotlib on first use. Raises a clear error if unavailable."""
+    global _matplotlib, _plt, _np
+    if _matplotlib is None:
+        try:
+            import matplotlib
+            import matplotlib.pyplot as plt
+            import numpy as np
+            matplotlib.use("Agg")
+            _matplotlib = matplotlib
+            _plt = plt
+            _np = np
+
+            # Apply our financial chart style on first load
+            plt.rcParams.update(CHART_STYLE)
+        except ImportError as e:
+            raise ImportError(
+                "matplotlib is required for chart generation. "
+                "Install it with: pip install matplotlib numpy"
+            ) from e
+    return _matplotlib, _plt, _np
 
 # Financial color scheme
 COLORS = {
@@ -43,8 +65,7 @@ CHART_STYLE = {
     "axes.labelsize": 10,
 }
 
-# Apply style
-plt.rcParams.update(CHART_STYLE)
+# Style is applied lazily inside _ensure_matplotlib() when first needed.
 
 
 def _format_currency(value: float | None, currency: str = "INR") -> str:
@@ -94,7 +115,7 @@ def _format_price(value: float | None, decimals: int = 2) -> str:
     return f"₹{value:,.{decimals}f}"
 
 
-def _save_figure_both_formats(fig: plt.Figure, dpi: int = 100) -> dict[str, str]:
+def _save_figure_both_formats(fig: Any, dpi: int = 100) -> dict[str, str]:
     """Save matplotlib figure to both SVG and PNG as base64-encoded strings.
 
     Args:
@@ -121,7 +142,7 @@ def _save_figure_both_formats(fig: plt.Figure, dpi: int = 100) -> dict[str, str]
     return {"svg": svg_base64, "png": png_base64}
 
 
-def _add_partial_data_indicator(ax: plt.Axes, message: str = "Partial Data") -> None:
+def _add_partial_data_indicator(ax: Any, message: str = "Partial Data") -> None:
     """Add a partial data indicator badge to the chart.
 
     Args:
@@ -166,6 +187,7 @@ def generate_price_chart(
     if not dates or not prices or len(dates) != len(prices):
         return None
 
+    _, plt, np = _ensure_matplotlib()
     fig, ax = plt.subplots(figsize=(10, 5))
 
     # Calculate trend for color
@@ -246,6 +268,7 @@ def generate_revenue_chart(
     if not labels or not revenue or len(labels) != len(revenue):
         return None
 
+    _, plt, np = _ensure_matplotlib()
     fig, ax = plt.subplots(figsize=(10, 5))
 
     x = np.arange(len(labels))
@@ -352,6 +375,7 @@ def generate_comparison_chart(
     if not categories or len(values_a) != len(categories) or len(values_b) != len(categories):
         return None
 
+    _, plt, np = _ensure_matplotlib()
     fig, ax = plt.subplots(figsize=(10, 5))
 
     x = np.arange(len(categories))
@@ -436,6 +460,7 @@ def generate_sparkline(
     if not values or len(values) < 2:
         return None
 
+    _, plt, np = _ensure_matplotlib()
     fig, ax = plt.subplots(figsize=(width, height))
 
     # Calculate trend for color
@@ -495,6 +520,7 @@ def generate_multiseries_line_chart(
         if len(values) != len(dates):
             return None
 
+    _, plt, np = _ensure_matplotlib()
     fig, ax = plt.subplots(figsize=(10, 5))
 
     # Color cycle
@@ -566,6 +592,7 @@ def generate_metric_gauge(
     Returns:
         Dictionary with 'svg' and 'png' base64 strings, or None if input invalid
     """
+    _, plt, np = _ensure_matplotlib()
     fig, ax = plt.subplots(figsize=(6, 2))
 
     # Normalize value

@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com" rel="preconnect" />
   <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin="" />
   <link rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" />
   <link rel="stylesheet"
     href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -23,44 +23,91 @@
       theme: {
         extend: {
           colors: {
-            // ── MINIMALIST DARK PALETTE ─────────────────────────────────
-            // Pure neutrals only. Single accent (primary). Functional states.
-            background: "#09090b",
-            surface: "#09090b",
-            "surface-1": "#0c0c0e",
-            "surface-2": "#111114",
-            "surface-3": "#17171a",
-            "surface-4": "#202024",
-            "on-surface": "#fafafa",
-            "on-surface-variant": "#a1a1aa",
-            "outline": "#71717a",
-            "outline-variant": "#27272a",
-            // Legacy aliases — preserved so existing render fns keep working
-            "surface-container-lowest": "#09090b",
-            "surface-container-low": "#0c0c0e",
-            "surface-container": "#111114",
-            "surface-container-high": "#17171a",
-            "surface-container-highest": "#202024",
-            "surface-bright": "#27272a",
-            "surface-variant": "#17171a",
-            // Single accent — soft white-blue
-            "primary": "#e4e4e7",
-            "primary-fixed-dim": "#e4e4e7",
-            "primary-container": "#3f3f46",
-            "secondary": "#a1a1aa",
-            "tertiary": "#71717a",
-            // Functional state colors (muted, not saturated)
-            "error": "#f87171",
-            "success": "#4ade80",
-            "warn": "#fbbf24",
-            // Mode-distinct accents
-            "research": "#60a5fa",
-            "marathon": "#a78bfa",
+            "primary": "#e9feff",
+            "secondary-container": "#474649",
+            "surface-tint": "#00dce5",
+            "surface-variant": "#353436",
+            "charcoal-surface": "#141416",
+            "surface-bright": "#3a393a",
+            "outline-variant": "#3a494a",
+            "surface-container-high": "#2a2a2b",
+            "on-primary": "#003739",
+            "surface": "#131314",
+            "on-tertiary-fixed-variant": "#544600",
+            "tertiary-fixed-dim": "#e7c427",
+            "tertiary-container": "#ffdb3f",
+            "on-primary-fixed": "#002021",
+            "primary-fixed": "#63f7ff",
+            "on-secondary-fixed-variant": "#474649",
+            "on-tertiary": "#3a3000",
+            "background": "#131314",
+            "crimson-risk": "#FF3B30",
+            "surface-container": "#201f20",
+            "on-tertiary-fixed": "#221b00",
+            "surface-container-lowest": "#0e0e0f",
+            "inverse-on-surface": "#313031",
+            "obsidian-base": "#0A0A0B",
+            "titanium-highlight": "#E2E2E2",
+            "surface-dim": "#131314",
+            "error": "#ffb4ab",
+            "tertiary": "#fff9f0",
+            "outline": "#849495",
+            "inverse-primary": "#00696e",
+            "on-secondary": "#303032",
+            "on-error-container": "#ffdad6",
+            "on-surface": "#e5e2e3",
+            "primary-fixed-dim": "#00dce5",
+            "on-primary-fixed-variant": "#004f53",
+            "surface-container-low": "#1c1b1c",
+            "on-tertiary-container": "#736000",
+            "surface-container-highest": "#353436",
+            "primary-container": "#00f5ff",
+            "on-secondary-fixed": "#1b1b1d",
+            "error-container": "#93000a",
+            "inverse-surface": "#e5e2e3",
+            "glass-stroke": "rgba(255, 255, 255, 0.08)",
+            "secondary": "#c8c6c8",
+            "on-surface-variant": "#b9caca",
+            "secondary-fixed": "#e5e1e4",
+            "tertiary-fixed": "#ffe16c",
+            "electric-cyan": "#00F5FF",
+            "on-secondary-container": "#b7b4b7",
+            "on-background": "#e5e2e3",
+            "secondary-fixed-dim": "#c8c6c8",
+            "on-error": "#690005",
+            "on-primary-container": "#006c71"
+          },
+          borderRadius: {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          spacing: {
+            "table-row-height": "48px",
+            "gutter": "24px",
+            "unit": "4px",
+            "widget-gap": "16px",
+            "margin-page": "40px"
           },
           fontFamily: {
-            inter: ["Inter", "sans-serif"],
-            mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+            "headline-xl": ["Manrope"],
+            "headline-md": ["Manrope"],
+            "label-caps": ["JetBrains Mono"],
+            "headline-lg": ["Manrope"],
+            "data-tabular": ["JetBrains Mono"],
+            "body-lg": ["Manrope"],
+            "body-md": ["Manrope"]
           },
+          fontSize: {
+            "headline-xl": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+            "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+            "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+            "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+            "data-tabular": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+            "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+            "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+          }
         },
       },
     };
@@ -73,30 +120,45 @@
        Every surface, border, and motion is intentional.
        ═══════════════════════════════════════════════════════════════════ */
     :root {
-      --bg: #09090b;
-      --surface-1: #0c0c0e;
-      --surface-2: #111114;
-      --surface-3: #17171a;
-      --surface-4: #202024;
-      --border: rgba(255, 255, 255, 0.06);
-      --border-strong: rgba(255, 255, 255, 0.12);
-      --text: #fafafa;
-      --text-muted: #a1a1aa;
-      --text-faint: #52525b;
-      --accent: #e4e4e7;
-      --research: #60a5fa;
+      --bg: #0A0A0B;
+      --surface-1: #131314;
+      --surface-2: #141416;
+      --surface-3: #201f20;
+      --surface-4: #2a2a2b;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.15);
+      --text: #e5e2e3;
+      --text-muted: #b9caca;
+      --text-faint: #849495;
+      --accent: #00F5FF;
+      --research: #00F5FF;
       --marathon: #a78bfa;
-      --success: #4ade80;
-      --error: #f87171;
-      --warn: #fbbf24;
+      --success: #00f5ff;
+      --error: #FF3B30;
+      --warn: #ffdb3f;
       --ease: cubic-bezier(0.16, 1, 0.3, 1);
       --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
+    /* Activity drawer */
+    #activityDrawer {
+      position: fixed;
+      top: 0; right: 0;
+      width: 320px; height: 100vh;
+      background: var(--surface-1);
+      border-left: 1px solid var(--border);
+      transform: translateX(100%);
+      transition: transform 0.3s var(--ease);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+    }
+    #activityDrawer.open { transform: translateX(0); }
+
     html, body {
       background: var(--bg);
       color: var(--text);
-      font-family: "Inter", -apple-system, system-ui, sans-serif;
+      font-family: "Manrope", -apple-system, system-ui, sans-serif;
       font-feature-settings: "cv11", "ss01";
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
@@ -1435,6 +1497,27 @@
     .holding-kind-badge.equity { background: rgba(96,165,250,0.15); color: #60a5fa; }
     .holding-kind-badge.mf { background: rgba(167,139,250,0.15); color: #a78bfa; }
 
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .sidebar-scroller::-webkit-scrollbar {
+      width: 4px;
+    }
+    .sidebar-scroller::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .sidebar-scroller::-webkit-scrollbar-thumb {
+      background: rgba(0, 245, 255, 0.2);
+      border-radius: 2px;
+    }
+    .functional-gradient-cyan {
+      background: linear-gradient(180deg, rgba(0, 245, 255, 0.1) 0%, rgba(0, 245, 255, 0) 100%);
+    }
+    .chart-trend {
+      filter: drop-shadow(0 0 8px rgba(0, 245, 255, 0.4));
+    }
   </style>
 </head>
 
@@ -1444,19 +1527,19 @@
        Just the brand, mode toggle, and utility controls.
        Mode selector is the prominent center element.
   ════════════════════════════════════════════════════════════════════ -->
-  <header class="h-14 flex items-center justify-between px-6 shrink-0 anim-fade-in">
-    <div class="flex items-center gap-3">
+  <header class="h-16 flex items-center justify-between px-6 shrink-0 bg-surface/60 backdrop-blur-xl border-b border-glass-stroke z-50 sticky top-0 anim-fade-in">
+    <div class="flex items-center gap-4">
       <button id="mobileSidebarToggle" class="icon-btn lg:hidden" title="Open history" aria-label="Open session history">
         <span class="material-symbols-outlined">menu</span>
       </button>
       <button id="newRunBtn" class="icon-btn" title="New thread">
         <span class="material-symbols-outlined">add</span>
       </button>
-      <div class="text-sm font-medium text-white tracking-tight">prospektlab</div>
+      <span class="text-headline-md font-headline-md font-bold tracking-tighter text-on-surface">ProspektLab</span>
     </div>
 
-    <!-- ── MODE SELECTOR (animated pill toggle) ─────────────────── -->
-    <div id="modeSelector" class="mode-pill-container" data-mode="deep" role="tablist" aria-label="Research mode">
+    <!-- ── MODE SELECTOR (animated pill toggle - Hidden) ─────────────────── -->
+    <div id="modeSelector" class="mode-pill-container hidden" data-mode="deep" role="tablist" aria-label="Research mode">
       <span class="mode-pill-indicator"></span>
       <button id="modeDeep" class="mode-pill mode-toggle active" role="tab" aria-selected="true"
         title="Bounded 8-phase Deep Research">
@@ -1465,8 +1548,8 @@
       </button>
     </div>
 
-    <div class="flex items-center gap-2">
-      <button id="activityToggle" class="icon-btn" title="Activity stream">
+    <div class="flex items-center gap-4">
+      <button id="activityToggle" class="icon-btn hidden" title="Activity stream">
         <span class="material-symbols-outlined">history</span>
       </button>
       <div id="authControls" class="flex items-center gap-2 text-xs"></div>
@@ -1481,16 +1564,17 @@
         if (userStr) {
           const user = JSON.parse(userStr);
           c.innerHTML = `
-            <span class="text-[11px] text-zinc-400">${user.name || user.email}</span>
-            <button onclick="logoutApp();"
-              class="icon-btn" title="Logout">
-              <span class="material-symbols-outlined">logout</span>
-            </button>
+            <div class="flex items-center gap-2 border-l border-glass-stroke pl-4">
+              <span class="text-xs font-mono font-bold text-on-surface-variant uppercase tracking-wider">${user.name || user.email}</span>
+              <button onclick="logoutApp();" class="icon-btn text-on-surface-variant hover:text-on-surface transition-colors" title="Logout">
+                <span class="material-symbols-outlined">logout</span>
+              </button>
+            </div>
           `;
         } else {
           c.innerHTML = `
-            <a href="/login" class="text-[11px] text-zinc-400 hover:text-white transition-colors px-2 py-1">Login</a>
-            <a href="/signup" class="text-[11px] text-white bg-white/10 hover:bg-white/15 px-3 py-1.5 rounded-full transition-colors">Sign up</a>
+            <a href="/login" class="text-xs font-mono font-bold tracking-widest text-on-surface-variant hover:text-on-surface transition-colors uppercase px-3 py-2">Login</a>
+            <a href="/signup" class="px-4 py-2 bg-electric-cyan hover:opacity-95 text-black font-mono font-bold rounded-xl text-[10px] tracking-wider transition-colors uppercase">Sign up</a>
           `;
         }
       } catch (e) { /* silent user load error */ }
@@ -1502,333 +1586,335 @@
   <main class="flex-1 flex overflow-hidden min-h-0 relative main-layout">
 
     <!-- LEFT RAIL -->
-    <aside id="sessionSidebar" class="left-rail scroll-thin" data-tour="library">
-      <!-- Sector allocation -->
-      <div class="px-4 py-3 border-b border-white/5">
-        <div class="flex items-center justify-between gap-2 mb-2">
-          <div class="label-mono text-zinc-500">Sector allocation</div>
-          <span class="material-symbols-outlined text-zinc-600 text-[14px]">donut_large</span>
-        </div>
-        <div id="sectorAllocationChart" class="chart-box" style="height:150px;"></div>
-      </div>
-
-      <!-- Holdings tabs -->
-      <div class="px-4 py-3 border-b border-white/5 flex-1 flex flex-col min-h-0">
-        <div class="pm-tabs">
-          <div class="pm-tab active" data-tab="equity" onclick="switchHoldingsTab('equity')">Equity</div>
-          <div class="pm-tab" data-tab="mf" onclick="switchHoldingsTab('mf')">Mutual Funds</div>
-        </div>
-        <div id="leftHoldingsList" class="flex-1 overflow-y-auto scroll-thin text-[11px]">
-          <div class="text-zinc-600 py-2">Upload a CAS to see holdings.</div>
-        </div>
-      </div>
-
-      <!-- Sidebar details toggle -->
-      <div class="px-4 py-2 border-t border-white/5">
-        <button id="toggleSidebarDetails" class="text-[11px] text-zinc-500 hover:text-zinc-300 flex items-center gap-1 w-full" onclick="document.getElementById('sidebarDetails').classList.toggle('hidden')">
-          <span class="material-symbols-outlined text-[14px]">expand_more</span>
-          Watchlists & Sessions
-        </button>
-        <div id="sidebarDetails" class="hidden mt-2">
-          <div class="rail-section">
-            <div class="label-mono text-zinc-600 mb-2">Watchlist</div>
-            <div id="watchlistRail" class="watchlist-list"></div>
-          </div>
-          <div class="rail-section">
-            <div class="label-mono text-zinc-600 mb-2">Sector boards</div>
-            <div id="sectorBoardRail" class="sector-board-list"></div>
-          </div>
-          <div class="session-sidebar-header mt-3">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <div class="label-mono text-zinc-500">Recent sessions</div>
-              </div>
-              <div id="sessionSidebarCount" class="label-mono text-zinc-600">0</div>
+    <aside id="sessionSidebar" class="w-[280px] h-full border-r border-glass-stroke flex flex-col bg-[#0A0A0B]/50 sidebar-scroller overflow-y-auto left-rail scroll-thin" data-tour="library">
+      <div class="p-4 space-y-6">
+        
+        <!-- Dual Allocation Charts -->
+        <div>
+          <h3 class="text-label-caps font-label-caps text-on-surface-variant/60 mb-3 px-1 uppercase tracking-wider">Allocation</h3>
+          <div class="glass-panel p-4 rounded-xl space-y-4">
+            <!-- Asset Allocation Donut -->
+            <div>
+              <div class="text-[10px] text-zinc-500 mb-1.5 px-1">Asset Allocation</div>
+              <div id="assetAllocationChart" class="w-full h-[110px] relative"></div>
+            </div>
+            <!-- Equity Sector Allocation Donut -->
+            <div>
+              <div class="text-[10px] text-zinc-500 mb-1.5 px-1">Sector Allocation (Equity)</div>
+              <div id="equitySectorChart" class="w-full h-[110px] relative"></div>
             </div>
           </div>
-          <div id="sessionSidebarList" class="session-sidebar-list scroll-thin">
-            <div class="session-sidebar-empty">Completed sessions will appear here.</div>
+        </div>
+
+        <!-- Holdings tabs -->
+        <div class="flex flex-col min-h-0">
+          <div class="flex border-b border-glass-stroke mb-3 justify-around">
+            <button class="pm-tab pb-2 text-[10px] font-mono font-bold tracking-widest text-center flex-1 uppercase active border-b-2 border-electric-cyan text-electric-cyan" data-tab="equity" onclick="switchHoldingsTab('equity')">Equity</button>
+            <button class="pm-tab pb-2 text-[10px] font-mono font-bold tracking-widest text-center flex-1 uppercase text-on-surface-variant hover:text-on-surface" data-tab="mf" onclick="switchHoldingsTab('mf')">Mutual Funds</button>
+          </div>
+          <div id="leftHoldingsList" class="overflow-y-auto scroll-thin text-[11px] space-y-1 max-h-[220px]">
+            <div class="text-zinc-600 py-2">Upload a CAS to see holdings.</div>
           </div>
         </div>
+
+        <!-- Sidebar details toggle (Hidden for design) -->
+        <div class="border-t border-glass-stroke pt-4 hidden" aria-hidden="true">
+          <button id="toggleSidebarDetails" class="text-[11px] font-mono text-zinc-500 hover:text-zinc-300 flex items-center gap-1 w-full uppercase tracking-wider" onclick="document.getElementById('sidebarDetails').classList.toggle('hidden')">
+            <span class="material-symbols-outlined text-[14px]">expand_more</span>
+            Watchlists & Sessions
+          </button>
+          <div id="sidebarDetails" class="hidden mt-3 space-y-4">
+            <div>
+              <div class="font-mono text-[10px] text-zinc-600 mb-2 uppercase tracking-wider">Watchlist</div>
+              <div id="watchlistRail" class="watchlist-list space-y-1"></div>
+            </div>
+            <div>
+              <div class="font-mono text-[10px] text-zinc-600 mb-2 uppercase tracking-wider">Sector boards</div>
+              <div id="sectorBoardRail" class="sector-board-list space-y-1"></div>
+            </div>
+            <div class="session-sidebar-header border-t border-glass-stroke pt-3 mt-3">
+              <div class="flex items-center justify-between gap-3">
+                <div class="font-mono text-[10px] text-zinc-600 uppercase tracking-wider">Recent sessions</div>
+                <div id="sessionSidebarCount" class="font-mono text-[10px] text-electric-cyan">0</div>
+              </div>
+            </div>
+            <div id="sessionSidebarList" class="session-sidebar-list scroll-thin space-y-1 max-h-[200px] overflow-y-auto">
+              <div class="session-sidebar-empty text-zinc-600 py-2 text-xs italic">Completed sessions will appear here.</div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </aside>
 
-    <!-- MIDDLE: PORTFOLIO MIRROR -->
-    <section id="portfolioMirrorMain" class="middle-panel scroll-thin portfolio-mirror-main">
-      <!-- Upload bar -->
-      <div class="px-5 py-3 border-b border-white/5 flex items-center gap-3 flex-wrap">
-        <div class="flex-1 min-w-[120px]">
-          <div class="text-sm font-medium text-zinc-100">Portfolio mirror</div>
-          <div id="portfolioUploadStatus" class="text-[11px] text-zinc-500 mt-0.5">No holdings loaded</div>
+    <!-- MIDDLE: PORTFOLIO MIRROR (Obsidian Spatial Overhaul) -->
+    <section id="portfolioMirrorMain" class="middle-panel scroll-thin portfolio-mirror-main bg-obsidian-base">
+      <div class="p-gutter max-w-6xl mx-auto space-y-8">
+        
+        <!-- Portfolio Header -->
+        <div class="flex justify-between items-end flex-wrap gap-4">
+          <div>
+            <nav class="flex items-center gap-2 text-on-surface-variant/60 text-label-caps font-label-caps mb-2 hidden">
+              <span class="">Home</span> <span class="material-symbols-outlined text-[14px]">chevron_right</span> <span class="">Portfolios</span>
+            </nav>
+            <h1 class="text-headline-xl font-headline-xl text-on-surface">Portfolio</h1>
+            <div class="flex items-center gap-4 mt-2">
+              <span id="portfolioValueText" class="text-headline-md font-headline-md text-on-surface">Upload holdings first</span>
+              <div id="portfolioPnlContainer" class="flex items-center gap-1 text-electric-cyan hidden">
+                <span class="material-symbols-outlined" id="portfolioPnlIcon">arrow_upward</span>
+                <span class="font-data-tabular" id="portfolioPnlText">+0.00% Today</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-3 flex-wrap">
+            <!-- Hidden wrapper for upload elements to keep JS alive -->
+            <div class="hidden" aria-hidden="true">
+              <div id="portfolioUploadStatus">No holdings loaded</div>
+              <label id="portfolioDropZone" for="portfolioFileInput">
+                <input id="portfolioFileInput" type="file" accept=".pdf,.csv,.xls,.xlsx,.jpg,.jpeg,.png,application/pdf,text/csv,image/png,image/jpeg">
+              </label>
+              <input id="ecasPasswordInput" type="password" placeholder="eCAS password">
+              <button id="portfolioClearBtn" type="button" title="Clear holdings"></button>
+              <button id="portfolioAuditBtn" type="button" title="Audit"></button>
+            </div>
+            
+            <button onclick="window.exportToPdf()" class="px-4 py-2 bg-electric-cyan text-on-primary rounded-lg font-label-caps hover:opacity-90 transition-all text-xs">
+              Export Report
+            </button>
+          </div>
         </div>
-        <label id="portfolioDropZone" class="upload-zone !py-2 !px-3 !text-[11px] !inline-flex items-center gap-1" for="portfolioFileInput">
-          <input id="portfolioFileInput" type="file" class="hidden" accept=".csv,.pdf,application/pdf,text/csv">
-          <span class="material-symbols-outlined text-zinc-400 text-[16px]">cloud_upload</span>
-          <span>Upload CAS / CSV</span>
-        </label>
-        <input id="ecasPasswordInput" class="portfolio-input !w-28 !text-[11px]" type="password" placeholder="eCAS password">
-        <button id="portfolioClearBtn" class="portfolio-action !py-1.5 !px-2 !text-[11px]" type="button" title="Clear holdings">
-          <span class="material-symbols-outlined text-[14px]">delete</span>
-        </button>
-        <button id="portfolioAuditBtn" class="portfolio-action !py-1.5 !px-2 !text-[11px]" type="button" title="Audit">
-          <span class="material-symbols-outlined text-[14px]">shield</span>
-        </button>
-      </div>
 
-      <!-- AI Brief -->
-      <div class="px-5 pb-2">
-        <div id="portfolioBriefCard" class="pm-section hidden">
-          <div class="pm-section-title">
-            <span class="material-symbols-outlined text-[14px]">auto_awesome</span>
+        <!-- AI Brief -->
+        <div id="portfolioBriefCard" class="glass-panel rounded-2xl p-6 relative overflow-hidden hidden">
+          <div class="pm-section-title flex items-center gap-2 text-electric-cyan mb-2 font-mono text-xs uppercase tracking-wider">
+            <span class="material-symbols-outlined text-[16px]">auto_awesome</span>
             Portfolio brief
           </div>
-          <div id="portfolioBriefText" class="text-[12px] text-zinc-300 leading-relaxed"></div>
+          <div id="portfolioBriefText" class="text-[13px] text-zinc-300 leading-relaxed font-body-md"></div>
         </div>
-      </div>
 
-      <!-- Action Queue (Today) -->
-      <div class="px-5 pb-2">
-        <div id="todayCard" class="pm-section hidden">
-          <div class="pm-section-title flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-[14px]">today</span>
+        <!-- Action Queue (Today) -->
+        <div id="todayCard" class="glass-panel rounded-2xl p-6 relative overflow-hidden hidden">
+          <div class="pm-section-title flex items-center justify-between mb-4 border-b border-glass-stroke pb-2">
+            <div class="flex items-center gap-2 text-on-surface font-mono text-xs uppercase tracking-wider">
+              <span class="material-symbols-outlined text-[16px]">today</span>
               Today
             </div>
-            <button id="refreshTodayBtn" class="icon-btn" title="Refresh">
-              <span class="material-symbols-outlined text-[14px]">refresh</span>
+            <button id="refreshTodayBtn" class="icon-btn hover:text-electric-cyan" title="Refresh">
+              <span class="material-symbols-outlined text-[16px]">refresh</span>
             </button>
           </div>
-          <div id="todayList" class="flex flex-col gap-1"></div>
+          <div id="todayList" class="flex flex-col gap-2"></div>
         </div>
-      </div>
 
-      <!-- Day-change leaderboard -->
-      <div class="px-5 pb-2">
-        <div id="dayChangeCard" class="pm-section hidden">
-          <div class="pm-section-title">
-            <span class="material-symbols-outlined text-[14px]">leaderboard</span>
+        <!-- Day Movers Leaderboard -->
+        <div id="dayChangeCard" class="glass-panel rounded-2xl p-6 relative overflow-hidden hidden">
+          <div class="pm-section-title mb-4 border-b border-glass-stroke pb-2 text-on-surface font-mono text-xs uppercase tracking-wider flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px]">leaderboard</span>
             Day movers
           </div>
-          <div class="grid grid-cols-2 gap-2" id="dayChangeGrid"></div>
+          <div class="grid grid-cols-2 gap-4" id="dayChangeGrid"></div>
         </div>
-      </div>
 
-      <!-- KPI Strip -->
-      <div class="px-5 pt-3 pb-2">
-        <div class="pm-kpi-strip" id="pmKpiStrip"></div>
-      </div>
-
-      <!-- Charts row -->
-      <div class="px-5 pb-2 grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <div class="pm-section">
-          <div class="pm-section-title">
-            <span class="material-symbols-outlined text-[14px]">pie_chart</span>
-            Allocation
-          </div>
-          <div id="allocationChart" class="chart-box"></div>
-        </div>
-        <div class="pm-section">
-          <div class="pm-section-title flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-[14px]">show_chart</span>
-              Performance vs <span id="benchmarkLabel">Nifty 50</span>
+        <!-- Cinematic Chart Container -->
+        <div class="glass-panel rounded-2xl p-6 relative overflow-hidden group">
+          <div class="flex items-center justify-between mb-8">
+            <div class="flex gap-4">
+              <button class="text-label-caps font-label-caps text-electric-cyan border-b-2 border-electric-cyan pb-1">Portfolio vs Nifty 50</button>
             </div>
-            <select id="benchmarkSelect" class="portfolio-input !w-32 !text-[11px] !py-1">
-              <option value="NIFTY50">Nifty 50</option>
-              <option value="NIFTYMIDCAP">Nifty Midcap 50</option>
-              <option value="SENSEX">Sensex</option>
-              <option value="NIFTYBANK">Nifty Bank</option>
-              <option value="NIFTYIT">Nifty IT</option>
-            </select>
+            
+            <div class="flex items-center gap-4">
+              <!-- Benchmark Selector Dropdown -->
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] font-mono text-zinc-500 uppercase">Benchmark:</span>
+                <select id="benchmarkSelect" class="bg-surface-container border border-glass-stroke rounded-lg px-2 py-1 text-[11px] text-on-surface focus:outline-none focus:border-electric-cyan/40">
+                  <option value="NIFTY50">Nifty 50</option>
+                  <option value="NIFTYMIDCAP">Nifty Midcap 50</option>
+                  <option value="SENSEX">Sensex</option>
+                  <option value="NIFTYBANK">Nifty Bank</option>
+                  <option value="NIFTYIT">Nifty IT</option>
+                </select>
+              </div>
+              
+              <!-- Time Frame Buttons -->
+              <div class="flex bg-surface-container rounded-lg p-1 border border-glass-stroke">
+                <button class="px-3 py-1 text-[11px] font-mono rounded text-on-surface-variant hover:text-on-surface" onclick="loadPerformancePeriod('1M')">1M</button>
+                <button class="px-3 py-1 text-[11px] font-mono rounded text-on-surface-variant hover:text-on-surface" onclick="loadPerformancePeriod('3M')">3M</button>
+                <button class="px-3 py-1 text-[11px] font-mono rounded bg-surface-bright text-on-surface font-semibold" onclick="loadPerformancePeriod('1Y')">1Y</button>
+                <button class="px-3 py-1 text-[11px] font-mono rounded text-on-surface-variant hover:text-on-surface" onclick="loadPerformancePeriod('YTD')">YTD</button>
+              </div>
+            </div>
           </div>
-          <div id="performanceChart" class="chart-box"></div>
-          <div class="flex gap-1 mt-1 justify-center">
-            <button class="text-[10px] px-2 py-0.5 rounded bg-surface-3 text-zinc-400" onclick="loadPerformancePeriod('1M')">1M</button>
-            <button class="text-[10px] px-2 py-0.5 rounded bg-surface-3 text-zinc-400" onclick="loadPerformancePeriod('3M')">3M</button>
-            <button class="text-[10px] px-2 py-0.5 rounded bg-surface-4 text-zinc-200" onclick="loadPerformancePeriod('1Y')">1Y</button>
-            <button class="text-[10px] px-2 py-0.5 rounded bg-surface-3 text-zinc-400" onclick="loadPerformancePeriod('YTD')">YTD</button>
+          
+          <div class="h-[300px] w-full relative">
+            <div id="performanceChart" class="w-full h-full">
+              <!-- Chart.js canvas will be inserted here -->
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Attribution cards -->
-      <div class="px-5 pb-2">
-        <div id="attributionCard" class="pm-section hidden">
-          <div class="pm-section-title">
-            <span class="material-symbols-outlined text-[14px]">trending_up</span>
+        <!-- Latest News -->
+        <div class="space-y-4">
+          <div class="flex justify-between items-center px-1">
+            <h3 class="text-label-caps font-label-caps text-on-surface-variant/60 uppercase">Latest News</h3>
+            
+            <div class="flex items-center gap-2">
+              <input id="newsSearchInput" type="text" placeholder="Search news..." class="bg-surface-container border border-glass-stroke rounded-lg px-3 py-1 text-xs focus:outline-none focus:border-electric-cyan/40 w-44">
+              <div class="flex gap-1" id="newsFilterChips">
+                <button class="news-chip active bg-white/5 border border-glass-stroke px-2 py-0.5 rounded text-[10px] font-mono text-zinc-400 hover:text-white" data-filter="all">All</button>
+                <button class="news-chip bg-white/5 border border-glass-stroke px-2 py-0.5 rounded text-[10px] font-mono text-zinc-400 hover:text-white" data-filter="equity">Equity</button>
+                <button class="news-chip bg-white/5 border border-glass-stroke px-2 py-0.5 rounded text-[10px] font-mono text-zinc-400 hover:text-white" data-filter="mf">MF</button>
+                <button class="news-chip bg-white/5 border border-glass-stroke px-2 py-0.5 rounded text-[10px] font-mono text-zinc-400 hover:text-white" data-filter="fresh">Fresh</button>
+              </div>
+              <button id="refreshNewsBtn" class="icon-btn hover:text-electric-cyan" title="Refresh news">
+                <span class="material-symbols-outlined text-[16px]">refresh</span>
+              </button>
+            </div>
+          </div>
+          <div id="portfolioNewsStrip" class="flex gap-4 overflow-x-auto pb-4 scroll-thin">
+            <!-- News cards dynamically generated -->
+          </div>
+        </div>
+
+        <!-- Risk Metrics Bento -->
+        <div id="riskMetricsGrid" class="grid grid-cols-1 md:grid-cols-4 gap-widget-gap">
+          <!-- Populated by renderRiskMetrics -->
+        </div>
+
+        <!-- Holdings Table -->
+        <div class="glass-panel rounded-2xl overflow-hidden">
+          <div class="p-6 border-b border-glass-stroke flex justify-between items-center bg-white/5">
+            <h2 class="text-headline-md font-headline-md text-on-surface">Core Holdings</h2>
+            <div class="flex items-center gap-4">
+              <div class="relative">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
+                <input id="holdingsSearchInput" class="bg-surface-container border border-glass-stroke rounded-lg pl-10 pr-4 py-1.5 text-body-md focus:outline-none focus:border-electric-cyan/50 w-64 text-on-surface" placeholder="Search holdings..." type="text">
+              </div>
+              <span id="refreshPortfolioBtn" class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-on-surface">refresh</span>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse" id="pmHoldingsTable">
+              <thead>
+                <tr class="bg-surface-container-high/30 border-b border-glass-stroke">
+                  <th class="px-6 py-4 text-label-caps font-label-caps text-on-surface-variant/60 uppercase">Symbol</th>
+                  <th class="px-6 py-4 text-label-caps font-label-caps text-on-surface-variant/60 uppercase">Name</th>
+                  <th class="px-6 py-4 text-label-caps font-label-caps text-on-surface-variant/60 uppercase text-right">Qty</th>
+                  <th class="px-6 py-4 text-label-caps font-label-caps text-on-surface-variant/60 uppercase text-right">Avg</th>
+                  <th class="px-6 py-4 text-label-caps font-label-caps text-on-surface-variant/60 uppercase text-right">LTP</th>
+                  <th class="px-6 py-4 text-label-caps font-label-caps text-on-surface-variant/60 uppercase text-right">Value</th>
+                  <th class="px-6 py-4 text-label-caps font-label-caps text-on-surface-variant/60 uppercase text-right">Wt</th>
+                  <th class="px-6 py-4 text-label-caps font-label-caps text-on-surface-variant/60 uppercase text-right">Day Δ</th>
+                  <th class="px-6 py-4 text-label-caps font-label-caps text-on-surface-variant/60 uppercase text-right">P/L</th>
+                </tr>
+              </thead>
+              <tbody id="pmHoldingsTableBody" class="divide-y divide-glass-stroke">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Hidden / Legacy KPI Strip wrapper to prevent JS errors -->
+        <div id="pmKpiStrip" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"></div>
+
+        <!-- Hidden / Legacy Allocation Chart wrapper to prevent JS errors -->
+
+
+        <!-- Advanced Cards rendered dynamically below Core Holdings -->
+        
+        <!-- Attribution cards -->
+        <div id="attributionCard" class="glass-panel rounded-2xl p-6 relative overflow-hidden hidden">
+          <div class="pm-section-title mb-4 border-b border-glass-stroke pb-2 text-on-surface font-mono text-xs uppercase tracking-wider flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px]">trending_up</span>
             Performance attribution
           </div>
-          <div class="grid grid-cols-2 gap-2" id="attributionGrid"></div>
+          <div class="grid grid-cols-2 gap-4" id="attributionGrid"></div>
         </div>
-      </div>
 
-      <!-- Tax outlook -->
-      <div class="px-5 pb-2">
-        <div id="taxCard" class="pm-section hidden">
-          <div class="pm-section-title">
-            <span class="material-symbols-outlined text-[14px]">account_balance</span>
+        <!-- Tax outlook -->
+        <div id="taxCard" class="glass-panel rounded-2xl p-6 relative overflow-hidden hidden">
+          <div class="pm-section-title mb-4 border-b border-glass-stroke pb-2 text-on-surface font-mono text-xs uppercase tracking-wider flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px]">account_balance</span>
             Tax outlook
           </div>
-          <div id="taxGrid" class="grid grid-cols-2 md:grid-cols-4 gap-2"></div>
+          <div id="taxGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
         </div>
-      </div>
 
-      <!-- MF analytics (conditional) -->
-      <div class="px-5 pb-2">
-        <div id="mfAnalyticsCard" class="pm-section hidden">
-          <div class="pm-section-title">
-            <span class="material-symbols-outlined text-[14px]">savings</span>
+        <!-- MF analytics (conditional) -->
+        <div id="mfAnalyticsCard" class="glass-panel rounded-2xl p-6 relative overflow-hidden hidden">
+          <div class="pm-section-title mb-4 border-b border-glass-stroke pb-2 text-on-surface font-mono text-xs uppercase tracking-wider flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px]">savings</span>
             Mutual funds
           </div>
-          <div id="mfAnalyticsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-2"></div>
+          <div id="mfAnalyticsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
         </div>
-      </div>
 
-      <!-- Corporate actions calendar -->
-      <div class="px-5 pb-2">
-        <div id="corporateActionsCard" class="pm-section hidden">
-          <div class="pm-section-title flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-[14px]">event</span>
+        <!-- Corporate actions calendar -->
+        <div id="corporateActionsCard" class="glass-panel rounded-2xl p-6 relative overflow-hidden hidden">
+          <div class="pm-section-title flex items-center justify-between mb-4 border-b border-glass-stroke pb-2">
+            <div class="flex items-center gap-2 text-on-surface font-mono text-xs uppercase tracking-wider">
+              <span class="material-symbols-outlined text-[16px]">event</span>
               Upcoming events
             </div>
-            <button id="refreshEventsBtn" class="icon-btn" title="Refresh events">
-              <span class="material-symbols-outlined text-[14px]">refresh</span>
+            <button id="refreshEventsBtn" class="icon-btn hover:text-electric-cyan" title="Refresh events">
+              <span class="material-symbols-outlined text-[16px]">refresh</span>
             </button>
           </div>
-          <div id="corporateActionsList" class="flex flex-col gap-1"></div>
+          <div id="corporateActionsList" class="flex flex-col gap-2"></div>
         </div>
-      </div>
 
-      <!-- Stress test simulator -->
-      <div class="px-5 pb-2">
-        <div id="stressTestCard" class="pm-section hidden">
-          <div class="pm-section-title">
-            <span class="material-symbols-outlined text-[14px]">thunderstorm</span>
+        <!-- Stress test simulator -->
+        <div id="stressTestCard" class="glass-panel rounded-2xl p-6 relative overflow-hidden hidden">
+          <div class="pm-section-title mb-4 border-b border-glass-stroke pb-2 text-on-surface font-mono text-xs uppercase tracking-wider flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px]">thunderstorm</span>
             Stress test
           </div>
-          <div class="flex gap-2 mb-2 flex-wrap">
-            <button class="stress-scenario-btn active" data-scenario="nifty_down_10">-10%</button>
-            <button class="stress-scenario-btn" data-scenario="nifty_down_20">-20%</button>
-            <button class="stress-scenario-btn" data-scenario="nifty_down_30">-30%</button>
-            <button class="stress-scenario-btn" data-scenario="banks_down_15">Banks -15%</button>
-            <button class="stress-scenario-btn" data-scenario="it_down_20">IT -20%</button>
+          <div class="flex gap-2 mb-4 flex-wrap">
+            <button class="stress-scenario-btn active bg-white/5 border border-glass-stroke px-3 py-1.5 rounded-lg text-xs hover:border-electric-cyan/40" data-scenario="nifty_down_10">-10%</button>
+            <button class="stress-scenario-btn bg-white/5 border border-glass-stroke px-3 py-1.5 rounded-lg text-xs hover:border-electric-cyan/40" data-scenario="nifty_down_20">-20%</button>
+            <button class="stress-scenario-btn bg-white/5 border border-glass-stroke px-3 py-1.5 rounded-lg text-xs hover:border-electric-cyan/40" data-scenario="nifty_down_30">-30%</button>
+            <button class="stress-scenario-btn bg-white/5 border border-glass-stroke px-3 py-1.5 rounded-lg text-xs hover:border-electric-cyan/40" data-scenario="banks_down_15">Banks -15%</button>
+            <button class="stress-scenario-btn bg-white/5 border border-glass-stroke px-3 py-1.5 rounded-lg text-xs hover:border-electric-cyan/40" data-scenario="it_down_20">IT -20%</button>
           </div>
-          <div id="stressTestResult" class="text-[12px] text-zinc-300"></div>
+          <div id="stressTestResult" class="text-[13px] text-zinc-300 leading-relaxed"></div>
         </div>
-      </div>
 
-      <!-- Correlation heatmap -->
-      <div class="px-5 pb-2">
-        <div id="correlationCard" class="pm-section hidden">
-          <div class="pm-section-title">
-            <span class="material-symbols-outlined text-[14px]">grid_on</span>
+        <!-- Correlation matrix -->
+        <div id="correlationCard" class="glass-panel rounded-2xl p-6 relative overflow-hidden hidden">
+          <div class="pm-section-title mb-4 border-b border-glass-stroke pb-2 text-on-surface font-mono text-xs uppercase tracking-wider flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px]">grid_on</span>
             Correlation matrix
           </div>
           <div id="correlationHeatmap" class="overflow-x-auto"></div>
         </div>
-      </div>
 
-      <!-- Risk-return scatter -->
-      <div class="px-5 pb-2">
-        <div id="riskReturnCard" class="pm-section hidden">
-          <div class="pm-section-title">
-            <span class="material-symbols-outlined text-[14px]">scatter_plot</span>
+        <!-- Risk-return scatter -->
+        <div id="riskReturnCard" class="glass-panel rounded-2xl p-6 relative overflow-hidden hidden">
+          <div class="pm-section-title mb-4 border-b border-glass-stroke pb-2 text-on-surface font-mono text-xs uppercase tracking-wider flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px]">scatter_plot</span>
             Risk landscape
           </div>
           <div id="riskReturnChart" class="chart-box"></div>
         </div>
-      </div>
 
-      <!-- Risk panel -->
-      <div class="px-5 pb-2">
-        <div class="pm-section">
-          <div class="pm-section-title flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-[14px]">monitoring</span>
-              Risk metrics
-            </div>
-            <div id="alertsBanner" class="flex gap-1 flex-wrap"></div>
-          </div>
-          <div id="riskMetricsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-2"></div>
-        </div>
-      </div>
-
-      <!-- Holdings table -->
-      <div class="px-5 pb-2">
-        <div class="pm-section">
-          <div class="pm-section-title flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-[14px]">table</span>
-              Holdings
-            </div>
-            <button id="refreshPortfolioBtn" class="icon-btn" title="Refresh portfolio">
-              <span class="material-symbols-outlined text-[14px]">refresh</span>
-            </button>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="pm-holdings-table" id="pmHoldingsTable">
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Name</th>
-                  <th class="text-right">Qty</th>
-                  <th class="text-right">Avg</th>
-                  <th class="text-right">LTP</th>
-                  <th class="text-right">Value</th>
-                  <th class="text-right">Wt</th>
-                  <th class="text-right">Day Δ</th>
-                  <th class="text-right">P/L</th>
-                </tr>
-              </thead>
-              <tbody id="pmHoldingsTableBody"></tbody>
-            </table>
-          </div>
-        </div>
       </div>
 
       <!-- Detail drawer -->
-      <div id="holdingDetailDrawer" class="fixed inset-y-0 right-0 w-[360px] bg-surface-3 border-l border-white/5 shadow-2xl transform translate-x-full transition-transform duration-300 z-50 overflow-y-auto scroll-thin">
-        <div class="p-4">
-          <div class="flex items-center justify-between mb-3">
-            <div class="text-sm font-medium text-zinc-100" id="detailDrawerTitle">Holding detail</div>
-            <button id="closeDetailDrawer" class="icon-btn">
-              <span class="material-symbols-outlined text-[16px]">close</span>
+      <div id="holdingDetailDrawer" class="fixed inset-y-0 right-0 w-[360px] bg-[var(--surface-3)] border-l border-white/5 shadow-2xl transform translate-x-full transition-transform duration-300 z-50 overflow-y-auto scroll-thin">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4 border-b border-glass-stroke pb-3">
+            <div class="text-sm font-mono font-bold tracking-widest text-zinc-100 uppercase" id="detailDrawerTitle">Holding detail</div>
+            <button id="closeDetailDrawer" class="icon-btn hover:text-crimson-risk">
+              <span class="material-symbols-outlined text-[18px]">close</span>
             </button>
           </div>
-          <div id="detailDrawerContent" class="text-[12px] text-zinc-300 space-y-3"></div>
+          <div id="detailDrawerContent" class="text-xs text-zinc-300 space-y-4 font-mono"></div>
         </div>
       </div>
-      <div id="holdingDetailOverlay" class="fixed inset-0 bg-black/50 z-40 hidden"></div>
+      <div id="holdingDetailOverlay" class="fixed inset-0 bg-black/60 z-40 hidden backdrop-blur-sm"></div>
 
-      <!-- News strip -->
-      <div class="px-5 pb-5">
-        <div class="pm-section">
-          <div class="pm-section-title flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="material-symbols-outlined text-[14px]">newspaper</span>
-              Latest news
-            </div>
-            <button id="refreshNewsBtn" class="icon-btn" title="Refresh news">
-              <span class="material-symbols-outlined text-[14px]">refresh</span>
-            </button>
-          </div>
-          <!-- News filters -->
-          <div class="flex items-center gap-2 mb-2 flex-wrap">
-            <input id="newsSearchInput" type="text" placeholder="Search news..." class="portfolio-input !w-40 !text-[11px]">
-            <div class="flex gap-1" id="newsFilterChips">
-              <button class="news-chip active" data-filter="all">All</button>
-              <button class="news-chip" data-filter="equity">Equity</button>
-              <button class="news-chip" data-filter="mf">MF</button>
-              <button class="news-chip" data-filter="fresh">&lt;24h</button>
-              <button class="news-chip" data-filter="earnings">Earnings</button>
-              <button class="news-chip" data-filter="regulatory">Regulatory</button>
-              <button class="news-chip" data-filter="corporate_action">Corp. Actions</button>
-            </div>
-          </div>
-          <div id="portfolioNewsStrip" class="pm-news-strip"></div>
-        </div>
-      </div>
     </section>
 
     <!-- RIGHT RAIL: CHAT -->
@@ -1840,23 +1926,47 @@
             <h1 class="text-2xl font-semibold text-white mb-2 tracking-tight gradient-text">What would you like to research?</h1>
             <p class="text-sm text-zinc-500 leading-relaxed mb-4">Ask about a company, ticker, sector, or your portfolio.</p>
             <div class="suggestion-grid">
-              <button class="suggestion-chip" data-query="Run a risk audit on my portfolio concentration" type="button">
-                <span class="material-symbols-outlined">shield</span><span>Portfolio risk audit</span>
+              <button class="suggestion-chip w-full p-4 glass-panel rounded-xl text-left hover:border-electric-cyan/50 transition-all group flex items-start justify-between" data-query="Run a risk audit on my portfolio concentration" type="button">
+                <div class="flex items-start gap-3">
+                  <span class="material-symbols-outlined text-electric-cyan mt-0.5">shield</span>
+                  <span class="text-body-md text-on-surface">Portfolio risk audit</span>
+                </div>
+                <span class="material-symbols-outlined text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">north_east</span>
               </button>
-              <button class="suggestion-chip" data-query="Analyze Reliance Industries stock outlook" type="button">
-                <span class="material-symbols-outlined">trending_up</span><span>Analyze Reliance Industries</span>
+              <button class="suggestion-chip w-full p-4 glass-panel rounded-xl text-left hover:border-electric-cyan/50 transition-all group flex items-start justify-between" data-query="Analyze Reliance Industries stock outlook" type="button">
+                <div class="flex items-start gap-3">
+                  <span class="material-symbols-outlined text-electric-cyan mt-0.5">trending_up</span>
+                  <span class="text-body-md text-on-surface">Analyze Reliance Industries</span>
+                </div>
+                <span class="material-symbols-outlined text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">north_east</span>
               </button>
-              <button class="suggestion-chip" data-query="Compare HDFC Bank vs ICICI Bank investment case" type="button">
-                <span class="material-symbols-outlined">compare_arrows</span><span>HDFC Bank vs ICICI Bank</span>
+              <button class="suggestion-chip w-full p-4 glass-panel rounded-xl text-left hover:border-electric-cyan/50 transition-all group flex items-start justify-between" data-query="Compare HDFC Bank vs ICICI Bank investment case" type="button">
+                <div class="flex items-start gap-3">
+                  <span class="material-symbols-outlined text-electric-cyan mt-0.5">compare_arrows</span>
+                  <span class="text-body-md text-on-surface">HDFC Bank vs ICICI Bank</span>
+                </div>
+                <span class="material-symbols-outlined text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">north_east</span>
               </button>
-              <button class="suggestion-chip" data-query="Top performing Nifty 50 stocks this quarter" type="button">
-                <span class="material-symbols-outlined">leaderboard</span><span>Top Nifty 50 performers</span>
+              <button class="suggestion-chip w-full p-4 glass-panel rounded-xl text-left hover:border-electric-cyan/50 transition-all group flex items-start justify-between" data-query="Top performing Nifty 50 stocks this quarter" type="button">
+                <div class="flex items-start gap-3">
+                  <span class="material-symbols-outlined text-electric-cyan mt-0.5">leaderboard</span>
+                  <span class="text-body-md text-on-surface">Top Nifty 50 performers</span>
+                </div>
+                <span class="material-symbols-outlined text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">north_east</span>
               </button>
-              <button class="suggestion-chip" data-query="Is TCS a good long-term investment?" type="button">
-                <span class="material-symbols-outlined">query_stats</span><span>TCS long-term outlook</span>
+              <button class="suggestion-chip w-full p-4 glass-panel rounded-xl text-left hover:border-electric-cyan/50 transition-all group flex items-start justify-between" data-query="Is TCS a good long-term investment?" type="button">
+                <div class="flex items-start gap-3">
+                  <span class="material-symbols-outlined text-electric-cyan mt-0.5">query_stats</span>
+                  <span class="text-body-md text-on-surface">TCS long-term outlook</span>
+                </div>
+                <span class="material-symbols-outlined text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">north_east</span>
               </button>
-              <button class="suggestion-chip" data-query="Impact of current RBI monetary policy on Indian markets" type="button">
-                <span class="material-symbols-outlined">account_balance</span><span>RBI policy market impact</span>
+              <button class="suggestion-chip w-full p-4 glass-panel rounded-xl text-left hover:border-electric-cyan/50 transition-all group flex items-start justify-between" data-query="Impact of current RBI monetary policy on Indian markets" type="button">
+                <div class="flex items-start gap-3">
+                  <span class="material-symbols-outlined text-electric-cyan mt-0.5">account_balance</span>
+                  <span class="text-body-md text-on-surface">RBI policy market impact</span>
+                </div>
+                <span class="material-symbols-outlined text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">north_east</span>
               </button>
             </div>
           </div>
@@ -1883,7 +1993,7 @@
       </div>
       <div class="absolute bottom-4 left-0 right-0 px-4 z-20 pointer-events-none">
         <div class="max-w-2xl mx-auto pointer-events-auto anim-fade-up">
-          <div class="input-shell">
+          <div class="input-shell bg-[#141416] border border-glass-stroke rounded-xl p-4 text-body-md focus-within:border-electric-cyan/50 focus-within:bg-[#201f20] transition-all">
             <input type="text" id="targetInput" placeholder="Ask about a company, ticker, or sector…" autocomplete="off">
             <input type="text" id="activeInput" class="hidden">
             <input type="text" id="heroSearchInput" class="hidden">
@@ -1891,7 +2001,7 @@
               <div class="flex items-center gap-3"><span id="modeIndicator" class="label-mono text-zinc-500">research mode</span></div>
               <div class="flex items-center gap-2">
                 <button id="stopBtn" class="abort-btn hidden" title="Terminate active generation"><span class="stop-square"></span>Stop</button>
-                <button id="executeBtn" class="execute-btn" title="Execute query"><span>Send</span><span class="material-symbols-outlined">arrow_upward</span></button>
+                <button id="executeBtn" class="execute-btn" type="button" title="Execute query" onclick="const inp=document.getElementById('targetInput'); const val=(inp?inp.value:'').trim(); if(!val){inp?.focus(); return;} this.style.background='#00F5FF'; this.style.color='#000'; setTimeout(()=>{this.style.background=''; this.style.color='';},300); window._lastManualQuery=val; startRun(val);"><span>Send</span><span class="material-symbols-outlined" style="pointer-events:none">arrow_upward</span></button>
               </div>
               <button id="activeExecuteBtn" class="hidden"></button>
               <button id="heroExecuteBtn" class="hidden"></button>
@@ -1904,8 +2014,8 @@
       </div>
     </section>
 
-    <!-- Activity drawer kept hidden for JS compat -->
-    <aside id="activityDrawer" class="hidden">
+    <!-- Activity drawer -->
+    <aside id="activityDrawer">
       <div class="px-5 py-4 flex items-center justify-between border-b border-white/5">
         <div class="label-mono text-zinc-400">Live activity</div>
         <button id="activityClose" class="icon-btn" title="Close"><span class="material-symbols-outlined">close</span></button>
@@ -2634,7 +2744,7 @@
               ${Number(p.cost_basis || 0) > 0 ? `<div class="label-mono text-zinc-700">cost ${formatInr(p.cost_basis)}</div>` : ""}
             </div>
           </div>
-        `).join("") : `<div class="session-sidebar-empty">Upload a broker CSV to create the tenant mirror.</div>`;
+        `).join("") : `<div class="session-sidebar-empty">Upload eCAS, CSV, Excel, or screenshot holdings to create the tenant mirror.</div>`;
       }
     }
 
@@ -2654,38 +2764,108 @@
       return null;
     }
 
-    function parseNumberCell(value) {
-      return Number(String(value ?? "").replace(/[,\s]/g, "")) || 0;
+    function fileKind(file) {
+      const name = (file?.name || "").toLowerCase();
+      if (/\.(jpg|jpeg|png)$/.test(name)) return "image";
+      if (/\.(pdf|csv|xls|xlsx)$/.test(name)) return "document";
+      return "unsupported";
     }
 
-    function readRowField(row, names) {
-      const entries = Object.entries(row || {});
-      for (const name of names) {
-        const wanted = name.toLowerCase();
-        const found = entries.find(([key]) => String(key).trim().toLowerCase() === wanted);
-        if (found && String(found[1]).trim()) return found[1];
-      }
-      return "";
+    function updatePortfolioPasswordVisibility(file) {
+      const input = $("ecasPasswordInput");
+      if (!input) return;
+      const name = (file?.name || "").toLowerCase();
+      const show = /\.(pdf|xls|xlsx)$/.test(name);
+      input.classList.toggle("hidden", !show);
+      input.placeholder = name.endsWith(".pdf") ? "eCAS password" : "File password";
     }
 
-    function csvPositionsFromText(text) {
-      let rows = [];
-      if (window.XLSX) {
-        const wb = XLSX.read(text, { type: "string" });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+    async function postPortfolioForm(endpoint, file, password = "") {
+      const form = new FormData();
+      form.append("file", file);
+      if (password) form.append("password", password);
+      const r = await fetch(`${API_BASE}${endpoint}`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: form,
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const detail = body.detail || {};
+        const message = detail.message || detail || `HTTP ${r.status}`;
+        throw new Error(typeof message === "string" ? message : JSON.stringify(message));
       }
-      return rows.map((row) => {
-        const rawSymbol = String(readRowField(row, ["symbol", "tradingsymbol", "trading symbol", "instrument", "scrip", "stock", "isin"]) || "").trim();
-        const symbol = rawSymbol.split(":").pop().replace(/-EQ$/i, "");
-        const exchange = String(readRowField(row, ["exchange", "segment", "market"]) || (symbol.endsWith(".BO") ? "BSE" : "NSE")).trim();
-        const quantity = parseNumberCell(readRowField(row, ["quantity", "qty", "net qty", "holdings", "units"]));
-        const price = parseNumberCell(readRowField(row, ["ltp", "last price", "current price", "close", "average price"]));
-        const avgCost = parseNumberCell(readRowField(row, ["average cost", "avg cost", "average buy price", "buy average", "avg price"]));
-        const marketValue = parseNumberCell(readRowField(row, ["market_value", "market value", "current value", "value", "amount", "net value"])) || (quantity * price);
-        const costBasis = parseNumberCell(readRowField(row, ["cost_basis", "cost basis", "invested value", "investment cost", "buy value", "purchase value"])) || (quantity * avgCost);
-        return { symbol, exchange, quantity, market_value: marketValue, cost_basis: costBasis, active: true };
-      }).filter((p) => p.symbol && p.market_value > 0);
+      return body;
+    }
+
+    async function syncReviewedExtraction(reviewId, positions, sourceType) {
+      const r = await fetch(`${API_BASE}/api/portfolio/confirm-extraction`, {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ review_id: reviewId, positions, source_type: sourceType || "review" }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.detail || `HTTP ${r.status}`);
+      return body;
+    }
+
+    function showExtractionReviewModal(body) {
+      const existing = $("extractionReviewModal");
+      if (existing) existing.remove();
+      const positions = Array.isArray(body.positions) ? body.positions : [];
+      const overlay = document.createElement("div");
+      overlay.id = "extractionReviewModal";
+      overlay.className = "modal-overlay";
+      overlay.innerHTML = `
+        <div class="modal-box" style="max-width:760px;width:min(92vw,760px)">
+          <div class="modal-title">Review extracted holdings</div>
+          <div class="modal-body">
+            Confirm these rows came from your uploaded document before syncing the portfolio mirror.
+            <div class="mt-3 max-h-[320px] overflow-auto rounded-lg border border-white/10">
+              <table class="w-full text-left text-[11px]">
+                <thead class="text-zinc-500 label-mono">
+                  <tr><th class="p-2">Symbol</th><th class="p-2">Name</th><th class="p-2 text-right">Qty</th><th class="p-2 text-right">Value</th><th class="p-2 text-right">Conf.</th></tr>
+                </thead>
+                <tbody>
+                  ${positions.map((p, idx) => `
+                    <tr class="border-t border-white/5" data-review-row="${idx}">
+                      <td class="p-2">${escapeHtml(p.symbol || p.isin || "")}</td>
+                      <td class="p-2">${escapeHtml(p.name || "")}</td>
+                      <td class="p-2 text-right">${Number(p.quantity || 0).toLocaleString("en-IN")}</td>
+                      <td class="p-2 text-right">${formatInr(p.market_value || 0)}</td>
+                      <td class="p-2 text-right">${Math.round(Number(p.confidence || 0) * 100)}%</td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="portfolio-action !py-1.5 !px-3 !text-[11px]" id="reviewCancelBtn">Cancel</button>
+            <button class="execute-btn !py-1.5 !px-3 !text-[11px]" id="reviewSyncBtn" ${positions.length ? "" : "disabled"}>Sync portfolio mirror</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      $("reviewCancelBtn")?.addEventListener("click", async () => {
+        try { await fetch(`${API_BASE}/api/portfolio/cancel-extraction`, { method: "POST", headers: getAuthHeaders() }); } catch (_) {}
+        overlay.remove();
+      });
+      $("reviewSyncBtn")?.addEventListener("click", async () => {
+        const status = $("portfolioUploadStatus");
+        try {
+          if (status) status.textContent = "Synchronizing reviewed holdings";
+          const summary = await syncReviewedExtraction(body.review_id, positions, body.source_type);
+          overlay.remove();
+          renderPortfolioSummary(summary);
+          pendingPortfolioFile = null;
+          if (status) status.textContent = `${summary.count} reviewed holdings mirrored`;
+          showToast(`${summary.count} holdings synchronized`, "success");
+        } catch (e) {
+          if (status) status.textContent = `Sync failed: ${e.message}`;
+          showToast(`Sync failed: ${e.message}`, "error");
+        }
+      });
     }
 
     async function importPortfolioFile(file, opts = {}) {
@@ -2696,81 +2876,54 @@
         return;
       }
       pendingPortfolioFile = file;
+      updatePortfolioPasswordVisibility(file);
       portfolioSyncing = true;
-      if (file.name.toLowerCase().endsWith(".pdf")) {
-        const password = ($("ecasPasswordInput")?.value || "").trim();
-        if (!password) {
-          if (status) status.textContent = "Enter the eCAS password before uploading PDF";
-          portfolioSyncing = false;
-          return;
-        }
-        try {
-          if (status) status.textContent = "Parsing encrypted eCAS PDF";
-          const form = new FormData();
-          form.append("file", file);
-          form.append("password", password);
-          const r = await fetch(`${API_BASE}/api/portfolio/upload-cas`, {
-            method: "POST",
-            headers: getAuthHeaders(),
-            body: form,
-          });
-          const body = await r.json().catch(() => ({}));
-          if (!r.ok) {
-            const detail = body.detail || {};
-            const code = detail.code || "CAS_PARSE_ERROR";
-            const message = detail.message || "Upload failed";
-            const actionHint = detail.action_hint || "";
-            if (status) status.textContent = `${code}: ${message}`;
-            showToast(`${message}${actionHint ? " — " + actionHint : ""}`, "error");
-            return null;
-          }
-          // Handle empty-but-valid (warning)
-          if (body.code === "EMPTY_BUT_VALID") {
-            if (opts.allowEmpty) {
-              // User confirmed replace
-              renderPortfolioSummary({ positions: [], status: "MIRROR_EMPTY", sync_status: "MIRROR_EMPTY" });
-              pendingPortfolioFile = null;
-              if (status) status.textContent = "Statement valid but no holdings found";
-              showToast("Statement valid but no holdings found", "warn");
-              return body;
-            }
-            // Show replace-or-keep modal
-            showEmptyCasModal(body);
-            return null;
-          }
-          if (body.code !== "MIRROR_SYNCHRONIZED") {
-            if (status) status.textContent = body.message || "Mirror synchronization did not complete";
-            showToast(body.message || "Upload failed", "error");
-            return null;
-          }
-          renderPortfolioSummary(body);
-          pendingPortfolioFile = null;
-          if (status) status.textContent = `${body.count} eCAS holdings mirrored`;
-          return body;
-        } catch (e) {
-          isPortfolioActive = false;
-          if (status) status.textContent = `eCAS import failed: ${e.message}`;
-          return null;
-        } finally {
-          portfolioSyncing = false;
-        }
-      }
       try {
-        if (status) status.textContent = "Parsing broker CSV";
-        const positions = csvPositionsFromText(await file.text());
-        if (!positions.length) {
-          if (status) status.textContent = "No usable holdings found";
-          isPortfolioActive = false;
-          portfolioSyncing = false;
-          return;
+        const kind = fileKind(file);
+        if (kind === "unsupported") {
+          if (status) status.textContent = "Upload PDF, CSV, XLSX, JPG, JPEG, or PNG only";
+          showToast("Unsupported portfolio file type", "error");
+          return null;
         }
-        const r = await fetch(`${API_BASE}/portfolio/mirror`, {
-          method: "POST",
-          headers: getAuthHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ positions }),
-        });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const summary = await r.json();
+        if (kind === "image") {
+          if (status) status.textContent = "Extracting screenshot holdings for review";
+          const body = await postPortfolioForm("/api/portfolio/upload-screenshot", file);
+          showExtractionReviewModal(body);
+          if (status) status.textContent = `${(body.positions || []).length} screenshot rows need review`;
+          return body;
+        }
+
+        const password = ($("ecasPasswordInput")?.value || "").trim();
+        if (kind === "pdf" && !password) {
+          if (status) status.textContent = "Enter the eCAS password before uploading PDF";
+          return null;
+        }
+        if (status) status.textContent = "Transforming holdings document";
+        const summary = await postPortfolioForm("/api/portfolio/upload-document", file, password);
+
+        if (summary.code === "EMPTY_BUT_VALID") {
+          if (opts.allowEmpty) {
+            renderPortfolioSummary({ positions: [], status: "MIRROR_EMPTY", sync_status: "MIRROR_EMPTY" });
+            pendingPortfolioFile = null;
+            if (status) status.textContent = "Statement valid but no holdings found";
+            showToast("Statement valid but no holdings found", "warn");
+            return summary;
+          }
+          showEmptyCasModal(summary);
+          return null;
+        }
+        if (summary.status === "REVIEW_REQUIRED" || summary.code === "REVIEW_REQUIRED") {
+          showExtractionReviewModal(summary);
+          if (status) status.textContent = `${(summary.positions || []).length} extracted rows need review`;
+          return summary;
+        }
+        if (summary.code !== "MIRROR_SYNCHRONIZED") {
+          const message = summary.message || "Mirror synchronization did not complete";
+          if (status) status.textContent = message;
+          showToast(message, "error");
+          return null;
+        }
+
         renderPortfolioSummary(summary);
         pendingPortfolioFile = null;
         if (status) status.textContent = `${summary.count} holdings mirrored`;
@@ -2800,7 +2953,7 @@
       if (!isPortfolioActive) {
         const summary = await loadPortfolioMirror();
         if (!summary || summary.status !== "MIRROR_SYNCHRONIZED") {
-          if (status) status.textContent = "Upload eCAS PDF or broker CSV before portfolio audit";
+          if (status) status.textContent = "Upload eCAS, CSV, Excel, or screenshot holdings before portfolio analytics";
           return;
         }
       }
@@ -2811,8 +2964,8 @@
       } catch (_) {}
 
       const finalCount = portfolioLastSummary?.count || 0;
-      if (status) status.textContent = `Audit complete · ${finalCount} holdings`;
-      showToast(`Audit complete · ${finalCount} holdings`, "success");
+      if (status) status.textContent = `Portfolio analytics refreshed · ${finalCount} holdings`;
+      showToast(`Portfolio analytics refreshed · ${finalCount} holdings`, "success");
     }
 
     async function logoutApp() {
@@ -4077,13 +4230,13 @@
         return true;
       }
       const status = $("portfolioUploadStatus");
-      if (status) status.textContent = "Upload eCAS PDF or broker CSV before portfolio audit";
+      if (status) status.textContent = "Upload eCAS, CSV, Excel, or screenshot holdings before portfolio research";
       $("portfolioFileInput")?.focus();
       return false;
     }
 
-    async function startRun() {
-      const target = readUnifiedQueryInput();
+    async function startRun(forcedTarget) {
+      const target = forcedTarget || readUnifiedQueryInput();
 
       if (!target) {
         ($("targetInput") || $("activeInput") || $("heroSearchInput"))?.focus();
@@ -4116,9 +4269,10 @@
       }
       
       // Clear the input for next query
-      $("targetInput").value = "";
-            if ($("heroSearchInput")) $("heroSearchInput").value = "";
-            if ($("activeInput")) $("activeInput").value = "";
+      const ti = $("targetInput");
+      if (ti) ti.value = "";
+      if ($("heroSearchInput")) $("heroSearchInput").value = "";
+      if ($("activeInput")) $("activeInput").value = "";
             // Animate the hero title out
             const hero = $("heroTitle");
             if (hero && !hero.classList.contains("brand-exit")) {
@@ -4581,7 +4735,7 @@
                   turn.visualEl.classList.add("hidden");
                 }
 
-                if (false && !turn.marathonExportRendered) {
+                if (!turn.marathonExportRendered) {
                   turn.marathonExportRendered = true;
                   const exportHtml = `
                     <div class="claude-card anim-fade-up" style="border-color: rgba(167,139,250,0.3); background: linear-gradient(145deg, rgba(167,139,250,0.06), rgba(12,12,14,0.95));">
@@ -4660,10 +4814,6 @@
                 loadMemoLibrary();
               }
             });
-            eventSource.addEventListener("warning", (e) => {
-              const d = JSON.parse(e.data);
-              pushActivity("warning", "Notice", d.message || "", "warning");
-            });
             eventSource.addEventListener("deep_pass", (e) => {
               const d = JSON.parse(e.data);
               const icon = d.status === "done" ? "check_circle" : "hourglass_top";
@@ -4697,7 +4847,7 @@
             const q = c.dataset.q;
             $("targetInput").value = q;
             if ($("heroSearchInput")) $("heroSearchInput").value = q;
-            startRun();
+            ($("heroSearchInput") || $("targetInput"))?.focus();
           }));
 
           // ── Mode toggle: bounded Deep Research (animated pill) ──
@@ -4801,7 +4951,14 @@
           });
           $("portfolioFileInput")?.addEventListener("change", (e) => {
             pendingPortfolioFile = e.target.files?.[0] || null;
+            updatePortfolioPasswordVisibility(pendingPortfolioFile);
             importPortfolioFile(pendingPortfolioFile);
+          });
+          $("ecasPasswordInput")?.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && pendingPortfolioFile) {
+              e.preventDefault();
+              importPortfolioFile(pendingPortfolioFile);
+            }
           });
           const dropZone = $("portfolioDropZone");
           if (dropZone) {
@@ -4815,6 +4972,7 @@
             }));
             dropZone.addEventListener("drop", (e) => {
               pendingPortfolioFile = e.dataTransfer?.files?.[0] || null;
+              updatePortfolioPasswordVisibility(pendingPortfolioFile);
               importPortfolioFile(pendingPortfolioFile);
             });
           }
@@ -4841,12 +4999,11 @@
               if (!activeTurn.memoBuffer) {
                 activeTurn.memoEl.innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Generation stopped by user.</p>`;
               }
-            }
-            pushActivity("stop_circle", "User", "Research cancelled", "warning");
           }
-          $("stopBtn").addEventListener("click", stopRun);
+          pushActivity("stop_circle", "User", "Research cancelled", "warning");
+        }
 
-          // ── Activity drawer toggle ──
+        // ── Activity drawer toggle ──
           const activityDrawer = document.getElementById("activityDrawer");
           const activityToggleBtn = document.getElementById("activityToggle");
           const activityCloseBtn = document.getElementById("activityClose");
@@ -4871,17 +5028,25 @@
             }
           });
 
-          $("executeBtn").addEventListener("click", startRun);
-          $("targetInput").addEventListener("keydown", (e) => { if (e.key === "Enter") startRun(); });
+          // Stop button listener (registered once in init)
+          $("stopBtn")?.addEventListener("click", stopRun);
 
-          // ── Suggestion chips: auto-fill input and execute ─────────────
+          // Enter key handler for targetInput
+          $("targetInput").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+              const val = (e.target.value || "").trim();
+              if (val) startRun(val);
+            }
+          });
+
+          // ── Suggestion chips: auto-fill AND submit ──
           document.querySelectorAll(".suggestion-chip").forEach((chip) => {
             chip.addEventListener("click", () => {
               const q = chip.dataset.query || "";
               $("targetInput").value = q;
               $("activeInput").value = q;
               $("heroSearchInput").value = q;
-              startRun();
+              startRun(q);
             });
           });
 
@@ -4966,15 +5131,6 @@
              } catch (_) { }
            });
 
-           // Document generation buttons
-           function showDocumentGenerationUI(show) {
-             const pdfBtn = $("generatePdfBtn");
-             const docxBtn = $("generateDocxBtn");
-             const xlsxBtn = $("generateXlsxBtn");
-             [pdfBtn, docxBtn, xlsxBtn].forEach(el => {
-               if (el) el.style.display = show ? "inline-flex" : "none";
-             });
-           }
           document.querySelectorAll(".nav-btn").forEach((n) => n.addEventListener("click", (e) => {
             e.preventDefault();
             if (n.dataset.nav === "command") { showState("command"); }
@@ -6125,14 +6281,13 @@
       }
       list.innerHTML = positions.slice(0, 20).map(p => {
         const kindClass = (p.kind || 'equity') === 'equity' ? 'equity' : 'mf';
-        return `<div class="flex items-center justify-between py-1.5 border-b border-white/[0.04]">
-          <div class="flex items-center gap-1.5 min-w-0">
-            <span class="text-zinc-200 font-medium truncate">${escapeHtml(p.symbol || '')}</span>
+        return `<div class="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-all">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="font-data-tabular text-on-surface truncate">${escapeHtml(p.symbol || '')}</span>
             <span class="holding-kind-badge ${kindClass}">${p.kind || 'equity'}</span>
           </div>
           <div class="text-right shrink-0">
-            <div class="text-zinc-300">${Math.round(Number(p.weight || 0) * 100)}%</div>
-            <div class="text-zinc-600 text-[10px]">${formatInr(p.market_value)}</div>
+            <span class="text-electric-cyan font-mono text-xs">${Math.round(Number(p.weight || 0) * 100)}%</span>
           </div>
         </div>`;
       }).join('');
@@ -6161,6 +6316,28 @@
         <div class="pm-kpi-card"><div class="pm-kpi-label">Max DD</div><div class="pm-kpi-value">${dd.toFixed(1)}%</div></div>
         <div class="pm-kpi-card"><div class="pm-kpi-label">Holdings</div><div class="pm-kpi-value">${data?.count || 0}</div></div>
       `;
+
+      // Dynamic header P/L - Overall daily change for the entire portfolio
+      const pnlContainer = $('portfolioPnlContainer');
+      const pnlIcon = $('portfolioPnlIcon');
+      const pnlText = $('portfolioPnlText');
+      if (pnlContainer && pnlIcon && pnlText) {
+        if (data?.positions && data.positions.length > 0) {
+          const dayPct = Number(data?.day_change_pct || 0) * 100;
+          const dayTotal = Number(data?.day_change_total || 0);
+          const daySign = dayPct >= 0 ? '+' : '';
+          const dayColor = dayPct >= 0 ? 'text-electric-cyan' : 'text-crimson-risk';
+          const dayIcon = dayPct >= 0 ? 'arrow_upward' : 'arrow_downward';
+          
+          pnlContainer.classList.remove('hidden');
+          pnlContainer.className = `flex items-center gap-1 ${dayColor}`;
+          pnlIcon.textContent = dayIcon;
+          // Show daily change of the overall portfolio
+          pnlText.textContent = `${daySign}${dayPct.toFixed(2)}% (${daySign}${formatInr(dayTotal)}) Today`;
+        } else {
+          pnlContainer.classList.add('hidden');
+        }
+      }
     }
 
     function renderDonutChart(canvasId, labels, dataValues, colors) {
@@ -6178,27 +6355,95 @@
       const ctx = document.getElementById(canvasId);
       if (!ctx) return;
       if (pmChartInstances[canvasId]) { pmChartInstances[canvasId].destroy(); }
+      
+      const configuredDatasets = datasets.map(d => {
+        const isBenchmark = d.label && (d.label.toLowerCase().includes('nifty') || d.label.toLowerCase().includes('sensex') || d.label.toLowerCase().includes('benchmark'));
+        const color = isBenchmark ? 'rgba(255, 255, 255, 0.4)' : '#00F5FF';
+        
+        return {
+          label: d.label,
+          data: d.data,
+          borderColor: color,
+          backgroundColor: isBenchmark ? 'transparent' : 'rgba(0, 245, 255, 0.05)',
+          fill: !isBenchmark,
+          borderDash: isBenchmark ? [6, 4] : [],
+          borderWidth: isBenchmark ? 1.5 : 2.5,
+          tension: 0.3,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointBackgroundColor: color
+        };
+      });
+
       pmChartInstances[canvasId] = new Chart(ctx, {
         type: 'line',
-        data: { labels, datasets: datasets.map(d => ({ label: d.label, data: d.data, borderColor: d.color, backgroundColor: d.color + '20', fill: true, tension: 0.3, pointRadius: 0 })) },
-        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { x: { display: false }, y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#a1a1aa', font: { size: 10 } } } }, plugins: { legend: { labels: { color: '#a1a1aa', font: { size: 11 } } } } }
+        data: { labels, datasets: configuredDatasets },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          interaction: { mode: 'index', intersect: false }, 
+          scales: { 
+            x: { display: false }, 
+            y: { 
+              grid: { color: 'rgba(255,255,255,0.04)' }, 
+              ticks: { color: '#849495', font: { size: 10, family: 'JetBrains Mono' } } 
+            } 
+          }, 
+          plugins: { 
+            legend: { 
+              labels: { 
+                color: '#e5e2e3', 
+                font: { size: 11, family: 'Manrope', weight: '600' } 
+              } 
+            } 
+          } 
+        }
       });
     }
 
+    // New: Two donut charts - Asset Allocation + Equity Sector Allocation
     function renderSectorAllocation(data) {
-      const sectors = data?.sector_breakdown || {};
-      const labels = Object.keys(sectors);
-      const values = Object.values(sectors).map(v => Math.round(v * 100));
-      if (!labels.length) {
-        $('sectorAllocationChart').innerHTML = '<div class="flex items-center justify-center h-full text-zinc-600 text-[11px]">No sector data</div>';
-        return;
+      // 1. Asset Allocation (Equity / MF / etc.)
+      const kind = data?.kind_breakdown || {};
+      const assetLabels = Object.keys(kind);
+      const assetValues = Object.values(kind).map(v => Math.round(v * 100));
+      
+      const assetContainer = $('assetAllocationChart');
+      if (assetContainer) {
+        if (!assetLabels.length) {
+          assetContainer.innerHTML = '<div class="flex items-center justify-center h-full text-zinc-600 text-[10px]">No asset data</div>';
+        } else {
+          const palette1 = ['#60a5fa', '#a78bfa', '#34d399', '#fbbf24'];
+          const canvas1 = document.createElement('canvas');
+          assetContainer.innerHTML = '';
+          assetContainer.appendChild(canvas1);
+          canvas1.id = 'assetAllocCanvas';
+          renderDonutChart(canvas1.id, assetLabels, assetValues, palette1);
+        }
       }
-      const palette = ['#60a5fa','#a78bfa','#34d399','#fbbf24','#f87171','#38bdf8','#818cf8','#fb923c','#a3a3a3','#22d3ee'];
-      const canvas = document.createElement('canvas');
-      $('sectorAllocationChart').innerHTML = '';
-      $('sectorAllocationChart').appendChild(canvas);
-      renderDonutChart(canvas.id || 'sectorAllocCanvas', labels, values, palette);
-      if (!canvas.id) canvas.id = 'sectorAllocCanvas';
+
+      // 2. Sector Allocation (Equity only, if possible)
+      const sectors = data?.sector_breakdown || {};
+      const equitySectors = Object.entries(sectors)
+        .filter(([k]) => !['Mutual Funds', 'MF', 'Debt', 'Cash'].includes(k))
+        .reduce((acc, [k, v]) => { acc[k] = v; return acc; }, {});
+      
+      const sectorLabels = Object.keys(equitySectors);
+      const sectorValues = Object.values(equitySectors).map(v => Math.round(v * 100));
+      
+      const sectorContainer = $('equitySectorChart');
+      if (sectorContainer) {
+        if (!sectorLabels.length) {
+          sectorContainer.innerHTML = '<div class="flex items-center justify-center h-full text-zinc-600 text-[10px]">No equity sector data</div>';
+        } else {
+          const palette2 = ['#f87171','#38bdf8','#818cf8','#fb923c','#a3a3a3','#22d3ee','#60a5fa','#a78bfa'];
+          const canvas2 = document.createElement('canvas');
+          sectorContainer.innerHTML = '';
+          sectorContainer.appendChild(canvas2);
+          canvas2.id = 'equitySectorCanvas';
+          renderDonutChart(canvas2.id, sectorLabels, sectorValues, palette2);
+        }
+      }
     }
 
     function renderAllocationChart(data) {
@@ -6209,31 +6454,84 @@
       const canvas = document.createElement('canvas');
       $('allocationChart').innerHTML = '';
       $('allocationChart').appendChild(canvas);
-      renderDonutChart(canvas.id || 'allocCanvas', labels, values, palette);
+      canvas.id = 'allocCanvas'; renderDonutChart(canvas.id, labels, values, palette);
       if (!canvas.id) canvas.id = 'allocCanvas';
-    }
-
-    function loadPerformancePeriod(period) {
-      // Analytics endpoint already returns 1Y; extend later if needed
-      loadPortfolioAnalytics();
     }
 
     function renderPerformanceChart(data) {
       const hist = data?.history?.portfolio || {};
-      const nifty = data?.history?.nifty50 || {};
-      if (!hist.dates || !hist.dates.length) {
-        $('performanceChart').innerHTML = '<div class="flex items-center justify-center h-full text-zinc-600 text-[11px]">Upload holdings to see performance</div>';
+      const benchmark = data?.history?.benchmark || {};
+      const benchmarkLabel = data?.history?.benchmark_label || "Benchmark";
+      
+      // Check if we have usable data for portfolio
+      const hasPortfolioData = hist.dates && hist.dates.length && hist.prices && hist.prices.some(p => p > 0);
+      
+      if (!hasPortfolioData) {
+        $('performanceChart').innerHTML = `
+          <div class="flex flex-col items-center justify-center h-full text-zinc-400 text-[11px] p-4 text-center">
+            <div class="mb-2">📉 Portfolio performance history not available</div>
+            <div class="text-[10px] text-zinc-500">This happens when:</div>
+            <ul class="text-left text-[10px] text-zinc-500 mt-1 list-disc pl-4">
+              <li>Most holdings are Mutual Funds (no daily price series)</li>
+              <li>Using CAS/eCAS upload (limited historical data)</li>
+              <li>Symbols are still ISINs instead of tickers</li>
+            </ul>
+            <div class="text-[9px] mt-2 text-zinc-600">Only benchmark data is shown below for reference.</div>
+          </div>`;
+        
+        // Still try to show at least the benchmark if available
+        if (benchmark.dates && benchmark.prices && benchmark.prices.length > 0) {
+          const canvas = document.createElement('canvas');
+          $('performanceChart').innerHTML = '';
+          $('performanceChart').appendChild(canvas);
+          canvas.id = 'perfCanvas';
+          const labels = benchmark.dates;
+          const datasets = [{ 
+            label: benchmarkLabel, 
+            data: benchmark.prices, 
+            color: '#a78bfa',
+            borderDash: [5, 5]
+          }];
+          renderLineChart(canvas.id, labels, datasets);
+        }
         return;
       }
+      
       const labels = hist.dates;
-      const datasets = [{ label: 'Portfolio', data: hist.prices || [], color: '#60a5fa' }];
-      if (nifty.dates && nifty.prices) {
-        datasets.push({ label: 'Nifty 50', data: nifty.prices, color: '#a78bfa' });
+      
+      // Normalize both series to start at 100 for fair visual comparison
+      function normalizeTo100(prices) {
+        if (!prices || prices.length === 0) return [];
+        const base = prices[0];
+        if (base === 0) return prices; // avoid division by zero
+        return prices.map(p => (p / base) * 100);
       }
+      
+      const normalizedPortfolio = normalizeTo100(hist.prices);
+      const normalizedBenchmark = benchmark.prices && benchmark.prices.length 
+        ? normalizeTo100(benchmark.prices) 
+        : null;
+      
+      const datasets = [{
+        label: 'Portfolio (indexed)',
+        data: normalizedPortfolio,
+        color: '#60a5fa'
+      }];
+      
+      if (normalizedBenchmark) {
+        datasets.push({
+          label: `${benchmarkLabel} (indexed)`,
+          data: normalizedBenchmark,
+          color: '#a78bfa',
+          borderDash: [5, 5]
+        });
+      }
+      
       const canvas = document.createElement('canvas');
       $('performanceChart').innerHTML = '';
       $('performanceChart').appendChild(canvas);
-      renderLineChart(canvas.id || 'perfCanvas', labels, datasets);
+      canvas.id = 'perfCanvas';
+      renderLineChart(canvas.id, labels, datasets);
       if (!canvas.id) canvas.id = 'perfCanvas';
     }
 
@@ -6242,10 +6540,32 @@
       if (!grid) return;
       const risk = data?.risk || {};
       grid.innerHTML = `
-        <div class="pm-kpi-card"><div class="pm-kpi-label">HHI</div><div class="pm-kpi-value">${(risk.hhi || 0).toFixed(3)}</div></div>
-        <div class="pm-kpi-card"><div class="pm-kpi-label">Beta vs Nifty</div><div class="pm-kpi-value">${(risk.beta_vs_nifty || 0).toFixed(2)}</div></div>
-        <div class="pm-kpi-card"><div class="pm-kpi-label">Volatility</div><div class="pm-kpi-value">${(risk.annualized_volatility_pct || 0).toFixed(1)}%</div></div>
-        <div class="pm-kpi-card"><div class="pm-kpi-label">Max Drawdown</div><div class="pm-kpi-value">${(risk.max_drawdown_pct || 0).toFixed(1)}%</div></div>
+        <div class="glass-panel p-5 rounded-xl hover:border-electric-cyan/30 transition-all cursor-default flex flex-col justify-between min-h-[100px]">
+          <span class="font-mono text-[10px] text-zinc-500 tracking-wider block mb-2 uppercase">HHI Concentration</span>
+          <span class="text-xl font-mono font-bold text-on-surface">${(risk.hhi || 0).toFixed(3)}</span>
+          <div class="w-full h-1 bg-white/5 mt-3 rounded-full overflow-hidden">
+            <div class="h-full bg-electric-cyan" style="width: ${Math.min(100, (risk.hhi || 0) * 400)}%"></div>
+          </div>
+        </div>
+        <div class="glass-panel p-5 rounded-xl hover:border-electric-cyan/30 transition-all cursor-default flex flex-col justify-between min-h-[100px]">
+          <span class="font-mono text-[10px] text-zinc-500 tracking-wider block mb-2 uppercase">Beta vs Nifty</span>
+          <span class="text-xl font-mono font-bold text-on-surface">${(risk.beta_vs_nifty || 0).toFixed(2)}</span>
+          <span class="text-[9px] text-electric-cyan font-mono block mt-1 uppercase">${(risk.beta_vs_nifty || 0) < 1.0 ? 'Low Volatility' : 'High Beta'}</span>
+        </div>
+        <div class="glass-panel p-5 rounded-xl hover:border-electric-cyan/30 transition-all cursor-default flex flex-col justify-between min-h-[100px]">
+          <span class="font-mono text-[10px] text-zinc-500 tracking-wider block mb-2 uppercase">Annual Volatility</span>
+          <span class="text-xl font-mono font-bold text-on-surface">${(risk.annualized_volatility_pct || 0).toFixed(1)}%</span>
+          <div class="flex gap-1 mt-2">
+            <div class="w-1.5 h-3 bg-electric-cyan rounded-full"></div>
+            <div class="w-1.5 h-3 bg-electric-cyan rounded-full"></div>
+            <div class="w-1.5 h-3 bg-white/10 rounded-full"></div>
+          </div>
+        </div>
+        <div class="glass-panel p-5 rounded-xl hover:border-electric-cyan/30 transition-all cursor-default flex flex-col justify-between min-h-[100px]">
+          <span class="font-mono text-[10px] text-zinc-500 tracking-wider block mb-2 uppercase">Max Drawdown</span>
+          <span class="text-xl font-mono font-bold text-on-surface">${(risk.max_drawdown_pct || 0).toFixed(1)}%</span>
+          <span class="text-[9px] text-zinc-600 font-mono block mt-1 uppercase">Last 12 Months</span>
+        </div>
       `;
     }
 
@@ -6258,20 +6578,20 @@
         const pnl = Number(p.unrealized_pnl || 0);
         const pnlClass = pnl >= 0 ? 'up' : 'down';
         const pnlSign = pnl >= 0 ? '+' : '';
-        const dayPct = Number(p.day_change_pct || 0);
+        const dayPct = Number(p.day_change_pct || 0) * 100;
         const dayClass = dayPct >= 0 ? 'up' : 'down';
         const daySign = dayPct >= 0 ? '+' : '';
         const kindBadge = `<span class="holding-kind-badge ${p.kind || 'equity'}">${p.kind || 'equity'}</span>`;
-        return `<tr class="cursor-pointer hover:bg-surface-3 transition-colors" onclick="openDetailDrawer('${escapeHtml(p.symbol || '')}')">
-          <td class="font-medium text-zinc-200">${escapeHtml(p.symbol || '')}${kindBadge}</td>
-          <td class="truncate max-w-[120px]">${escapeHtml(p.name || '')}</td>
-          <td class="text-right">${Number(p.quantity || 0).toLocaleString('en-IN')}</td>
-          <td class="text-right">${formatInr(p.avg_cost || 0)}</td>
-          <td class="text-right">${formatInr(p.last_price || 0)}</td>
-          <td class="text-right font-medium">${formatInr(p.market_value || 0)}</td>
-          <td class="text-right">${Math.round(Number(p.weight || 0) * 100)}%</td>
-          <td class="text-right ${dayClass}">${daySign}${dayPct.toFixed(2)}%</td>
-          <td class="text-right ${pnlClass}">${pnlSign}${formatInr(pnl)}</td>
+        return `<tr class="hover:bg-white/5 transition-colors group cursor-pointer" onclick="openDetailDrawer('${escapeHtml(p.symbol || '')}')">
+          <td class="px-6 py-4 font-mono text-on-surface flex items-center gap-2">${escapeHtml(p.symbol || '')}${kindBadge}</td>
+          <td class="px-6 py-4 text-body-md text-on-surface-variant truncate max-w-[150px]">${escapeHtml(p.name || '')}</td>
+          <td class="px-6 py-4 text-right font-mono">${Number(p.quantity || 0).toLocaleString('en-IN')}</td>
+          <td class="px-6 py-4 text-right font-mono">${formatInr(p.avg_cost || 0)}</td>
+          <td class="px-6 py-4 text-right font-mono">${formatInr(p.last_price || 0)}</td>
+          <td class="px-6 py-4 text-right font-mono font-semibold">${formatInr(p.market_value || 0)}</td>
+          <td class="px-6 py-4 text-right font-mono">${Math.round(Number(p.weight || 0) * 100)}%</td>
+          <td class="px-6 py-4 text-right font-mono ${dayClass}">${daySign}${dayPct.toFixed(2)}%</td>
+          <td class="px-6 py-4 text-right font-mono ${pnlClass}">${pnlSign}${formatInr(pnl)}</td>
         </tr>`;
       }).join('');
     }
@@ -6331,7 +6651,7 @@
       if (!items || !items.length) { card.classList.add("hidden"); return; }
       card.classList.remove("hidden");
       list.innerHTML = items.map((item, idx) => `
-        <div class="flex items-start gap-2 p-2 rounded bg-surface-2 border border-white/5">
+        <div class="flex items-start gap-2 p-2 rounded bg-[var(--surface-2)] border border-white/5">
           <div class="text-zinc-500 font-mono text-[10px] pt-0.5">${idx + 1}</div>
           <div class="flex-1">
             <div class="text-[11px] font-medium text-zinc-200">${escapeHtml(item.title || '')}</div>
@@ -6355,7 +6675,7 @@
         <div>
           <div class="text-[10px] font-medium text-zinc-500 mb-1">${title}</div>
           ${items.map(p => `
-            <div class="flex items-center justify-between p-1.5 rounded bg-surface-2 border border-white/5 mb-1">
+            <div class="flex items-center justify-between p-1.5 rounded bg-[var(--surface-2)] border border-white/5 mb-1">
               <div class="text-[11px] text-zinc-200">${escapeHtml(p.symbol || '')}</div>
               <div class="text-[11px] font-medium ${cls}">${(p.day_change_pct || 0) >= 0 ? '+' : ''}${((p.day_change_pct || 0) * 100).toFixed(2)}%</div>
             </div>
@@ -6376,7 +6696,7 @@
         <div>
           <div class="text-[10px] font-medium text-zinc-500 mb-1">${title}</div>
           ${(items || []).map(a => `
-            <div class="flex items-center justify-between p-1.5 rounded bg-surface-2 border border-white/5 mb-1">
+            <div class="flex items-center justify-between p-1.5 rounded bg-[var(--surface-2)] border border-white/5 mb-1">
               <div class="text-[11px] text-zinc-200">${escapeHtml(a.symbol || '')}</div>
               <div class="text-[11px] font-medium ${cls}">${a.contribution_pct >= 0 ? '+' : ''}${a.contribution_pct.toFixed(2)}%</div>
             </div>
@@ -6423,12 +6743,36 @@
       if (!events || !events.length) { card.classList.add("hidden"); return; }
       card.classList.remove("hidden");
       list.innerHTML = events.slice(0, 8).map(e => `
-        <div class="flex items-center justify-between p-2 rounded bg-surface-2 border border-white/5">
+        <div class="flex items-center justify-between p-2 rounded bg-[var(--surface-2)] border border-white/5">
           <div class="flex-1">
             <div class="text-[11px] text-zinc-200">${escapeHtml(e.title || '')}</div>
             <div class="text-[10px] text-zinc-500">${escapeHtml(e.related_name || '')} · ${escapeHtml(e.category || '')}</div>
           </div>
           <div class="text-[10px] ${e.days_remaining <= 3 ? 'text-red-400' : 'text-zinc-500'}">${e.days_remaining}d</div>
+        </div>
+      `).join('');
+    }
+
+    function renderDividends(data) {
+      const card = $("dividendCard");
+      const list = $("dividendList");
+      if (!card || !list) return;
+      const divSummary = data?.dividend_summary;
+      if (!divSummary || divSummary.status === "NO_DATA" || !divSummary.upcoming || divSummary.upcoming.length === 0) {
+        card.classList.add("hidden");
+        return;
+      }
+      card.classList.remove("hidden");
+      list.innerHTML = divSummary.upcoming.slice(0, 8).map(d => `
+        <div class="flex items-center justify-between p-2 rounded bg-[var(--surface-2)] border border-white/5">
+          <div class="flex-1">
+            <div class="text-[11px] text-zinc-200">${escapeHtml(d.symbol || '')}</div>
+            <div class="text-[9px] text-zinc-500">Ex-date: ${d.ex_date || 'N/A'}</div>
+          </div>
+          <div class="flex flex-col items-end gap-1">
+            <div class="text-[11px] font-semibold text-amber-400">${formatInr(d.per_unit || 0)}</div>
+            <div class="text-[9px] text-zinc-500">${d.frequency || 'N/A'}</div>
+          </div>
         </div>
       `).join('');
     }
@@ -6453,7 +6797,7 @@
           </div>
           <div class="flex flex-col gap-1 max-h-[200px] overflow-y-auto">
             ${(data.positions || []).slice(0, 6).map(p => `
-              <div class="flex items-center justify-between p-1.5 rounded bg-surface-2 border border-white/5">
+              <div class="flex items-center justify-between p-1.5 rounded bg-[var(--surface-2)] border border-white/5">
                 <div class="text-[10px] text-zinc-200">${escapeHtml(p.symbol || '')}</div>
                 <div class="text-[10px] text-zinc-500">β${p.beta} · ${p.impact_pct}%</div>
               </div>
@@ -6542,6 +6886,27 @@
       });
     }
 
+    async function clearPortfolio() {
+      if (!getAuthToken()) return;
+      if (!confirm("Clear all portfolio holdings? This cannot be undone.")) return;
+      try {
+        const r = await fetch(`${API_BASE}/portfolio/mirror`, {
+          method: "DELETE",
+          headers: getAuthHeaders(),
+        });
+        if (r.ok) {
+          renderPortfolioSummary({ positions: [], status: "MIRROR_EMPTY", sync_status: "MIRROR_EMPTY" });
+          showToast("Portfolio cleared", "success");
+          // Refresh the analytics dashboard to clear charts and numbers
+          await loadPortfolioAnalytics();
+        } else {
+          showToast("Failed to clear portfolio", "error");
+        }
+      } catch (e) {
+        showToast("Failed to clear portfolio", "error");
+      }
+    }
+
     function renderAlertsBanner(alerts) {
       const banner = $("alertsBanner");
       if (!banner) return;
@@ -6559,14 +6924,15 @@
       if (!select) return;
       select.addEventListener("change", async () => {
         const benchmark = select.value;
-        $("benchmarkLabel").textContent = select.options[select.selectedIndex].text;
+        _currentPerfBenchmark = benchmark;
+        // Update any visible benchmark label
+        const labelEl = $("benchmarkLabel");
+        if (labelEl) labelEl.textContent = select.options[select.selectedIndex].text;
         try {
-          const r = await fetch(`${API_BASE}/portfolio/analytics?benchmark=${benchmark}`, { headers: getAuthHeaders() });
-          if (r.ok) {
-            const data = await r.json();
-            renderPerformanceChart(data);
-          }
-        } catch (_) {}
+          await loadPortfolioAnalytics({ benchmark });
+        } catch (e) {
+          console.error("Benchmark switch failed:", e);
+        }
       });
     }
 
@@ -6614,15 +6980,24 @@
           ? `<div class="text-[10px] text-zinc-500 mt-1">${escapeHtml(n.related_holding.name || '')} · ${n.related_holding.weight_pct || 0}%</div>`
           : '';
         return `
-        <a href="${escapeHtml(n.url || '#')}" target="_blank" rel="noopener" class="pm-news-card" data-read="false" onclick="this.dataset.read='true';this.style.opacity='0.6';">
-          <div class="flex items-start gap-1 mb-1">
-            <span class="tier-badge ${tierClass}">T${n.source_tier ?? 3}</span>
-            ${freshnessBadge}
-            ${categoryPill}
+        <a href="${escapeHtml(n.url || '#')}" target="_blank" rel="noopener" 
+           class="glass-panel p-4 rounded-xl group relative overflow-hidden block min-w-[260px] max-w-[320px] transition-all hover:border-electric-cyan/30"
+           data-read="false" onclick="this.dataset.read='true';this.style.opacity='0.6';">
+          <div class="relative z-10 flex flex-col justify-between h-full">
+            <div>
+              <div class="flex items-center gap-1.5 flex-wrap mb-2">
+                <span class="px-2 py-0.5 border border-glass-stroke rounded text-[9px] font-mono text-zinc-500 uppercase">T${n.source_tier ?? 3}</span>
+                ${n.category ? `<span class="px-2 py-0.5 border border-electric-cyan/30 rounded text-[9px] font-mono text-electric-cyan bg-electric-cyan/10 uppercase">${escapeHtml(n.category)}</span>` : ''}
+              </div>
+              <p class="text-xs text-on-surface font-semibold group-hover:text-electric-cyan transition-colors line-clamp-2">${escapeHtml(n.title || '')}</p>
+            </div>
+            <div class="mt-3 border-t border-glass-stroke/50 pt-2 flex items-center justify-between">
+              <span class="text-[9px] font-mono text-on-surface-variant/60 uppercase">
+                ${escapeHtml(n.source_host || n.source || '')}
+              </span>
+              ${holdingInfo}
+            </div>
           </div>
-          <div class="pm-news-title">${escapeHtml(n.title || '')}</div>
-          <div class="pm-news-source">${escapeHtml(n.source_host || n.source || '')}</div>
-          ${holdingInfo}
         </a>
       `}).join('');
     }
@@ -6688,35 +7063,26 @@
       });
     }
 
-    async function clearPortfolio() {
-      if (!getAuthToken()) return;
-      if (!confirm("Clear all portfolio holdings? This cannot be undone.")) return;
-      try {
-        const r = await fetch(`${API_BASE}/portfolio/mirror`, {
-          method: "DELETE",
-          headers: getAuthHeaders(),
-        });
-        if (r.ok) {
-          renderPortfolioSummary({ positions: [], status: "MIRROR_EMPTY", sync_status: "MIRROR_EMPTY" });
-          showToast("Portfolio cleared", "success");
-        } else {
-          showToast("Failed to clear portfolio", "error");
-        }
-      } catch (e) {
-        showToast("Failed to clear portfolio", "error");
-      }
-    }
+    let _currentPerfBenchmark = "NIFTY50";
+    let _currentPerfPeriod = "1Y";
 
-    async function loadPortfolioAnalytics() {
+    async function loadPortfolioAnalytics(opts = {}) {
       if (!getAuthToken()) return;
+      const benchmark = opts.benchmark || $("benchmarkSelect")?.value || _currentPerfBenchmark;
+      const period = opts.period || _currentPerfPeriod;
+      _currentPerfBenchmark = benchmark;
+      _currentPerfPeriod = period;
+
       try {
-        const benchmark = $("benchmarkSelect")?.value || "NIFTY50";
-        const r = await fetch(`${API_BASE}/portfolio/analytics?benchmark=${benchmark}`, { headers: getAuthHeaders() });
-        if (!r.ok) return;
+        const r = await fetch(`${API_BASE}/portfolio/analytics?benchmark=${benchmark}&period=${period}`, { headers: getAuthHeaders() });
+        if (!r.ok) {
+          console.error("Portfolio analytics failed:", r.status);
+          showToast("Portfolio data unavailable", "error");
+          return;
+        }
         const data = await r.json();
         renderPmKpis(data);
         renderSectorAllocation(data);
-        renderAllocationChart(data);
         renderPerformanceChart(data);
         renderRiskMetrics(data);
         renderHoldingsTable(data);
@@ -6724,70 +7090,49 @@
         renderDayChange(data);
         renderCorrelationMatrix(data.correlation_matrix);
         renderRiskReturn(data);
-      } catch (_) {}
-      try {
-        const nr = await fetch(`${API_BASE}/portfolio/news`, { headers: getAuthHeaders() });
-        if (nr.ok) {
-          const newsData = await nr.json();
-          renderPortfolioNews(newsData.items || []);
-        }
-      } catch (_) {}
-      try {
-        const ar = await fetch(`${API_BASE}/portfolio/alerts`, { headers: getAuthHeaders() });
-        if (ar.ok) {
-          const alertData = await ar.json();
-          renderAlertsBanner(alertData.alerts || []);
-        }
-      } catch (_) {}
-      try {
-        const tr = await fetch(`${API_BASE}/portfolio/tax-summary`, { headers: getAuthHeaders() });
-        if (tr.ok) {
-          const taxData = await tr.json();
-          renderTax(taxData);
-        }
-      } catch (_) {}
-      try {
-        const dr = await fetch(`${API_BASE}/portfolio/dividends`, { headers: getAuthHeaders() });
-        if (dr.ok) {
-          const divData = await dr.json();
-          // Dividend data can be shown inline or in a dedicated section if needed
-        }
-      } catch (_) {}
-      try {
-        const mfr = await fetch(`${API_BASE}/portfolio/mf-analytics`, { headers: getAuthHeaders() });
-        if (mfr.ok) {
-          const mfData = await mfr.json();
-          renderMfAnalytics({ mf_analytics: mfData.status !== "NO_MF_POSITIONS" ? mfData : null });
-        }
-      } catch (_) {}
-      try {
-        const er = await fetch(`${API_BASE}/portfolio/corporate-actions?days=30`, { headers: getAuthHeaders() });
-        if (er.ok) {
-          const eventData = await er.json();
-          renderCorporateActions(eventData.events || []);
-        }
-      } catch (_) {}
-      try {
-        const br = await fetch(`${API_BASE}/portfolio/brief`, { headers: getAuthHeaders() });
-        if (br.ok) {
-          const briefData = await br.json();
-          renderBrief(briefData);
-        }
-      } catch (_) {}
-      try {
-        const qr = await fetch(`${API_BASE}/portfolio/today`, { headers: getAuthHeaders() });
-        if (qr.ok) {
-          const qData = await qr.json();
-          renderToday(qData.items || []);
-        }
-      } catch (_) {}
+      } catch (e) {
+        console.error("Portfolio analytics error:", e);
+        showToast("Portfolio data error", "error");
+      }
+      // Secondary endpoints — don't block primary on failure
+      const secondaryCalls = [
+        { url: `${API_BASE}/portfolio/news`, render: d => renderPortfolioNews(d.items || []) },
+        { url: `${API_BASE}/portfolio/alerts`, render: d => renderAlertsBanner(d.alerts || []) },
+        { url: `${API_BASE}/portfolio/tax-summary`, render: d => renderTax(d) },
+        { url: `${API_BASE}/portfolio/dividends`, render: d => renderDividends(d) },
+        { url: `${API_BASE}/portfolio/mf-analytics`, render: d => renderMfAnalytics({ mf_analytics: d.status !== "NO_MF_POSITIONS" ? d : null }) },
+        { url: `${API_BASE}/portfolio/corporate-actions?days=30`, render: d => renderCorporateActions(d.events || []) },
+        { url: `${API_BASE}/portfolio/brief`, render: d => renderBrief(d) },
+        { url: `${API_BASE}/portfolio/today`, render: d => renderToday(d.items || []) },
+      ];
+      for (const call of secondaryCalls) {
+        try {
+          const res = await fetch(call.url, { headers: getAuthHeaders() });
+          if (res.ok) call.render(await res.json());
+        } catch (e) { console.debug("Secondary portfolio call failed:", call.url, e); }
+      }
       // Run default stress test if card visible
       try {
         const activeScenario = document.querySelector(".stress-scenario-btn.active");
-        if (activeScenario) {
-          await runStressTest(activeScenario.dataset.scenario);
-        }
+        if (activeScenario) await runStressTest(activeScenario.dataset.scenario);
       } catch (_) {}
+    }
+
+    function loadPerformancePeriod(period) {
+      _currentPerfPeriod = period;
+      // Update button styling
+      const periodBtns = document.querySelectorAll('[onclick^="loadPerformancePeriod"]');
+      periodBtns.forEach(btn => {
+        const isActive = btn.getAttribute("onclick").includes(`'${period}'`);
+        if (isActive) {
+          btn.classList.add("bg-surface-bright", "text-on-surface", "font-semibold");
+          btn.classList.remove("text-on-surface-variant");
+        } else {
+          btn.classList.remove("bg-surface-bright", "text-on-surface", "font-semibold");
+          btn.classList.add("text-on-surface-variant");
+        }
+      });
+      loadPortfolioAnalytics({ period });
     }
 
     // Hook into existing renderPortfolioSummary
@@ -6796,8 +7141,10 @@
       _origRenderPortfolioSummary(data);
       renderLeftHoldingsList(data);
       renderSectorAllocation(data);
-      // Also load full analytics
-      loadPortfolioAnalytics();
+      // Load full analytics only if portfolio is active
+      if (isPortfolioActive) {
+        loadPortfolioAnalytics();
+      }
     };
 
     // ── Chat visual block hydration ───────────────────────────────────
@@ -6823,6 +7170,8 @@
           tension: 0.3,
           pointRadius: 0,
         }));
+        const existingChart = Chart.getChart(canvas);
+        if (existingChart) existingChart.destroy();
         new Chart(canvas, {
           type: type === 'donut' ? 'doughnut' : type,
           data: { labels, datasets },
@@ -6850,16 +7199,44 @@
       });
     }
 
-    // Hook chart/kpi hydration into renderTurnMemo
+    // Hook chart/kpi hydration into renderTurnMemo — only on final render, not streaming tokens
     const _origRenderTurnMemo = renderTurnMemo;
     renderTurnMemo = function(turnId, text, opts) {
       _origRenderTurnMemo(turnId, text, opts);
+      if (opts && opts.streaming) return;
       const turn = getTurn(turnId);
       if (turn && turn.memoEl) {
         hydrateChartBlocks(turn.memoEl);
         hydrateKpiBlocks(turn.memoEl);
       }
     };
+
+    // Micro-interaction: Focus Mode & holdings search filtering
+    document.addEventListener('DOMContentLoaded', () => {
+      const panels = document.querySelectorAll('.glass-panel');
+      panels.forEach(panel => {
+        panel.addEventListener('mouseenter', () => {
+          panels.forEach(p => {
+            if (p !== panel) p.style.opacity = '0.4';
+          });
+        });
+        panel.addEventListener('mouseleave', () => {
+          panels.forEach(p => p.style.opacity = '1');
+        });
+      });
+
+      const searchInput = document.getElementById("holdingsSearchInput");
+      if (searchInput) {
+        searchInput.addEventListener("input", (e) => {
+          const query = e.target.value.toLowerCase();
+          const rows = document.querySelectorAll("#pmHoldingsTableBody tr");
+          rows.forEach((row) => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(query) ? "" : "none";
+          });
+        });
+      }
+    });
 
   </script>
 </body>
