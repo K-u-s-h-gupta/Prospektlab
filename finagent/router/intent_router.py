@@ -41,6 +41,19 @@ _MODERATE_PATTERNS = (
 )
 
 _FOLLOWUP_PRONOUNS = ("it", "its", "that company", "this company", "same company", "they", "their")
+_PORTFOLIO_SCOPE_PATTERNS = (
+    "my portfolio",
+    "our portfolio",
+    "portfolio risk",
+    "portfolio audit",
+    "risk audit",
+    "our holdings",
+    "my holdings",
+    "holdings audit",
+    "portfolio concentration",
+    "concentration risk",
+    "asset allocation",
+)
 _FOCUS_PATTERNS = {
     "news": ("latest news", "recent news", "news", "headlines", "updates"),
     "valuation": ("valuation", "p/e", "pe ratio", "ev/ebitda", "market cap", "target price", "multiples"),
@@ -50,10 +63,10 @@ _FOCUS_PATTERNS = {
     "risk": ("risk", "red flag", "governance", "lawsuit", "investigation", "penalty"),
 }
 
-# Complex / marathon — full pipeline
+# Complex / deep research — full pipeline
 _COMPLEX_PATTERNS = (
     "deep", "comprehensive", "exhaustive", "due diligence", "full analysis",
-    "marathon", "investigate", "compare", "vs ", "versus", "peer analysis",
+    "investigate", "compare", "vs ", "versus", "peer analysis",
     "risk factors", "sebi", "fraud", "investigation", "governance",
     "long term", "investment thesis", "initiation", "moat",
 )
@@ -85,6 +98,7 @@ class RoutingDecision:
     skip_deep_dive: bool = False         # skip all deep-dive rounds
     max_deep_dive_rounds: int = 4        # cap deep-dive iterations
     operational_intent: str = "snapshot"
+    intent_key: str = "SNAPSHOT"
     is_followup: bool = False
     # NOTE: There is intentionally NO skip_verifier field.
     # The verifier ALWAYS runs to protect financial data integrity.
@@ -106,6 +120,11 @@ def detect_operational_intent(objective: str, *, has_prior_entity: bool = False)
     return focus, is_followup
 
 
+def is_portfolio_scope_query(objective: str) -> bool:
+    lower = (objective or "").lower()
+    return any(pattern in lower for pattern in _PORTFOLIO_SCOPE_PATTERNS)
+
+
 def route_objective(
     objective: str,
     entity: ResolvedEntity,
@@ -113,8 +132,14 @@ def route_objective(
     playbook_agents: list[str] | None = None,
     has_prior_entity: bool = False,
 ) -> RoutingDecision:
+    # V3 SINGLE-TICKER BYPASS:
+    # Portfolio and natural-language research prompts are valid first-class inputs.
+    # This router never raises ticker-only validation errors; unresolved targets
+    # continue through the raw-query fallback path for graceful handling.
     lower = (objective or "").lower()
     operational_intent, is_followup = detect_operational_intent(objective, has_prior_entity=has_prior_entity)
+    portfolio_scope = is_portfolio_scope_query(objective)
+    intent_key = "PORTFOLIO_AUDIT" if portfolio_scope else operational_intent.upper()
 
     # Agent selection from keyword taxonomy
     selected: list[str] = []
@@ -133,7 +158,10 @@ def route_objective(
                 selected.append(agent)
 
     complexity = "simple" if is_followup and operational_intent in {"news", "valuation", "shareholding", "price_history"} else _classify_complexity(objective)
-    deep = should_enable_deep_research(objective)
+    if portfolio_scope:
+        complexity = "complex"
+        selected = list(dict.fromkeys(["risk", "governance", "accounting", "financials", "valuation", *selected]))
+    deep = portfolio_scope or should_enable_deep_research(objective)
 
     # Phase flags based on complexity
     skip_reflection = complexity == "simple"
@@ -166,6 +194,7 @@ def route_objective(
         skip_deep_dive=skip_deep_dive,
         max_deep_dive_rounds=max_rounds,
         operational_intent=operational_intent,
+        intent_key=intent_key,
         is_followup=is_followup,
     )
 

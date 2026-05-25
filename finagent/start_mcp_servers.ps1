@@ -10,19 +10,10 @@ Write-Host "Starting FinAgent MCP Servers..." -ForegroundColor Cyan
 $basePath = "C:\Users\kusha\OneDrive\डेस्कटॉप\PROSPEKTLAB\finagent"
 
 # Start each MCP server in a new PowerShell window
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$basePath'; python -m finagent.tools.mcp_servers.nse_server"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$basePath'; python -m finagent.tools.mcp_servers.quant_server"
 Start-Sleep -Seconds 1
 
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$basePath'; python -m finagent.tools.mcp_servers.fundamentals_server"
-Start-Sleep -Seconds 1
-
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$basePath'; python -m finagent.tools.mcp_servers.research_server"
-Start-Sleep -Seconds 1
-
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$basePath'; python -m finagent.tools.mcp_servers.docs_server"
-Start-Sleep -Seconds 1
-
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$basePath'; python -m finagent.tools.mcp_servers.mcp_valuation"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$basePath'; python -m finagent.tools.mcp_servers.discovery_server"
 
 Write-Host "`nAll MCP servers are starting in separate windows." -ForegroundColor Green
 Write-Host "You can now run the main API server." -ForegroundColor Yellow

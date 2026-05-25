@@ -51,7 +51,7 @@ try:
 except ImportError:
     pass  # python-dotenv not installed; keys must come from environment
 
-from fastapi import FastAPI, HTTPException, Header, Depends, Request, Response
+from fastapi import FastAPI, HTTPException, Header, Depends, Request, Response, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, field_validator
@@ -65,9 +65,14 @@ from finagent.output.intent_classifier import extract_finance_entities, primary_
 from finagent.paths import finagent_data_path, finagent_home
 from finagent.run_agent import AgentLoopConfig, run_research_session
 from finagent.tools.web.http_fetcher import aclose_shared_client
-from finagent.router.intent_router import ContextualizerError, ContextualizeResult, LLMQueryContextualizer
+from finagent.router.intent_router import ContextualizerError, ContextualizeResult, LLMQueryContextualizer, is_portfolio_scope_query
 from finagent.memory.chat_memory import ChatMemoryManager
+from finagent.ingestion.ecas import parse_ecas_pdf, positions_from_ecas_payload
+from finagent.portfolio_mirrors import load_active_positions, replace_active_positions, summarize_positions
+from finagent.portfolio.analytics import compute_portfolio_analytics
+from finagent.portfolio.news import fetch_portfolio_news
 from finagent.gateway import supabase_client as supabase
+from finagent.gateway.auth_guard import decode_current_user_token
 import time
 
 class InMemSlidingWindowRateLimiter:
@@ -177,43 +182,7 @@ def _clear_auth_cookie(response: Response) -> None:
 
 
 def _decode_current_user(actual_token: str) -> dict:
-    if not actual_token:
-        raise HTTPException(status_code=401, detail="Missing or invalid authentication credentials")
-
-    try:
-        # Try local JWT_SECRET first (issued for Google login or local overrides)
-        payload = jwt.decode(actual_token, JWT_SECRET, algorithms=["HS256"])
-        return {
-            "user_id": payload.get("user_id"),
-            "email": payload.get("email"),
-            "auth_provider": "local_jwt"
-        }
-    except Exception:
-        # Fallback: decode as a Supabase authentication token
-        try:
-            supabase_jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
-            if supabase_jwt_secret:
-                payload = jwt.decode(actual_token, supabase_jwt_secret, algorithms=["HS256"], audience="authenticated")
-            else:
-                # If Supabase secret not set locally, decode without validation for local single-user context
-                # PROHIBIT unverified signature decode in production to prevent spoofing
-                if os.getenv("PROSPEKTLAB_ENV") == "production":
-                    raise HTTPException(status_code=401, detail="Supabase JWT verification secret is required in production")
-                payload = jwt.decode(actual_token, options={"verify_signature": False})
-            
-            user_id = payload.get("sub") or payload.get("user_id")
-            email = payload.get("email")
-            if not email:
-                raise HTTPException(status_code=401, detail="Invalid token details")
-            return {
-                "user_id": user_id,
-                "email": email,
-                "auth_provider": "supabase_jwt"
-            }
-        except Exception as e:
-            if isinstance(e, HTTPException):
-                raise
-            raise HTTPException(status_code=401, detail="Could not validate authentication credentials")
+    return decode_current_user_token(actual_token, local_jwt_secret=JWT_SECRET)
 
 
 async def get_current_user(
@@ -232,6 +201,9 @@ async def get_current_user(
 
 def verify_session_ownership(session_id: str, current_user: dict) -> None:
     meta = _load_session_meta(session_id)
+    owner_tenant = meta.get("tenant_id")
+    if owner_tenant and owner_tenant != current_user.get("tenant_id"):
+        raise HTTPException(status_code=403, detail="Access denied: You do not own this research session.")
     owner_email = meta.get("user_email")
     if owner_email and owner_email.lower().strip() != current_user["email"].lower().strip():
         raise HTTPException(status_code=403, detail="Access denied: You do not own this research session.")
@@ -395,13 +367,21 @@ class StartResearchRequest(BaseModel):
     user_email: str | None = None
     session_id: str | None = None
 
+    @field_validator("mode")
+    @classmethod
+    def _mode(cls, v: str) -> str:
+        mode = (v or "chat").strip().lower()
+        if mode == "marathon":
+            return "deep"
+        return mode if mode in {"chat", "standard", "deep"} else "chat"
+
 
 class DeepResearchRequest(BaseModel):
     target: str = Field(..., min_length=1)
-    passes: int = Field(default=5, ge=2, le=20, description="Number of chained research passes")
-    pass_depth: int = Field(default=40, ge=10, le=200, description="Max steps per pass")
-    max_wall_seconds: float | None = Field(default=None, ge=30, le=24 * 60 * 60)
-    heartbeat_interval_s: float = Field(default=20.0, ge=5, le=300)
+    passes: int = Field(default=8, ge=2, le=20, description="Legacy input accepted; runtime uses fixed 8-phase Deep Research")
+    pass_depth: int = Field(default=40, ge=10, le=120, description="Max steps per phase")
+    max_wall_seconds: float | None = Field(default=None, ge=30, le=30 * 60)
+    heartbeat_interval_s: float = Field(default=20.0, ge=5, le=60)
     user_email: str | None = None
     session_id: str | None = None
 
@@ -409,10 +389,29 @@ class DeepResearchRequest(BaseModel):
 class ChatResearchRequest(BaseModel):
     message: str = Field(..., min_length=1)
     target: str | None = Field(default=None, min_length=1)
-    mode: str = Field(default="standard", description="standard, deep, or marathon")
-    max_wall_seconds: float | None = Field(default=None, ge=10, le=24 * 60 * 60)
+    mode: str = Field(default="standard", description="standard or deep")
+    max_wall_seconds: float | None = Field(default=None, ge=10, le=30 * 60)
     user_email: str | None = None
     session_id: str | None = None
+
+    @field_validator("mode")
+    @classmethod
+    def _mode(cls, v: str) -> str:
+        mode = (v or "standard").strip().lower()
+        return "deep" if mode == "marathon" else (mode if mode in {"standard", "deep"} else "standard")
+
+
+class PositionMirrorInput(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=48)
+    exchange: str = Field(default="NSE", max_length=12)
+    quantity: float = Field(default=0.0, ge=0)
+    market_value: float = Field(default=0.0, ge=0)
+    cost_basis: float = Field(default=0.0, ge=0)
+    active: bool = True
+
+
+class PositionMirrorReplaceRequest(BaseModel):
+    positions: list[PositionMirrorInput] = Field(default_factory=list, max_length=500)
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -482,12 +481,21 @@ _TASKS: dict[str, asyncio.Task[Any]] = {}
 _SESSION_META: dict[str, dict[str, Any]] = {}
 
 
-def _session_record(session_id: str, *, mode: str, target: str, objective: str = "", user_email: str | None = None) -> None:
+def _session_record(
+    session_id: str,
+    *,
+    mode: str,
+    target: str,
+    objective: str = "",
+    user_email: str | None = None,
+    tenant_id: str | None = None,
+) -> None:
     record = {
         "session_id": session_id,
         "mode": mode,
         "target": target,
         "objective": objective,
+        "tenant_id": tenant_id,
         "user_email": user_email,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "status": "running",
@@ -673,6 +681,237 @@ def config():
 
 
 # ── Memory viewer endpoints ─────────────────────────────────────────────
+
+@app.get("/portfolio/mirror")
+def get_portfolio_mirror(current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    return summarize_positions(positions)
+
+
+@app.post("/portfolio/mirror")
+def replace_portfolio_mirror(req: PositionMirrorReplaceRequest, current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = replace_active_positions(
+        tenant_id,
+        [item.model_dump() for item in req.positions if item.active],
+    )
+    return summarize_positions(positions)
+
+
+def _require_synchronized_portfolio(tenant_id: str | None) -> None:
+    if not tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail={"status": "TENANT_REQUIRED", "message": "Portfolio audit requires a verified tenant session."},
+        )
+    if not load_active_positions(tenant_id):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "status": "MIRROR_REQUIRED",
+                "message": "Upload and synchronize your eCAS PDF or broker CSV before running a portfolio audit.",
+            },
+        )
+
+
+@app.post("/api/portfolio/upload-cas")
+@app.post("/portfolio/mirror/ecas")
+async def upload_ecas_pdf(
+    file: UploadFile = File(...),
+    password: str = Form(...),
+    current_user: dict = Depends(get_current_user),
+):
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Upload an encrypted eCAS PDF.")
+    pdf_bytes = await file.read()
+    payload = await parse_ecas_pdf(pdf_bytes, file.filename, password)
+
+    # New envelope format: always returns a dict with ok, code, severity, etc.
+    if not payload.get("ok"):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "ok": False,
+                "code": payload.get("code", "CAS_PARSE_ERROR"),
+                "severity": payload.get("severity", "error"),
+                "message": payload.get("message", "CAS parse failed"),
+                "action_hint": payload.get("action_hint", ""),
+                "diagnostics": payload.get("diagnostics", {}),
+            },
+        )
+
+    parsed_positions = positions_from_ecas_payload(payload)
+    if not parsed_positions:
+        # Empty-but-valid case (warning, not error)
+        return {
+            "ok": True,
+            "code": "EMPTY_BUT_VALID",
+            "severity": "warning",
+            "message": payload.get("message", "No active holdings found in this statement."),
+            "action_hint": payload.get("action_hint", ""),
+            "diagnostics": payload.get("diagnostics", {}),
+            "investor": payload.get("investor", {}),
+            "cas_meta": payload.get("meta", {}),
+        }
+
+    tenant_id = current_user.get("tenant_id")
+    positions = replace_active_positions(tenant_id, parsed_positions)
+    summary = summarize_positions(positions)
+    summary["ok"] = True
+    summary["code"] = "MIRROR_SYNCHRONIZED"
+    summary["severity"] = "info"
+    summary["source"] = "ecas_pdf"
+    summary["status"] = "MIRROR_SYNCHRONIZED"
+    summary["sync_status"] = "MIRROR_SYNCHRONIZED"
+    summary["cas_meta"] = payload.get("meta", {})
+    summary["investor"] = payload.get("investor", {})
+    summary["diagnostics"] = payload.get("diagnostics", {})
+    return summary
+
+
+@app.get("/portfolio/analytics")
+def get_portfolio_analytics(current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    return compute_portfolio_analytics(positions)
+
+
+@app.delete("/portfolio/mirror")
+def delete_portfolio_mirror(current_user: dict = Depends(get_current_user)):
+    """Clear all holdings for the authenticated tenant."""
+    tenant_id = current_user.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant required")
+    from finagent.storage.sqlite import connect_wal
+    from finagent.paths import finagent_data_path
+    db_path = finagent_data_path("memory.sqlite3")
+    with connect_wal(db_path) as conn:
+        cur = conn.execute("DELETE FROM position_mirrors WHERE tenant_id = ?", (tenant_id,))
+    return {"ok": True, "deleted": cur.rowcount}
+
+
+@app.get("/portfolio/news")
+def get_portfolio_news(limit: int = 12, current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    items = fetch_portfolio_news(positions, limit=limit)
+    return {
+        "items": items,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "filters": {
+            "min_score": 0.5,
+            "max_age_days": 7,
+            "verified_only": True,
+        },
+    }
+
+
+@app.get("/portfolio/sectors")
+def get_portfolio_sectors(current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    from finagent.portfolio_mirrors import sector_breakdown
+    return sector_breakdown(positions)
+
+
+@app.get("/portfolio/holding/{symbol}")
+def get_holding_detail(symbol: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    pos = next((p for p in positions if p.exchange_symbol == symbol or p.normalized_symbol == symbol), None)
+    if not pos:
+        raise HTTPException(status_code=404, detail="Holding not found")
+    from finagent.portfolio.holding_detail import get_holding_detail as _get_detail
+    return _get_detail(pos)
+
+
+@app.get("/portfolio/corporate-actions")
+def get_corporate_actions(days: int = 30, current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    from finagent.portfolio.corporate_actions import fetch_corporate_actions
+    return {"events": fetch_corporate_actions(positions, days=days)}
+
+
+@app.get("/portfolio/alerts")
+def get_portfolio_alerts(current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    from finagent.portfolio.alerts import compute_alerts
+    analytics = compute_portfolio_analytics(positions)
+    return {"alerts": compute_alerts(positions, analytics)}
+
+
+@app.get("/portfolio/tax-summary")
+def get_tax_summary(current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    from finagent.portfolio.tax import compute_tax_summary
+    return compute_tax_summary(positions)
+
+
+@app.get("/portfolio/dividends")
+def get_dividends(current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    from finagent.portfolio.dividends import compute_dividend_summary, get_next_ex_dates
+    return {
+        **compute_dividend_summary(positions),
+        "next_ex_dates": get_next_ex_dates(positions),
+    }
+
+
+@app.post("/portfolio/stress-test")
+def post_stress_test(
+    scenario: str = "nifty_down_20",
+    custom_shocks: dict[str, float] | None = None,
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    from finagent.portfolio.stress_test import run_stress_test
+    return run_stress_test(positions, scenario=scenario, custom_shocks=custom_shocks)
+
+
+@app.get("/portfolio/mf-analytics")
+def get_mf_analytics(current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    from finagent.portfolio.mf_analytics import compute_mf_analytics
+    result = compute_mf_analytics(positions)
+    if result is None:
+        return {"status": "NO_MF_POSITIONS"}
+    return result
+
+
+@app.get("/portfolio/today")
+def get_today_queue(current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    from finagent.portfolio.action_queue import build_action_queue
+    analytics = compute_portfolio_analytics(positions)
+    return {"items": build_action_queue(positions, analytics)}
+
+
+@app.get("/portfolio/brief")
+def get_portfolio_brief(current_user: dict = Depends(get_current_user)):
+    tenant_id = current_user.get("tenant_id")
+    positions = load_active_positions(tenant_id)
+    if not positions:
+        return {"brief": "No portfolio data available."}
+    from finagent.synthesis import SynthesisEngine
+    analytics = compute_portfolio_analytics(positions)
+    facts = (
+        f"Portfolio value: ₹{analytics['total_market_value']:,.0f}. "
+        f"Holdings: {analytics['count']}. "
+        f"Unrealized P/L: {analytics['unrealized_pnl_pct']*100:+.1f}%. "
+        f"Beta: {analytics['risk']['beta_vs_nifty']}. "
+        f"Top sector: {max(analytics['sector_breakdown'], key=analytics['sector_breakdown'].get, default='Unknown')}. "
+        f"Top 5 concentration: {sum(p['weight_pct'] for p in analytics['risk']['top5_concentration']):.1f}%. "
+    )
+    return {"brief": f"{facts} Summary generated for your review."}
+
 
 from finagent.memory import get_memory_store
 from finagent.memory.store import normalize_target
@@ -1088,6 +1327,9 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
         
     raw_query = req.target.strip()
     user_email = current_user["email"]
+    tenant_id = current_user["tenant_id"]
+    if is_portfolio_scope_query(raw_query):
+        _require_synchronized_portfolio(tenant_id)
     
     # ── Pure-LLM follow-up contextualization ─────────────────────────────
     # The LLM decides whether this is a follow-up to the prior conversation,
@@ -1137,7 +1379,7 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
     # replay of previous run's "memo"/"final" events into the new turn's UI).
     BUS.open(session_id, reset=True)
     mode = (req.mode or "chat").strip().lower()
-    if mode not in {"chat", "standard", "deep", "marathon"}:
+    if mode not in {"chat", "standard", "deep"}:
         mode = "chat"
     
     # ── Comparison detection: extract both entities ────────────────────
@@ -1148,12 +1390,12 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
     if is_comparison_query and not forced_output_mode:
         forced_output_mode = "company_comparison"
     
-    _session_record(session_id, mode=mode, target=target, objective=objective, user_email=user_email)
+    _session_record(session_id, mode=mode, target=target, objective=objective, user_email=user_email, tenant_id=tenant_id)
 
     async def _runner() -> None:
         try:
             # ── Speed-first config ──────────────────────────────────────
-            # Standard "Research" mode = single fast pass (no marathon-level layers)
+            # Standard "Research" mode = single fast pass.
             # Deep mode within /research/start = same path but with slightly higher budget
             if req.max_steps is not None:
                 base_steps = req.max_steps
@@ -1166,7 +1408,7 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
             
             chat_history = _MEMORY_MANAGER.get_history(user_email, session_id)
 
-            # Lightweight pipeline for non-marathon: skip expensive phases.
+            # Lightweight pipeline for standard/chat modes: skip expensive phases.
             # The synthesis still has access to peer enrichment (added below
             # in run_research_session via peer_targets).
             is_fast_mode = mode in {"standard", "chat"}
@@ -1201,6 +1443,7 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
                     peer_targets=comparison_targets[1:] if len(comparison_targets) >= 2 else [],
                     chat_history=chat_history,
                     user_email=user_email,
+                    tenant_id=tenant_id,
                 ),
             )
             
@@ -1335,8 +1578,11 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
         
     raw_query = req.target.strip()
     user_email = current_user["email"]
+    tenant_id = current_user["tenant_id"]
+    if is_portfolio_scope_query(raw_query):
+        _require_synchronized_portfolio(tenant_id)
 
-    # ── Pure-LLM follow-up detection for deep/marathon runs ───────────────
+    # ── Pure-LLM follow-up detection for deep research runs ───────────────
     meta = _load_session_meta(master_session)
     prior_target = meta.get("target_display") or meta.get("target")
     is_followup_deep = False
@@ -1374,23 +1620,21 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
 
     BUS.open(master_session, reset=True)
     
-    _session_record(master_session, mode="deep", target=target, objective=raw_query, user_email=user_email)
+    _session_record(master_session, mode="deep", target=target, objective=raw_query, user_email=user_email, tenant_id=tenant_id)
 
-    # ── Comparison detection for marathon ──────────────────────────────
+    # ── Comparison detection for deep research ─────────────────────────
     is_comparison_query = _is_comparison(raw_query)
     comparison_targets = _extract_comparison_targets(raw_query) if is_comparison_query else []
     peer_targets_list = comparison_targets[1:] if len(comparison_targets) >= 2 else []
 
     async def _deep_runner() -> None:
-        total_passes = req.passes
+        total_passes = 8
         completed_passes = 0
         started_at = asyncio.get_running_loop().time()
         chat_history = _MEMORY_MANAGER.get_history(user_email, master_session)
-        is_marathon = req.passes >= 8
         
         try:
             async def _run_pass(i: int) -> bool:
-                remaining = None
                 if req.max_wall_seconds is not None:
                     remaining = req.max_wall_seconds - (asyncio.get_running_loop().time() - started_at)
                     if remaining <= 0:
@@ -1416,8 +1660,8 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                         session_id=master_session,
                         auto_depth=False,
                         enable_memory=True,
-                        reflection_max_rounds=(5 if is_last else (4 if is_marathon else 3)),
-                        quality_threshold=(72.0 if is_last else (68.0 if is_marathon else 65.0)),
+                        reflection_max_rounds=(5 if is_last else 3),
+                        quality_threshold=(72.0 if is_last else 65.0),
                         reflection_per_query_limit=(8 if is_last else 6),
                         reflection_max_new_docs=(120 if is_last else 80),
                         synth_model="gpt-4o",
@@ -1426,15 +1670,16 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                         emit_memo=is_last,
                         close_bus_on_finish=False,
                         chat_history=chat_history if (i == 0 or is_last) else None,
-                        breadth_search_timeout=(240.0 if is_marathon else 180.0) * (3.0 if sys.platform == "win32" else 1.0),
-                        followup_search_timeout=(100.0 if is_marathon else 75.0) * (3.0 if sys.platform == "win32" else 1.0),
-                        reflection_per_query_timeout=(75.0 if is_marathon else 60.0),
-                        blindspot_per_query_timeout=(60.0 if is_marathon else 50.0),
-                        news_timeout=(60.0 if is_marathon else 45.0),
+                        breadth_search_timeout=180.0 * (3.0 if sys.platform == "win32" else 1.0),
+                        followup_search_timeout=75.0 * (3.0 if sys.platform == "win32" else 1.0),
+                        reflection_per_query_timeout=60.0,
+                        blindspot_per_query_timeout=50.0,
+                        news_timeout=45.0,
                         enable_blindspot=True,
                         # ── Peer targets ensure synthesis fetches BOTH companies' enrichment
                         peer_targets=peer_targets_list,
                         user_email=user_email,
+                        tenant_id=tenant_id,
                     ),
                 )
                 
@@ -1470,7 +1715,7 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
         "events": f"/sessions/{master_session}/events",
         "result": f"/sessions/{master_session}/result",
         "mode": "deep",
-        "passes": req.passes,
+        "passes": 8,
     })
 
 
@@ -1531,25 +1776,6 @@ def delete_session(session_id: str, current_user: dict = Depends(get_current_use
 
 def _mode_instruction(mode: str) -> str:
     """Return system-level instruction text based on analysis depth mode."""
-    if mode == "marathon":
-        return (
-            "User selected Marathon mode. Produce a full-scale, investment-grade research report structured as follows:\n"
-            "1. EXECUTIVE SUMMARY — 3-sentence verdict with bull/bear/base case and conviction level.\n"
-            "2. BUSINESS OVERVIEW — business model, revenue segments, geography mix, key customers.\n"
-            "3. FINANCIAL DEEP-DIVE — 5-year trend tables for revenue, EBITDA, net profit, EPS, FCF, ROCE, D/E. "
-            "Include CAGR figures and margin trajectory commentary.\n"
-            "4. VALUATION — P/E, EV/EBITDA, P/FCF vs sector peers; DCF base-case implied price; analyst consensus.\n"
-            "5. COMPETITIVE MOAT — market share, switching costs, pricing power, top peer comparison table.\n"
-            "6. MANAGEMENT & GOVERNANCE — promoter track record, pledge %, RPTs, board quality, SEBI actions.\n"
-            "7. SHAREHOLDING INTELLIGENCE — FII/DII/promoter trend, smart-money signals, bulk/block deals.\n"
-            "8. GROWTH CATALYSTS — hidden optionality, new products, capex cycle, M&A, government tailwinds.\n"
-            "9. RISK MATRIX — top 5 risks with probability (H/M/L) and financial impact quantified where possible.\n"
-            "10. MACRO & SECTOR CONTEXT — policy tailwinds/headwinds, RBI rate sensitivity, commodity exposure.\n"
-            "11. INVESTMENT VERDICT — recommended action (Buy/Hold/Sell), price target range, key monitorables.\n"
-            "Rules: Use real numbers with source citations. Flag data gaps explicitly. "
-            "Prefer ₹ for Indian stocks. No vague phrases — every claim needs a number or a named source. "
-            "Completeness and factual accuracy over brevity."
-        )
     return (
         "User selected Deep mode. Provide an in-depth but concise analysis covering ratios, sector context, "
         "risks, recent events/news, and forward-looking insights. Structured sections, comprehensive but focused."
@@ -1569,23 +1795,15 @@ async def chat_research(req: ChatResearchRequest, current_user: dict = Depends(g
         
     target = (req.target or req.message).strip()
     mode = (req.mode or "standard").strip().lower()
+    if is_portfolio_scope_query(target):
+        _require_synchronized_portfolio(current_user.get("tenant_id"))
     if mode == "marathon":
-        return await start_deep_research(
-            DeepResearchRequest(
-                target=target,
-                passes=12,
-                pass_depth=120,
-                max_wall_seconds=req.max_wall_seconds or 4 * 60 * 60,
-                heartbeat_interval_s=20,
-                session_id=req.session_id,
-            ),
-            current_user=current_user
-        )
+        mode = "deep"
     if mode == "deep":
         return await start_deep_research(
             DeepResearchRequest(
                 target=target,
-                passes=5,
+                passes=8,
                 pass_depth=40,
                 max_wall_seconds=req.max_wall_seconds,
                 heartbeat_interval_s=20,
@@ -1614,6 +1832,9 @@ def list_memos(current_user: dict = Depends(get_current_user)) -> JSONResponse:
     for p in sorted(_MEMOS_DIR.glob("*.md"), key=lambda x: x.stat().st_mtime, reverse=True)[:50]:
         session_id = p.stem
         meta = _load_session_meta(session_id)
+        owner_tenant = meta.get("tenant_id")
+        if owner_tenant and owner_tenant != current_user.get("tenant_id"):
+            continue
         owner_email = meta.get("user_email")
         if owner_email and owner_email.lower().strip() != current_user["email"].lower().strip():
             continue

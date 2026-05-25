@@ -19,6 +19,8 @@ _FORENSIC_TERMS = ("forensic", "anomaly", "anomalies", "manipulation", "earnings
 
 def normalize_depth(value: str | None) -> ResponseDepth:
     lower = (value or "").strip().lower()
+    if lower == "marathon":
+        return ResponseDepth.DEEP
     if lower == "deep":
         return ResponseDepth.DEEP
     if lower == "standard":

@@ -171,7 +171,7 @@ def _build_mode_aware_metric_cards(
             label="Forecast Model",
             value=str(model_used),
             icon="chip",
-            tooltip="Model that generated the projection (timesfm_2.5 = real model)",
+            tooltip="Model that generated the projection (statistical_cagr_2sigma = local deterministic model)",
             is_partial=model_used in (None, "n/a", "fallback_cagr", "fallback_statistical"),
         ))
         # Market cap for context
@@ -930,7 +930,7 @@ def _summary_for(mode: OutputMode, target: str, bundle, entity, quality_report) 
     if mode in {OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS}:
         return f"Here is the valuation view for {label}. Figures are based on retrieved market/fundamental data and should be treated as an analytical estimate, not investment advice."
     if mode == OutputMode.FORENSIC_INSIGHTS:
-        return f"Here is the forensic accounting and anomaly screening view for {label} using TimesFM probabilistic corridors."
+        return f"Here is the forensic accounting and anomaly screening view for {label} using statistical +/-2 sigma bands."
     if mode == OutputMode.NEWS_BRIEF:
         return f"Here are the latest retrieved developments for {label} and why they matter."
     if mode == OutputMode.MARKET_EXPLAINER:

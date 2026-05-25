@@ -1,10 +1,2 @@
-# ORACLE FIOS — MCP Servers Package
-# Includes:
-#   - nse_server (market data)
-#   - fundamentals_server
-#   - research_server
-#   - docs_server
-#   - mcp_valuation (deterministic valuation models)
-#   - mcp_forecasting (TimesFM 2.5 zero-shot forecasting)  ← NEW
-#
-# Phase 1: NSE Market Data + Fundamentals (FMP)
+# ORACLE FIOS MCP servers package.
+# ProspektLab v3 exposes only discovery_server.py:8003 and quant_server.py:8005.

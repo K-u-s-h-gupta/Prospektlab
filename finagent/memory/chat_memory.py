@@ -12,6 +12,7 @@ import threading
 from typing import Any
 
 from finagent.paths import finagent_data_path
+from finagent.storage.sqlite import connect_wal
 
 _RAM_STORE: dict[str, list[dict[str, str]]] = {}
 _RAM_LOCK = threading.Lock()
@@ -21,9 +22,12 @@ class ChatMemoryManager:
         self.db_path = finagent_data_path("chat_memory.db")
         self._init_db()
 
+    def _conn(self) -> sqlite3.Connection:
+        return connect_wal(self.db_path, timeout=10.0)
+
     def _init_db(self) -> None:
         """Initialize the SQLite database for logged-in users."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._conn() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS messages (
@@ -52,7 +56,7 @@ class ChatMemoryManager:
             content: The text content of the message.
         """
         if user_email:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._conn() as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
                     INSERT INTO messages (user_email, session_id, role, content)
@@ -72,7 +76,7 @@ class ChatMemoryManager:
             A list of dicts like [{"role": "user", "content": "..."}]
         """
         if user_email:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._conn() as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
                     SELECT role, content FROM messages
@@ -88,7 +92,7 @@ class ChatMemoryManager:
     def delete_session(self, user_email: str | None, session_id: str) -> int:
         """Delete chat history for a session."""
         if user_email:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._conn() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     '''

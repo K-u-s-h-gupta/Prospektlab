@@ -80,7 +80,7 @@ Response fields:
 - `result`: fetch memo/final payload when done.
 
 `/capabilities` describes the agent's currently available search, browser,
-skill, chart, and marathon features for orchestrators.
+skill, chart, and Deep Research features for orchestrators.
 
 Session events and metadata are also written under
 `FINAGENT_HOME/sessions/{session_id}/`, so polling can recover after an SSE

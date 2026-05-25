@@ -9,9 +9,9 @@ client = TestClient(app, raise_server_exceptions=False)
 @pytest.fixture(autouse=True)
 def reset_rate_limiters():
     # Reset rate limit histories before each test
-    auth_rate_limiter.history = {}
-    research_rate_limiter.history = {}
-    default_rate_limiter.history = {}
+    auth_rate_limiter.local_history = {}
+    research_rate_limiter.local_history = {}
+    default_rate_limiter.local_history = {}
     client.cookies.clear()
 
 def test_health_endpoint():

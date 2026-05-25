@@ -1625,7 +1625,7 @@ def _native_valuation_assemble(
         label="Forecast model",
         value=model_used or "n/a",
         icon="chip",
-        tooltip="timesfm_2.5 = real model; fallback = statistical",
+        tooltip="statistical_cagr_2sigma = local deterministic model",
         is_partial=model_used in (None, "fallback_cagr", "fallback_statistical"),
     ))
     if fcf:

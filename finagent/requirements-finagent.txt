@@ -16,6 +16,7 @@ yfinance>=0.2.40
 pandas>=2.0.0
 numpy>=1.24.0
 openpyxl>=3.1.0
+PyPortfolioOpt>=1.5.5
 
 PyJWT>=2.0.0
 
@@ -23,25 +24,18 @@ PyJWT>=2.0.0
 yfinance>=0.2.40
 tavily-python>=0.5.0
 
-# Time-series foundation model (TimesFM 2.5 200M PyTorch — Google Research)
-# Modern recommended installation (avoids the ancient JAX-pinned 1.0.0 PyPI package):
-#
-#   python -m venv .venv-finagent
-#   .\.venv-finagent\Scripts\Activate.ps1
-#   python -m pip install --upgrade pip setuptools wheel
-#   python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-#   python -m pip install git+https://github.com/google-research/timesfm.git
-#   python -m pip install safetensors einshape huggingface_hub
-#
-# Then test:
-#   python scripts/test_timesfm_standalone.py
-#
-# If the model is gated:
-#   huggingface-cli login   (after accepting terms on HF)
-
 # Optional deep web scraper (Crawl4AI)
 # Falls back to httpx if not present; include here so Docker image has full capability
 crawl4ai>=0.4.0
+
+# eCAS PDF ingestion
+python-multipart>=0.0.9
+casparser>=0.9.0
+casparser-isin>=2024.1.0
+pdfplumber>=0.11.0
+camelot-py[cv]>=1.0.0
+feedparser>=6.0.10
+python-dateutil>=2.9.0
 
 # Chart generation for memos (used in output/chart_generator.py)
 matplotlib>=3.8.0

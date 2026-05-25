@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Iterable
 
 from finagent.paths import finagent_data_path
+from finagent.storage.sqlite import connect_wal
 
 logger = logging.getLogger("finagent.memory")
 
@@ -150,7 +151,7 @@ class MemoryStore:
             self._migrate_schema()
 
     def _conn(self) -> sqlite3.Connection:
-        c = sqlite3.connect(str(self.db_path), timeout=10.0)
+        c = connect_wal(self.db_path, timeout=10.0)
         c.row_factory = sqlite3.Row
         return c
 

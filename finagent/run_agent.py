@@ -118,6 +118,7 @@ class AgentLoopConfig:
     chat_history: list[dict[str, str]] | None = None
     # ── User isolation for per-user memory recall / persist ──
     user_email: str | None = None
+    tenant_id: str | None = None
     # ── Comparison: when set, synthesis fetches rich enrichment for peers ──
     peer_targets: list[str] = field(default_factory=list)
 
@@ -1271,7 +1272,7 @@ async def run_research_session(
     # which skipped the entire orchestrator block, resulting in "AGENTS: None" and
     # no calls to forecasting/valuation_engine MCPs even when the router selected them.
     # By forcing True here (after routing), selected agents (e.g. valuation for
-    # "TCS valuation and DCF intrinsic value") will run, call TimesFM forecasting,
+    # "TCS valuation and DCF intrinsic value") will run deterministic forecasting,
     # run DCF via valuation_engine, and record the MCPs in the session summary.
     cfg.enable_multi_agent = True
     cfg.enable_scraping = True
@@ -1324,6 +1325,7 @@ async def run_research_session(
         session_id,
         "routing",
         selected_agents=routing.selected_agents,
+        intent_key=routing.intent_key,
         country_code=entity.country_code,
         preferred_domains=preferred_domains[:8],
         deep_research=routing.deep_research,
@@ -1331,6 +1333,37 @@ async def run_research_session(
 
     logger.info("[AGENT-ROUTING] Selected agents: %s | deep_research=%s | country=%s | preferred_domains=%s",
                 routing.selected_agents, routing.deep_research, entity.country_code, preferred_domains[:8])
+
+    portfolio_sentinel = None
+    if routing.intent_key == "PORTFOLIO_AUDIT":
+        BUS.emit(session_id, "phase", phase="portfolio_identify", note="Loading tenant-scoped active holdings")
+        if not cfg.tenant_id:
+            BUS.emit(session_id, "warning", message="Portfolio audit requires a verified tenant_id.")
+        else:
+            try:
+                from finagent.portfolio_sentinel import run_portfolio_sentinel
+
+                portfolio_sentinel = await run_portfolio_sentinel(cfg.tenant_id)
+                BUS.emit(
+                    session_id,
+                    "portfolio_identify",
+                    tenant_id=cfg.tenant_id,
+                    positions_found=portfolio_sentinel.positions_found,
+                    symbols=portfolio_sentinel.symbols,
+                    weights=portfolio_sentinel.weights,
+                    error=portfolio_sentinel.error,
+                )
+                BUS.emit(
+                    session_id,
+                    "portfolio_sentinel",
+                    risk=portfolio_sentinel.risk,
+                    rules=portfolio_sentinel.rules,
+                    concentration_alert=portfolio_sentinel.concentration_alert,
+                    error=portfolio_sentinel.error,
+                )
+            except Exception as exc:
+                logger.warning("Portfolio Sentinel preflight failed: %s", exc)
+                BUS.emit(session_id, "warning", message=f"Portfolio Sentinel failed: {exc}")
 
     logger.info("[AGENT-RETRIEVAL-PLAN] Breadth queries (%d): %s",
                 len(retrieval_plan.breadth_queries), retrieval_plan.breadth_queries[:6])
@@ -1636,6 +1669,9 @@ async def run_research_session(
             seen_urls=seen_urls,
             resolved_entity=entity,
             preferred_domains=preferred_domains,
+            portfolio_symbols=(portfolio_sentinel.symbols if portfolio_sentinel else []),
+            portfolio_risk=(portfolio_sentinel.risk if portfolio_sentinel else {}),
+            runtime_rules=(portfolio_sentinel.rules if portfolio_sentinel else []),
         )
 
         try:

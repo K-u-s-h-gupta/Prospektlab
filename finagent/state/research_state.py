@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from finagent.paths import finagent_data_path
+from finagent.storage.sqlite import connect_wal
 
 
 SCHEMA = """
@@ -38,7 +39,7 @@ class ResearchStateStore:
         self.db_path = db_path
 
     def connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        conn = connect_wal(self.db_path)
         conn.executescript(SCHEMA)
         conn.row_factory = sqlite3.Row
         return conn

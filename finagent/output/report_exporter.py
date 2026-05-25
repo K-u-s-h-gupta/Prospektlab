@@ -191,7 +191,5 @@ def export_xlsx(artifact: AnswerArtifact) -> bytes:
 
 
 def can_generate_documents(depth: ResponseDepth | str) -> bool:
-    """Return True only when the user selected Marathon mode."""
-    if isinstance(depth, str):
-        return depth.lower() == "marathon"
-    return depth == ResponseDepth.MARATHON
+    """Document export is disabled in the bounded v3 research engine."""
+    return False

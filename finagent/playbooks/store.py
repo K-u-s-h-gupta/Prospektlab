@@ -6,6 +6,7 @@ from pathlib import Path
 
 from finagent.paths import finagent_data_path
 from finagent.playbooks.schema import FinancialPlaybook
+from finagent.storage.sqlite import connect_wal
 
 
 _SCHEMA = """
@@ -27,11 +28,11 @@ class PlaybookStore:
     def __init__(self, db_path: Path | None = None) -> None:
         self.db_path = Path(db_path) if db_path else finagent_data_path("playbooks.sqlite3")
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(str(self.db_path)) as conn:
+        with connect_wal(self.db_path) as conn:
             conn.executescript(_SCHEMA)
 
     def upsert(self, playbook: FinancialPlaybook) -> None:
-        with sqlite3.connect(str(self.db_path)) as conn:
+        with connect_wal(self.db_path) as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO playbooks
@@ -55,7 +56,7 @@ class PlaybookStore:
     def retrieve(self, *, geography: str, objective: str) -> FinancialPlaybook | None:
         lower = (objective or "").lower()
         candidates: list[FinancialPlaybook] = []
-        with sqlite3.connect(str(self.db_path)) as conn:
+        with connect_wal(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 "SELECT * FROM playbooks WHERE geography IN (?, 'GLOBAL') ORDER BY success_count DESC LIMIT 20",

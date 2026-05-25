@@ -1,17 +1,14 @@
-"""ValuationAgent — data-driven DCF projections via TimesFM zero-shot forecasts.
+"""ValuationAgent - deterministic DCF projections via statistical bands.
 
-Replaces static or rule-based growth assumptions with transformer-based
-time-series projections.  Extracts historical revenue (and optionally
-operating-margin) arrays from the enrichment bundle, feeds them into the
-TimesFM forecasting module, and uses the resulting P50 projected values
-as DCF terminal growth inputs.
-
-Falls back to CAGR-based growth when TimesFM is unavailable.
+Extracts historical revenue arrays from the enrichment bundle and derives
+forward inputs with CAGR and rolling variance. This deliberately avoids any
+removed forecasting microservice dependency; all math remains deterministic.
 """
 
 from __future__ import annotations
 
 import logging
+import statistics
 
 from finagent.accuracy_validator import Claim
 from finagent.agents.base import (
@@ -20,9 +17,15 @@ from finagent.agents.base import (
     Finding,
     SubAgentContext,
 )
-from finagent.tools.mcp.forecasting import cagr as _cagr   # shared implementation
-
 logger = logging.getLogger("finagent.agents.specialists.valuation")
+
+
+def _cagr(values: list[float]) -> float | None:
+    clean = [float(v) for v in values if v and v > 0]
+    if len(clean) < 2:
+        return None
+    years = len(clean) - 1
+    return (clean[-1] / clean[0]) ** (1.0 / years) - 1.0 if clean[0] > 0 else None
 
 
 def _fmt_compact(value: float) -> str:
@@ -41,7 +44,7 @@ def _fmt_compact(value: float) -> str:
 
 
 class ValuationAgent(BaseSubAgent):
-    """Specialist that computes forward-looking valuations using TimesFM projections."""
+    """Specialist that computes forward-looking valuations using statistical projections."""
 
     name = "valuation"
     display = "Valuation & DCF Projections"
@@ -100,47 +103,23 @@ class ValuationAgent(BaseSubAgent):
             )
             return out
 
-        # ── 2. Run TimesFM forecast ────────────────────────────────────
-        # Note: The forecasting logic can also be called via the dedicated
-        # MCP server (mcp_forecasting.py on port 8006) for external clients.
-        # Inside the agent we currently use the fast in-process version.
-        try:
-            from finagent.tools.mcp.forecasting import generate_zero_shot_forecast
-        except ImportError:
-            logger.warning("forecasting module unavailable")
-            generate_zero_shot_forecast = None  # type: ignore[assignment]
-
-        forecast_result = None
+        # ── 2. Build deterministic statistical forecast ────────────────
         horizon = min(8, max(4, len(revenue_values)))  # 4-8 periods
 
-        if generate_zero_shot_forecast is not None:
-            logger.info("[TIMESFM] ValuationAgent -> calling generate_zero_shot_forecast (real or fallback)")
-            try:
-                forecast_result = await generate_zero_shot_forecast(
-                    revenue_values,
-                    horizon=horizon,
-                    freq=2,  # low-frequency (annual data)
-                    quantiles=[0.1, 0.25, 0.5, 0.75, 0.9],
-                )
-            except Exception as exc:
-                logger.warning("Forecast call failed: %s", exc)
-
-        # ── 3. Extract projections or fall back ────────────────────────
-        if forecast_result and forecast_result.point_forecast:
-            projected = forecast_result.point_forecast
-            model_used = forecast_result.model_used
-            q50 = forecast_result.quantile_forecasts.get(0.5, projected)
-            q10 = forecast_result.quantile_forecasts.get(0.1, [])
-            q90 = forecast_result.quantile_forecasts.get(0.9, [])
-        else:
-            # Pure CAGR fallback
-            growth = _cagr(revenue_values) or 0.08
-            last = revenue_values[-1]
-            projected = [last * (1 + growth) ** (i + 1) for i in range(horizon)]
-            q50 = projected
-            q10 = [p * 0.85 for p in projected]
-            q90 = [p * 1.15 for p in projected]
-            model_used = "fallback_cagr"
+        # ── 3. Extract projections from CAGR + +/-2 sigma corridor ─────
+        growth = _cagr(revenue_values) or 0.08
+        last = revenue_values[-1]
+        projected = [last * (1 + growth) ** (i + 1) for i in range(horizon)]
+        q50 = projected
+        growth_rates = [
+            (revenue_values[i] / revenue_values[i - 1]) - 1.0
+            for i in range(1, len(revenue_values))
+            if revenue_values[i - 1] > 0
+        ]
+        sigma = statistics.pstdev(growth_rates) if len(growth_rates) > 1 else 0.05
+        q10 = [p * max(0.0, 1 - (2 * sigma)) for p in projected]
+        q90 = [p * (1 + (2 * sigma)) for p in projected]
+        model_used = "statistical_cagr_2sigma"
 
         # ── 4. Compute implied growth rate ─────────────────────────────
         current_rev = revenue_values[-1]
@@ -160,20 +139,16 @@ class ValuationAgent(BaseSubAgent):
         p10_terminal = q10[-1] if q10 else terminal_rev * 0.85
         p90_terminal = q90[-1] if q90 else terminal_rev * 1.15
 
-        is_real_timesfm = model_used == "timesfm_2.5"
-        headline = (
-            f"TimesFM 2.5 Revenue Projection: {_fmt_compact(terminal_rev)} in {years_out}yr"
-            if is_real_timesfm else
-            f"Revenue Projection (statistical fallback): {_fmt_compact(terminal_rev)} in {years_out}yr"
-        )
+        headline = f"Revenue Projection (statistical): {_fmt_compact(terminal_rev)} in {years_out}yr"
+        use_primary_projection_branch = False
 
         detail = (
-            f"TimesFM 2.5 zero-shot forecast (real model) based on {len(revenue_values)} historical points. "
+            f"Statistical projection based on {len(revenue_values)} historical points. "
             f"Projected {currency} revenue in {years_out} years: {_fmt_compact(terminal_rev)} (P50). "
             f"Risk corridor: {_fmt_compact(p10_terminal)} (P10) – {_fmt_compact(p90_terminal)} (P90). "
-            f"Implied CAGR from TimesFM: {implied_growth * 100:+.1f}%."
-            if is_real_timesfm else
-            f"Statistical fallback (CAGR-based) used because TimesFM 2.5 was unavailable. "
+            f"Implied CAGR: {implied_growth * 100:+.1f}%."
+            if use_primary_projection_branch else
+            f"Statistical CAGR projection with +/-2 sigma growth corridor. "
             f"Projected {currency} revenue in {years_out} years: {_fmt_compact(terminal_rev)} (P50). "
             f"Implied CAGR: {implied_growth * 100:+.1f}%."
         )
@@ -184,7 +159,7 @@ class ValuationAgent(BaseSubAgent):
                 kind="financial",
                 headline=headline,
                 detail=detail,
-                confidence="MEDIUM" if is_real_timesfm else "LOW",
+                confidence="MEDIUM",
                 evidence=[yahoo.source_url] if yahoo else [],
                 metrics={
                     "projected_terminal_revenue": terminal_rev,
@@ -194,7 +169,7 @@ class ValuationAgent(BaseSubAgent):
                     "horizon_years": years_out,
                     "p10_terminal": p10_terminal,
                     "p90_terminal": p90_terminal,
-                    "timesfm_active": is_real_timesfm,
+                    "statistical_projection": True,
                 },
             )
         )
@@ -263,7 +238,7 @@ class ValuationAgent(BaseSubAgent):
             if upside is not None:
                 detail_parts.append(f"Upside: {upside:+.1f}%{verdict}")
             detail_parts.append(
-                f"Using TimesFM-derived growth of {high_growth * 100:.1f}% (high) / "
+                f"Using statistical growth of {high_growth * 100:.1f}% (high) / "
                 f"{stable_growth * 100:.1f}% (stable)."
             )
 
@@ -289,7 +264,7 @@ class ValuationAgent(BaseSubAgent):
             out.claims.append(
                 Claim(
                     text=(
-                        f"TimesFM-projected DCF intrinsic value is {currency} {intrinsic:,.2f}"
+                        f"Statistically projected DCF intrinsic value is {currency} {intrinsic:,.2f}"
                         + (f" ({upside:+.1f}% vs current price)" if upside is not None else "")
                         + "."
                     ),

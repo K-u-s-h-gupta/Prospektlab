@@ -43,8 +43,8 @@ def default_roster():
         TechnicalAgent(),    # 30
         CommunityAgent(),    # 30
         CompetitorAgent(),   # 40
-        ValuationAgent(),    # 40  ← TimesFM revenue projection
-        AccountingAgent(),   # 45  ← TimesFM anomaly / forensic
+        ValuationAgent(),    # 40  statistical revenue projection
+        AccountingAgent(),   # 45  statistical anomaly / forensic
         MacroAgent(),        # 50
         GovernanceAgent(),   # 60
     ]

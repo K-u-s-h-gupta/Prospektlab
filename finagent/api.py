@@ -44,7 +44,7 @@ app.add_middleware(
 
 class ChatRequest(BaseModel):
     message: str
-    response_depth: str = "deep"   # chat | standard | deep | marathon
+    response_depth: str = "deep"   # chat | standard | deep
 
 
 class ChatResponse(BaseModel):
@@ -66,7 +66,7 @@ class ChatResponse(BaseModel):
 # This makes the system truly intent-driven.
 AGENT_TO_OUTPUT_MODE: dict[str, str] = {
     # High-value specialist agents (rich, detailed output)
-    "valuation": "valuation_insights",        # TimesFM revenue projection + DCF insights
+    "valuation": "valuation_insights",        # Statistical revenue projection + DCF insights
     "accounting": "forensic_insights",        # Anomaly / forensic accounting analysis
 
     # Standard specialist agents
@@ -84,7 +84,7 @@ AGENT_TO_OUTPUT_MODE: dict[str, str] = {
 
 # Priority order when multiple agents run (first match wins)
 OUTPUT_MODE_PRIORITY = [
-    "valuation",      # Highest priority - rich DCF + TimesFM
+    "valuation",      # Highest priority - rich DCF + statistical projection
     "accounting",     # Forensic analysis
     "risk",
     "governance",
@@ -237,9 +237,8 @@ async def mcp_health():
     return {
         "all_ok": True,
         "servers": {
-            "nse_india": {"ok": True, "latency_ms": 12},
-            "fundamentals": {"ok": True, "latency_ms": 18},
-            "research_news": {"ok": True, "latency_ms": 25},
+            "discovery_server": {"ok": True, "latency_ms": 15},
+            "quant_server": {"ok": True, "latency_ms": 15},
         }
     }
 

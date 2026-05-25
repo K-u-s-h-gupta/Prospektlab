@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable
 
 from finagent.agents.base import (
@@ -99,6 +99,7 @@ class Orchestrator:
         out = OrchestrationResult()
         ctx.emit = self.emit
         ctx.deadline_ms = self.per_agent_deadline_ms
+        self._last_ctx = ctx
 
         waves = _waves(self.agents)
         out.waves = len(waves)
@@ -144,3 +145,33 @@ class Orchestrator:
                     len(out.findings), len(out.new_docs), out.elapsed_ms)
         self.emit("orchestrator_done", **out.to_dict())
         return out
+
+    async def run_agent(self, ticker: str, ctx: SubAgentContext | None = None) -> OrchestrationResult:
+        """Run the orchestrator subagents for a single stock entity/ticker."""
+        if ctx is None:
+            ctx = getattr(self, "_last_ctx", None)
+        if ctx is None:
+            raise ValueError("No SubAgentContext available for running the agent.")
+
+        from finagent.geo.entity_resolver import resolve_entity
+
+        resolved = None
+        try:
+            resolved = resolve_entity(ticker)
+        except Exception as e:
+            logger.warning("[ORCHESTRATOR] Failed to resolve entity for ticker %s: %s", ticker, e)
+
+        # Build a customized context for this specific stock entity
+        ticker_ctx = replace(
+            ctx,
+            target=ticker,
+            canonical_label=ticker,
+            resolved_entity=resolved if resolved else ctx.resolved_entity,
+        )
+        return await self.run(ticker_ctx)
+
+    async def run_portfolio(self, portfolio_array: list[str], ctx: SubAgentContext | None = None) -> list[OrchestrationResult]:
+        """Process multiple tickers in parallel using an async array to avoid timeouts."""
+        if ctx is not None:
+            self._last_ctx = ctx
+        return await asyncio.gather(*(self.run_agent(ticker, ctx) for ticker in portfolio_array))

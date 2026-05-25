@@ -1,5 +1,6 @@
 import pytest
 import jwt
+import os
 from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 from fastapi import HTTPException
@@ -85,6 +86,37 @@ def test_valid_jwt_access():
         response = client.get("/memos", headers=headers)
         assert response.status_code == 200
         assert response.json() == {"memos": []}
+
+def test_supabase_hs256_token_sets_tenant_id(monkeypatch):
+    from finagent.gateway.run import _decode_current_user
+
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "supabase-secret")
+    token = jwt.encode(
+        {"sub": "tenant-123", "email": "supabase@example.com", "aud": "authenticated"},
+        "supabase-secret",
+        algorithm="HS256",
+    )
+
+    user = _decode_current_user(token)
+
+    assert user["tenant_id"] == "tenant-123"
+    assert user["auth_provider"] == "supabase_jwt"
+
+def test_supabase_token_requires_configured_secret(monkeypatch):
+    from finagent.gateway.run import _decode_current_user
+
+    monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
+    token = jwt.encode(
+        {"sub": "tenant-123", "email": "supabase@example.com", "aud": "authenticated"},
+        "supabase-secret",
+        algorithm="HS256",
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        _decode_current_user(token)
+
+    assert exc.value.status_code == 401
+    assert "Supabase JWT verification secret is required" in exc.value.detail
 
 def test_bola_session_ownership_verification():
     # Two different users

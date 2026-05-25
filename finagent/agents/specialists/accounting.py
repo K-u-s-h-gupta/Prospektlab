@@ -1,11 +1,8 @@
-"""AccountingAgent — forensic anomaly detection via TimesFM confidence corridors.
+"""AccountingAgent - forensic anomaly detection via statistical bands.
 
-Ingests sequential historical financial series (revenue, net income,
-quarterly profits) into TimesFM to build P10–P90 confidence corridors.
-If newly reported values fall outside these corridors, the agent flags a
-structural accounting anomaly.
-
-Falls back to ±2σ z-score bands when TimesFM is unavailable.
+Screens sequential historical financial series (revenue, net income, quarterly
+profits) with deterministic +/-2 sigma z-score bands. This module deliberately
+has no forecasting-server dependency in the v3 backend.
 """
 
 from __future__ import annotations
@@ -62,14 +59,9 @@ class AccountingAgent(BaseSubAgent):
         yahoo = ctx.bundle.yahoo if ctx.bundle else None
         sec = ctx.bundle.sec if ctx.bundle else None
 
-        # ── Import forecasting module ──────────────────────────────────
-        # Note: Forecasting can also be called as an MCP tool (port 8006).
-        # Agents currently use the fast in-process implementation.
-        try:
-            from finagent.tools.mcp.forecasting import detect_anomalies
-        except ImportError:
-            logger.warning("forecasting module unavailable for accounting agent")
-            detect_anomalies = None  # type: ignore[assignment]
+        # ── Statistical anomaly engine ─────────────────────────────────
+        # The old forecasting MCP path is removed; keep detection local.
+        detect_anomalies = None
 
         anomaly_count = 0
         clean_count = 0
@@ -161,7 +153,7 @@ class AccountingAgent(BaseSubAgent):
                     headline="No structural accounting anomalies detected",
                     detail=(
                         f"All {clean_count} financial series passed anomaly screening. "
-                        "Latest reported values fall within expected confidence corridors."
+                        "Latest reported values fall within the expected +/-2 sigma bands."
                     ),
                     confidence="MEDIUM",
                     evidence=evidence_urls,
@@ -208,14 +200,14 @@ class AccountingAgent(BaseSubAgent):
 
         result = None
         if detect_fn is not None:
-            logger.info("[TIMESFM] AccountingAgent -> calling detect_anomalies on series '%s' (real TimesFM or fallback)", series_name)
+            logger.info("[ACCOUNTING] Calling anomaly detector on series '%s'", series_name)
             try:
                 result = await detect_fn(historical, new_value, freq=2)
             except Exception as exc:
                 logger.warning("Anomaly detection failed for %s: %s", series_name, exc)
 
         if result is None:
-            # Lightweight statistical fallback (duplicates logic in forecasting.py for isolation)
+            # Lightweight statistical screen kept local to avoid forecasting service dependencies.
             mu = statistics.mean(historical) if historical else 0.0
             sigma = statistics.stdev(historical) if len(historical) >= 2 else (abs(mu) * 0.05 or 1.0)
             lo, hi = mu - 2 * sigma, mu + 2 * sigma
@@ -229,7 +221,7 @@ class AccountingAgent(BaseSubAgent):
                     self.lower_bound = [lo]
                     self.upper_bound = [hi]
                     self.deviations = [dev]
-                    self.model_used = "fallback_zscore"
+                    self.model_used = "statistical_zscore_2sigma"
 
             result = _MiniResult()
 
@@ -250,7 +242,7 @@ class AccountingAgent(BaseSubAgent):
                     headline=f"WARNING: {series_name} anomaly detected ({latest_date})",
                     detail=(
                         f"The latest {series_name} value of {values[-1]:,.2f} "
-                        f"falls OUTSIDE the model's P10–P90 confidence corridor "
+                        f"falls OUTSIDE the model's +/-2 sigma confidence band "
                         f"[{lower:,.2f} – {upper:,.2f}]. "
                         f"Deviation magnitude: {deviation:+.2f}σ ({severity}). "
                         f"Model: {model_used}. "

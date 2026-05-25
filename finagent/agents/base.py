@@ -113,7 +113,10 @@ class SubAgentContext:
     resolved_entity: ResolvedEntity | None = None
     preferred_domains: list[str] = field(default_factory=list)
     query_cache: dict[str, list[ScrapedDoc]] | None = None
-    # Wall-clock guard shared with the main agent loop (marathon mode).
+    portfolio_symbols: list[str] = field(default_factory=list)
+    portfolio_risk: dict[str, Any] = field(default_factory=dict)
+    runtime_rules: list[str] = field(default_factory=list)
+    # Wall-clock guard shared with the main agent loop.
     budget_exceeded: Callable[[], bool] | None = None
 
 

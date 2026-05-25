@@ -412,6 +412,10 @@ def _market_segment_for(query: str, ticker_label: str | None, confidence: str) -
 
 
 def resolve_entity(query: str) -> ResolvedEntity:
+    # V3 SINGLE-TICKER VALIDATION BYPASS:
+    # Research, comparison, and portfolio-audit prompts are allowed even when
+    # they are not standalone ticker strings. If no known alias resolves, use
+    # the normalized raw query as the entity label instead of raising a 422.
     hypotheses = _compound_hypotheses(query)
     best = next((h for h in hypotheses if h.lower() in _ALIAS_TICKERS), None)
     if best is None:
