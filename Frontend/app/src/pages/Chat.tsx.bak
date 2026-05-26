@@ -1,0 +1,363 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { AppShell } from '../components/layout/AppShell';
+import { ChatInput } from '../components/chat/ChatInput';
+import { MessageBubble } from '../components/chat/MessageBubble';
+import { AgentThinking } from '../components/chat/AgentThinking';
+import { SuggestedPrompts } from '../components/chat/SuggestedPrompts';
+import { AgentEventData } from '../api/client';
+
+interface Message {
+  sender: 'user' | 'ai';
+  text: string;
+  richData?: any;
+  depth?: 'chat' | 'standard' | 'deep';
+  elapsedMs?: number;
+}
+
+export const Chat: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  // const { id } = useParams<{ id: string }>();
+  
+  const [style, setStyle] = useState('Balanced');
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isThinking, setIsThinking] = useState(false);
+  const [thinkingEvents, setThinkingEvents] = useState<AgentEventData[]>([]);
+  
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Suggested Prompts
+  const currentSuggested = [
+    'Run a DCF Valuation model',
+    'Compare with main competitors',
+    'Explain key margin growth drivers',
+    'Check promoter pledge risk factors'
+  ];
+
+  // Load profile contexts
+  useEffect(() => {
+    const savedStyle = localStorage.getItem('prospektlab_style') || 'Balanced';
+    setStyle(savedStyle);
+
+    const savedConversationsRaw = localStorage.getItem('prospektlab_conversations');
+    const savedConversations = savedConversationsRaw ? JSON.parse(savedConversationsRaw) : [];
+    setConversations(savedConversations);
+
+    // Bootstrap initial message welcome prompt
+    setMessages([
+      {
+        sender: 'ai',
+        text: `Hello! I am ORACLE, your equity intelligence supervisor calibrated to a **${savedStyle}** investing profile.\n\nType in stock tickers or plain English questions to trigger analysis. I can calculate DCFs, run Graham formulas, compare quarterly results, or trigger 8-phase deep research memos. What stock are we auditing today?`
+      }
+    ]);
+  }, []);
+
+  // Listen to incoming direct query requests (e.g. from Dashboard triggers)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const initialQuery = params.get('query');
+    const initialDepth = params.get('depth') as 'chat' | 'standard' | 'deep' | null;
+    
+    if (initialQuery) {
+      // Clear query params to prevent re-triggering
+      navigate('/chat', { replace: true });
+      setTimeout(() => {
+        handleSendMessage(initialQuery, initialDepth || 'standard');
+      }, 300);
+    }
+  }, [location.search]);
+
+  // Scroll to bottom on updates
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isThinking, thinkingEvents]);
+
+  // Simulation loop for agent streaming steps (mimics real SSE events)
+  const runAgentStreamMock = (message: string, depth: 'chat' | 'standard' | 'deep', onComplete: (rich: any, replyText: string) => void) => {
+    setThinkingEvents([]);
+    setIsThinking(true);
+
+    // const isFiling = message.toLowerCase().includes('sebi') || message.toLowerCase().includes('pledge');
+    const isCompare = message.toLowerCase().includes('compare') || message.toLowerCase().includes('vs');
+    const isValuation = message.toLowerCase().includes('valuation') || message.toLowerCase().includes('dcf') || message.toLowerCase().includes('graham');
+    
+    // Ticker extraction
+    let ticker = 'RELIANCE';
+    if (message.toUpperCase().includes('TCS')) ticker = 'TCS';
+    if (message.toUpperCase().includes('INFY')) ticker = 'INFY';
+    if (message.toUpperCase().includes('ASIANPAINT')) ticker = 'ASIANPAINT';
+    if (message.toUpperCase().includes('TATAMOTORS')) ticker = 'TATAMOTORS';
+
+    const stepsList: Array<{ agent: string; status: 'planned' | 'active' | 'completed'; step: string; details: string }> = [
+      { agent: 'intent_router', status: 'planned', step: 'Classifying user query', details: 'Scanning semantics for finance intents' },
+      { agent: 'intent_router', status: 'active', step: 'Routing to active nodes', details: `Found entities: ${ticker}. Primary intent: ${isValuation ? 'VALUATION' : isCompare ? 'COMPARISON' : 'SNAPSHOT'}` },
+      { agent: 'intent_router', status: 'completed', step: 'Routing hints established', details: 'Forwarding query to cognitive agents' },
+      
+      { agent: 'market_data_agent', status: 'planned', step: 'Establishing Live feed connect', details: 'Pending network connection' },
+      { agent: 'market_data_agent', status: 'active', step: 'Fetching live quote direct from NSE', details: `Connecting to NSE microservice. Retrieving quote for ticker: ${ticker}` },
+      { agent: 'market_data_agent', status: 'completed', step: 'NSE quote fetched', details: `Retrieved price: ${ticker === 'TCS' ? '₹3,842' : ticker === 'INFY' ? '₹1,452' : '₹2,931'}. Trading volume stable.` },
+      
+      { agent: 'fundamentals_agent', status: 'planned', step: 'Accessing quarterly statement files', details: 'Pending yfinance/filings ingest' },
+      { agent: 'fundamentals_agent', status: 'active', step: 'Analyzing quarterly ratios and operating margins', details: `Retrieving yfinance profile metrics. Calculating ROE, PE, and Debt/Equity for ${ticker}` },
+      { agent: 'fundamentals_agent', status: 'completed', step: 'Statements parsed successfully', details: `Finished calculation. ROE parsed: ${ticker === 'TCS' ? '28.4%' : '18.2%'}. Debt/Equity stable.` }
+    ];
+
+    if (isValuation) {
+      stepsList.push(
+        { agent: 'valuation_agent', status: 'planned', step: 'Opening DCF formula cells', details: 'Calibrating discount rate' },
+        { agent: 'valuation_agent', status: 'active', step: 'Running DCF and Graham mathematical calculations', details: `Running valuation engine. WACC configured at 10.5%. Cash flow growth at 8%.` },
+        { agent: 'valuation_agent', status: 'completed', step: 'Valuation bounds complete', details: `Intrinsic value successfully calculated relative to historical metrics.` }
+      );
+    }
+
+    if (depth === 'deep') {
+      stepsList.push(
+        { agent: 'news_research_agent', status: 'planned', step: 'Scanning Tavily finance news', details: 'Initializing web search queries' },
+        { agent: 'news_research_agent', status: 'active', step: 'Evaluating corporate news and SEBI filing sentiment', details: 'Searching recent press releases, shareholder circulars, and board meetings.' },
+        { agent: 'news_research_agent', status: 'completed', step: 'News audit complete', details: 'Sentiment remains largely positive. Minimal volatility flagged.' }
+      );
+    }
+
+    let currentStepIdx = 0;
+
+    const interval = setInterval(() => {
+      if (currentStepIdx < stepsList.length) {
+        const item = stepsList[currentStepIdx];
+        setThinkingEvents(prev => [
+          ...prev,
+          {
+            seq: currentStepIdx,
+            type: 'agent_event',
+            timestamp: new Date().toISOString(),
+            payload: {
+              agent: item.agent,
+              status: item.status,
+              step: item.step,
+              details: item.details
+            }
+          }
+        ]);
+        currentStepIdx++;
+      } else {
+        clearInterval(interval);
+        
+        // Assemble final synthesized response mock payload matching entity request
+        let richPayload: any = null;
+        let responseText = '';
+
+        if (isValuation) {
+          const intrinsic = ticker === 'TCS' ? 4250 : ticker === 'INFY' ? 1620 : 3240;
+          const current = ticker === 'TCS' ? 3842 : ticker === 'INFY' ? 1452 : 2931;
+          const diffPct = ((intrinsic - current) / current) * 100;
+
+          richPayload = {
+            mode: 'valuation_insights',
+            title: `Intrinsic Valuation Memo: ${ticker}`,
+            subtitle: 'Institutional DCF & Graham analysis models.',
+            primary_entity: {
+              label: ticker === 'TCS' ? 'Tata Consultancy Services' : ticker === 'INFY' ? 'Infosys Limited' : 'Reliance Industries Ltd',
+              ticker: ticker,
+              current_price: current,
+              change_pct: 0.81,
+              description: 'DCF Intrinsic calculation model.'
+            },
+            metric_cards: [
+              { label: 'Intrinsic Value (DCF)', value: `₹${intrinsic.toLocaleString('en-IN')}`, sub_value: `${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(1)}% vs market`, change_type: diffPct >= 0 ? 'positive' : 'negative' },
+              { label: 'Discount Rate (WACC)', value: '10.5%', sub_value: 'Conservative standard' },
+              { label: 'Graham Value', value: `₹${(intrinsic * 0.9).toFixed(0)}`, sub_value: 'Based on EPS growth' }
+            ],
+            charts: [
+              {
+                id: 'chart-1',
+                kind: 'area',
+                title: 'Projected Free Cash Flow',
+                x_labels: ['FY25 (E)', 'FY26 (E)', 'FY27 (E)', 'FY28 (E)', 'FY29 (E)'],
+                series: [{ name: 'FCF', values: [12000, 13100, 14200, 15500, 16900] }],
+                y_unit: 'Cr'
+              }
+            ],
+            data_sources: [{ label: 'NSE India' }, { label: 'yfinance' }, { label: 'Valuation Engine' }],
+            disclaimer: 'Calculated using static projection methods. Verify cash flows prior to entering capital.'
+          };
+
+          responseText = `I have run a detailed intrinsic valuation model for **${ticker}**. \n\nOur DCF model projects an intrinsic value of **₹${intrinsic.toLocaleString('en-IN')}**, indicating a **${diffPct.toFixed(1)}% margin of safety** relative to the current market price of ₹${current.toLocaleString('en-IN')}.\n\nThe Graham calculation also indicates a value of **₹${(intrinsic * 0.9).toFixed(0)}**, supporting our synthesis that the stock is reasonably positioned relative to its growth projections.`;
+        } else if (isCompare) {
+          richPayload = {
+            mode: 'comparison_insights',
+            title: 'Side-by-Side Comparative Audit',
+            subtitle: 'Financial statements comparison.',
+            comparison_rows: [
+              { metric: 'Operating Margin (EBIT)', primary_value: '24.6%', secondary_value: '21.2%', winner: 'primary' },
+              { metric: 'Return on Equity (ROE)', primary_value: '28.4%', secondary_value: '22.1%', winner: 'primary' },
+              { metric: 'Debt to Equity', primary_value: '0.08x', secondary_value: '0.12x', winner: 'primary' },
+              { metric: 'Revenue Growth (YoY)', primary_value: '8.4%', secondary_value: '9.2%', winner: 'secondary' }
+            ],
+            data_sources: [{ label: 'yfinance' }, { label: 'Fundamentals Server' }]
+          };
+
+          responseText = `Here is a side-by-side comparison. **TCS** (Primary) shows higher absolute operating margins at **24.6%** compared to **Infosys** at **21.2%**, indicating stronger pricing power. However, Infosys demonstrates slightly higher top-line YoY revenue growth at **9.2%**.`;
+        } else {
+          // Default snapshot
+          richPayload = {
+            mode: 'financial_snapshot',
+            title: `Corporate Pulse: ${ticker}`,
+            subtitle: 'Standard financial snapshot profile.',
+            primary_entity: {
+              label: ticker === 'TCS' ? 'Tata Consultancy Services' : ticker === 'ASIANPAINT' ? 'Asian Paints Limited' : 'Reliance Industries Ltd',
+              ticker: ticker,
+              current_price: ticker === 'TCS' ? 3842 : ticker === 'ASIANPAINT' ? 2810 : 2931,
+              change_pct: ticker === 'TCS' ? 0.33 : -1.48,
+              description: `${ticker} financial overview.`
+            },
+            metric_cards: [
+              { label: 'Market Cap', value: ticker === 'TCS' ? '₹14.2L Cr' : '₹2.7L Cr', sub_value: 'Index Heavyweight' },
+              { label: 'P/E Ratio', value: ticker === 'TCS' ? '28.2x' : '68.2x', sub_value: 'Trailing 12 Months' },
+              { label: 'ROE', value: ticker === 'TCS' ? '28.4%' : '22.1%', sub_value: 'Sustained capital efficiency', change_type: 'positive' }
+            ],
+            strengths_risks: [
+              {
+                entity_label: ticker,
+                strengths: ['Sustained high capital returns (ROE > 20%)', 'Zero long-term debt liabilities'],
+                risks: ['Higher comparative entry PE valuation', 'Sector discretionary spending delays']
+              }
+            ],
+            headlines: [
+              { title: `${ticker} announces quarterly dividend distribution`, source: 'BSE India', published: '2 days ago' },
+              { title: `Analysts upgrade ${ticker} to Outperform rating`, source: 'Economic Times', published: '5 days ago' }
+            ]
+          };
+
+          responseText = `Here is the current financial health snapshot for **${ticker}**. \n\nIt demonstrates strong fundamental stability, highlighted by a solid **Return on Equity (ROE) of ${ticker === 'TCS' ? '28.4%' : '22.1%'}** and a clean debt sheet. However, its high P/E represents a historically premium entry point.`;
+        }
+
+        setIsThinking(false);
+        onComplete(richPayload, responseText);
+      }
+    }, 450);
+  };
+
+  const handleSendMessage = (message: string, depth: 'chat' | 'standard' | 'deep') => {
+    if (!message.trim() || isThinking) return;
+
+    // Append User message to bubble thread
+    const userMsg: Message = { sender: 'user', text: message, depth };
+    setMessages(prev => [...prev, userMsg]);
+
+    // Track active query in history list
+    const newId = (conversations.length + 1).toString();
+    const cleanTitle = message.length > 28 ? message.substring(0, 28) + '...' : message;
+    
+    // Save to conversation history list
+    const newChat = { id: newId, title: cleanTitle, date: 'Today' };
+    const updatedHistory = [newChat, ...conversations.filter(c => c.title !== cleanTitle)];
+    setConversations(updatedHistory);
+    localStorage.setItem('prospektlab_conversations', JSON.stringify(updatedHistory));
+
+    // Run real-time agent scan mock loop
+    const t0 = performance.now();
+    runAgentStreamMock(message, depth, (richPayload, replyText) => {
+      const elapsed = Math.round(performance.now() - t0);
+      
+      const aiResponse: Message = {
+        sender: 'ai',
+        text: replyText,
+        richData: richPayload,
+        depth: depth,
+        elapsedMs: elapsed
+      };
+      
+      setMessages(prev => [...prev, aiResponse]);
+    });
+  };
+
+  const handleSuggestClick = (prompt: string) => {
+    handleSendMessage(prompt, 'standard');
+  };
+
+  const handleDeleteConversation = (id: string) => {
+    const updated = conversations.filter(c => c.id !== id);
+    setConversations(updated);
+    localStorage.setItem('prospektlab_conversations', JSON.stringify(updated));
+  };
+
+  const handleClearHistory = () => {
+    setConversations([]);
+    localStorage.setItem('prospektlab_conversations', JSON.stringify([]));
+  };
+
+  return (
+    <AppShell
+      title="ORACLE Workspace"
+      investorStyle={style}
+      watchlistsCount={3}
+      conversations={conversations}
+      onDeleteConversation={handleDeleteConversation}
+      onClearHistory={handleClearHistory}
+    >
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        justifyContent: 'space-between',
+        position: 'relative'
+      }}>
+        {/* Chat Conversation Area */}
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '24px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '24px'
+        }}>
+          {messages.map((msg, i) => (
+            <MessageBubble
+              key={i}
+              sender={msg.sender}
+              text={msg.text}
+              richData={msg.richData}
+              depth={msg.depth}
+              elapsedMs={msg.elapsedMs}
+            />
+          ))}
+
+          {/* Staggered thinking state */}
+          <AgentThinking
+            events={thinkingEvents}
+            isActive={isThinking}
+          />
+
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Bottom Input Area */}
+        <div style={{
+          padding: '16px 24px',
+          borderTop: '1px solid #161616',
+          backgroundColor: '#0D0D0D',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          zIndex: 5
+        }}>
+          {/* Suggested Chips (if idle) */}
+          {!isThinking && messages.length === 1 && (
+            <SuggestedPrompts
+              prompts={currentSuggested}
+              onClick={handleSuggestClick}
+              disabled={isThinking}
+            />
+          )}
+
+          {/* Full interactive ChatInput bar */}
+          <div style={{ maxWidth: '720px', width: '100%', alignSelf: 'center' }}>
+            <ChatInput onSend={handleSendMessage} disabled={isThinking} />
+          </div>
+        </div>
+      </div>
+    </AppShell>
+  );
+};
+export default Chat;
