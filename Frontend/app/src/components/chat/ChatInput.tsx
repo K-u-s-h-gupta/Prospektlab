@@ -1,15 +1,15 @@
 import React, { useState, KeyboardEvent } from 'react';
-import { Send, Sparkles, ShieldCheck, Zap } from 'lucide-react';
+import { Send, Sparkles, ShieldCheck } from 'lucide-react';
 
 interface ChatInputProps {
-  onSend: (message: string, depth: 'chat' | 'standard' | 'deep') => void;
+  onSend: (message: string, depth: 'standard' | 'deep') => void;
   onStop?: () => void;
   disabled?: boolean;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({ onSend, onStop, disabled }) => {
   const [text, setText] = useState('');
-  const [depth, setDepth] = useState<'chat' | 'standard' | 'deep'>('standard');
+  const [depth, setDepth] = useState<'standard' | 'deep'>('standard');
   const [isFocused, setIsFocused] = useState(false);
 
   const handleSend = () => {
@@ -45,7 +45,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, onStop, disabled }
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         disabled={disabled}
-        placeholder="Ask Mark anything — a ticker, your portfolio, or the tape..."
+        placeholder="Ask Mark-IT anything — a ticker, your portfolio, or the tape..."
         style={{
           width: '100%',
           minHeight: '60px',
@@ -75,32 +75,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, onStop, disabled }
           display: 'flex',
           gap: '8px'
         }}>
-          {/* Quick Chat Mode */}
-          <button
-            onClick={() => setDepth('chat')}
-            type="button"
-            disabled={disabled}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: depth === 'chat' ? 'var(--neutral-dim)' : 'transparent',
-              borderColor: depth === 'chat' ? 'var(--accent-cyan)' : 'transparent',
-              color: depth === 'chat' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-              padding: '6px 10px',
-              borderRadius: '6px',
-              fontSize: '11px',
-              fontWeight: 600,
-              border: '1px solid',
-              cursor: 'pointer',
-              transform: 'none',
-              lineHeight: 1
-            }}
-          >
-            <Zap size={11} />
-            Quick
-          </button>
-
           {/* Standard Mode */}
           <button
             onClick={() => setDepth('standard')}

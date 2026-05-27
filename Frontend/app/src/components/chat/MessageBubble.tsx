@@ -74,7 +74,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             fontSize: '11px',
             color: 'var(--text-secondary)'
           }}>
-            <span style={{ fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.05em' }}>Mark</span>
+            <span style={{ fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.05em' }}>Mark-IT</span>
             {depth && (
               <span className="badge badge-info" style={{ fontSize: '9px', padding: '1px 5px', color: 'var(--accent-indigo)', borderColor: 'rgba(129, 140, 248, 0.2)', background: 'rgba(129, 140, 248, 0.1)' }}>
                 {depth.toUpperCase()}

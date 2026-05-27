@@ -4,6 +4,7 @@ import { ArrowRight, AlertTriangle, Scale, Target } from 'lucide-react';
 export interface InsightItem {
   id: string;
   ticker: string;
+  name?: string;
   type: 'valuation' | 'risk' | 'earnings';
   title: string;
   summary: string;
@@ -86,7 +87,7 @@ export const RecentInsights: React.FC<RecentInsightsProps> = ({ insights = [], o
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Icon size={13} color={iconColor} />
                 <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {item.ticker}
+                  {item.name || item.ticker}
                 </span>
                 <span className={badgeClass} style={{ fontSize: '9px', padding: '2px 6px' }}>
                   {item.type.toUpperCase()}

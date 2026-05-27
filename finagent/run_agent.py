@@ -44,6 +44,7 @@ from finagent.retrieval import build_retrieval_plan
 from finagent.research_planner import ResearchPlan, build_default_plan
 from finagent.router import route_objective
 from finagent.output.intent_classifier import classify_output_mode, normalize_depth
+from finagent.output.contracts import ResponseDepth
 from finagent.state.checkpoint import Checkpoint, StepResult, empty_checkpoint
 from finagent.state.citation_log import Citation
 from finagent.synthesis import EnrichmentBundle, synthesize_memo
@@ -1266,18 +1267,22 @@ async def run_research_session(
         has_prior_entity=is_followup,
     )
 
-    # Always enable multi-agent specialists (and scraping) for every query.
-    # This implements Option A (force for valuation/DCF) + extends to ALL cases.
-    # Previously fast "chat"/"standard" modes in the gateway set enable_multi_agent=False,
-    # which skipped the entire orchestrator block, resulting in "AGENTS: None" and
-    # no calls to forecasting/valuation_engine MCPs even when the router selected them.
-    # By forcing True here (after routing), selected agents (e.g. valuation for
-    # "TCS valuation and DCF intrinsic value") will run deterministic forecasting,
-    # run DCF via valuation_engine, and record the MCPs in the session summary.
-    cfg.enable_multi_agent = True
-    cfg.enable_scraping = True
-
     response_depth = normalize_depth(cfg.response_depth)
+
+    # Force multi-agent specialists, scraping, reflection, and blindspots ONLY for deep research.
+    # For standard or chat modes, explicitly disable these heavy/expensive phases to ensure speed.
+    if response_depth == ResponseDepth.DEEP:
+        cfg.enable_multi_agent = True
+        cfg.enable_scraping = True
+        cfg.enable_reflection = True
+        cfg.enable_blindspot = True
+        cfg.enable_deep_dive = True
+    elif response_depth in {ResponseDepth.STANDARD, ResponseDepth.CHAT}:
+        cfg.enable_multi_agent = False
+        cfg.enable_blindspot = False
+        cfg.enable_reflection = False
+        cfg.enable_deep_dive = False
+        cfg.max_steps = min(cfg.max_steps, 8)
     output_mode = classify_output_mode(
         query=objective,
         target=target,

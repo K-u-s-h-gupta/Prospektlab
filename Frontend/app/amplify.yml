@@ -1,0 +1,46 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "📦 Installing dependencies for ProspektLab Frontend..."
+        - npm ci
+        - echo "🔧 Preparing production config..."
+        - |
+          if [ -z "$BACKEND_API_URL" ]; then
+            echo "⚠️  WARNING: BACKEND_API_URL not set. Using relative paths (may only work with proxy/rewrites)."
+            BACKEND_API_URL=""
+          else
+            echo "✅ Using backend API: $BACKEND_API_URL"
+          fi
+        - |
+          # Generate runtime config.js (loaded by index.html)
+          mkdir -p public
+          cat > public/config.js << EOF
+          window.__BACKEND_URL = "${BACKEND_API_URL}";
+          window.__CONFIG__ = {
+            apiBase: "${BACKEND_API_URL}",
+            environment: "production"
+          };
+          console.log("ProspektLab config loaded: backend=" + window.__BACKEND_URL);
+          EOF
+    build:
+      commands:
+        - echo "🚀 Building Vite React app for production..."
+        - npm run build
+        - echo "✅ Build complete. Output in dist/"
+    postBuild:
+      commands:
+        - echo "🎉 Amplify build finished on $(date)"
+        - ls -la dist/ || true
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
+  # Rewrites for SPA + optional API proxy comments (configure in Amplify Console if needed)
+  # For API proxy to backend (avoids CORS): add in Amplify App -> Rewrites & redirects:
+  #   Source: /api/<*>   Target: https://your-ecs-alb.execute-api.../api/<*>
+  #   etc for /auth /chat /portfolio etc. Or use absolute URLs in client (preferred for this setup).

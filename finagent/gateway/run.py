@@ -12,6 +12,7 @@ import shutil
 import sys
 import secrets
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -198,20 +199,40 @@ AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
 
 logger = logging.getLogger("finagent.gateway")
 
-app = FastAPI(title="ProspektLab Intelligence Gateway", version="0.5.0")
 
-@app.on_event("startup")
-async def startup_event():
-    configure_logging()
-    logger.info("FastAPI gateway startup: Logging configuration successfully applied to finagent and oracle namespaces.")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info(
+        "FastAPI gateway startup: Logging configuration successfully applied to finagent and oracle namespaces."
+    )
+    yield
+    # Shutdown
+    for task in list(_TASKS.values()):
+        task.cancel()
+    await aclose_shared_client()
+
+
+app = FastAPI(
+    title="ProspektLab Intelligence Gateway",
+    version="0.5.0",
+    lifespan=lifespan,
+)
 
 
 # ── CORS Middleware Configuration ─────────────────────────────────────────
 from fastapi.middleware.cors import CORSMiddleware
+_cors_raw = os.getenv("CORS_ORIGINS", "*")
+if _cors_raw.strip() == "*":
+    _allow_origins = ["*"]
+    _allow_credentials = False
+else:
+    _allow_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+    _allow_credentials = True
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow Amplify, localhost, and all production origins
-    allow_credentials=False,  # Must be False when allow_origins=["*"]
+    allow_origins=_allow_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -662,13 +683,6 @@ def _session_status(session_id: str) -> dict[str, Any]:
 #  the FinAgent home directory. No JWTs, no sessions — sufficient for a
 #  single-user dev/demo deployment. Production should swap in real auth.
 # ──────────────────────────────────────────────────────────────────────────
-
-
-@app.on_event("shutdown")
-async def _shutdown() -> None:
-    for task in list(_TASKS.values()):
-        task.cancel()
-    await aclose_shared_client()
 
 
 @app.get("/health")

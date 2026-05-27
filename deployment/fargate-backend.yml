@@ -189,8 +189,8 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Ref ProjectName
-      Cpu: '1024'         # 1 vCPU (Needed for running Playwright chromium stably)
-      Memory: '2048'      # 2 GB Memory
+      Cpu: '2048'         # 2 vCPU (recommended for Chromium + concurrent agents + search)
+      Memory: '4096'      # 4 GB Memory (stable for production workloads)
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -201,6 +201,27 @@ Resources:
           Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}:latest'
           PortMappings:
             - ContainerPort: 8080
+          Environment:
+            # Non-sensitive configuration (override via CI/CD or console for production values)
+            - Name: PROSPEKTLAB_ENV
+              Value: production
+            - Name: CORS_ORIGINS
+              Value: "*"
+            - Name: FINAGENT_SEARXNG_URL
+              Value: ""  # Optional: Set to your SearXNG URL (e.g. http://internal-alb-searxng:8888) for private search. Leave empty -> DDG+Bing fallback (NOW FULLY SUPPORTED & BUG-FIXED for ECS)
+            - Name: MCP_DISCOVERY_URL
+              Value: ""
+            - Name: MCP_QUANT_URL
+              Value: ""
+            # Secrets below must be updated after stack creation or via deployment workflow (do not commit real keys)
+            - Name: OPENAI_API_KEY
+              Value: "REPLACE_WITH_YOUR_OPENAI_KEY"
+            - Name: TAVILY_API_KEY
+              Value: ""
+            - Name: SUPABASE_URL
+              Value: ""
+            - Name: SUPABASE_KEY
+              Value: ""
           LogConfiguration:
             LogDriver: awslogs
             Options:

@@ -53,11 +53,11 @@ class SearXNGClient:
         """
         if not self.available:
             logger.info("SearXNG URL not configured (FINAGENT_SEARXNG_URL). Falling back to DDG + Bing.")
-            # Fallback to direct scrapers
+            # Fallback to direct scrapers (await since inside async context)
             try:
                 from finagent.tools.web.scraper import _search_ddg, _search_bing
-                ddg = asyncio.run(_search_ddg(query, max_results=num_results))
-                bing = asyncio.run(_search_bing(query, max_results=num_results))
+                ddg = await _search_ddg(query, max_results=num_results)
+                bing = await _search_bing(query, max_results=num_results)
                 combined = (ddg or []) + (bing or [])
                 # Dedup and format
                 seen = set()

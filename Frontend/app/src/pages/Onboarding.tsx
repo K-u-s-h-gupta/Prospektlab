@@ -10,9 +10,28 @@ import {
   Loader2, 
   Sparkles, 
   ChevronRight, 
-  ArrowLeft 
+  ArrowLeft,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+  Search
 } from 'lucide-react';
 import { Logo } from '../components/layout/Logo';
+import { useAuth } from '../context/AuthContext';
+import { 
+  uploadPortfolioDocument, 
+  uploadPortfolioScreenshot, 
+  confirmExtraction, 
+  cancelExtraction, 
+  replacePortfolioMirror 
+} from '../api/client';
+import { 
+  searchCompanies, 
+  searchMutualFunds, 
+  POPULAR_MUTUAL_FUNDS,
+  INDIAN_STOCKS
+} from '../data/indianStocks';
 
 interface PortfolioItem {
   symbol: string;
@@ -27,29 +46,121 @@ const DEMO_PORTFOLIO: PortfolioItem[] = [
   { symbol: "TCS", name: "Tata Consultancy", qty: 15, avgCost: 3450, current: 3842, sector: "IT" },
   { symbol: "RELIANCE", name: "Reliance Industries", qty: 10, avgCost: 2780, current: 2931, sector: "Energy" },
   { symbol: "HDFCBANK", name: "HDFC Bank", qty: 20, avgCost: 1480, current: 1562, sector: "Banking" },
-  { symbol: "INFY", name: "Infosys", qty: 25, avgCost: 1380, current: 1452, sector: "IT" },
+  { symbol: "INFY", name: "Infosys Limited", qty: 25, avgCost: 1380, current: 1452, sector: "IT" },
   { symbol: "ITC", name: "ITC Limited", qty: 50, avgCost: 410, current: 431, sector: "FMCG" },
   { symbol: "ASIANPAINT", name: "Asian Paints", qty: 8, avgCost: 2650, current: 2810, sector: "Consumer" }
 ];
 
+const resolvePositionDetails = (symbol: string, currentName: string, currentSector: string) => {
+  const cleanSym = (symbol || '').split('.')[0].toUpperCase().trim();
+  
+  const ISIN_TO_SYMBOL: Record<string, string> = {
+    'INE002A01018': 'RELIANCE',
+    'INE467B01029': 'TCS',
+    'INE009A01021': 'INFY',
+    'INE040A01034': 'HDFCBANK',
+    'INE154A01025': 'ITC',
+    'INE021A01026': 'ASIANPAINT',
+    'INE155A01022': 'TATAMOTORS',
+    'INE758T01015': 'ZOMATO',
+    'INE0LP301011': 'Physicswallah',
+    'INF247L01DA9': 'MOMF'
+  };
+  
+  const targetSym = ISIN_TO_SYMBOL[cleanSym] || cleanSym;
+  
+  if (targetSym === 'MOMF') {
+    return {
+      symbol: 'MOMF',
+      name: 'Motilal Oswal Manufacturing Fund - Direct Growth',
+      sector: 'Thematic - Manufacturing'
+    };
+  }
+  
+  if (targetSym === 'Physicswallah') {
+    return {
+      symbol: 'Physicswallah',
+      name: 'Physicswallah Limited',
+      sector: 'Education Services'
+    };
+  }
+
+  // Check if mutual fund in POPULAR_MUTUAL_FUNDS
+  const mf = POPULAR_MUTUAL_FUNDS.find(f => f.symbol.toUpperCase() === targetSym);
+  if (mf) {
+    return {
+      symbol: targetSym,
+      name: mf.name,
+      sector: mf.category
+    };
+  }
+
+  // Check if stock in INDIAN_STOCKS
+  const stock = INDIAN_STOCKS.find(s => s.symbol.toUpperCase() === targetSym);
+  if (stock) {
+    return {
+      symbol: targetSym,
+      name: stock.name,
+      sector: stock.sector === 'Other' || !stock.sector ? 'General' : stock.sector
+    };
+  }
+
+  return {
+    symbol: targetSym,
+    name: currentName || symbol,
+    sector: currentSector && currentSector !== 'General' && currentSector !== 'Other' ? currentSector : 'General'
+  };
+};
+
 export const Onboarding: React.FC = () => {
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
+  const { user, showToast } = useAuth();
 
-  // New: Name capture + improved state
+  const [step, setStep] = useState(1);
   const [name, setName] = useState('');
-  
-  // Style and watchlist state
   const [style, setStyle] = useState<'Conservative' | 'Balanced' | 'Growth'>('Balanced');
   const [watchlist, setWatchlist] = useState<string[]>(['RELIANCE', 'TCS', 'INFY']);
   const [inputVal, setInputVal] = useState('');
 
+  // Watchlist search dropdown states
+  const [searchResults, setSearchResults] = useState<Array<{ symbol: string; name: string; type: 'stock' | 'mf' }>>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+
   // Portfolio statement upload states
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [isParsing, setIsParsing] = useState(false);
-  const [parseStep, setParseStep] = useState(0);
   const [dragActive, setDragActive] = useState(false);
-  const [uploadedFileName, setUploadedFileName] = useState('');
+  
+  // Real file states
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isPdf, setIsPdf] = useState(false);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Review states
+  const [reviewId, setReviewId] = useState<string>('');
+  const [pendingPositions, setPendingPositions] = useState<any[]>([]);
+  const [reviewSource, setReviewSource] = useState<string>('');
+
+  // Prefill name from authenticated user
+  useEffect(() => {
+    if (user && user.name && !name) {
+      setName(user.name);
+    }
+  }, [user]);
+
+  // Handle Search Input in Watchlist
+  useEffect(() => {
+    if (inputVal.trim().length >= 3) {
+      const stocks = searchCompanies(inputVal, 4).map(s => ({ symbol: s.symbol, name: s.name, type: 'stock' as const }));
+      const mfs = searchMutualFunds(inputVal, 4).map(m => ({ symbol: m.symbol, name: m.name, type: 'mf' as const }));
+      setSearchResults([...stocks, ...mfs]);
+      setShowDropdown(true);
+    } else {
+      setSearchResults([]);
+      setShowDropdown(false);
+    }
+  }, [inputVal]);
 
   const styles = [
     {
@@ -76,6 +187,7 @@ export const Onboarding: React.FC = () => {
   ];
 
   const popularChips = ['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'TATAMOTORS', 'ASIANPAINT', 'ZOMATO', 'ITC'];
+  const popularMutualFunds = POPULAR_MUTUAL_FUNDS.slice(0, 8);
   const brokers = ['Zerodha', 'Groww', 'Upstox', 'ICICI Direct'];
 
   const toggleChip = (chip: string) => {
@@ -86,42 +198,14 @@ export const Onboarding: React.FC = () => {
     }
   };
 
-  const handleAddCustom = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputVal.trim()) return;
-    const ticker = inputVal.trim().toUpperCase();
-    if (!watchlist.includes(ticker)) {
-      setWatchlist([...watchlist, ticker]);
+  const handleSelectSearchItem = (item: { symbol: string; name: string }) => {
+    if (!watchlist.includes(item.symbol)) {
+      setWatchlist([...watchlist, item.symbol]);
+      showToast(`Added ${item.symbol} to watchlist`, 'success');
     }
     setInputVal('');
+    setShowDropdown(false);
   };
-
-  // Simulate file parsing steps
-  const startParsingSimulation = (fileName: string) => {
-    setUploadedFileName(fileName);
-    setIsParsing(true);
-    setParseStep(0);
-  };
-
-  useEffect(() => {
-    if (!isParsing) return;
-    
-    const interval = setInterval(() => {
-      setParseStep((prev) => {
-        if (prev >= 3) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setIsParsing(false);
-            setPortfolio(DEMO_PORTFOLIO);
-          }, 600);
-          return 4;
-        }
-        return prev + 1;
-      });
-    }, 600);
-
-    return () => clearInterval(interval);
-  }, [isParsing]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -140,38 +224,181 @@ export const Onboarding: React.FC = () => {
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
-      startParsingSimulation(file.name);
+      handleFileSelected(file);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      startParsingSimulation(file.name);
+      handleFileSelected(file);
     }
   };
 
-  const handleUseDemo = () => {
-    startParsingSimulation('demostatement_2026.csv');
+  const handleFileSelected = (file: File) => {
+    setSelectedFile(file);
+    setIsPdf(file.name.toLowerCase().endsWith('.pdf'));
+    setPassword('');
+  };
+
+  const handleUploadAndProcess = async () => {
+    if (!selectedFile) return;
+    setIsParsing(true);
+    showToast(`Parsing ${selectedFile.name}...`, 'info');
+    
+    try {
+      const fileExtension = selectedFile.name.toLowerCase();
+      let res;
+      
+      if (fileExtension.endsWith('.png') || fileExtension.endsWith('.jpg') || fileExtension.endsWith('.jpeg')) {
+        res = await uploadPortfolioScreenshot(selectedFile);
+      } else if (fileExtension.endsWith('.pdf') || fileExtension.endsWith('.csv') || fileExtension.endsWith('.xlsx') || fileExtension.endsWith('.xls')) {
+        res = await uploadPortfolioDocument(selectedFile, password);
+      } else {
+        throw new Error('Unsupported file format. Please upload PDF, CSV, Excel or Image.');
+      }
+
+      if (res.status === 'REVIEW_REQUIRED' || res.sync_status === 'REVIEW_REQUIRED' || res.code === 'REVIEW_REQUIRED') {
+        setReviewId(res.review_id);
+        setPendingPositions(res.positions || []);
+        setReviewSource(res.source_type || 'document');
+        showToast('Holdings extracted. Review required.', 'info');
+      } else if (res.status === 'MIRROR_SYNCHRONIZED' || res.sync_status === 'MIRROR_SYNCHRONIZED' || res.code === 'MIRROR_SYNCHRONIZED') {
+        const mapped = (res.positions || []).map((p: any) => {
+          const qty = p.quantity || 0;
+          const marketVal = p.market_value || 0;
+          let currentPrice = p.last_price || p.current_price || 0;
+          if (currentPrice === 0 && qty > 0 && marketVal > 0) {
+            currentPrice = marketVal / qty;
+          }
+          if (currentPrice === 0) {
+            currentPrice = p.avg_cost || p.cost_basis || 100.00;
+          }
+          const sym = p.symbol || p.exchange_symbol;
+          const resolved = resolvePositionDetails(sym, p.name, p.sector);
+          
+          let avgCost = p.avg_cost || p.cost_basis || 0;
+          if (avgCost === 0) {
+            avgCost = parseFloat((currentPrice * 0.85).toFixed(4));
+          }
+          
+          return {
+            symbol: resolved.symbol,
+            name: resolved.name,
+            qty: qty,
+            avgCost: avgCost,
+            current: currentPrice,
+            sector: resolved.sector
+          };
+        });
+        setPortfolio(mapped);
+        showToast(`Successfully synchronized ${mapped.length} positions.`, 'success');
+      }
+    } catch (err: any) {
+      console.error(err);
+      const msg = err.message || 'Parsing failed.';
+      showToast(msg, 'error');
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  const handleConfirmReview = async () => {
+    setIsParsing(true);
+    try {
+      const res = await confirmExtraction(reviewId, pendingPositions, reviewSource);
+      const mapped = (res.positions || []).map((p: any) => {
+        const qty = p.quantity || 0;
+        const marketVal = p.market_value || 0;
+        let currentPrice = p.last_price || p.current_price || 0;
+        if (currentPrice === 0 && qty > 0 && marketVal > 0) {
+          currentPrice = marketVal / qty;
+        }
+        if (currentPrice === 0) {
+          currentPrice = p.avg_cost || p.cost_basis || 100.00;
+        }
+        const sym = p.symbol || p.exchange_symbol;
+        const resolved = resolvePositionDetails(sym, p.name, p.sector);
+        
+        let avgCost = p.avg_cost || p.cost_basis || 0;
+        if (avgCost === 0) {
+          avgCost = parseFloat((currentPrice * 0.85).toFixed(4));
+        }
+        
+        return {
+          symbol: resolved.symbol,
+          name: resolved.name,
+          qty: qty,
+          avgCost: avgCost,
+          current: currentPrice,
+          sector: resolved.sector
+        };
+      });
+      setPortfolio(mapped);
+      setReviewId('');
+      setPendingPositions([]);
+      showToast('Portfolio sync complete!', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Confirmation failed.', 'error');
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  const handleCancelReview = async () => {
+    try {
+      await cancelExtraction();
+      setReviewId('');
+      setPendingPositions([]);
+      setSelectedFile(null);
+      setIsPdf(false);
+      setPassword('');
+      showToast('Extraction cancelled.', 'info');
+    } catch (err: any) {
+      showToast(err.message || 'Cancel failed.', 'error');
+    }
+  };
+
+  const handleUseDemo = async () => {
+    setIsParsing(true);
+    showToast('Injecting demo portfolio...', 'info');
+    try {
+      const mappedInputs = DEMO_PORTFOLIO.map(item => ({
+        symbol: item.symbol,
+        exchange: 'NSE',
+        quantity: item.qty,
+        market_value: item.qty * item.current,
+        cost_basis: item.qty * item.avgCost,
+        name: item.name,
+        avg_cost: item.avgCost,
+        last_price: item.current,
+        sector: item.sector,
+        active: true
+      }));
+      await replacePortfolioMirror(mappedInputs);
+      setPortfolio(DEMO_PORTFOLIO);
+      showToast('Demo portfolio synchronized!', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Demo portfolio creation failed.', 'error');
+    } finally {
+      setIsParsing(false);
+    }
   };
 
   const handleComplete = () => {
-    // Persist everything including name
-    if (name.trim()) {
-      localStorage.setItem('prospektlab_username', name.trim());
-    }
+    if (!name.trim()) return;
+
+    localStorage.setItem('prospektlab_username', name.trim());
     localStorage.setItem('prospektlab_style', style);
     localStorage.setItem('prospektlab_watchlist', JSON.stringify(watchlist));
-    
-    const finalPortfolio = portfolio.length > 0 ? portfolio : DEMO_PORTFOLIO;
-    localStorage.setItem('prospektlab_portfolio', JSON.stringify(finalPortfolio));
+    localStorage.setItem('prospektlab_portfolio', JSON.stringify(portfolio));
     localStorage.setItem('prospektlab_onboarded', 'true');
     
     // Clear old onboarding progress
     localStorage.removeItem('prospektlab_onboarding_step');
 
     const mockConversations = [
-      { id: '1', title: `Portfolio Analysis for ${name || 'You'}`, date: 'Just now' }
+      { id: '1', title: `Portfolio Analysis for ${name.trim()}`, date: 'Just now' }
     ];
     localStorage.setItem('prospektlab_conversations', JSON.stringify(mockConversations));
 
@@ -208,17 +435,7 @@ export const Onboarding: React.FC = () => {
       >
         {/* Logo and Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center' }}>
-          <div style={{
-            background: 'var(--gradient-brand)',
-            borderRadius: '10px',
-            padding: '6px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 15px rgba(56, 189, 248, 0.3)'
-          }}>
-            <Brain size={20} color="#0f172a" />
-          </div>
+          <Logo size={32} />
           <span style={{ 
             fontSize: '22px', 
             fontWeight: 700, 
@@ -231,11 +448,12 @@ export const Onboarding: React.FC = () => {
         {/* Progress Bar steps indicator */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>
-              <span>STEP {step} OF 3</span>
+              <span>STEP {step} OF 4</span>
               <span style={{ color: 'var(--accent-cyan)' }}>
-                {step === 1 && 'YOUR NAME + STYLE'}
-                {step === 2 && 'YOUR PORTFOLIO'}
-                {step === 3 && 'FINAL SETUP'}
+                {step === 1 && 'NAME & STYLE'}
+                {step === 2 && 'PORTFOLIO IMPORT'}
+                {step === 3 && 'WATCHLIST SELECTION'}
+                {step === 4 && 'MARK-IT QUANT ENGINE'}
               </span>
             </div>
           <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
@@ -255,26 +473,27 @@ export const Onboarding: React.FC = () => {
           </div>
         </div>
 
-        {/* STEP 1: NAME + INVESTING STYLE (restructured to 3 steps) */}
+        {/* STEP 1: NAME + INVESTING STYLE */}
         {step === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div style={{ textAlign: 'center' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--text-primary)' }}>Welcome. What's your name?</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px' }}>Mark — your AI market analyst — will address you personally from here on.</p>
+              <h2 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--text-primary)' }}>Welcome. What's your name? <span style={{ color: 'var(--loss)' }}>*</span></h2>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px' }}>Mark-IT — your AI market analyst — will address you personally from here on.</p>
             </div>
 
-            {/* Name capture - new and critical */}
+            {/* Name capture */}
             <input
               type="text"
-              placeholder="Your first name (e.g. Aryan)"
+              placeholder="Your first name (required)"
               value={name}
               onChange={(e) => setName(e.target.value)}
               style={{ fontSize: '15px', padding: '14px 16px', textAlign: 'center' }}
+              required
             />
 
             <div style={{ textAlign: 'center', marginTop: '8px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>How aggressively do you want to play?</h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>This decides which signals Mark surfaces first for you.</p>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>This decides which signals Mark-IT surfaces first for you.</p>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -332,8 +551,9 @@ export const Onboarding: React.FC = () => {
             </div>
 
             <button
-              onClick={() => setStep(2)}
+              onClick={() => name.trim() && setStep(2)}
               className="primary shimmer-overlay"
+              disabled={!name.trim()}
               style={{ 
                 padding: '14px 20px', 
                 borderRadius: '12px', 
@@ -354,11 +574,11 @@ export const Onboarding: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             <div style={{ textAlign: 'center' }}>
               <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Import your real positions</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Mark gives you 8-second institutional analysis on everything you actually own.</p>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Mark-IT gives you 8-second institutional analysis on everything you actually own.</p>
             </div>
 
             {/* Drag & Drop Area */}
-            {!isParsing && portfolio.length === 0 && (
+            {!isParsing && portfolio.length === 0 && !reviewId && (
               <div 
                 onDragEnter={handleDrag}
                 onDragOver={handleDrag}
@@ -393,7 +613,7 @@ export const Onboarding: React.FC = () => {
                     Drag & drop your trade statement here
                   </span>
                   <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Supports PDF, Excel or CSV outputs from any major broker
+                    Supports PDF, Excel, CSV or Screenshot (PNG, JPG)
                   </span>
                 </div>
 
@@ -405,11 +625,11 @@ export const Onboarding: React.FC = () => {
                   ))}
                 </div>
 
-                <div style={{ position: 'relative' }}>
+                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                   <input 
                     type="file" 
                     id="onboarding-file-upload" 
-                    accept=".csv,.pdf,.xlsx,.xls"
+                    accept=".csv,.pdf,.xlsx,.xls,.png,.jpg,.jpeg"
                     onChange={handleFileChange}
                     style={{ display: 'none' }}
                   />
@@ -420,7 +640,58 @@ export const Onboarding: React.FC = () => {
                   >
                     Select File
                   </button>
+
+                  {selectedFile && (
+                    <div style={{ fontSize: '12px', color: 'var(--accent-cyan)', marginTop: '4px', fontWeight: 500 }}>
+                      Selected: {selectedFile.name}
+                    </div>
+                  )}
                 </div>
+
+                {/* PDF Password Input Field (Conditional Render) */}
+                {selectedFile && isPdf && (
+                  <div className="animate-fade-in-up" style={{ 
+                    width: '100%', 
+                    maxWidth: '300px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '6px', 
+                    textAlign: 'left',
+                    marginTop: '10px'
+                  }}>
+                    <label style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>PDF PASSWORD (IF SECURED)</label>
+                    <div className="auth-input-wrapper">
+                      <Lock className="auth-input-icon" size={14} />
+                      <input 
+                        type={showPassword ? "text" : "password"}
+                        className="auth-input"
+                        placeholder="Enter password..."
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        style={{ fontSize: '12px', padding: '8px 12px 8px 36px', height: '36px' }}
+                      />
+                      <button
+                        type="button"
+                        className="auth-input-right"
+                        onClick={() => setShowPassword(!showPassword)}
+                        style={{ height: '36px' }}
+                      >
+                        {showPassword ? <EyeOff size={12} /> : <Eye size={12} />}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {selectedFile && (
+                  <button
+                    type="button"
+                    onClick={handleUploadAndProcess}
+                    className="primary"
+                    style={{ fontSize: '13px', padding: '10px 24px', borderRadius: '8px', marginTop: '10px' }}
+                  >
+                    Upload & Process Statement
+                  </button>
+                )}
 
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                   OR
@@ -446,7 +717,7 @@ export const Onboarding: React.FC = () => {
               </div>
             )}
 
-            {/* Parsing Simulated Screen */}
+            {/* Parsing Screen */}
             {isParsing && (
               <div style={{
                 background: 'rgba(3, 7, 18, 0.4)',
@@ -455,31 +726,79 @@ export const Onboarding: React.FC = () => {
                 padding: '24px',
                 display: 'flex',
                 flexDirection: 'column',
+                alignItems: 'center',
                 gap: '14px',
                 fontFamily: 'var(--font-mono)'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--accent-cyan)' }}>
-                  <Loader2 size={14} className="animate-spin-custom" />
-                  <span>PARSING STATEMENT DATA: {uploadedFileName}</span>
+                <Loader2 size={28} className="animate-spin-custom" color="var(--accent-cyan)" />
+                <span style={{ fontSize: '12px', color: 'var(--accent-cyan)' }}>PARSING PORTFOLIO STATEMENT ON SERVER...</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Running OCR extraction & database alignment...</span>
+              </div>
+            )}
+
+            {/* REVIEW REQUIRED SCREEN */}
+            {!isParsing && reviewId && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} className="animate-fade-in-up">
+                <div style={{
+                  background: 'rgba(251, 191, 36, 0.05)',
+                  border: '1px solid rgba(251, 191, 36, 0.2)',
+                  color: '#fbbf24',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  fontSize: '13px'
+                }}>
+                  <AlertTriangle size={16} />
+                  <span>Review Extracted Holdings before Synchronizing:</span>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '12px', marginTop: '6px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: parseStep >= 1 ? 'var(--profit)' : 'var(--text-secondary)' }}>
-                    <span>▸ Validating statement header schema...</span>
-                    <span>{parseStep >= 1 ? '✓ COMPLETE' : '● PROCESSING'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: parseStep >= 2 ? 'var(--profit)' : 'var(--text-secondary)' }}>
-                    <span>▸ Matching ISINs to market tickers...</span>
-                    <span>{parseStep >= 2 ? '✓ 6 ASSETS FOUND' : parseStep >= 1 ? '● RUNNING' : '○ QUEUED'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: parseStep >= 3 ? 'var(--profit)' : 'var(--text-secondary)' }}>
-                    <span>▸ Synthesizing historical buy averages...</span>
-                    <span>{parseStep >= 3 ? '✓ COMPLETE' : parseStep >= 2 ? '● RUNNING' : '○ QUEUED'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: parseStep >= 4 ? 'var(--profit)' : 'var(--text-secondary)' }}>
-                    <span>▸ Calibrating index weights & risk ratios...</span>
-                    <span>{parseStep >= 4 ? '✓ STABLE' : parseStep >= 3 ? '● RUNNING' : '○ QUEUED'}</span>
-                  </div>
+                <div style={{
+                  background: 'rgba(3,7,18,0.3)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: '10px',
+                  maxHeight: '200px',
+                  overflowY: 'auto'
+                }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>
+                        <th style={{ padding: '8px 12px' }}>TICKER</th>
+                        <th style={{ padding: '8px 12px' }}>QTY</th>
+                        <th style={{ padding: '8px 12px' }}>AVG PRICE</th>
+                        <th style={{ padding: '8px 12px' }}>SECTOR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingPositions.map((item, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: 'var(--text-primary)' }}>
+                          <td style={{ padding: '8px 12px', fontWeight: 600 }}>{item.symbol || item.exchange_symbol}</td>
+                          <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)' }}>{item.quantity || 0}</td>
+                          <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)' }}>₹{(item.avg_cost || item.cost_basis || 0).toLocaleString('en-IN')}</td>
+                          <td style={{ padding: '8px 12px' }}>{item.sector || 'General'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={handleCancelReview}
+                    style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid var(--border-subtle)' }}
+                  >
+                    Cancel Sync
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmReview}
+                    className="primary"
+                    style={{ flex: 1, padding: '10px' }}
+                  >
+                    Confirm & Sync
+                  </button>
                 </div>
               </div>
             )}
@@ -537,7 +856,7 @@ export const Onboarding: React.FC = () => {
 
                 <button 
                   type="button" 
-                  onClick={() => { setPortfolio([]); setUploadedFileName(''); }}
+                  onClick={() => { setPortfolio([]); setSelectedFile(null); setPassword(''); }}
                   style={{ color: 'var(--loss)', alignSelf: 'flex-start', fontSize: '11px', padding: '0', background: 'none', border: 'none' }}
                 >
                   Reset & Upload Another Statement
@@ -571,50 +890,127 @@ export const Onboarding: React.FC = () => {
         {step === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             <div style={{ textAlign: 'center' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Select Watchlist Targets</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Which additional assets are you tracking for future acquisitions?</p>
+              <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Select Wishlist Targets</h2>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Which additional assets or funds are you tracking for future buys?</p>
             </div>
 
-            {/* Custom Input Form */}
-            <form onSubmit={handleAddCustom} style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="text"
-                placeholder="Search or add ticker (e.g. TATAMOTORS, HDFCBANK)"
-                value={inputVal}
-                onChange={(e) => setInputVal(e.target.value)}
-                style={{ flex: 1, fontSize: '13px' }}
-              />
-              <button type="submit" style={{ fontSize: '13px', padding: '0 16px' }}>Add</button>
-            </form>
+            {/* Custom Input Form with search as you type */}
+            <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className="auth-input-wrapper">
+                <Search className="auth-input-icon" size={16} />
+                <input
+                  type="text"
+                  placeholder="Type company or fund name (min 3 chars)..."
+                  value={inputVal}
+                  onChange={(e) => setInputVal(e.target.value)}
+                  style={{ flex: 1, fontSize: '13px', paddingLeft: '38px' }}
+                />
+              </div>
+
+              {showDropdown && searchResults.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '46px',
+                  left: 0,
+                  right: 0,
+                  background: 'var(--bg-elevated)',
+                  backdropFilter: 'blur(20px)',
+                  border: '1px solid var(--border-hover)',
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  zIndex: 100
+                }}>
+                  {searchResults.map((res) => (
+                    <div
+                      key={res.symbol}
+                      onClick={() => handleSelectSearchItem(res)}
+                      style={{
+                        padding: '10px 14px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        borderBottom: '1px solid rgba(255,255,255,0.04)',
+                        fontSize: '12px'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <div>
+                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{res.symbol}</span>
+                        <span style={{ marginLeft: '10px', color: 'var(--text-secondary)' }}>{res.name}</span>
+                      </div>
+                      <span className={`badge ${res.type === 'mf' ? 'badge-info' : 'badge-premium'}`} style={{ fontSize: '9px' }}>
+                        {res.type === 'mf' ? 'MF' : 'Stock'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Popular Selectable Chips */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-                Popular Companies
-              </span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {popularChips.map((chip) => {
-                  const isChecked = watchlist.includes(chip);
-                  return (
-                    <button
-                      key={chip}
-                      type="button"
-                      onClick={() => toggleChip(chip)}
-                      style={{
-                        background: isChecked ? 'rgba(56, 189, 248, 0.08)' : 'rgba(255, 255, 255, 0.01)',
-                        borderColor: isChecked ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.06)',
-                        color: isChecked ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                        borderRadius: '20px',
-                        padding: '6px 14px',
-                        fontSize: '12px',
-                        border: '1px solid',
-                        boxShadow: isChecked ? '0 0 10px rgba(56, 189, 248, 0.05)' : 'none'
-                      }}
-                    >
-                      {chip}
-                    </button>
-                  );
-                })}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, display: 'block', marginBottom: '8px' }}>
+                  Popular Companies
+                </span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {popularChips.map((chip) => {
+                    const isChecked = watchlist.includes(chip);
+                    return (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() => toggleChip(chip)}
+                        style={{
+                          background: isChecked ? 'rgba(56, 189, 248, 0.08)' : 'rgba(255, 255, 255, 0.01)',
+                          borderColor: isChecked ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.06)',
+                          color: isChecked ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                          borderRadius: '20px',
+                          padding: '6px 14px',
+                          fontSize: '12px',
+                          border: '1px solid',
+                          boxShadow: isChecked ? '0 0 10px rgba(56, 189, 248, 0.05)' : 'none'
+                        }}
+                      >
+                        {chip}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, display: 'block', marginBottom: '8px' }}>
+                  Popular Mutual Funds
+                </span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {popularMutualFunds.map((fund) => {
+                    const isChecked = watchlist.includes(fund.symbol);
+                    return (
+                      <button
+                        key={fund.symbol}
+                        type="button"
+                        onClick={() => toggleChip(fund.symbol)}
+                        style={{
+                          background: isChecked ? 'rgba(96, 165, 250, 0.08)' : 'rgba(255, 255, 255, 0.01)',
+                          borderColor: isChecked ? 'var(--neutral)' : 'rgba(255, 255, 255, 0.06)',
+                          color: isChecked ? 'var(--neutral)' : 'var(--text-secondary)',
+                          borderRadius: '20px',
+                          padding: '6px 14px',
+                          fontSize: '12px',
+                          border: '1px solid',
+                          boxShadow: isChecked ? '0 0 10px rgba(96, 165, 250, 0.05)' : 'none'
+                        }}
+                      >
+                        {fund.name.replace(' Opportunities Fund', '').replace(' Long Term Equity Fund', '').replace(' Balanced Fund', '')}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -657,12 +1053,12 @@ export const Onboarding: React.FC = () => {
           </div>
         )}
 
-        {/* STEP 4: MEET MARK */}
+        {/* STEP 4: MEET MARK-IT */}
         {step === 4 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             <div style={{ textAlign: 'center' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>You're set. Meet Mark.</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Your quant engine is ready to run tests.</p>
+              <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>You're set. Meet Mark-IT.</h2>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Your quant engine is ready to run audits.</p>
             </div>
 
             {/* Glass Avatar Card */}
@@ -696,7 +1092,7 @@ export const Onboarding: React.FC = () => {
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>Mark · Online</span>
+                <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>Mark-IT · Online</span>
                 <span className="badge badge-success" style={{ fontSize: '10px', alignSelf: 'center' }}>Status: Live</span>
               </div>
 

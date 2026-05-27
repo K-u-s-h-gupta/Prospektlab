@@ -83,8 +83,8 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
                   >
                     <td style={{ padding: '14px 16px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontWeight: 700 }}>{item.symbol}</span>
-                        <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>{item.name}</span>
+                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.name}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{item.symbol}</span>
                       </div>
                     </td>
                     <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)' }}>{item.qty}</td>

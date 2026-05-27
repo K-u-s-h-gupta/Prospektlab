@@ -1,6 +1,9 @@
 import React from 'react';
 import { Doughnut } from 'react-chartjs-2';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, Title } from 'chart.js';
 import { ChartColors } from './ThemeProvider';
+
+ChartJS.register(ArcElement, Tooltip, Legend, Title);
 
 
 interface DonutChartProps {
@@ -10,18 +13,21 @@ interface DonutChartProps {
 }
 
 export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title }) => {
-  const getSectorColor = (label: string) => {
-    switch (label.toUpperCase()) {
-      case 'IT': return '#38BDF8'; // Cyan
-      case 'ENERGY': return '#818CF8'; // Indigo
-      case 'BANKING': return '#34D399'; // Emerald
-      case 'FMCG': return '#F59E0B'; // Amber
-      case 'CONSUMER': return '#FB7185'; // Soft Rose
-      default: return '#94A3B8'; // Slate
-    }
-  };
+  const PREDEFINED_COLORS = [
+    '#38BDF8', // Cyan
+    '#818CF8', // Indigo
+    '#34D399', // Emerald
+    '#F59E0B', // Amber
+    '#FB7185', // Soft Rose
+    '#A78BFA', // Violet
+    '#F472B6', // Pink
+    '#F87171', // Red
+    '#FB923C', // Orange
+    '#4ADE80', // Light Green
+    '#2DD4BF', // Teal
+  ];
 
-  const colors = labels.map(getSectorColor);
+  const colors = labels.map((_, idx) => PREDEFINED_COLORS[idx % PREDEFINED_COLORS.length]);
 
   const chartData = {
     labels,

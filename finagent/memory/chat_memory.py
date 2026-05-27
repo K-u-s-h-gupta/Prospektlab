@@ -14,8 +14,6 @@ from typing import Any
 from finagent.paths import finagent_data_path
 from finagent.storage.sqlite import connect_wal
 
-_RAM_STORE: dict[str, list[dict[str, str]]] = {}
-_RAM_LOCK = threading.Lock()
 
 class ChatMemoryManager:
     def __init__(self):
@@ -50,24 +48,21 @@ class ChatMemoryManager:
         """Append a message to the chat history.
         
         Args:
-            user_email: The email of the logged-in user, or None if guest.
+            user_email: The email of the logged-in user (required).
             session_id: The active chat session ID.
             role: "user" or "assistant".
             content: The text content of the message.
         """
-        if user_email:
-            with self._conn() as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO messages (user_email, session_id, role, content)
-                    VALUES (?, ?, ?, ?)
-                ''', (user_email, session_id, role, content))
-                conn.commit()
-        else:
-            with _RAM_LOCK:
-                if session_id not in _RAM_STORE:
-                    _RAM_STORE[session_id] = []
-                _RAM_STORE[session_id].append({"role": role, "content": content})
+        if not user_email:
+            raise ValueError("User email is required. Guest sessions are not supported.")
+            
+        with self._conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO messages (user_email, session_id, role, content)
+                VALUES (?, ?, ?, ?)
+            ''', (user_email, session_id, role, content))
+            conn.commit()
 
     def get_history(self, user_email: str | None, session_id: str) -> list[dict[str, str]]:
         """Retrieve the chat history for a given session.
@@ -75,35 +70,33 @@ class ChatMemoryManager:
         Returns:
             A list of dicts like [{"role": "user", "content": "..."}]
         """
-        if user_email:
-            with self._conn() as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT role, content FROM messages
-                    WHERE user_email = ? AND session_id = ?
-                    ORDER BY timestamp ASC, id ASC
-                ''', (user_email, session_id))
-                rows = cursor.fetchall()
-                return [{"role": row[0], "content": row[1]} for row in rows]
-        else:
-            with _RAM_LOCK:
-                return list(_RAM_STORE.get(session_id, []))
+        if not user_email:
+            raise ValueError("User email is required. Guest sessions are not supported.")
+            
+        with self._conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT role, content FROM messages
+                WHERE user_email = ? AND session_id = ?
+                ORDER BY timestamp ASC, id ASC
+            ''', (user_email, session_id))
+            rows = cursor.fetchall()
+            return [{"role": row[0], "content": row[1]} for row in rows]
 
     def delete_session(self, user_email: str | None, session_id: str) -> int:
         """Delete chat history for a session."""
-        if user_email:
-            with self._conn() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    '''
-                    DELETE FROM messages
-                    WHERE user_email = ? AND session_id = ?
-                    ''',
-                    (user_email, session_id),
-                )
-                conn.commit()
-                return int(cursor.rowcount or 0)
-        with _RAM_LOCK:
-            prior = len(_RAM_STORE.get(session_id, []))
-            _RAM_STORE.pop(session_id, None)
-            return prior
+        if not user_email:
+            raise ValueError("User email is required. Guest sessions are not supported.")
+            
+        with self._conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                '''
+                DELETE FROM messages
+                WHERE user_email = ? AND session_id = ?
+                ''',
+                (user_email, session_id),
+            )
+            conn.commit()
+            return int(cursor.rowcount or 0)
+
