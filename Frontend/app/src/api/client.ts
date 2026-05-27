@@ -557,7 +557,8 @@ export function streamSession(
   onError: (error: any) => void
 ): () => void {
   const token = getAuthToken();
-  const url = `/sessions/${encodeURIComponent(sessionId)}/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  const path = `/sessions/${encodeURIComponent(sessionId)}/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  const url = apiUrl(path);
 
   const eventSource = new EventSource(url);
   let hasClosed = false;
