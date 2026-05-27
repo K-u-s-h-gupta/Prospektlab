@@ -49,7 +49,7 @@ html, body, #root {
   background-color: var(--bg-deep);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  overflow: hidden;
+  overflow: auto;
   position: relative;
 }
 
@@ -331,6 +331,14 @@ button.primary {
 button.primary:hover:not(:disabled) {
   box-shadow: 0 0 16px rgba(56, 189, 248, 0.2);
   filter: brightness(1.05);
+}
+
+/* Protect colored CTAs (gradient with dark text) from generic hover making text invisible */
+button[style*="gradient-brand"]:hover,
+button[style*="#06B6D4"]:hover,
+button[style*="06B6D4"]:hover {
+  background: var(--gradient-brand) !important;
+  color: #0f172a !important;
 }
 
 /* ═══════════════════════════════════════════

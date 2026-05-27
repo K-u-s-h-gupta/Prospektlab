@@ -1,5 +1,9 @@
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import LandingPage from './pages/LandingPage';
+import Pricing from './pages/Pricing';
+import Testimonials from './pages/Testimonials';
+import Features from './pages/Features';
 import Onboarding from './pages/Onboarding';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
@@ -57,21 +61,16 @@ const PublicRoute: React.FC<{ children: React.ReactElement }> = ({ children }) =
 };
 
 export const AppContent: React.FC = () => {
-  const { isAuthenticated } = useAuth();
-  const onboarded = localStorage.getItem('prospektlab_onboarded') === 'true';
-
   return (
     <HashRouter>
       <Routes>
-        <Route
-          path="/"
-          element={
-            isAuthenticated 
-              ? (onboarded ? <Navigate to="/dashboard" replace /> : <Navigate to="/onboarding" replace />)
-              : <Navigate to="/login" replace />
-          }
-        />
+        {/* Marketing Pages */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/testimonials" element={<Testimonials />} />
+        <Route path="/features" element={<Features />} />
         
+        {/* Auth Pages */}
         <Route 
           path="/login" 
           element={
@@ -90,6 +89,7 @@ export const AppContent: React.FC = () => {
           } 
         />
         
+        {/* App Pages */}
         <Route 
           path="/onboarding" 
           element={
