@@ -586,101 +586,159 @@ export function streamSession(
   onError: (error: any) => void
 ): () => void {
   const token = getAuthToken();
-  const path = `/sessions/${encodeURIComponent(sessionId)}/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`;
-  const url = apiUrl(path);
-
-  const eventSource = new EventSource(url);
-  let hasClosed = false;
+  
+  let lastEventId: number | null = null;
+  let sseAbort = new AbortController();
+  let sseReconnectTimer: any = null;
+  let sseActive = true;
 
   const closeStream = () => {
-    if (!hasClosed) {
-      hasClosed = true;
-      eventSource.close();
+    if (sseActive) {
+      sseActive = false;
+      clearTimeout(sseReconnectTimer);
+      sseAbort.abort();
     }
   };
 
-  eventSource.addEventListener('agent_event', (e: any) => {
-    if (hasClosed) return;
-    try {
-      const parsed = JSON.parse(e.data);
-      onEvent({
-        seq: parsed.id || 0,
-        type: 'agent_event',
-        timestamp: parsed.timestamp || '',
-        payload: parsed,
-      });
-    } catch (err) {
-      console.error('Failed to parse agent event', err);
-    }
-  });
+  async function connectSSE() {
+    if (!sseActive) return;
+    sseAbort = new AbortController();
+    
+    // Reconnect before API Gateway's 30s timeout fires
+    clearTimeout(sseReconnectTimer);
+    sseReconnectTimer = setTimeout(() => {
+      if (sseActive) {
+        console.info("SSE: proactive reconnect (25s window)");
+        sseAbort.abort();
+        connectSSE();
+      }
+    }, 25000);
 
-  eventSource.addEventListener('phase', (e: any) => {
-    if (hasClosed) return;
-    try {
-      const parsed = JSON.parse(e.data);
-      onEvent({
-        seq: parsed.id || 0,
-        type: 'phase',
-        timestamp: parsed.timestamp || '',
-        payload: parsed,
-      });
-    } catch (err) {
-      console.error('Failed to parse phase event', err);
+    const headers: Record<string, string> = { 
+      "Accept": "text/event-stream", 
+      "Cache-Control": "no-cache" 
+    };
+    if (token) {
+      headers["Authorization"] = "Bearer " + token;
     }
-  });
-
-  eventSource.addEventListener('deep_pass', (e: any) => {
-    if (hasClosed) return;
-    try {
-      const parsed = JSON.parse(e.data);
-      onEvent({
-        seq: parsed.id || 0,
-        type: 'deep_pass',
-        timestamp: parsed.timestamp || '',
-        payload: parsed,
-      });
-    } catch (err) {
-      console.error('Failed to parse deep pass event', err);
+    if (lastEventId !== null) {
+      headers["Last-Event-ID"] = String(lastEventId);
     }
-  });
 
-  eventSource.addEventListener('memo', (e: any) => {
-    if (hasClosed) return;
-    try {
-      const parsed = JSON.parse(e.data);
-      closeStream();
-      onFinal(parsed);
-    } catch (err) {
-      console.error('Failed to parse memo event', err);
+    const path = `/sessions/${encodeURIComponent(sessionId)}/stream`;
+    let url = apiUrl(path);
+    if (token) {
+      url += (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(token);
     }
-  });
-
-  eventSource.addEventListener('final', (e: any) => {
-    if (hasClosed) return;
-    try {
-      const parsed = JSON.parse(e.data);
-      closeStream();
-      onFinal(parsed);
-    } catch (err) {
-      console.error('Failed to parse final event', err);
+    if (lastEventId !== null) {
+      url += (url.includes("?") ? "&" : "?") + "after=" + encodeURIComponent(lastEventId);
     }
-  });
 
-  eventSource.addEventListener('error', (e: any) => {
-    if (hasClosed) return;
+    let resp: Response;
     try {
-      const parsed = JSON.parse(e.data);
-      closeStream();
-      onError(new Error(parsed.message || 'Stream processing error'));
-    } catch (err) {
-      closeStream();
-      onError(new Error('Stream encountered an error'));
+      resp = await fetch(url, { headers, signal: sseAbort.signal });
+    } catch (err: any) {
+      if (!sseActive) return;
+      if (err && err.name === "AbortError") return; // proactive reconnect
+      console.warn("SSE fetch error, retrying in 2s:", err);
+      clearTimeout(sseReconnectTimer);
+      sseReconnectTimer = setTimeout(connectSSE, 2000);
+      return;
     }
-  });
 
-  eventSource.onerror = () => {
-    closeStream();
-  };
+    if (!resp.ok) {
+      if (!sseActive) return;
+      console.warn("SSE HTTP error status:", resp.status, "— retrying in 3s");
+      clearTimeout(sseReconnectTimer);
+      sseReconnectTimer = setTimeout(connectSSE, 3000);
+      return;
+    }
+
+    const reader = resp.body?.getReader();
+    if (!reader) {
+      console.error("SSE response body is not readable");
+      onError(new Error("Response body is not readable"));
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buf = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        
+        let boundary;
+        while ((boundary = buf.indexOf("\n\n")) !== -1) {
+          const block = buf.slice(0, boundary);
+          buf = buf.slice(boundary + 2);
+          if (!block.trim() || block.startsWith(":")) continue; // keepalive comment
+          
+          let evType = "message";
+          let evData = "";
+          let evId: string | null = null;
+          
+          for (const line of block.split("\n")) {
+            if (line.startsWith("event:")) {
+              evType = line.slice(6).trim();
+            } else if (line.startsWith("data:")) {
+              evData = line.slice(5).trim();
+            } else if (line.startsWith("id:")) {
+              evId = line.slice(3).trim();
+            }
+          }
+          
+          if (evId !== null) {
+            const parsedId = parseInt(evId, 10);
+            if (!isNaN(parsedId)) {
+              lastEventId = parsedId;
+            }
+          }
+          
+          if (evType === "agent_event" || evType === "phase" || evType === "deep_pass") {
+            try {
+              const parsed = JSON.parse(evData);
+              onEvent({
+                seq: parsed.id || (evId ? parseInt(evId, 10) : 0),
+                type: evType,
+                timestamp: parsed.timestamp || '',
+                payload: parsed,
+              });
+            } catch (err) {
+              console.error(`Failed to parse ${evType} event data`, err);
+            }
+          } else if (evType === "memo" || evType === "final") {
+            try {
+              const parsed = JSON.parse(evData);
+              closeStream();
+              onFinal(parsed);
+            } catch (err) {
+              console.error(`Failed to parse ${evType} event data`, err);
+            }
+          } else if (evType === "error") {
+            try {
+              const parsed = JSON.parse(evData);
+              closeStream();
+              onError(new Error(parsed.message || 'Stream processing error'));
+            } catch (err) {
+              closeStream();
+              onError(new Error('Stream encountered an error'));
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      if (!sseActive) return;
+      if (err && err.name === "AbortError") return; // proactive reconnect in progress
+      console.warn("SSE read error, retrying in 2s:", err);
+      clearTimeout(sseReconnectTimer);
+      sseReconnectTimer = setTimeout(connectSSE, 2000);
+    }
+  }
+
+  connectSSE();
 
   return () => {
     closeStream();
