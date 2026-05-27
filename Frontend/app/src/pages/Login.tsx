@@ -5,12 +5,12 @@ import { Logo } from '../components/layout/Logo';
 import { Mail, Lock, User as UserIcon, Phone, ShieldCheck, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { apiSendVerification, apiForgotPassword, apiResetPassword, apiUpdateMobile } from '../api/client';
 
-export const Login: React.FC = () => {
+export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTab = 'login' }) => {
   const navigate = useNavigate();
   const { login, signup, googleLogin, updateUserMobile, logout, showToast, isAuthenticated } = useAuth();
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
+  const [activeTab, setActiveTab] = useState<'login' | 'signup'>(initialTab);
   
   // Form values
   const [email, setEmail] = useState('');

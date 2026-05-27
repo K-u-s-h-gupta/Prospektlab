@@ -76,7 +76,16 @@ export const AppContent: React.FC = () => {
           path="/login" 
           element={
             <PublicRoute>
-              <Login />
+              <Login initialTab="login" />
+            </PublicRoute>
+          } 
+        />
+
+        <Route 
+          path="/signup" 
+          element={
+            <PublicRoute>
+              <Login initialTab="signup" />
             </PublicRoute>
           } 
         />
