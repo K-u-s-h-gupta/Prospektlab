@@ -79,13 +79,13 @@ jobs:
         run: |
           jq \
             --arg IMAGE "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
-            --arg CORS_ORIGINS "${{ secrets.AMPLIFY_DOMAIN || '' }}" \
-            --arg OPENAI_KEY "${{ secrets.OPENAI_API_KEY || '' }}" \
-            --arg SEARXNG_URL "${{ secrets.FINAGENT_SEARXNG_URL || '' }}" \
-            --arg TAVILY_KEY "${{ secrets.TAVILY_API_KEY || '' }}" \
-            --arg SUPABASE_URL "${{ secrets.SUPABASE_URL || '' }}" \
-            --arg SUPABASE_KEY "${{ secrets.SUPABASE_KEY || '' }}" \
-            --arg JWT_SECRET "${{ secrets.JWT_SECRET || 'change-me-in-prod' }}" \
+            --arg CORS_ORIGINS "${{ secrets.AMPLIFY_DOMAIN }}" \
+            --arg MCP_NSE "${{ secrets.MCP_NSE_URL }}" \
+            --arg MCP_FUNDAMENTALS "${{ secrets.MCP_FUNDAMENTALS_URL }}" \
+            --arg MCP_RESEARCH "${{ secrets.MCP_RESEARCH_URL }}" \
+            --arg MCP_DOCS "${{ secrets.MCP_DOCS_URL }}" \
+            --arg MCP_VALUATION "${{ secrets.MCP_VALUATION_URL }}" \
+            --arg OPENAI_KEY "${{ secrets.OPENAI_API_KEY }}" \
             '.containerDefinitions[0].image = $IMAGE |
              .containerDefinitions[0].environment |= (
                map(select(
@@ -95,25 +95,16 @@ jobs:
                  .name != "MCP_RESEARCH_URL" and 
                  .name != "MCP_DOCS_URL" and 
                  .name != "MCP_VALUATION_URL" and 
-                 .name != "MCP_DISCOVERY_URL" and 
-                 .name != "MCP_QUANT_URL" and 
-                 .name != "OPENAI_API_KEY" and
-                 .name != "FINAGENT_SEARXNG_URL" and
-                 .name != "TAVILY_API_KEY" and
-                 .name != "SUPABASE_URL" and
-                 .name != "SUPABASE_KEY" and
-                 .name != "JWT_SECRET"
+                 .name != "OPENAI_API_KEY"
                )) +
                [
                  {name: "CORS_ORIGINS", value: $CORS_ORIGINS},
-                 {name: "FINAGENT_SEARXNG_URL", value: $SEARXNG_URL},
-                 {name: "MCP_DISCOVERY_URL", value: ""},
-                 {name: "MCP_QUANT_URL", value: ""},
-                 {name: "OPENAI_API_KEY", value: $OPENAI_KEY},
-                 {name: "TAVILY_API_KEY", value: $TAVILY_KEY},
-                 {name: "SUPABASE_URL", value: $SUPABASE_URL},
-                 {name: "SUPABASE_KEY", value: $SUPABASE_KEY},
-                 {name: "JWT_SECRET", value: $JWT_SECRET}
+                 {name: "MCP_NSE_INDIA_URL", value: $MCP_NSE},
+                 {name: "MCP_FUNDAMENTALS_URL", value: $MCP_FUNDAMENTALS},
+                 {name: "MCP_RESEARCH_URL", value: $MCP_RESEARCH},
+                 {name: "MCP_DOCS_URL", value: $MCP_DOCS},
+                 {name: "MCP_VALUATION_URL", value: $MCP_VALUATION},
+                 {name: "OPENAI_API_KEY", value: $OPENAI_KEY}
                ]
              ) |
              del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \

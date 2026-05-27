@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getAuthToken, apiLogin, apiSignup, apiLogout, apiGoogleAuth } from '../api/client';
+import { getAuthToken, apiLogin, apiSignup, apiLogout, apiGoogleAuth, getPortfolioMirror } from '../api/client';
 
 export interface User {
   email: string;
@@ -43,6 +43,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         setToken(localToken);
         setUser(JSON.parse(localUser));
+
+        // Auto-detect onboarding status from portfolio holdings
+        getPortfolioMirror().then((data) => {
+          if (data && (data.count > 0 || data.status === 'MIRROR_SYNCHRONIZED')) {
+            localStorage.setItem('prospektlab_onboarded', 'true');
+          }
+        }).catch((err) => {
+          console.error('Failed to auto-resolve portfolio mirror state:', err);
+        });
       } catch (e) {
         console.error('Failed to parse cached user', e);
         localStorage.removeItem('prospektlab_token');
@@ -71,6 +80,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: data.user?.email || email,
         name: data.user?.name || 'Researcher',
       });
+
+      // Check if user has already uploaded a portfolio
+      try {
+        const portMirror = await getPortfolioMirror();
+        if (portMirror && (portMirror.count > 0 || portMirror.status === 'MIRROR_SYNCHRONIZED')) {
+          localStorage.setItem('prospektlab_onboarded', 'true');
+        }
+      } catch (e) {
+        console.error('Failed to fetch portfolio status on login:', e);
+      }
+
       showToast('Successfully signed in.', 'success');
       return data;
     } catch (err: any) {
@@ -111,6 +131,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         mobile: data.mobile,
         require_mobile: data.require_mobile,
       });
+
+      // Check if user has already uploaded a portfolio
+      try {
+        const portMirror = await getPortfolioMirror();
+        if (portMirror && (portMirror.count > 0 || portMirror.status === 'MIRROR_SYNCHRONIZED')) {
+          localStorage.setItem('prospektlab_onboarded', 'true');
+        }
+      } catch (e) {
+        console.error('Failed to fetch portfolio status on Google login:', e);
+      }
+
       showToast('Successfully signed in with Google.', 'success');
       return data;
     } catch (err: any) {

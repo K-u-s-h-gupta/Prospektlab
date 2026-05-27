@@ -14,9 +14,9 @@ frontend:
             echo "✅ Using backend API: $BACKEND_API_URL"
           fi
         - |
-          # Generate runtime config.js (loaded by index.html)
+          # Generate runtime env-config.js (loaded by index.html)
           mkdir -p public
-          cat > public/config.js << EOF
+          cat > public/env-config.js << EOF
           window.__BACKEND_URL = "${BACKEND_API_URL}";
           window.__CONFIG__ = {
             apiBase: "${BACKEND_API_URL}",

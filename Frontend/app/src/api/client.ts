@@ -79,6 +79,21 @@ export function getAuthHeaders(): HeadersInit {
   return headers;
 }
 
+function handleSessionSwitch(email: string) {
+  const lastEmail = localStorage.getItem('prospektlab_last_email');
+  if (lastEmail && lastEmail.toLowerCase().trim() !== email.toLowerCase().trim()) {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('prospektlab_')) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+  }
+  localStorage.setItem('prospektlab_last_email', email);
+}
+
 // ── Auth Endpoints ──────────────────────────────────────────────────────
 
 export async function apiLogin(email: string, password: string): Promise<any> {
@@ -97,9 +112,11 @@ export async function apiLogin(email: string, password: string): Promise<any> {
 
   const data = await res.json();
   if (data.token) {
+    const emailToSet = data.user?.email || email;
+    handleSessionSwitch(emailToSet);
     localStorage.setItem('prospektlab_token', data.token);
     localStorage.setItem('prospektlab_user', JSON.stringify({
-      email: data.user?.email || email,
+      email: emailToSet,
       name: data.user?.name || 'Researcher',
     }));
   }
@@ -128,9 +145,11 @@ export async function apiSignup(name: string, email: string, password: string, m
 
   const data = await res.json();
   if (data.token) {
+    const emailToSet = data.user?.email || email;
+    handleSessionSwitch(emailToSet);
     localStorage.setItem('prospektlab_token', data.token);
     localStorage.setItem('prospektlab_user', JSON.stringify({
-      email: data.user?.email || email,
+      email: emailToSet,
       name: data.user?.name || name,
     }));
   }
@@ -204,6 +223,10 @@ export async function apiGoogleAuth(credential: string): Promise<any> {
 
   const data = await res.json();
   if (data.token) {
+    const emailToSet = data.email;
+    if (emailToSet) {
+      handleSessionSwitch(emailToSet);
+    }
     localStorage.setItem('prospektlab_token', data.token);
     localStorage.setItem('prospektlab_user', JSON.stringify({
       email: data.email,
@@ -247,9 +270,15 @@ export async function apiLogout(): Promise<void> {
     method: 'POST',
     headers: getAuthHeaders(),
   }).catch(() => {});
-  localStorage.removeItem('prospektlab_token');
-  localStorage.removeItem('prospektlab_user');
-  localStorage.removeItem('prospektlab_onboarded');
+  
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('prospektlab_')) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key));
 }
 
 // ── Portfolio Endpoints ──────────────────────────────────────────────────
