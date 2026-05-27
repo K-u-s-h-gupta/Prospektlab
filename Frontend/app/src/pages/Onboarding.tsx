@@ -36,8 +36,8 @@ export const Onboarding: React.FC = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
 
-  // New: Name capture + improved state
-  const [name, setName] = useState('');
+  // Pre-fill name from localStorage (set by landing page personalisation)
+  const [name, setName] = useState(() => localStorage.getItem('prospektlab_username') || '');
   
   // Style and watchlist state
   const [style, setStyle] = useState<'Conservative' | 'Balanced' | 'Growth'>('Balanced');
@@ -259,8 +259,8 @@ export const Onboarding: React.FC = () => {
         {step === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div style={{ textAlign: 'center' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--text-primary)' }}>Welcome. What's your name?</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px' }}>Mark — your AI market analyst — will address you personally from here on.</p>
+              <h2 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--text-primary)' }}>Your Institutional Edge Starts Here</h2>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px' }}>Mark — your personal AI analyst — will address you by name and tailor every insight to your risk profile. Let's build your command center.</p>
             </div>
 
             {/* Name capture - new and critical */}
@@ -273,8 +273,8 @@ export const Onboarding: React.FC = () => {
             />
 
             <div style={{ textAlign: 'center', marginTop: '8px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>How aggressively do you want to play?</h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>This decides which signals Mark surfaces first for you.</p>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>How do you want Mark to think for you?</h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>This determines which red flags and opportunities Mark prioritizes in your daily briefings.</p>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -353,8 +353,8 @@ export const Onboarding: React.FC = () => {
         {step === 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             <div style={{ textAlign: 'center' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Import your real positions</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Mark gives you 8-second institutional analysis on everything you actually own.</p>
+              <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Upload Your Portfolio. See the Hidden Risks.</h2>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>In 8 seconds, Mark will audit your real holdings for concentration risk, overlap, and leverage — the things your broker won't tell you.</p>
             </div>
 
             {/* Drag & Drop Area */}
@@ -571,8 +571,8 @@ export const Onboarding: React.FC = () => {
         {step === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             <div style={{ textAlign: 'center' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Select Watchlist Targets</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Which additional assets are you tracking for future acquisitions?</p>
+              <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Build Your Opportunity Radar</h2>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Add the stocks you are watching. Mark will track earnings dates, run valuation screens, and alert you before the crowd moves.</p>
             </div>
 
             {/* Custom Input Form */}
@@ -661,8 +661,8 @@ export const Onboarding: React.FC = () => {
         {step === 4 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             <div style={{ textAlign: 'center' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>You're set. Meet Mark.</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Your quant engine is ready to run tests.</p>
+              <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Your Edge Is Live. Deploy It.</h2>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Mark is calibrated on your risk profile, portfolio, and watchlist. Ask your first question. Get institutional-grade analysis in 8 seconds.</p>
             </div>
 
             {/* Glass Avatar Card */}
@@ -701,7 +701,7 @@ export const Onboarding: React.FC = () => {
               </div>
 
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                "I am initialized on historical balance sheets, solvency margins, and quantitative cash flows. I synthesize pure equity data and strip away market noise. Let's deploy your cockpit."
+                "I do not do hope. I do numbers. I have indexed your portfolio against 850+ Indian corporates, real-time NSE feeds, and every quarterly filing available. Ask me anything about your book, a ticker, or the tape. Let's find where the market got it wrong today."
               </p>
             </div>
 
@@ -736,7 +736,7 @@ export const Onboarding: React.FC = () => {
                 className="primary shimmer-overlay"
                 style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               >
-                Launch Command Center <ChevronRight size={14} />
+                Launch Your Edge <ChevronRight size={14} />
               </button>
             </div>
           </div>
