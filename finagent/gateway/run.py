@@ -300,6 +300,41 @@ def verify_session_ownership(session_id: str, current_user: dict) -> None:
     if owner_email and owner_email.lower().strip() != current_user["email"].lower().strip():
         raise HTTPException(status_code=403, detail="Access denied: You do not own this research session.")
 
+def add_cors_headers(request: Request, response: Response) -> Response:
+    origin = request.headers.get("origin")
+    if not origin:
+        return response
+    
+    # Check if origin is allowed
+    is_allowed = False
+    if "*" in _allow_origins:
+        is_allowed = True
+        origin_to_set = "*"
+    elif origin in _allow_origins:
+        is_allowed = True
+        origin_to_set = origin
+    else:
+        origin_to_set = None
+        is_allowed = False
+
+    if is_allowed and origin_to_set:
+        response.headers["Access-Control-Allow-Origin"] = origin_to_set
+        if _allow_credentials and origin_to_set != "*":
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
+    return add_cors_headers(request, response)
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = []
@@ -308,24 +343,27 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         msg = err.get("msg", "Invalid value")
         errors.append(f"[{loc}]: {msg}")
     
-    return JSONResponse(
+    response = JSONResponse(
         status_code=422,
         content={
             "detail": "Input validation failed",
             "errors": errors
         }
     )
+    return add_cors_headers(request, response)
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled gateway error on %s %s", request.method, request.url.path)
-    return JSONResponse(
+    response = JSONResponse(
         status_code=500,
         content={
             "detail": "An internal server error occurred.",
             "error_type": exc.__class__.__name__
         }
     )
+    return add_cors_headers(request, response)
 
 JWT_SECRET = os.getenv("JWT_SECRET", "super_secret_ipo_key_123")
 if JWT_SECRET == "super_secret_ipo_key_123" and os.getenv("PROSPEKTLAB_ENV") == "production":

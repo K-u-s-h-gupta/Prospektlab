@@ -75,13 +75,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const data = await apiLogin(email, password);
-      setToken(data.token);
-      setUser({
-        email: data.user?.email || email,
-        name: data.user?.name || 'Researcher',
-      });
 
-      // Check if user has already uploaded a portfolio
+      // Check if user has already uploaded a portfolio BEFORE triggering authentication redirects
       try {
         const portMirror = await getPortfolioMirror();
         if (portMirror && (portMirror.count > 0 || portMirror.status === 'MIRROR_SYNCHRONIZED')) {
@@ -90,6 +85,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) {
         console.error('Failed to fetch portfolio status on login:', e);
       }
+
+      setToken(data.token);
+      setUser({
+        email: data.user?.email || email,
+        name: data.user?.name || 'Researcher',
+      });
 
       showToast('Successfully signed in.', 'success');
       return data;
@@ -124,15 +125,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const data = await apiGoogleAuth(credential);
-      setToken(data.token);
-      setUser({
-        email: data.email,
-        name: data.name || data.full_name || 'Researcher',
-        mobile: data.mobile,
-        require_mobile: data.require_mobile,
-      });
 
-      // Check if user has already uploaded a portfolio
+      // Check if user has already uploaded a portfolio BEFORE triggering authentication redirects
       try {
         const portMirror = await getPortfolioMirror();
         if (portMirror && (portMirror.count > 0 || portMirror.status === 'MIRROR_SYNCHRONIZED')) {
@@ -141,6 +135,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) {
         console.error('Failed to fetch portfolio status on Google login:', e);
       }
+
+      setToken(data.token);
+      setUser({
+        email: data.email,
+        name: data.name || data.full_name || 'Researcher',
+        mobile: data.mobile,
+        require_mobile: data.require_mobile,
+      });
 
       showToast('Successfully signed in with Google.', 'success');
       return data;
