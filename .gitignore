@@ -42,3 +42,12 @@ load_test.js
 # Environment
 .env
 .env.local
+
+# Frontend (Vite/React)
+Frontend/app/node_modules/
+Frontend/app/dist/
+Frontend/app/.vite/
+Frontend/app/.env.local
+Frontend/app/.env.*.local
+Frontend/app/*.log
+Frontend/app/npm-debug.log*
