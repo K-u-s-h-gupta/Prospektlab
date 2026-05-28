@@ -192,14 +192,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 fontWeight: 800,
                 fontSize: '16px',
                 color: 'var(--text-primary)',
-                letterSpacing: '-0.3px'
+                letterSpacing: '-0.3px',
+                whiteSpace: 'nowrap',
+                flexShrink: 0
               }}>
                 ProspektLab
               </span>
               <span className="badge badge-premium nav-text" style={{
                 fontSize: '8px',
                 padding: '2px 5px',
-                marginRight: '8px'
+                marginRight: '8px',
+                whiteSpace: 'nowrap',
+                flexShrink: 0
               }}>
                 PRO
               </span>
@@ -230,7 +234,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 style={{
                   width: '28px',
                   height: '28px',
-                  marginLeft: '8px',
+                  marginLeft: 'auto',
                   display: 'none'
                 }}
               >

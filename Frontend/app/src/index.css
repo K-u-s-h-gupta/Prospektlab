@@ -376,6 +376,13 @@ button[style*="06B6D4"]:hover {
   font-weight: 600;
   letter-spacing: 0.02em;
   gap: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.nav-text {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .badge-success {
@@ -1263,6 +1270,8 @@ button[style*="06B6D4"]:hover {
   padding: 2px 6px;
   border-radius: 3px;
   border: 1px solid rgba(52, 211, 153, 0.2);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* News / insights list */
@@ -2164,6 +2173,8 @@ button[style*="06B6D4"]:hover {
     font-size: 15px;
     font-weight: 700;
     color: var(--text-primary);
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   /* Workbench Dashboard Layout */

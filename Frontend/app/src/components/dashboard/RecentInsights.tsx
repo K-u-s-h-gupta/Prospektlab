@@ -84,15 +84,15 @@ export const RecentInsights: React.FC<RecentInsightsProps> = ({ insights = [], o
               onClick={() => onSelectInsight(item)}
             >
               {/* Top Row Meta */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Icon size={13} color={iconColor} />
-                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-primary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                <Icon size={13} color={iconColor} style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: 1 }}>
                   {item.name || item.ticker}
                 </span>
-                <span className={badgeClass} style={{ fontSize: '9px', padding: '2px 6px' }}>
+                <span className={badgeClass} style={{ fontSize: '9px', padding: '2px 6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   {item.type.toUpperCase()}
                 </span>
-                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginLeft: 'auto', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   {item.timestamp}
                 </span>
               </div>
