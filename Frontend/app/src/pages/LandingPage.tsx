@@ -235,6 +235,17 @@ export const LandingPage: React.FC = () => {
           .pain-3col, .feat-3col, .ba-2col, .rev-grid { grid-template-columns: 1fr !important; }
           .mobile-menu-btn { display: flex !important; align-items: center; justify-content: center; }
           .quote-block h3 { font-size: 22px !important; }
+          .landing-toast { max-width: 260px !important; right: 8px !important; top: 64px !important; }
+          .sticky-cta-bar { flex-direction: column !important; padding: 12px 16px !important; gap: 10px !important; align-items: flex-start !important; }
+          .active-review-card { flex-direction: column !important; align-items: center !important; text-align: center !important; }
+        }
+        @media (max-width: 480px) {
+          .stats-4col { grid-template-columns: 1fr !important; }
+          .stats-4col > div > div:first-child { font-size: 24px !important; }
+          .hero-split { gap: 28px !important; }
+          .sticky-cta-bar { padding: 10px 12px !important; }
+          .sticky-cta-bar button { width: 100% !important; text-align: center !important; }
+          .guarantee-items { flex-direction: column !important; align-items: center !important; gap: 12px !important; }
         }
       `}</style>
 
@@ -247,7 +258,7 @@ export const LandingPage: React.FC = () => {
 
       {/* ─── ACTIVITY TOAST ─── */}
       {showToast && (
-        <div style={{ position:'fixed', top:80, right:20, zIndex:999, maxWidth:320, background:'rgba(15,23,42,0.95)', backdropFilter:'blur(20px)', border:`1px solid ${toast.color}33`, borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'flex-start', gap:10, animation:'toastSlide 0.4s ease forwards', boxShadow:`0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px ${toast.color}22` }}>
+        <div className="landing-toast" style={{ position:'fixed', top:80, right:20, zIndex:999, maxWidth:320, background:'rgba(15,23,42,0.95)', backdropFilter:'blur(20px)', border:`1px solid ${toast.color}33`, borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'flex-start', gap:10, animation:'toastSlide 0.4s ease forwards', boxShadow:`0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px ${toast.color}22` }}>
           <div style={{ width:32, height:32, borderRadius:'50%', background:`${toast.color}22`, border:`1px solid ${toast.color}44`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:toast.color, flexShrink:0 }}>{toast.avatar}</div>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontSize:12, fontWeight:600, color:'var(--text-primary)', marginBottom:2 }}><span style={{ color:toast.color }}>{toast.name}</span> from {toast.city}</div>
@@ -263,7 +274,7 @@ export const LandingPage: React.FC = () => {
 
       {/* ─── STICKY CTA BAR ─── */}
       {showStickyBar && (
-        <div style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:100, background:'rgba(3,7,18,0.95)', backdropFilter:'blur(20px)', borderTop:'1px solid var(--border-subtle)', padding:'14px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, animation:'barUp 0.35s ease forwards', flexWrap:'wrap' }}>
+        <div className="sticky-cta-bar" style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:100, background:'rgba(3,7,18,0.95)', backdropFilter:'blur(20px)', borderTop:'1px solid var(--border-subtle)', padding:'14px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, animation:'barUp 0.35s ease forwards', flexWrap:'wrap' }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ background:'var(--gradient-brand)', borderRadius:8, padding:6, display:'flex' }}><Brain size={16} color="#0f172a" /></div>
             <div>
@@ -649,7 +660,7 @@ export const LandingPage: React.FC = () => {
             </p>
           </div>
 
-          <div key={activeReview} style={{ background:'linear-gradient(135deg, rgba(56,189,248,0.06), rgba(129,140,248,0.04))', border:'1px solid rgba(56,189,248,0.18)', borderRadius:22, padding:'clamp(24px,4vw,40px)', marginBottom:28, display:'flex', gap:24, alignItems:'flex-start', animation:'reviewFade 0.5s ease forwards' }}>
+          <div className="active-review-card" key={activeReview} style={{ background:'linear-gradient(135deg, rgba(56,189,248,0.06), rgba(129,140,248,0.04))', border:'1px solid rgba(56,189,248,0.18)', borderRadius:22, padding:'clamp(24px,4vw,40px)', marginBottom:28, display:'flex', gap:24, alignItems:'flex-start', animation:'reviewFade 0.5s ease forwards' }}>
             <div style={{ width:60, height:60, borderRadius:'50%', background:'var(--gradient-brand)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, fontWeight:800, color:'#0f172a', flexShrink:0, boxShadow:'0 0 20px rgba(56,189,248,0.2)' }}>{REVIEWS[activeReview].avatar}</div>
             <div style={{ flex:1 }}>
               <div style={{ display:'flex', gap:3, marginBottom:10 }}>
@@ -717,7 +728,7 @@ export const LandingPage: React.FC = () => {
             <p style={{ fontSize:16, color:'var(--text-secondary)', maxWidth:600, margin:'0 auto 28px', lineHeight:1.7 }}>
               Twenty queries per day. Live NSE data. Basic valuations. If Mark doesn't save you from one bad decision in your first week, you delete the tab. That's it. That's the deal.
             </p>
-            <div style={{ display:'flex', justifyContent:'center', gap:'clamp(16px,3vw,32px)', flexWrap:'wrap', marginBottom:32 }}>
+            <div className="guarantee-items" style={{ display:'flex', justifyContent:'center', gap:'clamp(16px,3vw,32px)', flexWrap:'wrap', marginBottom:32 }}>
               {['Free forever tier','Cancel anytime','No hidden fees','Your data never sold'].map((item,i) => (
                 <div key={i} style={{ display:'flex', alignItems:'center', gap:8, fontSize:14, color:'var(--text-secondary)' }}>
                   <CheckCircle size={16} color="var(--profit)" /> {item}

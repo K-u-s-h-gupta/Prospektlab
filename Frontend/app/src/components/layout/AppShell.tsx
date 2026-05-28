@@ -1,5 +1,7 @@
 import React from 'react';
 import { Sidebar } from './Sidebar';
+import { Logo } from './Logo';
+import { Menu } from 'lucide-react';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -15,6 +17,7 @@ interface AppShellProps {
     totalPnL: number;
     totalReturnPct: number;
   };
+  tokenUsage?: any;
 }
 
 export const AppShell: React.FC<AppShellProps> = ({
@@ -25,10 +28,17 @@ export const AppShell: React.FC<AppShellProps> = ({
   onSelectConversation,
   onNewConversation,
   activeConversationId,
-  portfolioSummary
+  portfolioSummary,
+  tokenUsage
 }) => {
   return (
     <div className="app-container" style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      {/* Sidebar overlay backdrop for mobile */}
+      <div 
+        className="sidebar-overlay"
+        onClick={() => document.body.classList.remove('pl-sidebar-active')}
+      />
+
       {/* Navigation Sidebar */}
       <Sidebar
         conversations={conversations}
@@ -38,10 +48,11 @@ export const AppShell: React.FC<AppShellProps> = ({
         onNewConversation={onNewConversation}
         activeConversationId={activeConversationId}
         portfolioSummary={portfolioSummary}
+        tokenUsage={tokenUsage}
       />
 
       {/* Main App Content Viewport - Full Height Cockpit */}
-      <div style={{
+      <div className="main-viewport-container" style={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
@@ -49,6 +60,22 @@ export const AppShell: React.FC<AppShellProps> = ({
         backgroundColor: 'transparent',
         overflow: 'hidden'
       }}>
+        {/* Mobile Header Bar */}
+        <header className="mobile-topbar">
+          <button 
+            className="mobile-hamburger-btn"
+            onClick={() => document.body.classList.toggle('pl-sidebar-active')}
+            title="Toggle Menu"
+          >
+            <Menu size={20} />
+          </button>
+          <div className="mobile-logo-container">
+            <Logo size={20} />
+            <span className="mobile-header-title text-gradient">ProspektLab</span>
+          </div>
+          <div style={{ width: 36 }} /> {/* Balance space */}
+        </header>
+
         <main style={{
           flex: 1,
           width: '100%',

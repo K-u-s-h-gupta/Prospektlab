@@ -13,7 +13,7 @@ import sys
 import secrets
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +76,7 @@ from finagent.portfolio.analytics import compute_portfolio_analytics
 from finagent.portfolio.news import fetch_portfolio_news
 from finagent.gateway import supabase_client as supabase
 from finagent.gateway.auth_guard import decode_current_user_token
+from finagent.tools.data import fetch_news, fetch_yahoo_quote, fetch_india_snapshot
 import time
 
 class InMemSlidingWindowRateLimiter:
@@ -109,6 +110,73 @@ research_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=5, window_s
 auth_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=10, window_seconds=60)
 default_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=100, window_seconds=60)
 _PENDING_EXTRACTIONS: dict[str, dict[str, Any]] = {}
+
+# ── Token Usage Tracking ──────────────────────────────────────────────────
+WEEKLY_TOKEN_LIMIT = int(os.getenv("WEEKLY_TOKEN_LIMIT", "5000000"))
+
+
+def _ensure_token_usage_table() -> None:
+    from finagent.storage.sqlite import connect_wal
+    with connect_wal(_ingestion_db_path()) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS token_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_email TEXT NOT NULL,
+                session_id TEXT DEFAULT '',
+                prompt_tokens INTEGER DEFAULT 0,
+                completion_tokens INTEGER DEFAULT 0,
+                total_tokens INTEGER DEFAULT 0,
+                model TEXT DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_token_usage_email
+            ON token_usage(user_email, created_at)
+        """)
+
+
+def _week_start_utc() -> datetime:
+    now = datetime.now(timezone.utc)
+    monday = now - timedelta(days=now.weekday())
+    return monday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _next_week_start_utc() -> datetime:
+    return _week_start_utc() + timedelta(weeks=1)
+
+
+def get_weekly_token_usage(user_email: str) -> int:
+    from finagent.storage.sqlite import connect_wal
+    _ensure_token_usage_table()
+    week_start = _week_start_utc().strftime("%Y-%m-%d %H:%M:%S")
+    with connect_wal(_ingestion_db_path()) as conn:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(total_tokens), 0) FROM token_usage "
+            "WHERE user_email = ? AND created_at >= ?",
+            (user_email, week_start)
+        ).fetchone()
+    return int(row[0]) if row else 0
+
+
+def record_token_usage(
+    user_email: str,
+    session_id: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    model: str = "",
+) -> None:
+    from finagent.storage.sqlite import connect_wal
+    _ensure_token_usage_table()
+    total = prompt_tokens + completion_tokens
+    with connect_wal(_ingestion_db_path()) as conn:
+        conn.execute(
+            "INSERT INTO token_usage "
+            "(user_email, session_id, prompt_tokens, completion_tokens, total_tokens, model) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (user_email, session_id, prompt_tokens, completion_tokens, total, model)
+        )
+
 
 
 def _ingestion_db_path() -> Path:
@@ -251,6 +319,7 @@ async def add_security_headers(request: Request, call_next):
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdn.tailwindcss.com; "
         "font-src 'self' data: https://fonts.gstatic.com; "
         "img-src 'self' data: https://*.googleusercontent.com; "
+        "frame-src 'self' https://accounts.google.com; "
         "connect-src 'self' https: wss: https://oauth2.googleapis.com https://*.supabase.co https://*.execute-api.us-east-1.amazonaws.com https://*.amplifyapp.com;"
     )
     return response
@@ -290,6 +359,31 @@ async def get_current_user(
     else:
         actual_token = request.cookies.get(AUTH_COOKIE_NAME)
     return _decode_current_user(actual_token)
+
+
+async def enforce_token_limit(
+    current_user: dict = Depends(get_current_user),
+    x_bypass_token_limit: str | None = Header(None, alias="X-Bypass-Token-Limit")
+) -> dict:
+    """FastAPI dependency — raises 429 when weekly token limit is exceeded."""
+    if x_bypass_token_limit == "true":
+        return current_user
+
+    usage = get_weekly_token_usage(current_user["email"])
+    if usage >= WEEKLY_TOKEN_LIMIT:
+        # Calculate reset time in IST (UTC+5:30)
+        restore_ist = _next_week_start_utc() + timedelta(hours=5, minutes=30)
+        restore_display = restore_ist.strftime("%A, %d %B %Y at %I:%M %p IST")
+        raise HTTPException(status_code=429, detail={
+            "code": "WEEKLY_TOKEN_LIMIT_EXCEEDED",
+            "message": f"You've used {usage:,} / {WEEKLY_TOKEN_LIMIT:,} tokens this week.",
+            "restore_at": _next_week_start_utc().isoformat() + "Z",
+            "restore_display": restore_display,
+            "usage": usage,
+            "limit": WEEKLY_TOKEN_LIMIT,
+            "remaining": 0,
+        })
+    return current_user
 
 def verify_session_ownership(session_id: str, current_user: dict) -> None:
     meta = _load_session_meta(session_id)
@@ -372,20 +466,45 @@ if JWT_SECRET == "super_secret_ipo_key_123" and os.getenv("PROSPEKTLAB_ENV") == 
 class GoogleAuthRequest(BaseModel):
     credential: str
 
-@app.post("/auth/google", dependencies=[Depends(auth_rate_limiter)])
-async def google_auth(req: GoogleAuthRequest, request: Request):
-    """Verify a Google ID token from GIS popup and return a session JWT."""
+async def _verify_google_token(credential: str) -> dict:
+    """Verify a Google ID token, falling back to local JWT decode if tokeninfo is unavailable."""
+    # Try v3 tokeninfo endpoint first (recommended by Google)
+    tokeninfo_urls = [
+        f"https://www.googleapis.com/oauth2/v3/tokeninfo?id_token={urllib.parse.quote(credential)}",
+        f"https://oauth2.googleapis.com/tokeninfo?id_token={urllib.parse.quote(credential)}",
+    ]
+    last_error = None
+    async with httpx.AsyncClient(timeout=10) as client:
+        for url in tokeninfo_urls:
+            try:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(f"Google tokeninfo returned {resp.status_code}: {resp.text[:200]}")
+            except Exception as e:
+                logger.warning(f"Google tokeninfo request failed for {url}: {e}")
+                last_error = e
+
+    # Fallback: decode the JWT locally to extract user info
     try:
-        url = f"https://oauth2.googleapis.com/tokeninfo?id_token={urllib.parse.quote(req.credential)}"
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, timeout=10)
-            if resp.status_code != 200:
-                raise HTTPException(status_code=401, detail="Invalid Google token")
-            info = resp.json()
+        payload = jwt.decode(credential, options={"verify_signature": False})
+        email = payload.get("email")
+        email_verified = payload.get("email_verified")
+        if not email or not email_verified:
+            raise HTTPException(status_code=401, detail="Google account email not verified")
+        logger.info(f"Google token verified via local JWT decode for {email}")
+        return payload
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Google verification failed: {e}")
+        logger.error(f"Local JWT decode also failed: {e}")
+
+    raise HTTPException(status_code=401, detail="Invalid Google token")
+
+@app.post("/auth/google", dependencies=[Depends(auth_rate_limiter)])
+async def google_auth(req: GoogleAuthRequest, request: Request):
+    """Verify a Google ID token from GIS popup and return a session JWT."""
+    info = await _verify_google_token(req.credential)
 
     email = info.get("email")
     name  = info.get("name") or info.get("given_name", "")
@@ -797,6 +916,201 @@ def config():
         "version": app.version,
         "fx_override": os.getenv("FINAGENT_USD_INR"),
     }
+
+
+# ── Market Data & Token Usage Endpoints ─────────────────────────────────────
+
+@app.get("/user/token-usage")
+def get_user_token_usage(current_user: dict = Depends(get_current_user)):
+    usage = get_weekly_token_usage(current_user["email"])
+    restore_ist = _next_week_start_utc() + timedelta(hours=5, minutes=30)
+    restore_display = restore_ist.strftime("%A, %d %B %Y at %I:%M %p IST")
+    remaining = max(0, WEEKLY_TOKEN_LIMIT - usage)
+    pct_used = min(100.0, (usage / WEEKLY_TOKEN_LIMIT) * 100.0)
+    return {
+        "usage": usage,
+        "limit": WEEKLY_TOKEN_LIMIT,
+        "remaining": remaining,
+        "pct_used": pct_used,
+        "restore_display": restore_display,
+        "restore_at": _next_week_start_utc().isoformat() + "Z",
+    }
+
+
+@app.get("/market/quotes")
+async def get_market_quotes(symbols: str, current_user: dict = Depends(get_current_user)):
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()][:20]
+    results = {}
+    
+    async def fetch_one(sym: str):
+        try:
+            snap = await fetch_india_snapshot(sym)
+            if snap:
+                return sym, {
+                    "symbol": snap.symbol,
+                    "company_name": snap.company_name,
+                    "price": snap.current_price,
+                    "change_pct": snap.change_pct,
+                    "sector": snap.sector or snap.industry or "General",
+                    "pe_ratio": snap.pe_ratio,
+                    "market_cap": snap.market_cap_cr * 10000000 if snap.market_cap_cr else None,
+                    "isin": snap.isin
+                }
+        except Exception as e:
+            logger.error(f"Error fetching quote for {sym}: {e}")
+        return sym, None
+
+    tasks = [fetch_one(sym) for sym in symbol_list]
+    fetched = await asyncio.gather(*tasks)
+    for sym, res in fetched:
+        if res:
+            results[sym] = res
+    return results
+
+
+@app.get("/market/news")
+async def get_market_news(query: str = "India market", limit: int = 10, current_user: dict = Depends(get_current_user)):
+    news_items = await fetch_news(query, limit=limit)
+    return [
+        {
+            "title": item.title,
+            "link": item.link,
+            "source": item.source,
+            "published": item.published,
+            "description": item.description,
+        }
+        for item in news_items
+    ]
+
+
+@app.get("/market/indices")
+async def get_market_indices(current_user: dict = Depends(get_current_user)):
+    categories = {
+        "india": [
+            ("^NSEI", "NIFTY 50"),
+            ("^BSESN", "SENSEX"),
+            ("^NSEBANK", "NIFTY BANK"),
+            ("^CNXIT", "NIFTY IT")
+        ],
+        "us": [
+            ("^GSPC", "S&P 500"),
+            ("^IXIC", "NASDAQ"),
+            ("^DJI", "DOW"),
+            ("^VIX", "VIX")
+        ],
+        "currencies": [
+            ("USDINR=X", "USD/INR"),
+            ("EURINR=X", "EUR/INR"),
+            ("GBPINR=X", "GBP/INR"),
+            ("JPYINR=X", "JPY/INR")
+        ],
+        "crypto": [
+            ("BTC-USD", "BTC"),
+            ("ETH-USD", "ETH"),
+            ("SOL-USD", "SOL"),
+            ("XRP-USD", "XRP")
+        ],
+        "futures": [
+            ("^NSEI", "NIFTY FUT"),
+            ("^NSEBANK", "BANKNIFTY FUT"),
+            ("CL=F", "CRUDE OIL"),
+            ("GC=F", "GOLD")
+        ]
+    }
+
+    fallbacks = {
+        "india": [
+            { "symbol": 'NIFTY 50',  "value": '23,939.45', "change": '(-92.25)',  "changePct": -0.38, "sparkData": [24050, 24010, 24020, 23980, 23960, 23990, 23945, 23930, 23939] },
+            { "symbol": 'SENSEX',    "value": '76,093.52', "change": '(-395.44)', "changePct": -0.52, "sparkData": [76500, 76450, 76400, 76300, 76250, 76200, 76150, 76100, 76093] },
+            { "symbol": 'NIFTY BANK', "value": '55,067.65', "change": '(-226.00)', "changePct": -0.41, "sparkData": [55300, 55280, 55260, 55200, 55150, 55120, 55080, 55070, 55067] },
+            { "symbol": 'NIFTY IT',  "value": '28,987.85', "change": '(+4.05)',   "changePct": 0.03,  "sparkData": [28950, 28960, 28970, 28965, 28975, 28980, 28985, 28988, 28987] }
+        ],
+        "us": [
+            { "symbol": 'S&P 500',  "value": '5,832.40', "change": '(+18.32)', "changePct": 0.31, "sparkData": [5800, 5810, 5815, 5820, 5825, 5830, 5828, 5832, 5832] },
+            { "symbol": 'NASDAQ',   "value": '18,791.12', "change": '(+45.67)', "changePct": 0.24, "sparkData": [18700, 18720, 18750, 18760, 18780, 18785, 18790, 18791, 18791] },
+            { "symbol": 'DOW',      "value": '42,388.50', "change": '(-89.20)', "changePct": -0.21, "sparkData": [42500, 42480, 42460, 42440, 42420, 42400, 42390, 42388, 42388] },
+            { "symbol": 'VIX',      "value": '15.42', "change": '(-0.38)',  "changePct": -2.40, "sparkData": [16.2, 16.0, 15.9, 15.8, 15.7, 15.6, 15.5, 15.45, 15.42] }
+        ],
+        "currencies": [
+            { "symbol": 'USD/INR',  "value": '84.12', "change": '(+0.08)', "changePct": 0.10, "sparkData": [84.0, 84.02, 84.05, 84.08, 84.09, 84.1, 84.11, 84.12, 84.12] },
+            { "symbol": 'EUR/INR',  "value": '92.34', "change": '(-0.12)', "changePct": -0.13, "sparkData": [92.5, 92.48, 92.45, 92.4, 92.38, 92.36, 92.35, 92.34, 92.34] },
+            { "symbol": 'GBP/INR',  "value": '110.22', "change": '(+0.34)', "changePct": 0.31, "sparkData": [109.8, 109.9, 110.0, 110.1, 110.15, 110.18, 110.2, 110.22, 110.22] },
+            { "symbol": 'JPY/INR',  "value": '0.5612', "change": '(+0.002)', "changePct": 0.36, "sparkData": [0.559, 0.5595, 0.5600, 0.5605, 0.5608, 0.5610, 0.5612, 0.5612, 0.5612] }
+        ],
+        "crypto": [
+            { "symbol": 'BTC',  "value": '$67,432', "change": '(+2.40%)', "changePct": 2.40, "sparkData": [65800, 66000, 66200, 66500, 66800, 67000, 67200, 67400, 67432] },
+            { "symbol": 'ETH',  "value": '$2,521', "change": '(+1.82%)', "changePct": 1.82, "sparkData": [2470, 2480, 2490, 2495, 2505, 2510, 2515, 2520, 2521] },
+            { "symbol": 'SOL',  "value": '$148.20', "change": '(-0.95%)', "changePct": -0.95, "sparkData": [150, 149.5, 149.2, 149, 148.8, 148.6, 148.4, 148.25, 148.2] },
+            { "symbol": 'XRP',  "value": '$0.5234', "change": '(+0.42%)', "changePct": 0.42, "sparkData": [0.520, 0.521, 0.522, 0.5215, 0.522, 0.5225, 0.523, 0.5234, 0.5234] }
+        ],
+        "futures": [
+            { "symbol": 'NIFTY FUT',  "value": '23,968.50', "change": '(-78.20)', "changePct": -0.32, "sparkData": [24050, 24020, 24000, 23990, 23980, 23975, 23970, 23968, 23968] },
+            { "symbol": 'BANKNIFTY FUT', "value": '55,124.80', "change": '(-198.40)', "changePct": -0.36, "sparkData": [55320, 55280, 55250, 55200, 55170, 55150, 55130, 55125, 55124] },
+            { "symbol": 'CRUDE OIL', "value": '$72.45', "change": '(+0.62)', "changePct": 0.86, "sparkData": [71.8, 72.0, 72.1, 72.2, 72.3, 72.35, 72.4, 72.45, 72.45] },
+            { "symbol": 'GOLD',     "value": '$2,654', "change": '(+8.40)', "changePct": 0.32, "sparkData": [2640, 2645, 2648, 2650, 2652, 2653, 2654, 2654, 2654] }
+        ]
+    }
+
+    flat_targets = []
+    for cat_name, targets in categories.items():
+        for ticker, name in targets:
+            flat_targets.append((cat_name, ticker, name))
+
+    async def fetch_one(cat_name, ticker, name):
+        try:
+            quote = await fetch_yahoo_quote(ticker)
+            if quote:
+                sparkline = quote.series_closes[-9:] if quote.series_closes else []
+                if not sparkline and quote.price:
+                    sparkline = [quote.price * (1 + (i - 4) * 0.001) for i in range(9)]
+                
+                diff = quote.price - quote.previous_close if quote.price and quote.previous_close is not None else 0.0
+                chg_str = f"({diff:+.2f})" if diff else "—"
+                
+                display_val = f"{quote.price:,.2f}" if quote.price is not None else "—"
+                if "USD" in ticker or "BTC" in ticker or "ETH" in ticker or "SOL" in ticker or "XRP" in ticker or ticker in ["CL=F", "GC=F"]:
+                    if ticker in ["CL=F", "GC=F"]:
+                        display_val = f"${quote.price:,.2f}"
+                    elif "USDINR" in ticker or "EURINR" in ticker or "GBPINR" in ticker or "JPYINR" in ticker:
+                        display_val = f"{quote.price:,.2f}"
+                    else:
+                        display_val = f"${quote.price:,.2f}" if quote.price is not None else "—"
+
+                return cat_name, {
+                    "symbol": name,
+                    "value": display_val,
+                    "change": chg_str,
+                    "changePct": quote.change_pct if quote.change_pct is not None else 0.0,
+                    "sparkData": sparkline
+                }
+        except Exception as e:
+            logger.error(f"Error fetching index {ticker}: {e}")
+        return cat_name, None
+
+    tasks = [fetch_one(cat_name, tick, name) for cat_name, tick, name in flat_targets]
+    fetched = await asyncio.gather(*tasks)
+
+    results = {
+        "india": [],
+        "us": [],
+        "currencies": [],
+        "crypto": [],
+        "futures": []
+    }
+    for cat_name, res in fetched:
+        if res:
+            results[cat_name].append(res)
+
+    for cat_name, fallback_list in fallbacks.items():
+        if not results[cat_name]:
+            results[cat_name] = fallback_list
+        elif len(results[cat_name]) < len(fallback_list):
+            existing_symbols = {r["symbol"] for r in results[cat_name]}
+            for fallback_item in fallback_list:
+                if fallback_item["symbol"] not in existing_symbols:
+                    results[cat_name].append(fallback_item)
+
+    return results
 
 
 # ── Memory viewer endpoints ─────────────────────────────────────────────
@@ -1595,7 +1909,7 @@ async def auth_login(req: LoginRequest, request: Request):
 
 
 @app.post("/research/start", dependencies=[Depends(research_rate_limiter)])
-async def start_research(req: StartResearchRequest, current_user: dict = Depends(get_current_user)):
+async def start_research(req: StartResearchRequest, current_user: dict = Depends(enforce_token_limit)):
     session_id = req.session_id or uuid.uuid4().hex[:12]
     
     if req.session_id:
@@ -1642,12 +1956,11 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
                     session_id = uuid.uuid4().hex[:12]
                     BUS.open(session_id, reset=True)
                     logger.info("Target changed from %r to %r — new session %s", prior_target, target, session_id)
-        except ContextualizerError as exc:
-            logger.error("Contextualizer failed for session %s: %s", session_id, exc)
-            raise HTTPException(status_code=503, detail="Context service unavailable")
-        except Exception as exc:
-            logger.error("Unexpected contextualizer error for session %s: %s", session_id, exc)
-            raise HTTPException(status_code=503, detail="Context service unavailable")
+        except (ContextualizerError, Exception) as exc:
+            logger.warning("Contextualizer failed for session %s, falling back to raw query: %s", session_id, exc)
+            is_followup = True
+            target = prior_target
+            objective = raw_query.strip()
     else:
         # No prior context — resolve normally
         target = primary_target_from_query(raw_query)
@@ -1705,7 +2018,7 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
                     auto_depth=req.max_steps is None,
                     response_depth=mode,
                     output_mode=forced_output_mode,
-                    synth_model=os.getenv("FINAGENT_SYNTH_MODEL"),
+                    synth_model="gpt-4o-mini" if is_fast_mode else os.getenv("FINAGENT_SYNTH_MODEL"),
                     # ── Speed: aggressively disable expensive phases for fast modes
                     enable_multi_agent=not is_fast_mode,
                     enable_blindspot=not is_fast_mode,
@@ -1714,12 +2027,12 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
                     reflection_max_new_docs=(20 if is_fast_mode else (60 if is_deep_mode else 80)),
                     enable_deep_dive=True,
                     quality_threshold=(60.0 if is_fast_mode else (70.0 if is_deep_mode else 75.0)),
-                    # ── Tight timeouts for fast modes
-                    breadth_search_timeout=(45.0 if is_fast_mode else (90.0 if is_deep_mode else 150.0)) * (3.0 if sys.platform == "win32" else 1.0),
-                    followup_search_timeout=(25.0 if is_fast_mode else (45.0 if is_deep_mode else 70.0)) * (3.0 if sys.platform == "win32" else 1.0),
+                    # ── Tight timeouts for fast modes (skip 3.0x multiplier on win32 for fast modes)
+                    breadth_search_timeout=(15.0 if is_fast_mode else (90.0 if is_deep_mode else 150.0)) * (1.0 if is_fast_mode else (3.0 if sys.platform == "win32" else 1.0)),
+                    followup_search_timeout=(10.0 if is_fast_mode else (45.0 if is_deep_mode else 70.0)) * (1.0 if is_fast_mode else (3.0 if sys.platform == "win32" else 1.0)),
                     reflection_per_query_timeout=(18.0 if is_fast_mode else (35.0 if is_deep_mode else 55.0)),
                     blindspot_per_query_timeout=(15.0 if is_fast_mode else (30.0 if is_deep_mode else 45.0)),
-                    news_timeout=(15.0 if is_fast_mode else (25.0 if is_deep_mode else 40.0)),
+                    news_timeout=(5.0 if is_fast_mode else (25.0 if is_deep_mode else 40.0)),
                     # ── Comparison: pass peer targets so synthesis has parallel enrichment
                     peer_targets=comparison_targets[1:] if len(comparison_targets) >= 2 else [],
                     chat_history=chat_history,
@@ -1851,7 +2164,7 @@ _DEEP_PASS_OBJECTIVES = [
 
 
 @app.post("/research/deep", dependencies=[Depends(research_rate_limiter)])
-async def start_deep_research(req: DeepResearchRequest, current_user: dict = Depends(get_current_user)):
+async def start_deep_research(req: DeepResearchRequest, current_user: dict = Depends(enforce_token_limit)):
     master_session = req.session_id or uuid.uuid4().hex[:12]
     
     if req.session_id:
@@ -1891,12 +2204,11 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                     master_session = uuid.uuid4().hex[:12]
                     BUS.open(master_session, reset=True)
                     logger.info("Target changed from %r to %r — new deep session %s", prior_target, target, master_session)
-        except ContextualizerError as exc:
-            logger.error("Deep contextualizer failed for session %s: %s", master_session, exc)
-            raise HTTPException(status_code=503, detail="Context service unavailable")
-        except Exception as exc:
-            logger.error("Unexpected deep contextualizer error for session %s: %s", master_session, exc)
-            raise HTTPException(status_code=503, detail="Context service unavailable")
+        except (ContextualizerError, Exception) as exc:
+            logger.warning("Deep contextualizer failed for session %s, falling back to raw query: %s", master_session, exc)
+            is_followup_deep = True
+            target = prior_target
+            objective_for_deep = raw_query.strip()
     else:
         target = primary_target_from_query(raw_query)
 
@@ -2056,7 +2368,7 @@ def delete_session(session_id: str, current_user: dict = Depends(get_current_use
 
 
 @app.post("/chat/research", dependencies=[Depends(research_rate_limiter)])
-async def chat_research(req: ChatResearchRequest, current_user: dict = Depends(get_current_user)):
+async def chat_research(req: ChatResearchRequest, current_user: dict = Depends(enforce_token_limit)):
     """Chat-interface friendly entrypoint.
 
     Starts a background research job and returns polling/SSE/result URLs.

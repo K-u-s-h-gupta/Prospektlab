@@ -126,11 +126,11 @@ export const WatchlistCard: React.FC<WatchlistCardProps> = ({
                 onClick={() => onSelectStock(stock.symbol)}
               >
                 {/* Meta details */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {stock.symbol}
                   </span>
-                  <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+                  <span style={{ fontSize: '10px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={stock.name}>
                     {stock.name}
                   </span>
                 </div>

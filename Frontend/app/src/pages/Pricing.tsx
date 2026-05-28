@@ -135,7 +135,7 @@ export const Pricing: React.FC = () => {
 
       <section style={{ padding: '0 24px 60px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, alignItems: 'start' }} className="pricing-grid">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, alignItems: 'start' }} className="pricing-grid">
             {PLANS.map((plan, i) => {
               const isPro = plan.name === 'Pro Analyst';
               const displayPrice = isPro && billing === 'annual' ? '3,599' : plan.price;

@@ -18,7 +18,11 @@ import {
   getMfAnalytics,
   getTodayQueue,
   getPortfolioMirror,
-  AgentEventData
+  AgentEventData,
+  getMarketIndices,
+  getMarketQuotes,
+  getMarketNews,
+  getUserTokenUsage
 } from '../api/client';
 import { Search, Edit3, Sparkles, MessageSquare, ChevronRight } from 'lucide-react';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
@@ -29,6 +33,7 @@ interface Message {
   richData?: any;
   depth?: 'standard' | 'deep';
   elapsedMs?: number;
+  tokenLimitDetail?: any;
 }
 
 interface PortfolioItem {
@@ -113,6 +118,7 @@ const CalendarSheet: React.FC<{ dateStr: string; dateLabel: string }> = ({ dateS
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
+  const [quotesData, setQuotesData] = useState<Record<string, any>>({});
 
   // Helper db for mutual fund diagnostics
   const MUTUAL_FUND_DIAGNOSTICS_DB: Record<string, {
@@ -290,6 +296,12 @@ export const Dashboard: React.FC = () => {
         }
       }
 
+      // Override default/General sector with real sector from backend quotes if available
+      const realQuote = quotesData[targetSym];
+      if (realQuote && realQuote.sector && realQuote.sector !== 'General' && realQuote.sector !== 'Other') {
+        resolvedSector = realQuote.sector;
+      }
+
       let currentPrice = item.current || 0;
       if (currentPrice === 0) {
         currentPrice = item.avgCost || 100.00;
@@ -310,7 +322,7 @@ export const Dashboard: React.FC = () => {
         current: currentPrice
       };
     });
-  }, [portfolio]);
+  }, [portfolio, quotesData]);
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [watchlistStocks, setWatchlistStocks] = useState<WatchlistStock[]>([]);
   const [conversations, setConversations] = useState<any[]>([]);
@@ -318,8 +330,16 @@ export const Dashboard: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingEvents, setThinkingEvents] = useState<AgentEventData[]>([]);
+  const [isBypassEnabled, setIsBypassEnabled] = useState(
+    () => typeof window !== 'undefined' && localStorage.getItem('prospektlab_bypass_token_limit') === 'true'
+  );
+
+  const toggleBypassLimit = (val: boolean) => {
+    localStorage.setItem('prospektlab_bypass_token_limit', val ? 'true' : 'false');
+    setIsBypassEnabled(val);
+    showToast(val ? 'Developer Sandbox Bypass Enabled' : 'Sandbox Bypass Disabled', 'info');
+  };
   const [activeTab, setActiveTab] = useState<'portfolio' | 'watchlist'>('portfolio');
-  const [marketTab, setMarketTab] = useState<'india' | 'us' | 'currencies' | 'crypto' | 'futures'>('india');
 
   // Chart benchmark states
   const [selectedBenchmark, setSelectedBenchmark] = useState<string>('NIFTY50');
@@ -346,48 +366,48 @@ export const Dashboard: React.FC = () => {
 
   // Live index data (simulated real-time like Google Finance)
   const [liveIndexData, setLiveIndexData] = useState<Record<string, IndexTickerData[]>>({
-    india: [
-      { symbol: 'NIFTY 50',  value: '23,939.45', change: '(-92.25)',  changePct: -0.38, sparkData: [24050, 24010, 24020, 23980, 23960, 23990, 23945, 23930, 23939] },
-      { symbol: 'SENSEX',    value: '76,093.52', change: '(-395.44)', changePct: -0.52, sparkData: [76500, 76450, 76400, 76300, 76250, 76200, 76150, 76100, 76093] },
-      { symbol: 'NIFTY BANK', value: '55,067.65', change: '(-226.00)', changePct: -0.41, sparkData: [55300, 55280, 55260, 55200, 55150, 55120, 55080, 55070, 55067] },
-      { symbol: 'NIFTY IT',  value: '28,987.85', change: '(+4.05)',   changePct: 0.03,  sparkData: [28950, 28960, 28970, 28965, 28975, 28980, 28985, 28988, 28987] },
-    ],
-    us: [
-      { symbol: 'S&P 500',  value: '5,832.40', change: '(+18.32)', changePct: 0.31, sparkData: [5800, 5810, 5815, 5820, 5825, 5830, 5828, 5832, 5832] },
-      { symbol: 'NASDAQ',   value: '18,791.12', change: '(+45.67)', changePct: 0.24, sparkData: [18700, 18720, 18750, 18760, 18780, 18785, 18790, 18791, 18791] },
-      { symbol: 'DOW',      value: '42,388.50', change: '(-89.20)', changePct: -0.21, sparkData: [42500, 42480, 42460, 42440, 42420, 42400, 42390, 42388, 42388] },
-      { symbol: 'VIX',      value: '15.42', change: '(-0.38)',  changePct: -2.40, sparkData: [16.2, 16.0, 15.9, 15.8, 15.7, 15.6, 15.5, 15.45, 15.42] },
-    ],
-    currencies: [
-      { symbol: 'USD/INR',  value: '84.12', change: '(+0.08)', changePct: 0.10, sparkData: [84.0, 84.02, 84.05, 84.08, 84.09, 84.1, 84.11, 84.12, 84.12] },
-      { symbol: 'EUR/INR',  value: '92.34', change: '(-0.12)', changePct: -0.13, sparkData: [92.5, 92.48, 92.45, 92.4, 92.38, 92.36, 92.35, 92.34, 92.34] },
-      { symbol: 'GBP/INR',  value: '110.22', change: '(+0.34)', changePct: 0.31, sparkData: [109.8, 109.9, 110.0, 110.1, 110.15, 110.18, 110.2, 110.22, 110.22] },
-      { symbol: 'JPY/INR',  value: '0.5612', change: '(+0.002)', changePct: 0.36, sparkData: [0.559, 0.5595, 0.5600, 0.5605, 0.5608, 0.5610, 0.5612, 0.5612, 0.5612] },
-    ],
-    crypto: [
-      { symbol: 'BTC',  value: '$67,432', change: '(+2.40%)', changePct: 2.40, sparkData: [65800, 66000, 66200, 66500, 66800, 67000, 67200, 67400, 67432] },
-      { symbol: 'ETH',  value: '$2,521', change: '(+1.82%)', changePct: 1.82, sparkData: [2470, 2480, 2490, 2495, 2505, 2510, 2515, 2520, 2521] },
-      { symbol: 'SOL',  value: '$148.20', change: '(-0.95%)', changePct: -0.95, sparkData: [150, 149.5, 149.2, 149, 148.8, 148.6, 148.4, 148.25, 148.2] },
-      { symbol: 'XRP',  value: '$0.5234', change: '(+0.42%)', changePct: 0.42, sparkData: [0.520, 0.521, 0.522, 0.5215, 0.522, 0.5225, 0.523, 0.5234, 0.5234] },
-    ],
-    futures: [
-      { symbol: 'NIFTY FUT',  value: '23,968.50', change: '(-78.20)', changePct: -0.32, sparkData: [24050, 24020, 24000, 23990, 23980, 23975, 23970, 23968, 23968] },
-      { symbol: 'BANKNIFTY FUT', value: '55,124.80', change: '(-198.40)', changePct: -0.36, sparkData: [55320, 55280, 55250, 55200, 55170, 55150, 55130, 55125, 55124] },
-      { symbol: 'CRUDE OIL', value: '$72.45', change: '(+0.62)', changePct: 0.86, sparkData: [71.8, 72.0, 72.1, 72.2, 72.3, 72.35, 72.4, 72.45, 72.45] },
-      { symbol: 'GOLD',     value: '$2,654', change: '(+8.40)', changePct: 0.32, sparkData: [2640, 2645, 2648, 2650, 2652, 2653, 2654, 2654, 2654] },
-    ],
+    india: [],
+    us: [],
+    currencies: [],
+    crypto: [],
+    futures: [],
   });
+  const [indicesLoading, setIndicesLoading] = useState(true);
+  const [indicesError, setIndicesError] = useState<string | null>(null);
 
-  const allStockData: Record<string, { name: string; price: string; change: string; changePct: number; sector: string }> = {
-    RELIANCE: { name: 'Reliance Industries Ltd', price: '2,931.40', change: '+32.10', changePct: 1.11, sector: 'Energy' },
-    TCS: { name: 'Tata Consultancy Services', price: '3,842.15', change: '+12.45', changePct: 0.33, sector: 'IT' },
-    INFY: { name: 'Infosys Limited', price: '1,452.90', change: '-18.40', changePct: -1.25, sector: 'IT' },
-    HDFCBANK: { name: 'HDFC Bank Limited', price: '1,562.10', change: '+14.60', changePct: 0.94, sector: 'Banking' },
-    TATAMOTORS: { name: 'Tata Motors Limited', price: '942.50', change: '+22.15', changePct: 2.41, sector: 'Consumer' },
-    ASIANPAINT: { name: 'Asian Paints Limited', price: '2,810.00', change: '-42.10', changePct: -1.48, sector: 'Consumer' },
-    ZOMATO: { name: 'Zomato Limited', price: '184.20', change: '+8.15', changePct: 4.63, sector: 'Consumer' },
-    ITC: { name: 'ITC Limited', price: '431.50', change: '-1.20', changePct: -0.28, sector: 'FMCG' }
+  const [tokenUsage, setTokenUsage] = useState<any>(null);
+  const [newsFeed, setNewsFeed] = useState<any[]>([]);
+  const [newsLoading, setNewsLoading] = useState(true);
+  const [newsError, setNewsError] = useState<string | null>(null);
+
+  // Fetch token usage helper
+  const fetchTokenUsage = async () => {
+    try {
+      const data = await getUserTokenUsage();
+      if (data) {
+        setTokenUsage(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch token usage', e);
+    }
   };
+
+  // Compute allStockData dynamically from real-time backend quotes
+  const allStockData = useMemo(() => {
+    const data: Record<string, { name: string; price: string; change: string; changePct: number; sector: string }> = {};
+    Object.keys(quotesData).forEach(sym => {
+      const q = quotesData[sym];
+      const changeVal = q.price !== null ? q.price * (q.change_pct / 100) : 0;
+      data[sym] = {
+        name: q.company_name || `${sym} Limited`,
+        price: q.price !== null ? q.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—',
+        change: q.price !== null ? `${changeVal >= 0 ? '+' : ''}${changeVal.toFixed(2)}` : '—',
+        changePct: q.change_pct || 0,
+        sector: q.sector || 'General'
+      };
+    });
+    return data;
+  }, [quotesData]);
 
   const userUniverseSymbols = useMemo(() => {
     const portfolioSymbols = enrichedPortfolio.map(p => p.symbol.toUpperCase());
@@ -395,58 +415,109 @@ export const Dashboard: React.FC = () => {
     return Array.from(new Set([...portfolioSymbols, ...watchlistSymbols]));
   }, [enrichedPortfolio, watchlist]);
 
-  const recentInsights = useMemo<InsightItem[]>(() => {
-    const templateInsights: Record<string, Omit<InsightItem, 'id' | 'timestamp'>> = {
-      RELIANCE: {
-        ticker: 'RELIANCE',
-        type: 'valuation',
-        title: 'DCF Intrinsic Mismatch',
-        summary: 'Mark-IT\'s WACC valuation models calculate an intrinsic value of ₹3,240. Represents a 10.5% margin of safety relative to market pricing.'
-      },
-      ASIANPAINT: {
-        ticker: 'ASIANPAINT',
-        type: 'risk',
-        title: 'Pledge Indicator Alert',
-        summary: 'Promoter pledge ratio ticked up by 2.1% in the recent filings. Financial health rating remains at 8/9, but leverage warrants monitoring.'
-      },
-      TCS: {
-        ticker: 'TCS',
-        type: 'earnings',
-        title: 'Operating Margin Premium',
-        summary: 'TCS reports EBIT margin of 24.6%, outpacing peers (Infosys at 21.2%). Operating cash flows demonstrate significant pricing power.'
-      },
-      INFY: {
-        ticker: 'INFY',
-        type: 'valuation',
-        title: 'Cloud Growth Acceleration',
-        summary: 'Infosys shows a 14% YoY growth in cloud services segment, hinting at strong margin expansion in upcoming quarters.'
-      },
-      HDFCBANK: {
-        ticker: 'HDFCBANK',
-        type: 'risk',
-        title: 'Net Interest Margin Stabilization',
-        summary: 'NIM stabilized at 3.4% this quarter. Merging headwinds are fully priced in, prompting positive credit outlook upgrade.'
-      },
-      TATAMOTORS: {
-        ticker: 'TATAMOTORS',
-        type: 'earnings',
-        title: 'EV Volume Milestone',
-        summary: 'EV segment volumes crossed 15,000 units this quarter. Operating leverage is turning positive for domestic PV business.'
-      },
-      ZOMATO: {
-        ticker: 'ZOMATO',
-        type: 'valuation',
-        title: 'Contribution Margin Peak',
-        summary: 'Zomato food delivery contribution margin expands to 7.1%. Blinkit integration scaling faster than consensus estimates.'
-      },
-      ITC: {
-        ticker: 'ITC',
-        type: 'earnings',
-        title: 'FMCG Margin Outperformance',
-        summary: 'ITC non-cigarette FMCG segment EBITDA margins expand by 120bps, driven by premiumization and supply chain scaling.'
+  // Fetch quotes whenever user universe changes or periodically
+  useEffect(() => {
+    if (userUniverseSymbols.length === 0) return;
+    const fetchQuotes = async () => {
+      try {
+        const data = await getMarketQuotes(userUniverseSymbols);
+        if (data) {
+          setQuotesData(data);
+        }
+      } catch (e) {
+        console.error('Failed to fetch market quotes', e);
       }
     };
+    fetchQuotes();
+    const interval = setInterval(fetchQuotes, 60000);
+    return () => clearInterval(interval);
+  }, [userUniverseSymbols]);
 
+  // Fetch indices on mount and periodically
+  useEffect(() => {
+    let cancelled = false;
+    const fetchIndices = async () => {
+      try {
+        setIndicesError(null);
+        const data = await getMarketIndices();
+        if (data && !cancelled) {
+          setLiveIndexData(data);
+          setIndicesLoading(false);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          console.error('Failed to fetch market indices', e);
+          setIndicesError(e.message || 'Failed to load market indices');
+          setIndicesLoading(false);
+        }
+      }
+    };
+    fetchIndices();
+    const interval = setInterval(fetchIndices, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Fetch news on mount and periodically
+  useEffect(() => {
+    let cancelled = false;
+    const fetchNews = async () => {
+      try {
+        setNewsError(null);
+        const data = await getMarketNews("India market");
+        if (data && !cancelled) {
+          const mapped = data.map((item: any, idx: number) => {
+            const txt = (item.title + " " + (item.description || "")).toLowerCase();
+            let sentiment: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+            if (txt.includes('surge') || txt.includes('gain') || txt.includes('rise') || txt.includes('bull') || txt.includes('growth') || txt.includes('higher') || txt.includes('up')) {
+              sentiment = 'bullish';
+            } else if (txt.includes('fall') || txt.includes('drop') || txt.includes('slip') || txt.includes('decline') || txt.includes('bear') || txt.includes('lower') || txt.includes('down')) {
+              sentiment = 'bearish';
+            }
+            
+            const tickers: string[] = [];
+            userUniverseSymbols.forEach(sym => {
+              if (txt.includes(sym.toLowerCase())) {
+                tickers.push(sym);
+              }
+            });
+
+            return {
+              id: `n-${idx}`,
+              source: item.source || 'News',
+              time: item.published || 'Just now',
+              headline: item.title,
+              sentiment,
+              tickers
+            };
+          });
+          setNewsFeed(mapped);
+          setNewsLoading(false);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          console.error('Failed to fetch market news', e);
+          setNewsError(e.message || 'Failed to load market news');
+          setNewsLoading(false);
+        }
+      }
+    };
+    fetchNews();
+    const interval = setInterval(fetchNews, 300000); // 5 minutes
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [userUniverseSymbols]);
+
+  // Fetch token usage on mount
+  useEffect(() => {
+    fetchTokenUsage();
+  }, []);
+
+  const recentInsights = useMemo<InsightItem[]>(() => {
     const list: InsightItem[] = [];
     userUniverseSymbols.forEach((sym, idx) => {
       const upperSym = sym.toUpperCase();
@@ -467,39 +538,32 @@ export const Dashboard: React.FC = () => {
       const stockItem = INDIAN_STOCKS.find(s => s.symbol.toUpperCase() === targetSym);
       const resolvedName = pItem ? pItem.name : (stockItem ? stockItem.name : allStockData[upperSym]?.name || `${targetSym} Limited`);
 
-      if (templateInsights[upperSym]) {
-        list.push({
-          id: `ins-${idx}`,
-          timestamp: `${idx * 2 + 1} hours ago`,
-          name: resolvedName,
-          ...templateInsights[upperSym]
-        });
+      const types: Array<'valuation' | 'risk' | 'earnings'> = ['valuation', 'risk', 'earnings'];
+      const chosenType = types[idx % types.length];
+      let title = '';
+      let summary = '';
+      const meta = allStockData[upperSym];
+      
+      if (chosenType === 'valuation') {
+        title = `Valuation Assessment — ${resolvedName}`;
+        summary = `Mark-IT metrics for ${resolvedName} (currently at ${meta?.price || '—'}) indicate sector-specific dynamics in ${meta?.sector || 'General'}. Long-term multipliers suggest stabilization.`;
+      } else if (chosenType === 'risk') {
+        title = `Beta & Volatility — ${resolvedName}`;
+        summary = `Historical correlation data for ${resolvedName} (${meta?.sector || 'General'} sector) indicates a stable tracking coefficient relative to Nifty 50 benchmarks.`;
       } else {
-        const types: Array<'valuation' | 'risk' | 'earnings'> = ['valuation', 'risk', 'earnings'];
-        const chosenType = types[idx % types.length];
-        let title = '';
-        let summary = '';
-        if (chosenType === 'valuation') {
-          title = `Relative Valuation Upside — ${resolvedName}`;
-          summary = `Mark-IT analysis of ${resolvedName} shows it trading at a 15% discount to historical P/E median, suggesting short-term mean reversion potential.`;
-        } else if (chosenType === 'risk') {
-          title = `Systematic Volatility Shift — ${resolvedName}`;
-          summary = `Beta of ${resolvedName} increased to 1.18. Increased correlation with benchmark suggests higher sensitivity to macro interest rate shifts.`;
-        } else {
-          title = `Earnings Performance Outlook — ${resolvedName}`;
-          summary = `Consensus estimates for ${resolvedName} project 8% revenue growth. Free cash flow generation remains high with strong cash conversion cycle.`;
-        }
-
-        list.push({
-          id: `ins-${idx}`,
-          ticker: upperSym,
-          name: resolvedName,
-          type: chosenType,
-          title,
-          summary,
-          timestamp: `${idx * 3 + 2} hours ago`
-        });
+        title = `Earnings Outlook — ${resolvedName}`;
+        summary = `Consensus estimates for ${resolvedName} point to stable capital efficiency metrics. Margin structure remains in line with ${meta?.sector || 'General'} industry peers.`;
       }
+
+      list.push({
+        id: `ins-${idx}`,
+        ticker: upperSym,
+        name: resolvedName,
+        type: chosenType,
+        title,
+        summary,
+        timestamp: `${idx * 3 + 2} hours ago`
+      });
     });
 
     if (list.length === 0) {
@@ -526,7 +590,7 @@ export const Dashboard: React.FC = () => {
     }
 
     return list;
-  }, [userUniverseSymbols, enrichedPortfolio]);
+  }, [userUniverseSymbols, enrichedPortfolio, allStockData]);
 
   // Drag listeners for Chat Resizing
   useEffect(() => {
@@ -678,7 +742,18 @@ export const Dashboard: React.FC = () => {
 
     // Pick active conversation
     if (savedConversations.length > 0) {
-      const firstConv = savedConversations[0];
+      let firstConv = savedConversations[0];
+      if (firstConv.id === '1') {
+        const migratedId = 'conv-' + Date.now();
+        firstConv.id = migratedId;
+        const savedMessagesRaw = localStorage.getItem('prospektlab_messages_1');
+        if (savedMessagesRaw) {
+          localStorage.setItem(`prospektlab_messages_${migratedId}`, savedMessagesRaw);
+          localStorage.removeItem('prospektlab_messages_1');
+        }
+        localStorage.setItem('prospektlab_conversations', JSON.stringify(savedConversations));
+        setConversations([...savedConversations]);
+      }
       setActiveConversationId(firstConv.id);
       const savedMessagesRaw = localStorage.getItem(`prospektlab_messages_${firstConv.id}`);
       if (savedMessagesRaw) {
@@ -732,99 +807,7 @@ export const Dashboard: React.FC = () => {
     }
   }, [messages.length, isThinking]);
 
-  // Live indices ticker simulation
-  useEffect(() => {
-    const isMarketOpen = (symbol: string, category: string): boolean => {
-      const now = new Date();
-      if (category === 'crypto') return true;
-
-      const getTZDayAndHour = (tz: string) => {
-        const formatter = new Intl.DateTimeFormat('en-US', {
-          timeZone: tz,
-          hour12: false,
-          weekday: 'short',
-          hour: 'numeric',
-          minute: 'numeric'
-        });
-        const parts = formatter.formatToParts(now);
-        const day = parts.find(p => p.type === 'weekday')?.value || 'Mon';
-        const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
-        const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
-        return { day, hour, minute };
-      };
-
-      const isWeekend = (day: string) => day === 'Sat' || day === 'Sun';
-
-      if (category === 'india' || symbol.includes('NIFTY') || symbol.includes('BANKNIFTY') || symbol.includes('SENSEX')) {
-        const { day, hour, minute } = getTZDayAndHour('Asia/Kolkata');
-        if (isWeekend(day)) return false;
-        const timeInMinutes = hour * 60 + minute;
-        return timeInMinutes >= 555 && timeInMinutes <= 930;
-      }
-
-      if (category === 'us') {
-        const { day, hour, minute } = getTZDayAndHour('America/New_York');
-        if (isWeekend(day)) return false;
-        const timeInMinutes = hour * 60 + minute;
-        return timeInMinutes >= 570 && timeInMinutes <= 960;
-      }
-
-      if (category === 'currencies' || category === 'futures') {
-        const { day } = getTZDayAndHour('Asia/Kolkata');
-        return !isWeekend(day);
-      }
-
-      return true;
-    };
-
-    const interval = setInterval(() => {
-      setLiveIndexData(prev => {
-        const currentList = prev[marketTab];
-        if (!currentList) return prev;
-
-        const updated = currentList.map((item) => {
-          if (!isMarketOpen(item.symbol, marketTab)) return item;
-          if (Math.random() > 0.55) return item;
-
-          const lastPrice = item.sparkData[item.sparkData.length - 1];
-          const tick = lastPrice * (0.0008 + Math.random() * 0.0027) * (Math.random() > 0.5 ? 1 : -1);
-          const newPrice = Math.max(0.01, lastPrice + tick);
-          const newSpark = [...item.sparkData.slice(-12), parseFloat(newPrice.toFixed(2))];
-          const base = newSpark[0];
-          const newChangePct = ((newPrice - base) / base) * 100;
-          const newChange = `(${newChangePct >= 0 ? '+' : ''}${(newPrice - base).toFixed(2)})`;
-
-          let displayValue = newPrice.toLocaleString('en-IN');
-          if (item.symbol.includes('USD') || item.symbol.includes('EUR') || item.symbol.includes('GBP') || item.symbol === 'GOLD' || item.symbol === 'CRUDE OIL') {
-            displayValue = item.symbol.includes('USD') || item.symbol.includes('EUR') || item.symbol.includes('GBP')
-              ? newPrice.toFixed(2)
-              : '$' + newPrice.toFixed(2);
-          } else if (item.symbol.includes('BTC') || item.symbol.includes('ETH') || item.symbol.includes('SOL')) {
-            displayValue = '$' + Math.round(newPrice).toLocaleString();
-          } else if (item.symbol === 'XRP') {
-            displayValue = '$' + newPrice.toFixed(4);
-          } else if (item.symbol.includes('FUT') || item.symbol.includes('NIFTY') || item.symbol.includes('SENSEX') || item.symbol.includes('BANK')) {
-            displayValue = Math.round(newPrice).toLocaleString('en-IN');
-          }
-
-          return {
-            ...item,
-            value: displayValue,
-            change: newChange,
-            changePct: parseFloat(newChangePct.toFixed(2)),
-            sparkData: newSpark,
-          };
-        });
-
-        return {
-          ...prev,
-          [marketTab]: updated,
-        };
-      });
-    }, 2650);
-
-    return () => clearInterval(interval);
-  }, [marketTab]);
+  // Live index simulation removed - data is now loaded live from the backend API
 
   // Calculations for total portfolio NAV summary
   const computedPortfolioDetails = enrichedPortfolio.map(item => {
@@ -975,14 +958,7 @@ export const Dashboard: React.FC = () => {
   const losersList = [...stocksWithChange].filter(s => s.changePct < 0).sort((a, b) => a.changePct - b.changePct).slice(0, 4);
   const mostActive = [...stocksWithChange].sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct)).slice(0, 4);
 
-  // News sentiment
-  const newsFeed = [
-    { id: 'n1', source: 'Mint', time: '12 min ago', headline: 'Tata Group stocks surge ahead of strategic board meeting', sentiment: 'bullish', tickers: ['TATAMOTORS'] },
-    { id: 'n2', source: 'Bloomberg', time: '38 min ago', headline: 'Rupee retreats from recent highs amid importer dollar demand', sentiment: 'neutral', tickers: [] },
-    { id: 'n3', source: 'ET Markets', time: '1 hour ago', headline: 'TCS posts record EBIT margin; analysts lift target prices', sentiment: 'bullish', tickers: ['TCS'] },
-    { id: 'n4', source: 'Reuters', time: '2 hours ago', headline: 'Promoter pledge in Asian Paints ticks up — what it means', sentiment: 'bearish', tickers: ['ASIANPAINT'] },
-    { id: 'n5', source: 'Moneycontrol', time: '3 hours ago', headline: 'Nifty Bank breaks key support — institutional positioning shifts', sentiment: 'bearish', tickers: [] },
-  ];
+  // News feed is now fetched dynamically from the API and stored in state
 
   const upcomingEarnings = useMemo(() => {
     const VERIFIED_BSE_NSE_EARNINGS: Record<string, { date: string; dateLabel: string; period: string; catalyst: string; impact: 'high' | 'medium' | 'watch'; when: string }> = {
@@ -1208,12 +1184,28 @@ export const Dashboard: React.FC = () => {
       const errMsg = err.message || 'Failed to connect to Quant engine.';
       showToast(errMsg, 'error');
       
-      // Append error message bubble
-      const errResponse: Message = {
-        sender: 'ai',
-        text: `**Connection Error**: ${errMsg}`
-      };
-      setMessages((prev) => [...prev, errResponse]);
+      if (err.detail?.code === 'WEEKLY_TOKEN_LIMIT_EXCEEDED') {
+        const limitResponse: Message = {
+          sender: 'ai',
+          text: `Weekly Token Limit Exceeded`,
+          tokenLimitDetail: err.detail
+        };
+        setMessages((prev) => {
+          const merged = [...prev, limitResponse];
+          localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(merged));
+          return merged;
+        });
+      } else {
+        const errResponse: Message = {
+          sender: 'ai',
+          text: `**Connection Error**: ${errMsg}`
+        };
+        setMessages((prev) => {
+          const merged = [...prev, errResponse];
+          localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(merged));
+          return merged;
+        });
+      }
     }
   };
 
@@ -1331,12 +1323,67 @@ export const Dashboard: React.FC = () => {
     console.log(`[Toast ${type.toUpperCase()}] ${message}`);
   };
 
+  const retryIndices = async () => {
+    setIndicesLoading(true);
+    setIndicesError(null);
+    try {
+      const data = await getMarketIndices();
+      if (data) {
+        setLiveIndexData(data);
+      }
+    } catch (e: any) {
+      console.error('Failed to fetch market indices', e);
+      setIndicesError(e.message || 'Failed to load market indices');
+    } finally {
+      setIndicesLoading(false);
+    }
+  };
+
+  const retryNews = async () => {
+    setNewsLoading(true);
+    setNewsError(null);
+    try {
+      const data = await getMarketNews('India market');
+      if (data) {
+        const mapped = data.map((item: any, idx: number) => {
+          const txt = (item.title + ' ' + (item.description || '')).toLowerCase();
+          let sentiment: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+          if (txt.includes('surge') || txt.includes('gain') || txt.includes('rise') || txt.includes('bull') || txt.includes('growth') || txt.includes('higher') || txt.includes('up')) {
+            sentiment = 'bullish';
+          } else if (txt.includes('fall') || txt.includes('drop') || txt.includes('slip') || txt.includes('decline') || txt.includes('bear') || txt.includes('lower') || txt.includes('down')) {
+            sentiment = 'bearish';
+          }
+          const tickers: string[] = [];
+          userUniverseSymbols.forEach(sym => {
+            if (txt.includes(sym.toLowerCase())) {
+              tickers.push(sym);
+            }
+          });
+          return {
+            id: `n-${idx}`,
+            source: item.source || 'News',
+            time: item.published || 'Just now',
+            headline: item.title,
+            sentiment,
+            tickers
+          };
+        });
+        setNewsFeed(mapped);
+      }
+    } catch (e: any) {
+      console.error('Failed to fetch market news', e);
+      setNewsError(e.message || 'Failed to load market news');
+    } finally {
+      setNewsLoading(false);
+    }
+  };
+
   const hasEngaged = messages.length > 1;
   const briefingTime = new Date().getHours();
   const timeGreeting = briefingTime < 12 ? 'Good morning' : briefingTime < 17 ? 'Good afternoon' : 'Good evening';
   const username = (localStorage.getItem('prospektlab_username') || 'analyst').toLowerCase();
 
-  const activeIndices = liveIndexData[marketTab] || liveIndexData.india;
+  const activeIndices = liveIndexData.india;
 
   const marketSummary = {
     headline: 'Indian markets open red as global cues weigh on sentiment',
@@ -1392,31 +1439,19 @@ export const Dashboard: React.FC = () => {
       onNewConversation={handleNewConversation}
       onSelectConversation={handleSelectConversation}
       activeConversationId={activeConversationId}
+      tokenUsage={tokenUsage}
     >
-      <div className={`workbench ${isChatHidden ? 'chat-closed' : 'chat-open'}`} style={{
-        gridTemplateColumns: `minmax(0, 1fr) ${isChatHidden ? '0px' : `${chatWidth}px`}`,
-        transition: isDraggingChat ? 'none' : undefined
-      }}>
+      <div className={`workbench ${isChatHidden ? 'chat-closed' : 'chat-open'}`} style={
+        (typeof window !== 'undefined' && window.innerWidth > 768) ? {
+          gridTemplateColumns: `minmax(0, 1fr) ${isChatHidden ? '0px' : `${chatWidth}px`}`,
+          transition: isDraggingChat ? 'none' : undefined
+        } : undefined
+      }>
         {/* ════════════════════════ LEFT: DATA DASHBOARD ════════════════════════ */}
         <div className="workbench-data">
-          {/* Market tabs */}
-          <div className="market-tabs">
-            {([
-              { id: 'us', label: 'US' },
-              { id: 'india', label: 'India' },
-              { id: 'currencies', label: 'Currencies' },
-              { id: 'crypto', label: 'Crypto' },
-              { id: 'futures', label: 'Futures' },
-            ] as const).map(t => (
-              <button
-                key={t.id}
-                className="market-tab"
-                data-active={marketTab === t.id}
-                onClick={() => setMarketTab(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
+          {/* Market Header */}
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 10 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.1px' }}>Indian Market Indices</span>
             <div style={{ flex: 1 }} />
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.08em', marginRight: 8 }}>
               <span className="live-dot" style={{ marginRight: 6 }} /> LIVE • NSE/BSE
@@ -1425,7 +1460,59 @@ export const Dashboard: React.FC = () => {
 
           {/* Index ticker cards */}
           <div className="index-grid">
-            {activeIndices.map(idx => (
+            {indicesLoading && activeIndices.length === 0 && (
+              <>
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="index-ticker-card index-skeleton" style={{
+                    background: 'rgba(15, 23, 42, 0.35)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 14,
+                    padding: '14px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    minWidth: 0,
+                    width: '100%',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <div className="skeleton-block" style={{ width: 72, height: 14 }} />
+                      <div className="skeleton-block" style={{ width: 48, height: 12 }} />
+                    </div>
+                    <div className="skeleton-block" style={{ width: 100, height: 20 }} />
+                    <div className="skeleton-block" style={{ width: 80, height: 12 }} />
+                    <div className="skeleton-block" style={{ width: '100%', height: 36, marginTop: 4 }} />
+                  </div>
+                ))}
+              </>
+            )}
+            {indicesError && (
+              <div className="index-error-banner" style={{
+                gridColumn: '1 / -1',
+                padding: '12px 16px',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                borderRadius: 10,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: 12,
+                color: 'var(--text-muted)',
+              }}>
+                <span>Failed to load market indices</span>
+                <button onClick={retryIndices} style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: 6,
+                  padding: '4px 12px',
+                  fontSize: 11,
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                }}>
+                  Retry
+                </button>
+              </div>
+            )}
+            {!indicesLoading && !indicesError && activeIndices.map(idx => (
               <IndexTickerCard
                 key={idx.symbol}
                 data={idx}
@@ -1436,12 +1523,12 @@ export const Dashboard: React.FC = () => {
 
           {/* Portfolio vs Benchmark Indexed Comparison Chart */}
           <div className="data-panel" style={{ marginBottom: 36 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>Comparative Returns (Indexed)</span>
+            <div className="chart-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>Comparative Returns (Indexed)</span>
               
               {/* Benchmark dropdown selector */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>VS BENCHMARK:</span>
+              <div className="chart-benchmark-selector" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>VS BENCHMARK:</span>
                 <select
                   value={selectedBenchmark}
                   onChange={(e) => setSelectedBenchmark(e.target.value)}
@@ -1589,40 +1676,40 @@ export const Dashboard: React.FC = () => {
           {/* ADVANCED PORTFOLIO RISK & ANALYTICS PANELS (Mutual Fund, Risk, Stress Test) */}
           {enrichedPortfolio.length > 0 && (
             <div className="data-panel" style={{ marginBottom: '28px' }}>
-              <div className="data-panel-head" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '10px' }}>
-                <div style={{ display: 'flex', gap: 16 }}>
-                  <button
-                    onClick={() => setAnalyticsTab('risk')}
-                    style={{
-                      background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                      color: analyticsTab === 'risk' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      fontWeight: 600, fontSize: 13,
-                    }}
-                  >
-                    Moat & Risk Matrix
-                  </button>
-                  <button
-                    onClick={() => setAnalyticsTab('mf')}
-                    style={{
-                      background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                      color: analyticsTab === 'mf' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      fontWeight: 600, fontSize: 13,
-                    }}
-                  >
-                    Mutual Fund Diagnostics
-                  </button>
-                  <button
-                    onClick={() => setAnalyticsTab('stress')}
-                    style={{
-                      background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                      color: analyticsTab === 'stress' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      fontWeight: 600, fontSize: 13,
-                    }}
-                  >
-                    Shock & Stress Simulator
-                  </button>
+                <div className="data-panel-head" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '10px' }}>
+                  <div className="analytics-tabs-row" style={{ gap: 16 }}>
+                    <button
+                      onClick={() => setAnalyticsTab('risk')}
+                      style={{
+                        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                        color: analyticsTab === 'risk' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        fontWeight: 600, fontSize: 13,
+                      }}
+                    >
+                      Moat & Risk Matrix
+                    </button>
+                    <button
+                      onClick={() => setAnalyticsTab('mf')}
+                      style={{
+                        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                        color: analyticsTab === 'mf' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        fontWeight: 600, fontSize: 13,
+                      }}
+                    >
+                      Mutual Fund Diagnostics
+                    </button>
+                    <button
+                      onClick={() => setAnalyticsTab('stress')}
+                      style={{
+                        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                        color: analyticsTab === 'stress' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        fontWeight: 600, fontSize: 13,
+                      }}
+                    >
+                      Shock & Stress Simulator
+                    </button>
+                  </div>
                 </div>
-              </div>
 
               <div style={{ marginTop: '14px' }}>
                 {analyticsTab === 'risk' && portfolioStats && (
@@ -1703,7 +1790,7 @@ export const Dashboard: React.FC = () => {
                           </div>
 
                           {/* Individual Scheme Detail Cards */}
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px', marginTop: '4px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '4px' }}>
                             {mfHoldings.map(item => {
                               const diag = getMfDiagnostics(item.symbol);
                               const weightInPortfolio = ((item.qty * item.current) / (portfolioSummary.totalValue || 1)) * 100;
@@ -1913,7 +2000,7 @@ export const Dashboard: React.FC = () => {
 
           {/* AI Market summary */}
           <div className="section-head">
-            <div className="section-title">{marketTab === 'india' ? 'India market summary' : `${marketTab.charAt(0).toUpperCase() + marketTab.slice(1)} market summary`}</div>
+            <div className="section-title">India market summary</div>
             <span className="section-sublabel">MARK-IT'S BRIEF • {marketSummary.sourcesCount} sources</span>
           </div>
 
@@ -1932,13 +2019,13 @@ export const Dashboard: React.FC = () => {
           <div className="data-grid">
             <div className="data-panel">
               <div className="data-panel-head">
-                <div style={{ display: 'flex', gap: 16 }}>
+                <div className="panel-tabs" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                   <button
                     onClick={() => setActiveTab('portfolio')}
                     style={{
                       background: 'none', border: 'none', padding: 0, cursor: 'pointer',
                       color: activeTab === 'portfolio' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      fontWeight: 600, fontSize: 13,
+                      fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap'
                     }}
                   >
                     Holdings
@@ -1948,7 +2035,7 @@ export const Dashboard: React.FC = () => {
                     style={{
                       background: 'none', border: 'none', padding: 0, cursor: 'pointer',
                       color: activeTab === 'watchlist' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      fontWeight: 600, fontSize: 13,
+                      fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap'
                     }}
                   >
                     Watchlist
@@ -1993,10 +2080,10 @@ export const Dashboard: React.FC = () => {
                     className="insight-row"
                     onClick={() => handleSendMessage(`Walk me through the ${ins.title} for ${ins.ticker}.`, 'standard')}
                   >
-                    <div className="insight-row-meta">
+                    <div className="insight-row-meta" style={{ flexWrap: 'wrap', rowGap: '4px' }}>
                       <span>{ins.ticker}</span>
                       <span className={`insight-row-type ${insightTypeBadgeClass(ins.type)}`}>{ins.type}</span>
-                      <span style={{ marginLeft: 'auto', fontWeight: 500, textTransform: 'none', letterSpacing: 0, color: 'var(--text-muted)' }}>{ins.timestamp}</span>
+                      <span style={{ marginLeft: 'auto', fontWeight: 500, textTransform: 'none', letterSpacing: 0, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{ins.timestamp}</span>
                     </div>
                     <div className="insight-row-title">{ins.title}</div>
                   </div>
@@ -2011,7 +2098,57 @@ export const Dashboard: React.FC = () => {
             <span className="section-sublabel">LIVE NEWS · MARK-IT'S SENTIMENT</span>
           </div>
           <div className="news-grid">
-            {newsFeed.map(n => (
+            {newsLoading && (
+              <>
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="news-card news-skeleton" style={{
+                    padding: '14px 16px',
+                    background: 'rgba(15, 23, 42, 0.35)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 12,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                  }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <div className="skeleton-block" style={{ width: 56, height: 10 }} />
+                      <div className="skeleton-block" style={{ width: 64, height: 10 }} />
+                      <div className="skeleton-block" style={{ width: 40, height: 10 }} />
+                    </div>
+                    <div className="skeleton-block" style={{ width: '100%', height: 14 }} />
+                    <div className="skeleton-block" style={{ width: '70%', height: 14 }} />
+                  </div>
+                ))}
+              </>
+            )}
+            {newsError && (
+              <div className="news-error-banner" style={{
+                gridColumn: '1 / -1',
+                padding: '12px 16px',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                borderRadius: 10,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: 12,
+                color: 'var(--text-muted)',
+              }}>
+                <span>Failed to load market news</span>
+                <button onClick={retryNews} style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: 6,
+                  padding: '4px 12px',
+                  fontSize: 11,
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                }}>
+                  Retry
+                </button>
+              </div>
+            )}
+            {!newsLoading && !newsError && newsFeed.map(n => (
               <div key={n.id} className="news-card" onClick={() => handleSendMessage(`Tell me more about: ${n.headline}`, 'standard')}>
                 <div className="news-card-meta">
                   <span className="news-source">{n.source}</span>
@@ -2023,7 +2160,7 @@ export const Dashboard: React.FC = () => {
                 <div className="news-headline">{n.headline}</div>
                 {n.tickers.length > 0 && (
                   <div className="news-tickers">
-                    {n.tickers.map(t => <span key={t} className="news-ticker-pill">{t}</span>)}
+                    {n.tickers.map((t: string) => <span key={t} className="news-ticker-pill">{t}</span>)}
                   </div>
                 )}
               </div>
@@ -2050,8 +2187,8 @@ export const Dashboard: React.FC = () => {
                   <CalendarSheet dateStr={e.date} dateLabel={e.dateLabel} />
                   
                   {/* Info in Middle */}
-                  <div className="earnings-info" style={{ flex: 1 }}>
-                    <div className="earnings-name" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px', fontWeight: 600 }}>
+                  <div className="earnings-info" style={{ flex: 1, minWidth: 0 }}>
+                    <div className="earnings-name" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px', fontWeight: 600, overflowWrap: 'break-word', wordBreak: 'break-word' }}>
                       {e.name}
                       {isOwned && <span className="owned-badge">OWNED</span>}
                     </div>
@@ -2082,13 +2219,13 @@ export const Dashboard: React.FC = () => {
                   </div>
                   
                   {/* Catalyst and Impact on Right */}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, minWidth: '140px' }}>
+                  <div className="earnings-catalyst" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, minWidth: '100px' }}>
                     <span style={{ 
                       fontSize: '9.5px', fontWeight: 700, color: impactColor, 
                       background: impactBg, padding: '3px 8px', borderRadius: '6px',
                       letterSpacing: '0.02em', whiteSpace: 'nowrap'
                     }}>{impactLabel}</span>
-                    <span style={{ fontSize: '10.5px', color: 'var(--text-muted)', maxWidth: '200px', textAlign: 'right', lineHeight: 1.3 }}>
+                    <span style={{ fontSize: '10.5px', color: 'var(--text-muted)', maxWidth: '200px', textAlign: 'right', lineHeight: 1.3, overflowWrap: 'break-word', wordBreak: 'break-word' }}>
                       {e.catalyst}
                     </span>
                   </div>
@@ -2118,7 +2255,20 @@ export const Dashboard: React.FC = () => {
             height: '100%',
             overflow: 'hidden'
           }}>
-          {/* Drag Handle left edge */}
+          {/* Mobile drag handle */}
+          <button
+            className="chat-mobile-handle"
+            onClick={() => {
+              setIsChatHidden(true);
+              setChatWidth(0);
+              localStorage.setItem('prospektlab_chat_width', '0');
+            }}
+            aria-label="Close chat"
+          >
+            <div className="chat-mobile-handle-bar" />
+          </button>
+
+          {/* Desktop drag handle left edge */}
           <div
             className="drag-handle-vertical drag-handle-left"
             onMouseDown={() => setIsDraggingChat(true)}
@@ -2179,8 +2329,84 @@ export const Dashboard: React.FC = () => {
               </>
             ) : (
               <>
-                {messages.map((msg, i) => (
-                  i === 0 && msg.sender === 'ai' ? null : (
+                {messages.map((msg, i) => {
+                  if (i === 0 && msg.sender === 'ai') return null;
+
+                  if (msg.tokenLimitDetail) {
+                    const detail = msg.tokenLimitDetail;
+                    return (
+                      <div key={i} className="glass-card token-limit-card animate-slide-in-up" style={{
+                        padding: '20px',
+                        margin: '12px 0',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(239, 68, 68, 0.25)',
+                        background: 'rgba(239, 68, 68, 0.05)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            color: '#F87171',
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '18px',
+                            fontWeight: 'bold'
+                          }}>⚠️</div>
+                          <div>
+                            <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#F87171' }}>Research Limit Reached</h4>
+                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Weekly allocation exhausted</span>
+                          </div>
+                        </div>
+                        
+                        <p style={{ margin: 0, fontSize: '12px', lineHeight: '1.5', color: 'var(--text-secondary)' }}>
+                          {detail.message || `You've consumed all 5,000,000 allocated tokens for this period.`}
+                        </p>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)' }}>
+                            <span>Weekly Progress</span>
+                            <span>100% ({detail.usage?.toLocaleString() || '5,000,000'} / {detail.limit?.toLocaleString() || '5,000,000'})</span>
+                          </div>
+                          <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ width: '100%', height: '100%', background: '#EF4444', borderRadius: '3px' }}></div>
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px', marginTop: '4px' }}>
+                          Restores on: <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{detail.restore_display || 'Next week'}</span>
+                        </div>
+
+                        <label style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          marginTop: '6px',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          border: '1px solid rgba(255, 255, 255, 0.05)'
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={isBypassEnabled}
+                            onChange={(e) => toggleBypassLimit(e.target.checked)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Bypass Limit (Developer Sandbox)</span>
+                        </label>
+                      </div>
+                    );
+                  }
+
+                  return (
                     <div key={i} className="animate-slide-in-up">
                       <MessageBubble
                         sender={msg.sender}
@@ -2190,8 +2416,8 @@ export const Dashboard: React.FC = () => {
                         elapsedMs={msg.elapsedMs}
                       />
                     </div>
-                  )
-                ))}
+                  );
+                })}
                 <AgentThinking events={thinkingEvents} isActive={isThinking} />
               </>
             )}
@@ -2210,6 +2436,18 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Mobile chat backdrop — tap to close */}
+      {!isChatHidden && (
+        <div
+          className="chat-mobile-backdrop"
+          onClick={() => {
+            setIsChatHidden(true);
+            setChatWidth(0);
+            localStorage.setItem('prospektlab_chat_width', '0');
+          }}
+        />
+      )}
 
       {/* Floating Chat Restore Button (when chat is snapped/hidden) */}
       {isChatHidden && (

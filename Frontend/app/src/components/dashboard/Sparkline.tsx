@@ -1,4 +1,4 @@
-import React from 'react';
+  import React from 'react';
 
 interface SparklineProps {
   data: number[];
@@ -47,7 +47,7 @@ export const Sparkline: React.FC<SparklineProps> = ({
   const lastPoint = points[points.length - 1];
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}>
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', width: '100%', height: 'auto', maxWidth: width }}>
       <defs>
         <linearGradient id={gradId} x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor={stroke} stopOpacity={0.35} />

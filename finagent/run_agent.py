@@ -100,6 +100,10 @@ class AgentLoopConfig:
     reflection_per_query_limit: int = 6
     reflection_per_query_timeout: float = 25.0
     reflection_max_new_docs: int = 80
+    # ── AutoCritique Loop ──
+    enable_auto_critique: bool = True
+    auto_critique_max_rounds: int = 3
+    auto_critique_score_threshold: int = 80
     breadth_search_timeout: float = 270.0 if sys.platform == "win32" else 90.0
     followup_search_timeout: float = 135.0 if sys.platform == "win32" else 45.0
     news_timeout: float = 25.0
@@ -1282,7 +1286,14 @@ async def run_research_session(
         cfg.enable_blindspot = False
         cfg.enable_reflection = False
         cfg.enable_deep_dive = False
+        cfg.enable_auto_critique = False  # Disable critique self-correction loop for speed
         cfg.max_steps = min(cfg.max_steps, 8)
+        # If the query is simple, we do not need web scraping at all; Yahoo Quote / Screener is enough
+        if routing.query_complexity == "simple":
+            cfg.enable_scraping = False
+        # Limit breadth queries to at most 2 to reduce search latency
+        if retrieval_plan and retrieval_plan.breadth_queries:
+            retrieval_plan.breadth_queries = retrieval_plan.breadth_queries[:2]
     output_mode = classify_output_mode(
         query=objective,
         target=target,
@@ -1290,7 +1301,7 @@ async def run_research_session(
         depth=response_depth,
         explicit_mode=cfg.output_mode,
     )
-    if routing.deep_research:
+    if routing.deep_research and response_depth == ResponseDepth.DEEP:
         cfg.max_steps = max(cfg.max_steps, 80)
         cfg.reflection_max_rounds = max(cfg.reflection_max_rounds, 6)
         cfg.blindspot_max_queries = max(cfg.blindspot_max_queries, 10)
@@ -1451,6 +1462,7 @@ async def run_research_session(
                 preferred_domains=preferred_domains,
                 entity=entity,
                 timeout_s=timeout_s,
+                bypass_crawl4ai=(response_depth in {ResponseDepth.STANDARD, ResponseDepth.CHAT}),
             )
             logger.info("[AGENT-SEARCH] Breadth survey COMPLETE | docs_returned=%d", len(docs))
         except Exception as exc:
@@ -1899,6 +1911,7 @@ async def run_research_session(
             chat_history=cfg.chat_history,
             session_id=session_id,
             peer_targets=cfg.peer_targets,
+            user_email=cfg.user_email,
         )
         memos_dir = finagent_data_path("memos")
         memos_dir.mkdir(parents=True, exist_ok=True)
@@ -1906,6 +1919,194 @@ async def run_research_session(
         memo_path.write_text(synthesis.memo, encoding="utf-8")
         logger.info("[AGENT-SYNTH] Memo synthesis COMPLETE | via=%s | length=%d chars | quality=%.1f | path=%s",
                     synthesis.via, len(synthesis.memo), final_quality.score, memo_path)
+
+        # ── AutoCritique & Re-research Loop ──
+        if cfg.enable_auto_critique:
+            from finagent.auto_critique import AutoCritique
+            
+            portfolio_ctx_str = ""
+            if portfolio_sentinel:
+                portfolio_ctx_str = (
+                    f"Active Holdings: {', '.join(portfolio_sentinel.symbols)}\n"
+                    f"Holdings Weights: {portfolio_sentinel.weights}\n"
+                    f"Portfolio Risk Metrics: {portfolio_sentinel.risk}"
+                )
+
+            critique_round = 0
+            max_critique_rounds = cfg.auto_critique_max_rounds
+            
+            BUS.emit(
+                session_id,
+                "phase",
+                phase="critique",
+                note="Evaluating research report quality via AutoCritique",
+            )
+            
+            critique_res = await AutoCritique.evaluate(
+                answer=synthesis.memo,
+                objective=objective,
+                docs=docs,
+                portfolio_context=portfolio_ctx_str,
+            )
+            
+            initial_critique_score = critique_res.score
+            logger.info("[CRITIQUE-LOOP] Initial AutoCritique Score: %d | Gaps: %s", 
+                        initial_critique_score, critique_res.gaps)
+            
+            score_before = initial_critique_score
+            score_after = initial_critique_score
+            all_gap_queries = []
+            critique_start_time = time.perf_counter()
+            
+            while critique_res.score < cfg.auto_critique_score_threshold and critique_round < max_critique_rounds:
+                critique_round += 1
+                logger.info("[CRITIQUE-LOOP] Starting Critique Round %d/%d (Score: %d < Threshold: %d)",
+                            critique_round, max_critique_rounds, critique_res.score, cfg.auto_critique_score_threshold)
+                
+                BUS.emit(
+                    session_id,
+                    "phase",
+                    phase="critique",
+                    note=f"Critique Round {critique_round}: score {critique_res.score}/100. Addressing gaps...",
+                )
+                
+                gap_queries = await AutoCritique.generate_gap_queries(critique_res.gaps)
+                if not gap_queries:
+                    logger.info("[CRITIQUE-LOOP] No gap queries generated. Stopping.")
+                    break
+                    
+                logger.info("[CRITIQUE-LOOP] Generated %d gap queries: %s", len(gap_queries), gap_queries)
+                all_gap_queries.extend(gap_queries)
+                
+                new_docs_found = 0
+                for query in gap_queries:
+                    BUS.emit(session_id, "query", query=query, status="running", count=0)
+                    try:
+                        localized_q = localize_search_query(query, entity)
+                        scraped = await search_web(
+                            localized_q,
+                            max_results=cfg.reflection_per_query_limit,
+                            preferred_domains=preferred_domains,
+                            entity=entity,
+                        )
+                        BUS.emit(session_id, "query", query=query, status="done", count=len(scraped))
+                        
+                        for doc in scraped:
+                            key = (doc.final_url or doc.url or "").split("#", 1)[0]
+                            if not key or any((d.final_url or d.url or "").split("#", 1)[0] == key for d in docs):
+                                continue
+                            docs.append(doc)
+                            new_docs_found += 1
+                            
+                            step += 1
+                            await _process_doc(
+                                doc,
+                                step,
+                                cp,
+                                harness,
+                                validator,
+                                session_id,
+                                enrichment_corroborates=(bundle.sec is not None),
+                            )
+                    except Exception as e:
+                        logger.warning("[CRITIQUE-LOOP] Search failed for query %r: %s", query, e)
+                        BUS.emit(session_id, "query", query=query, status="error", count=0)
+                
+                logger.info("[CRITIQUE-LOOP] Critique Round %d fetched %d new documents.", critique_round, new_docs_found)
+                
+                if new_docs_found == 0:
+                    logger.info("[CRITIQUE-LOOP] No new documents found. Stopping.")
+                    break
+                
+                BUS.emit(
+                    session_id,
+                    "phase",
+                    phase="synthesis",
+                    note=f"Re-synthesizing memo with {new_docs_found} new sources",
+                )
+                
+                conflicts = detect_conflicts(docs)
+                for conflict in conflicts:
+                    BUS.emit(
+                        session_id,
+                        "conflict",
+                        metric=conflict.metric,
+                        spread_pct=round(conflict.spread_pct, 1),
+                        note=conflict.note,
+                        observations=[
+                            {
+                                "domain": o.domain,
+                                "tier": o.tier,
+                                "raw": o.raw,
+                                "value": o.value,
+                                "url": o.url,
+                                "context": o.context,
+                            }
+                            for o in conflict.observations
+                        ],
+                    )
+                
+                final_quality = score_research(
+                    target=canonical_label,
+                    bundle=bundle,
+                    docs=docs,
+                    checkpoint=cp,
+                    entity=entity,
+                    conflicts=conflicts,
+                )
+                
+                synthesis = await synthesize_memo(
+                    target,
+                    objective,
+                    docs,
+                    cp,
+                    conflicts=conflicts,
+                    on_token=_on_memo_token,
+                    enrichment=bundle,
+                    synth_model=cfg.synth_model,
+                    output_mode=output_mode.value,
+                    response_depth=response_depth.value,
+                    entity=entity,
+                    specialist_findings=orchestration_findings,
+                    quality_report=final_quality,
+                    chat_history=cfg.chat_history,
+                    session_id=session_id,
+                    peer_targets=cfg.peer_targets,
+                    user_email=cfg.user_email,
+                )
+                
+                memo_path.write_text(synthesis.memo, encoding="utf-8")
+                
+                critique_res = await AutoCritique.evaluate(
+                    answer=synthesis.memo,
+                    objective=objective,
+                    docs=docs,
+                    portfolio_context=portfolio_ctx_str,
+                )
+                
+                score_after = critique_res.score
+                logger.info("[CRITIQUE-LOOP] Round %d AutoCritique Score: %d | Gaps: %s",
+                            critique_round, score_after, critique_res.gaps)
+            
+            critique_elapsed = int((time.perf_counter() - critique_start_time) * 1000)
+            AutoCritique.log_experiment(
+                session_id=session_id,
+                query=objective,
+                mode=output_mode.value or "standard",
+                score_before=initial_critique_score,
+                score_after=score_after,
+                iterations=critique_round,
+                gap_queries=all_gap_queries,
+                elapsed_ms=critique_elapsed,
+            )
+            
+            # Emit a final critique completion state
+            BUS.emit(
+                session_id,
+                "phase",
+                phase="critique",
+                note=f"AutoCritique complete. Final score: {critique_res.score}/100.",
+            )
 
         BUS.emit(
             session_id,

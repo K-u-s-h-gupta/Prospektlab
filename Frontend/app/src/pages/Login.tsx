@@ -7,7 +7,7 @@ import { apiSendVerification, apiForgotPassword, apiResetPassword, apiUpdateMobi
 
 export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTab = 'login' }) => {
   const navigate = useNavigate();
-  const { login, signup, googleLogin, updateUserMobile, logout, showToast, isAuthenticated } = useAuth();
+  const { user, login, signup, googleLogin, updateUserMobile, logout, showToast, isAuthenticated } = useAuth();
 
   // Tab State
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>(initialTab);
@@ -41,13 +41,20 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
   const [isUpdatingMobile, setIsUpdatingMobile] = useState(false);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
-  // Redirect if already authenticated
+  // Sync requireMobileMode with user state on mount/change
   useEffect(() => {
-    if (isAuthenticated) {
+    if (user?.require_mobile) {
+      setRequireMobileMode(true);
+    }
+  }, [user]);
+
+  // Redirect if already authenticated and doesn't require completing profile
+  useEffect(() => {
+    if (isAuthenticated && !user?.require_mobile) {
       const onboarded = localStorage.getItem('prospektlab_onboarded') === 'true';
       navigate(onboarded ? '/dashboard' : '/onboarding');
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, user, navigate]);
 
   // Handle signup countdown
   useEffect(() => {
@@ -295,33 +302,16 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
     }
   };
 
-  // Mock / Dev fallback Google login trigger
+  // Google login trigger for the fallback button
   const handleGoogleSocialClick = async () => {
-    // If window.google is not available, we can simulate a login in development
-    // otherwise GIS popup handles it.
     // @ts-ignore
-    if (!window.google?.accounts?.id) {
-      setIsSubmitting(true);
-      showToast('Google GIS initializing fallback flow...', 'info');
-      try {
-        // Call with a mock JWT credential
-        const res = await googleLogin('mock_credential_token_123456');
-        showToast('Google Auth successful (Simulation Mode)', 'success');
-        if (res.require_mobile) {
-          setRequireMobileMode(true);
-        } else {
-          const onboarded = localStorage.getItem('prospektlab_onboarded') === 'true';
-          navigate(onboarded ? '/dashboard' : '/onboarding');
-        }
-      } catch (err: any) {
-        showToast(err.message || 'Failed to authenticate Google user.', 'error');
-      } finally {
-        setIsSubmitting(false);
-      }
-    } else {
-      // Request prompt
+    if (window.google?.accounts?.id) {
+      // GIS is loaded, trigger the popup
       // @ts-ignore
       window.google.accounts.id.prompt();
+    } else {
+      // GIS not available — likely blocked by ad blocker or network issue
+      showToast('Google Sign-In is not available. Please check your ad blocker or try email login.', 'error');
     }
   };
 
@@ -767,57 +757,57 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
         <div className="auth-divider">or continue with</div>
 
         <div style={{ position: 'relative', width: '100%', marginTop: '8px' }}>
-          <button
-            className="auth-btn-social"
-            onClick={handleGoogleSocialClick}
-            disabled={isSubmitting}
-            style={{
-              width: '100%',
-              background: 'var(--gradient-brand)',
-              color: '#0f172a',
-              border: 'none',
-              fontWeight: 600,
-              borderRadius: 'var(--radius-sm)',
-              boxShadow: '0 4px 12px rgba(6, 182, 212, 0.1)',
-              height: '42px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px'
-            }}
-          >
-            <svg style={{ width: '16px', height: '16px' }} viewBox="0 0 24 24">
-              <path
-                fill="#0f172a"
-                d="M12 5.04c1.67 0 3.17.58 4.35 1.71l3.25-3.25C17.65 1.58 15.01 1 12 1 7.37 1 3.44 3.63 1.57 7.43l3.81 2.95C6.27 7.38 8.9 5.04 12 5.04z"
-              />
-              <path
-                fill="#0f172a"
-                d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.44h6.45c-.28 1.48-1.12 2.74-2.38 3.59l3.71 2.87c2.17-2 3.71-4.94 3.71-8.56z"
-              />
-              <path
-                fill="#0f172a"
-                d="M5.38 14.88c-.23-.68-.36-1.41-.36-2.16s.13-1.48.36-2.16L1.57 7.61C.77 9.21.32 11 .32 12.88s.45 3.67 1.25 5.27l3.81-3.27z"
-              />
-              <path
-                fill="#0f172a"
-                d="M12 22.96c3.24 0 5.97-1.07 7.96-2.91l-3.71-2.87c-1.03.69-2.35 1.1-4.25 1.1-3.1 0-5.73-2.34-6.67-5.49l-3.81 2.95C3.44 20.33 7.37 22.96 12 22.96z"
-              />
-            </svg>
-            {activeTab === 'login' ? 'Sign in with Google' : 'Sign up with Google'}
-          </button>
+          {!isGoogleLoaded && (
+            <button
+              className="auth-btn-social"
+              onClick={handleGoogleSocialClick}
+              disabled={isSubmitting}
+              style={{
+                width: '100%',
+                background: 'var(--gradient-brand)',
+                color: '#0f172a',
+                border: 'none',
+                fontWeight: 600,
+                borderRadius: 'var(--radius-sm)',
+                boxShadow: '0 4px 12px rgba(6, 182, 212, 0.1)',
+                height: '42px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px'
+              }}
+            >
+              <svg style={{ width: '16px', height: '16px' }} viewBox="0 0 24 24">
+                <path
+                  fill="#0f172a"
+                  d="M12 5.04c1.67 0 3.17.58 4.35 1.71l3.25-3.25C17.65 1.58 15.01 1 12 1 7.37 1 3.44 3.63 1.57 7.43l3.81 2.95C6.27 7.38 8.9 5.04 12 5.04z"
+                />
+                <path
+                  fill="#0f172a"
+                  d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.44h6.45c-.28 1.48-1.12 2.74-2.38 3.59l3.71 2.87c2.17-2 3.71-4.94 3.71-8.56z"
+                />
+                <path
+                  fill="#0f172a"
+                  d="M5.38 14.88c-.23-.68-.36-1.41-.36-2.16s.13-1.48.36-2.16L1.57 7.61C.77 9.21.32 11 .32 12.88s.45 3.67 1.25 5.27l3.81-3.27z"
+                />
+                <path
+                  fill="#0f172a"
+                  d="M12 22.96c3.24 0 5.97-1.07 7.96-2.91l-3.71-2.87c-1.03.69-2.35 1.1-4.25 1.1-3.1 0-5.73-2.34-6.67-5.49l-3.81 2.95C3.44 20.33 7.37 22.96 12 22.96z"
+                />
+              </svg>
+              {activeTab === 'login' ? 'Sign in with Google' : 'Sign up with Google'}
+            </button>
+          )}
 
           {isGoogleLoaded && (
             <div
               key={activeTab}
               ref={googleBtnOverlayRef}
               style={{
-                position: 'absolute',
-                inset: 0,
-                opacity: 0.01,
-                zIndex: 10,
-                overflow: 'hidden',
-                cursor: 'pointer'
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
             />
           )}

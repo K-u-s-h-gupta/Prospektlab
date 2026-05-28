@@ -569,10 +569,29 @@ async def _openai_memo(
     chat_history: list[dict[str, str]] | None = None,
     output_mode: str | None = None,
     force_non_stream: bool = False,
+    user_email: str | None = None,
+    session_id: str | None = None,
 ) -> str:
     cfg = resolve_openai_config()
     if cfg is None:
         raise RuntimeError("No LLM provider configured — set OPENAI_API_KEY or XAI_API_KEY")
+    
+    model_to_use = synth_model or cfg.model
+
+    def _record_usage(usage_obj):
+        if not user_email or not usage_obj:
+            return
+        try:
+            from finagent.gateway.run import record_token_usage
+            record_token_usage(
+                user_email=user_email,
+                session_id=session_id or "",
+                prompt_tokens=getattr(usage_obj, "prompt_tokens", 0),
+                completion_tokens=getattr(usage_obj, "completion_tokens", 0),
+                model=model_to_use
+            )
+        except Exception as e:
+            logger.debug("Failed to record token usage: %s", e)
     try:
         from openai import AsyncOpenAI
     except ImportError as exc:
@@ -709,6 +728,8 @@ async def _openai_memo(
                 {"role": "user", "content": user_prompt},
             ],
         )
+        if getattr(resp, "usage", None):
+            _record_usage(resp.usage)
         final = resp.choices[0].message.content or ""
         if isinstance(final, list):
             final = "".join(
@@ -729,10 +750,14 @@ async def _openai_memo(
         temperature=0.2,
         max_tokens=_max_tokens,
         stream=True,
+        stream_options={"include_usage": True},
         messages=messages,
     )
+    usage_data = None
     try:
         async for event in stream:
+            if hasattr(event, "usage") and event.usage:
+                usage_data = event.usage
             if not event.choices:
                 continue
             delta = event.choices[0].delta
@@ -749,6 +774,8 @@ async def _openai_memo(
         full = "".join(chunks).strip()
         if full:
             logger.info("[LLM-RESPONSE] Synthesis completed via streaming | model=%s | output_len=%d chars", model_to_use, len(full))
+            if usage_data:
+                _record_usage(usage_data)
             return full
         logger.warning("[LLM-FALLBACK] Streaming returned empty — falling back to non-streaming call | model=%s", cfg.model)
         logger.info("[LLM-CONTEXT] FALLBACK non-stream call | model=%s | user_prompt_len=%d", cfg.model, len(user_prompt))
@@ -762,6 +789,8 @@ async def _openai_memo(
                 {"role": "user", "content": user_prompt},
             ],
         )
+        if getattr(resp, "usage", None):
+            _record_usage(resp.usage)
         final = resp.choices[0].message.content or ""
         if isinstance(final, list):
             final = "".join(
@@ -1566,6 +1595,7 @@ async def synthesize_memo(
     session_id: str | None = None,
     chat_history: list[dict[str, str]] | None = None,
     peer_targets: list[str] | None = None,
+    user_email: str | None = None,
 ) -> SynthesisResult:
     digest, used = _build_source_digest(docs)
     conflicts = conflicts or []
@@ -1743,6 +1773,8 @@ async def synthesize_memo(
                     synth_model=synth_model,
                     chat_history=chat_history,
                     output_mode=mode.value,
+                    user_email=user_email,
+                    session_id=session_id,
                 ),
                 timeout=timeout_s,
             )
@@ -1765,6 +1797,8 @@ async def synthesize_memo(
                         chat_history=chat_history,
                         output_mode=mode.value,
                         force_non_stream=True,
+                        user_email=user_email,
+                        session_id=session_id,
                     ),
                     timeout=timeout_s,
                 )

@@ -13,6 +13,14 @@ import {
   ArrowLeft 
 } from 'lucide-react';
 import { Logo } from '../components/layout/Logo';
+import { 
+  uploadPortfolioDocument, 
+  uploadPortfolioScreenshot, 
+  confirmExtraction, 
+  cancelExtraction 
+} from '../api/client';
+import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
+
 
 interface PortfolioItem {
   symbol: string;
@@ -36,6 +44,21 @@ export const Onboarding: React.FC = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
 
+  // Allow the page to scroll while on the onboarding screen.
+  // The main app uses overflow:hidden on body/#root for the dashboard cockpit,
+  // so we temporarily unlock it here and restore on unmount.
+  useEffect(() => {
+    const root = document.getElementById('root');
+    const prevBodyOverflow = document.body.style.overflowY;
+    const prevRootOverflow = root ? root.style.overflowY : '';
+    document.body.style.overflowY = 'auto';
+    if (root) root.style.overflowY = 'auto';
+    return () => {
+      document.body.style.overflowY = prevBodyOverflow;
+      if (root) root.style.overflowY = prevRootOverflow;
+    };
+  }, []);
+
   // Pre-fill name from localStorage (set by landing page personalisation)
   const [name, setName] = useState(() => localStorage.getItem('prospektlab_username') || '');
   
@@ -50,6 +73,21 @@ export const Onboarding: React.FC = () => {
   const [parseStep, setParseStep] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState('');
+
+  // Real backend parsing state hooks
+  const [pdfPassword, setPdfPassword] = useState('');
+  const [showPasswordInput, setShowPasswordInput] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  const [reviewPositions, setReviewPositions] = useState<any[]>([]);
+  const [sourceType, setSourceType] = useState<string>('unknown');
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Autocomplete suggestions for watchlist search
+  const [suggestions, setSuggestions] = useState<Array<{ symbol: string; name: string; type: 'Stock' | 'Mutual Fund'; detail: string }>>([]);
+
 
   const styles = [
     {
@@ -94,34 +132,223 @@ export const Onboarding: React.FC = () => {
       setWatchlist([...watchlist, ticker]);
     }
     setInputVal('');
+    setSuggestions([]);
   };
 
-  // Simulate file parsing steps
-  const startParsingSimulation = (fileName: string) => {
-    setUploadedFileName(fileName);
+  // Autocomplete filtering for stocks & mutual funds as user types
+  useEffect(() => {
+    if (!inputVal.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    const query = inputVal.toLowerCase().trim();
+
+    // Filter stocks (up to 5 matches)
+    const matchedStocks = INDIAN_STOCKS.filter(
+      s => s.symbol.toLowerCase().includes(query) || s.name.toLowerCase().includes(query)
+    ).slice(0, 5).map(s => ({
+      symbol: s.symbol,
+      name: s.name,
+      type: 'Stock' as const,
+      detail: s.sector && s.sector !== 'Other' ? s.sector : 'Equity'
+    }));
+
+    // Filter mutual funds (up to 5 matches)
+    const matchedMFs = POPULAR_MUTUAL_FUNDS.filter(
+      f => f.symbol.toLowerCase().includes(query) || f.name.toLowerCase().includes(query)
+    ).slice(0, 5).map(f => ({
+      symbol: f.symbol,
+      name: f.name,
+      type: 'Mutual Fund' as const,
+      detail: f.category || 'Mutual Fund'
+    }));
+
+    setSuggestions([...matchedStocks, ...matchedMFs]);
+  }, [inputVal]);
+
+
+  // Helper to map backend positions into the UI PortfolioItem format
+  const mapPositionsToPortfolioItems = (positions: any[]): PortfolioItem[] => {
+    return positions.map((p: any) => {
+      const qty = p.quantity || 0;
+      const marketVal = p.market_value || 0;
+      let currentPrice = p.last_price || 0;
+      if (currentPrice === 0 && qty > 0 && marketVal > 0) {
+        currentPrice = marketVal / qty;
+      }
+      if (currentPrice === 0) {
+        currentPrice = p.avg_cost || p.cost_basis || 100.00;
+      }
+      
+      let avgCost = p.avg_cost || 0;
+      if (avgCost === 0) {
+        avgCost = parseFloat((currentPrice * 0.85).toFixed(4));
+      }
+      
+      const cleanSym = (p.symbol || '').split('.')[0].toUpperCase().trim();
+      const ISIN_TO_SYMBOL: Record<string, string> = {
+        'INE002A01018': 'RELIANCE',
+        'INE467B01029': 'TCS',
+        'INE009A01021': 'INFY',
+        'INE040A01034': 'HDFCBANK',
+        'INE154A01025': 'ITC',
+        'INE021A01026': 'ASIANPAINT',
+        'INE155A01022': 'TATAMOTORS',
+        'INE758T01015': 'ZOMATO',
+        'INE0LP301011': 'Physicswallah',
+        'INF247L01DA9': 'MOMF'
+      };
+      const targetSym = ISIN_TO_SYMBOL[cleanSym] || cleanSym;
+      let resolvedName = p.name || '';
+      let resolvedSector = p.sector || 'General';
+      
+      if (targetSym === 'MOMF') {
+        resolvedName = 'Motilal Oswal Manufacturing Fund - Direct Growth';
+        resolvedSector = 'Thematic - Manufacturing';
+      } else if (targetSym === 'Physicswallah') {
+        resolvedName = 'Physicswallah Limited';
+        resolvedSector = 'Education Services';
+      } else {
+        const mf = POPULAR_MUTUAL_FUNDS.find(f => f.symbol.toUpperCase() === targetSym);
+        if (mf) {
+          resolvedName = mf.name;
+          resolvedSector = mf.category;
+        } else {
+          const stock = INDIAN_STOCKS.find(s => s.symbol.toUpperCase() === targetSym);
+          if (stock) {
+            resolvedName = stock.name;
+            resolvedSector = stock.sector === 'Other' || !stock.sector ? 'General' : stock.sector;
+          }
+        }
+      }
+
+      return {
+        symbol: targetSym,
+        name: resolvedName,
+        qty: qty,
+        avgCost: avgCost,
+        current: currentPrice,
+        sector: resolvedSector
+      };
+    });
+  };
+
+  const handleFileSelect = (file: File) => {
+    setErrorMsg(null);
+    setShowPasswordInput(false);
+    setPdfPassword('');
+    setPendingFile(null);
+
+    const fileName = file.name.toLowerCase();
+    const isPDF = fileName.endsWith('.pdf');
+    const isExcelOrCsv = fileName.endsWith('.xls') || fileName.endsWith('.xlsx') || fileName.endsWith('.csv');
+    const isImage = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png');
+
+    if (!isPDF && !isExcelOrCsv && !isImage) {
+      setErrorMsg('Unsupported file type. Please upload a PDF, CSV, Excel, or Image file.');
+      return;
+    }
+
+    if (isPDF) {
+      setPendingFile(file);
+      setShowPasswordInput(true);
+    } else {
+      startRealUpload(file);
+    }
+  };
+
+  const startRealUpload = async (file: File, password?: string) => {
     setIsParsing(true);
     setParseStep(0);
+    setErrorMsg(null);
+    setUploadedFileName(file.name);
+    setShowPasswordInput(false);
+    setPendingFile(null);
+
+    // Visual steps timer progress in parallel
+    let currentStep = 0;
+    const progressTimer = setInterval(() => {
+      currentStep = Math.min(currentStep + 1, 3);
+      setParseStep(currentStep);
+    }, 1200);
+
+    try {
+      const fileName = file.name.toLowerCase();
+      const isImage = fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png');
+      
+      let res;
+      if (isImage) {
+        res = await uploadPortfolioScreenshot(file);
+      } else {
+        res = await uploadPortfolioDocument(file, password);
+      }
+
+      clearInterval(progressTimer);
+      setParseStep(4);
+      // Wait a moment for UX transition
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      if (res.code === "REVIEW_REQUIRED" || res.status === "REVIEW_REQUIRED" || res.sync_status === "REVIEW_REQUIRED") {
+        setReviewId(res.review_id);
+        setReviewPositions(res.positions || []);
+        setSourceType(res.source_type || (isImage ? 'image' : 'pdf'));
+        setIsReviewing(true);
+        setIsParsing(false);
+      } else if (res.code === "MIRROR_SYNCHRONIZED" || res.status === "MIRROR_SYNCHRONIZED" || res.sync_status === "MIRROR_SYNCHRONIZED") {
+        const mapped = mapPositionsToPortfolioItems(res.positions || []);
+        setPortfolio(mapped);
+        setIsParsing(false);
+      } else if (res.code === "EMPTY_BUT_VALID") {
+        setErrorMsg('Document is valid but no active holdings were found.');
+        setIsParsing(false);
+      } else {
+        const mapped = mapPositionsToPortfolioItems(res.positions || []);
+        setPortfolio(mapped);
+        setIsParsing(false);
+      }
+    } catch (err: any) {
+      clearInterval(progressTimer);
+      console.error(err);
+      setErrorMsg(err.message || 'An error occurred during file parsing.');
+      setIsParsing(false);
+    }
   };
 
-  useEffect(() => {
-    if (!isParsing) return;
-    
-    const interval = setInterval(() => {
-      setParseStep((prev) => {
-        if (prev >= 3) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setIsParsing(false);
-            setPortfolio(DEMO_PORTFOLIO);
-          }, 600);
-          return 4;
-        }
-        return prev + 1;
-      });
-    }, 600);
+  const handleConfirmReview = async () => {
+    if (!reviewId) return;
+    setIsSubmittingReview(true);
+    setErrorMsg(null);
+    try {
+      const res = await confirmExtraction(reviewId, reviewPositions, sourceType);
+      if (res && res.positions) {
+        const mapped = mapPositionsToPortfolioItems(res.positions);
+        setPortfolio(mapped);
+        setIsReviewing(false);
+        setReviewId(null);
+        setReviewPositions([]);
+      } else {
+        throw new Error('Failed to synchronize reviewed positions.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Failed to confirm review.');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
-    return () => clearInterval(interval);
-  }, [isParsing]);
+  const handleCancelReview = async () => {
+    try {
+      await cancelExtraction();
+    } catch (err) {
+      console.error('Cancel extraction failed', err);
+    } finally {
+      setIsReviewing(false);
+      setReviewId(null);
+      setReviewPositions([]);
+      setPendingFile(null);
+    }
+  };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -140,20 +367,37 @@ export const Onboarding: React.FC = () => {
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
-      startParsingSimulation(file.name);
+      handleFileSelect(file);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      startParsingSimulation(file.name);
+      handleFileSelect(file);
     }
   };
 
   const handleUseDemo = () => {
-    startParsingSimulation('demostatement_2026.csv');
+    setUploadedFileName('demostatement_2026.csv');
+    setIsParsing(true);
+    setParseStep(0);
+    // Start simulation timer
+    const interval = setInterval(() => {
+      setParseStep((prev) => {
+        if (prev >= 3) {
+          clearInterval(interval);
+          setTimeout(() => {
+            setIsParsing(false);
+            setPortfolio(DEMO_PORTFOLIO);
+          }, 600);
+          return 4;
+        }
+        return prev + 1;
+      });
+    }, 600);
   };
+
 
   const handleComplete = () => {
     // Persist everything including name
@@ -170,8 +414,9 @@ export const Onboarding: React.FC = () => {
     // Clear old onboarding progress
     localStorage.removeItem('prospektlab_onboarding_step');
 
+    const newSessionId = 'conv-' + Date.now();
     const mockConversations = [
-      { id: '1', title: `Portfolio Analysis for ${name || 'You'}`, date: 'Just now' }
+      { id: newSessionId, title: `Portfolio Analysis for ${name || 'You'}`, date: 'Just now' }
     ];
     localStorage.setItem('prospektlab_conversations', JSON.stringify(mockConversations));
 
@@ -179,33 +424,10 @@ export const Onboarding: React.FC = () => {
   };
 
   return (
-    <div style={{
-      width: '100vw',
-      height: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      position: 'relative',
-      overflow: 'hidden',
-      padding: '20px'
-    }} className="animate-fade-in-up">
+    <div className="onboarding-screen animate-fade-in-up">
       
       {/* Absolute Glass Card Container */}
-      <div 
-        className="glass"
-        style={{
-          width: '100%',
-          maxWidth: '600px',
-          padding: '40px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '28px',
-          position: 'relative',
-          zIndex: 10,
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          boxShadow: '0 24px 64px rgba(0, 0, 0, 0.7)'
-        }}
-      >
+      <div className="glass onboarding-card">
         {/* Logo and Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center' }}>
           <div style={{
@@ -231,11 +453,12 @@ export const Onboarding: React.FC = () => {
         {/* Progress Bar steps indicator */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>
-              <span>STEP {step} OF 3</span>
+              <span>{step === 4 ? 'COMPLETE' : `STEP ${step} OF 3`}</span>
               <span style={{ color: 'var(--accent-cyan)' }}>
                 {step === 1 && 'YOUR NAME + STYLE'}
                 {step === 2 && 'YOUR PORTFOLIO'}
                 {step === 3 && 'FINAL SETUP'}
+                {step === 4 && 'DEPLOY COMMAND CENTER'}
               </span>
             </div>
           <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
@@ -357,8 +580,184 @@ export const Onboarding: React.FC = () => {
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>In 8 seconds, Mark will audit your real holdings for concentration risk, overlap, and leverage — the things your broker won't tell you.</p>
             </div>
 
-            {/* Drag & Drop Area */}
-            {!isParsing && portfolio.length === 0 && (
+            {/* Error Message Box */}
+            {errorMsg && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                color: 'var(--loss)',
+                padding: '12px 16px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '13px'
+              }}>
+                <ShieldAlert size={16} />
+                <span style={{ flex: 1 }}>{errorMsg}</span>
+                <button
+                  type="button"
+                  onClick={() => setErrorMsg(null)}
+                  style={{ background: 'none', border: 'none', color: 'var(--loss)', cursor: 'pointer', fontSize: '12px', padding: '0 4px' }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* HOLDINGS REVIEW SCREEN */}
+            {isReviewing && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.01)',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={16} color="var(--accent-cyan)" />
+                    <span>Review Extracted Holdings</span>
+                  </div>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                    Confirm the positions parsed from your document before synchronizing them with your dashboard.
+                  </p>
+                  
+                  <div style={{
+                    maxHeight: '260px',
+                    overflowY: 'auto',
+                    overflowX: 'auto',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderRadius: '8px',
+                    background: 'rgba(3, 7, 18, 0.2)'
+                  }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>
+                          <th style={{ padding: '8px 12px' }}>TICKER/ISIN</th>
+                          <th style={{ padding: '8px 12px' }}>NAME</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right' }}>QTY</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right' }}>VALUE</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right' }}>CONF.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reviewPositions.map((pos, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: 'var(--text-primary)' }}>
+                            <td style={{ padding: '8px 12px', fontWeight: 600 }}>{pos.symbol || pos.isin || 'UNKNOWN'}</td>
+                            <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{pos.name || ''}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(pos.quantity || 0).toLocaleString('en-IN')}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                              ₹{Number(pos.market_value || 0).toLocaleString('en-IN')}
+                            </td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: pos.confidence > 0.8 ? 'var(--profit)' : 'var(--accent-orange)' }}>
+                              {Math.round(Number(pos.confidence || 0) * 100)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={handleCancelReview}
+                    style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmReview}
+                    disabled={isSubmittingReview || reviewPositions.length === 0}
+                    className="primary"
+                    style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    {isSubmittingReview ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin-custom" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        Sync Portfolio Mirror
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* PASSWORD INPUT SCREEN */}
+            {showPasswordInput && pendingFile && !isReviewing && (
+              <div style={{
+                background: 'rgba(3, 7, 18, 0.4)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                borderRadius: '16px',
+                padding: '24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+                textAlign: 'center'
+              }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Password Required
+                </h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  The file "{pendingFile.name}" is password protected (e.g. eCAS PDF). Please enter the password to parse:
+                </p>
+                <input
+                  type="password"
+                  placeholder="eCAS / File Password"
+                  value={pdfPassword}
+                  onChange={(e) => setPdfPassword(e.target.value)}
+                  style={{
+                    fontSize: '14px',
+                    padding: '10px 12px',
+                    textAlign: 'center',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    color: 'var(--text-primary)',
+                    outline: 'none',
+                    width: '100%'
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      startRealUpload(pendingFile, pdfPassword);
+                    }
+                  }}
+                />
+                <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPasswordInput(false);
+                      setPendingFile(null);
+                      setPdfPassword('');
+                    }}
+                    style={{ flex: 1, padding: '10px', fontSize: '12px' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => startRealUpload(pendingFile, pdfPassword)}
+                    className="primary"
+                    style={{ flex: 1, padding: '10px', fontSize: '12px' }}
+                  >
+                    Parse Document
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* DRAG AND DROP FILE ZONE */}
+            {!isReviewing && !showPasswordInput && !isParsing && portfolio.length === 0 && (
               <div 
                 onDragEnter={handleDrag}
                 onDragOver={handleDrag}
@@ -390,10 +789,10 @@ export const Onboarding: React.FC = () => {
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <span style={{ fontSize: '14px', fontWeight: 500 }}>
-                    Drag & drop your trade statement here
+                    Drag & drop your statement or screenshot here
                   </span>
                   <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Supports PDF, Excel or CSV outputs from any major broker
+                    Supports PDF, Excel, CSV or broker screenshot image
                   </span>
                 </div>
 
@@ -409,7 +808,7 @@ export const Onboarding: React.FC = () => {
                   <input 
                     type="file" 
                     id="onboarding-file-upload" 
-                    accept=".csv,.pdf,.xlsx,.xls"
+                    accept=".csv,.pdf,.xlsx,.xls,.png,.jpg,.jpeg"
                     onChange={handleFileChange}
                     style={{ display: 'none' }}
                   />
@@ -446,8 +845,8 @@ export const Onboarding: React.FC = () => {
               </div>
             )}
 
-            {/* Parsing Simulated Screen */}
-            {isParsing && (
+            {/* PARSING STEP LOGS */}
+            {isParsing && !isReviewing && !showPasswordInput && (
               <div style={{
                 background: 'rgba(3, 7, 18, 0.4)',
                 border: '1px solid rgba(255, 255, 255, 0.06)',
@@ -470,7 +869,7 @@ export const Onboarding: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: parseStep >= 2 ? 'var(--profit)' : 'var(--text-secondary)' }}>
                     <span>▸ Matching ISINs to market tickers...</span>
-                    <span>{parseStep >= 2 ? '✓ 6 ASSETS FOUND' : parseStep >= 1 ? '● RUNNING' : '○ QUEUED'}</span>
+                    <span>{parseStep >= 2 ? '✓ COMPLETE' : parseStep >= 1 ? '● RUNNING' : '○ QUEUED'}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: parseStep >= 3 ? 'var(--profit)' : 'var(--text-secondary)' }}>
                     <span>▸ Synthesizing historical buy averages...</span>
@@ -484,8 +883,8 @@ export const Onboarding: React.FC = () => {
               </div>
             )}
 
-            {/* Parsing Complete / Holdings Preview */}
-            {!isParsing && portfolio.length > 0 && (
+            {/* PREVIEW COMPLETED HOLDINGS */}
+            {!isParsing && !isReviewing && !showPasswordInput && portfolio.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{
                   background: 'rgba(52, 211, 153, 0.05)',
@@ -537,7 +936,7 @@ export const Onboarding: React.FC = () => {
 
                 <button 
                   type="button" 
-                  onClick={() => { setPortfolio([]); setUploadedFileName(''); }}
+                  onClick={() => { setPortfolio([]); setUploadedFileName(''); setErrorMsg(null); }}
                   style={{ color: 'var(--loss)', alignSelf: 'flex-start', fontSize: '11px', padding: '0', background: 'none', border: 'none' }}
                 >
                   Reset & Upload Another Statement
@@ -545,25 +944,27 @@ export const Onboarding: React.FC = () => {
               </div>
             )}
 
-            {/* Navigation buttons */}
-            <div style={{ display: 'flex', gap: '14px', marginTop: '6px' }}>
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-              >
-                <ArrowLeft size={14} /> Back
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep(3)}
-                disabled={isParsing || portfolio.length === 0}
-                className="primary"
-                style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-              >
-                Continue Setup <ChevronRight size={14} />
-              </button>
-            </div>
+            {/* Navigation buttons - only show when not in review/password mode */}
+            {!isReviewing && !showPasswordInput && (
+              <div style={{ display: 'flex', gap: '14px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                >
+                  <ArrowLeft size={14} /> Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep(3)}
+                  disabled={isParsing || portfolio.length === 0}
+                  className="primary"
+                  style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                >
+                  Continue Setup <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -575,17 +976,100 @@ export const Onboarding: React.FC = () => {
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Add the stocks you are watching. Mark will track earnings dates, run valuation screens, and alert you before the crowd moves.</p>
             </div>
 
-            {/* Custom Input Form */}
-            <form onSubmit={handleAddCustom} style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="text"
-                placeholder="Search or add ticker (e.g. TATAMOTORS, HDFCBANK)"
-                value={inputVal}
-                onChange={(e) => setInputVal(e.target.value)}
-                style={{ flex: 1, fontSize: '13px' }}
-              />
-              <button type="submit" style={{ fontSize: '13px', padding: '0 16px' }}>Add</button>
-            </form>
+            {/* Custom Input Form with Autocomplete Suggestions */}
+            <div style={{ position: 'relative' }}>
+              <form onSubmit={handleAddCustom} style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  placeholder="Search or add ticker (e.g. TATAMOTORS, HDFCBANK)"
+                  value={inputVal}
+                  onChange={(e) => setInputVal(e.target.value)}
+                  style={{ flex: 1, fontSize: '13px' }}
+                />
+                <button type="submit" style={{ fontSize: '13px', padding: '0 16px' }}>Add</button>
+              </form>
+
+              {/* Suggestions Dropdown */}
+              {suggestions.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 100,
+                  marginTop: '6px',
+                  maxHeight: '220px',
+                  overflowY: 'auto',
+                  background: 'rgba(15, 23, 42, 0.95)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '10px',
+                  boxShadow: '0 12px 36px rgba(0, 0, 0, 0.65)'
+                }}>
+                  {suggestions.map((item, idx) => {
+                    const isAlreadyAdded = watchlist.includes(item.symbol);
+                    return (
+                      <div
+                        key={`${item.symbol}-${idx}`}
+                        onClick={() => {
+                          if (isAlreadyAdded) {
+                            setWatchlist(watchlist.filter(w => w !== item.symbol));
+                          } else {
+                            setWatchlist([...watchlist, item.symbol]);
+                          }
+                          setInputVal('');
+                          setSuggestions([]);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 14px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(56, 189, 248, 0.06)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left', overflow: 'hidden' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            {item.symbol}
+                          </span>
+                          <span style={{ fontSize: '10px', color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '300px' }}>
+                            {item.name}
+                          </span>
+                        </div>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            fontSize: '9px',
+                            fontWeight: 600,
+                            padding: '1px 6px',
+                            borderRadius: '4px',
+                            background: item.type === 'Stock' ? 'rgba(56, 189, 248, 0.08)' : 'rgba(129, 140, 248, 0.08)',
+                            color: item.type === 'Stock' ? 'var(--accent-cyan)' : 'var(--accent-indigo)',
+                            border: `1px solid ${item.type === 'Stock' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(129, 140, 248, 0.15)'}`
+                          }}>
+                            {item.type}
+                          </span>
+                          {isAlreadyAdded ? (
+                            <span style={{ fontSize: '10px', color: 'var(--loss)', fontWeight: 500 }}>✕ Remove</span>
+                          ) : (
+                            <span style={{ fontSize: '10px', color: 'var(--profit)', fontWeight: 500 }}>+ Add</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
 
             {/* Popular Selectable Chips */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

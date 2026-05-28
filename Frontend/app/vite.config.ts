@@ -16,6 +16,8 @@ export default defineConfig({
       '/chat': 'http://localhost:8000',
       '/health': 'http://localhost:8000',
       '/memos': 'http://localhost:8000',
+      '/market': 'http://localhost:8000',
+      '/user': 'http://localhost:8000',
     }
   }
 })

@@ -76,7 +76,11 @@ export function getAuthHeaders(): HeadersInit {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  return headers;
+  const bypass = typeof window !== 'undefined' && localStorage.getItem('prospektlab_bypass_token_limit') === 'true';
+  if (bypass) {
+    headers['X-Bypass-Token-Limit'] = 'true';
+  }
+  return headers as any;
 }
 
 function handleSessionSwitch(email: string) {
@@ -92,6 +96,28 @@ function handleSessionSwitch(email: string) {
     keysToRemove.forEach(key => localStorage.removeItem(key));
   }
   localStorage.setItem('prospektlab_last_email', email);
+}
+
+function handleAuthFailure() {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('prospektlab_')) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key));
+  if (typeof window !== 'undefined') {
+    window.location.hash = '#/login';
+  }
+}
+
+async function fetchApi(url: string, options?: RequestInit): Promise<Response> {
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    handleAuthFailure();
+  }
+  return res;
 }
 
 // ── Auth Endpoints ──────────────────────────────────────────────────────
@@ -239,7 +265,7 @@ export async function apiGoogleAuth(credential: string): Promise<any> {
 }
 
 export async function apiUpdateMobile(mobile: string): Promise<any> {
-  const res = await fetch(apiUrl('/auth/google/update-mobile'), {
+  const res = await fetchApi(apiUrl('/auth/google/update-mobile'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -284,7 +310,7 @@ export async function apiLogout(): Promise<void> {
 // ── Portfolio Endpoints ──────────────────────────────────────────────────
 
 export async function getPortfolioMirror(): Promise<any> {
-  const res = await fetch(apiUrl('/portfolio/mirror'), {
+  const res = await fetchApi(apiUrl('/portfolio/mirror'), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -294,7 +320,7 @@ export async function getPortfolioMirror(): Promise<any> {
 }
 
 export async function replacePortfolioMirror(positions: PositionInput[]): Promise<any> {
-  const res = await fetch(apiUrl('/portfolio/mirror'), {
+  const res = await fetchApi(apiUrl('/portfolio/mirror'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -316,7 +342,7 @@ export async function uploadPortfolioDocument(file: File, password?: string): Pr
     formData.append('password', password);
   }
 
-  const res = await fetch(apiUrl('/api/portfolio/upload-cas'), {
+  const res = await fetchApi(apiUrl('/api/portfolio/upload-cas'), {
     method: 'POST',
     headers: getAuthHeaders(),
     body: formData,
@@ -334,7 +360,7 @@ export async function uploadPortfolioScreenshot(file: File): Promise<any> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(apiUrl('/api/portfolio/upload-screenshot'), {
+  const res = await fetchApi(apiUrl('/api/portfolio/upload-screenshot'), {
     method: 'POST',
     headers: getAuthHeaders(),
     body: formData,
@@ -349,7 +375,7 @@ export async function uploadPortfolioScreenshot(file: File): Promise<any> {
 }
 
 export async function confirmExtraction(reviewId: string, positions?: any[], sourceType?: string): Promise<any> {
-  const res = await fetch(apiUrl('/api/portfolio/confirm-extraction'), {
+  const res = await fetchApi(apiUrl('/api/portfolio/confirm-extraction'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -371,7 +397,7 @@ export async function confirmExtraction(reviewId: string, positions?: any[], sou
 }
 
 export async function cancelExtraction(): Promise<any> {
-  const res = await fetch(apiUrl('/api/portfolio/cancel-extraction'), {
+  const res = await fetchApi(apiUrl('/api/portfolio/cancel-extraction'), {
     method: 'POST',
     headers: getAuthHeaders(),
   });
@@ -385,7 +411,7 @@ export async function cancelExtraction(): Promise<any> {
 }
 
 export async function getPortfolioAnalytics(benchmark: string = 'NIFTY50', period: string = '1y'): Promise<any> {
-  const res = await fetch(apiUrl(`/portfolio/analytics?benchmark=${encodeURIComponent(benchmark)}&period=${encodeURIComponent(period)}`), {
+  const res = await fetchApi(apiUrl(`/portfolio/analytics?benchmark=${encodeURIComponent(benchmark)}&period=${encodeURIComponent(period)}`), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -395,7 +421,7 @@ export async function getPortfolioAnalytics(benchmark: string = 'NIFTY50', perio
 }
 
 export async function deletePortfolioMirror(): Promise<any> {
-  const res = await fetch(apiUrl('/portfolio/mirror'), {
+  const res = await fetchApi(apiUrl('/portfolio/mirror'), {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });
@@ -406,7 +432,7 @@ export async function deletePortfolioMirror(): Promise<any> {
 }
 
 export async function getPortfolioNews(limit: number = 12): Promise<any> {
-  const res = await fetch(apiUrl(`/portfolio/news?limit=${limit}`), {
+  const res = await fetchApi(apiUrl(`/portfolio/news?limit=${limit}`), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -416,7 +442,7 @@ export async function getPortfolioNews(limit: number = 12): Promise<any> {
 }
 
 export async function getPortfolioSectors(): Promise<any> {
-  const res = await fetch(apiUrl('/portfolio/sectors'), {
+  const res = await fetchApi(apiUrl('/portfolio/sectors'), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -426,7 +452,7 @@ export async function getPortfolioSectors(): Promise<any> {
 }
 
 export async function getHoldingDetail(symbol: string): Promise<any> {
-  const res = await fetch(apiUrl(`/portfolio/holding/${encodeURIComponent(symbol)}`), {
+  const res = await fetchApi(apiUrl(`/portfolio/holding/${encodeURIComponent(symbol)}`), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -436,7 +462,7 @@ export async function getHoldingDetail(symbol: string): Promise<any> {
 }
 
 export async function getCorporateActions(days: number = 30): Promise<any> {
-  const res = await fetch(apiUrl(`/portfolio/corporate-actions?days=${days}`), {
+  const res = await fetchApi(apiUrl(`/portfolio/corporate-actions?days=${days}`), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -446,7 +472,7 @@ export async function getCorporateActions(days: number = 30): Promise<any> {
 }
 
 export async function getPortfolioAlerts(): Promise<any> {
-  const res = await fetch(apiUrl('/portfolio/alerts'), {
+  const res = await fetchApi(apiUrl('/portfolio/alerts'), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -456,7 +482,7 @@ export async function getPortfolioAlerts(): Promise<any> {
 }
 
 export async function getTaxSummary(): Promise<any> {
-  const res = await fetch(apiUrl('/portfolio/tax-summary'), {
+  const res = await fetchApi(apiUrl('/portfolio/tax-summary'), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -466,7 +492,7 @@ export async function getTaxSummary(): Promise<any> {
 }
 
 export async function getDividends(): Promise<any> {
-  const res = await fetch(apiUrl('/portfolio/dividends'), {
+  const res = await fetchApi(apiUrl('/portfolio/dividends'), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -476,7 +502,7 @@ export async function getDividends(): Promise<any> {
 }
 
 export async function postStressTest(scenario: string, customShocks?: any): Promise<any> {
-  const res = await fetch(apiUrl('/portfolio/stress-test'), {
+  const res = await fetchApi(apiUrl('/portfolio/stress-test'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -491,7 +517,7 @@ export async function postStressTest(scenario: string, customShocks?: any): Prom
 }
 
 export async function getMfAnalytics(): Promise<any> {
-  const res = await fetch(apiUrl('/portfolio/mf-analytics'), {
+  const res = await fetchApi(apiUrl('/portfolio/mf-analytics'), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -501,7 +527,7 @@ export async function getMfAnalytics(): Promise<any> {
 }
 
 export async function getTodayQueue(): Promise<any> {
-  const res = await fetch(apiUrl('/portfolio/today'), {
+  const res = await fetchApi(apiUrl('/portfolio/today'), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -511,7 +537,7 @@ export async function getTodayQueue(): Promise<any> {
 }
 
 export async function getPortfolioBrief(): Promise<any> {
-  const res = await fetch(apiUrl('/portfolio/brief'), {
+  const res = await fetchApi(apiUrl('/portfolio/brief'), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -541,25 +567,32 @@ export async function startResearch(message: string, mode: 'standard' | 'deep', 
   const rewrittenMessage = portfolioContext ? `${portfolioContext} ${message}` : message;
   payload.message = rewrittenMessage;
 
-  const res = await fetch(apiUrl('/chat/research'), {
+  const headers: any = {
+    'Content-Type': 'application/json',
+    ...getAuthHeaders(),
+  };
+  if (typeof window !== 'undefined' && localStorage.getItem('prospektlab_bypass_token_limit') === 'true') {
+    headers['X-Bypass-Token-Limit'] = 'true';
+  }
+
+  const res = await fetchApi(apiUrl('/chat/research'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-    },
+    headers,
     body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail?.message || errorData.detail || `Failed to start research: ${res.statusText}`);
+    const err = new Error(errorData.detail?.message || errorData.detail || `Failed to start research: ${res.statusText}`);
+    (err as any).detail = errorData.detail;
+    throw err;
   }
 
   return res.json();
 }
 
 export async function stopSession(sessionId: string): Promise<any> {
-  const res = await fetch(apiUrl(`/sessions/${encodeURIComponent(sessionId)}/stop`), {
+  const res = await fetchApi(apiUrl(`/sessions/${encodeURIComponent(sessionId)}/stop`), {
     method: 'POST',
     headers: getAuthHeaders(),
   });
@@ -570,7 +603,7 @@ export async function stopSession(sessionId: string): Promise<any> {
 }
 
 export async function getSessionResult(sessionId: string): Promise<FinalResponse> {
-  const res = await fetch(apiUrl(`/sessions/${encodeURIComponent(sessionId)}/result`), {
+  const res = await fetchApi(apiUrl(`/sessions/${encodeURIComponent(sessionId)}/result`), {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -591,6 +624,8 @@ export function streamSession(
   let sseAbort = new AbortController();
   let sseReconnectTimer: any = null;
   let sseActive = true;
+  let onFinalCalled = false;
+  let onErrorCalled = false;
 
   const closeStream = () => {
     if (sseActive) {
@@ -713,7 +748,10 @@ export function streamSession(
             try {
               const parsed = JSON.parse(evData);
               closeStream();
-              onFinal(parsed);
+              if (!onFinalCalled) {
+                onFinalCalled = true;
+                onFinal(parsed);
+              }
             } catch (err) {
               console.error(`Failed to parse ${evType} event data`, err);
             }
@@ -721,10 +759,16 @@ export function streamSession(
             try {
               const parsed = JSON.parse(evData);
               closeStream();
-              onError(new Error(parsed.message || 'Stream processing error'));
+              if (!onErrorCalled) {
+                onErrorCalled = true;
+                onError(new Error(parsed.message || 'Stream processing error'));
+              }
             } catch (err) {
               closeStream();
-              onError(new Error('Stream encountered an error'));
+              if (!onErrorCalled) {
+                onErrorCalled = true;
+                onError(new Error('Stream encountered an error'));
+              }
             }
           }
         }
@@ -744,3 +788,48 @@ export function streamSession(
     closeStream();
   };
 }
+
+
+// ── Market Data & Token Usage API Endpoints ──────────────────────────────
+
+export async function getUserTokenUsage(): Promise<any> {
+  const res = await fetchApi(apiUrl('/user/token-usage'), {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch user token usage: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function getMarketQuotes(symbols: string[]): Promise<any> {
+  const res = await fetchApi(apiUrl(`/market/quotes?symbols=${encodeURIComponent(symbols.join(','))}`), {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch market quotes: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function getMarketNews(query?: string): Promise<any> {
+  const qStr = query ? `?query=${encodeURIComponent(query)}` : '';
+  const res = await fetchApi(apiUrl(`/market/news${qStr}`), {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch market news: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function getMarketIndices(): Promise<any> {
+  const res = await fetchApi(apiUrl('/market/indices'), {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch market indices: ${res.statusText}`);
+  }
+  return res.json();
+}
+

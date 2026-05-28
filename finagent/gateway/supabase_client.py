@@ -149,7 +149,23 @@ async def update_admin_user_mobile(user_id: str, mobile: str):
         return res.json()
 
 def get_user_id_from_auth(email: str) -> str | None:
-    """Queries auth.users directly via psycopg2 using DB URL to get a user's uuid."""
+    """Queries auth.users via GoTrue Admin Users API, falling back to psycopg2 using DB URL."""
+    # 1. Query GoTrue Admin Users API using service key
+    try:
+        import httpx
+        url = f"{_get_supabase_url()}/auth/v1/admin/users"
+        headers = get_headers()
+        # Filter by email using GoTrue's filter query parameter
+        resp = httpx.get(url, params={"filter": email}, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            users = resp.json().get("users", [])
+            for u in users:
+                if u.get("email") == email:
+                    return str(u.get("id"))
+    except Exception as e:
+        print(f"Error querying auth.users via Supabase Admin API: {e}")
+
+    # 2. Fallback: Query auth.users directly via psycopg2 using DB URL
     db_url = os.environ.get("SUPABASE_DB_URL")
     if not db_url:
         return None
@@ -164,3 +180,4 @@ def get_user_id_from_auth(email: str) -> str | None:
     except Exception as e:
         print(f"Error querying auth.users from database: {e}")
     return None
+

@@ -9,7 +9,8 @@ import {
   Compass, 
   LogOut,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAuth } from '../../context/AuthContext';
@@ -26,6 +27,7 @@ interface SidebarProps {
     totalPnL: number;
     totalReturnPct: number;
   };
+  tokenUsage?: any;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -35,7 +37,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectConversation,
   onNewConversation,
   activeConversationId,
-  portfolioSummary
+  portfolioSummary,
+  tokenUsage
 }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -85,19 +88,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [isDragging]);
 
+  const dismissSidebarOnMobile = () => {
+    if (window.innerWidth <= 768) {
+      document.body.classList.remove('pl-sidebar-active');
+    }
+  };
+
   const handleNewChatClick = () => {
+    dismissSidebarOnMobile();
     if (onNewConversation) {
       onNewConversation();
     }
   };
 
   const handleSelectChatClick = (id: string) => {
+    dismissSidebarOnMobile();
     if (onSelectConversation) {
       onSelectConversation(id);
     }
   };
 
   const handleSignOut = async () => {
+    dismissSidebarOnMobile();
     await logout();
     navigate('/login');
   };
@@ -153,6 +165,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             setWidth(260);
             localStorage.setItem('prospektlab_sidebar_width', '260');
           } else {
+            dismissSidebarOnMobile();
             navigate('/dashboard');
           }
         }}
@@ -206,6 +219,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <ChevronLeft size={14} color="#38BDF8" style={{ minWidth: 14, minHeight: 14, display: 'block' }} />
               </button>
+              {/* Mobile close button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismissSidebarOnMobile();
+                }}
+                className="sidebar-close-btn"
+                title="Close Menu"
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  marginLeft: '8px',
+                  display: 'none'
+                }}
+              >
+                <X size={14} color="#FB7185" style={{ minWidth: 14, minHeight: 14, display: 'block' }} />
+              </button>
             </>
           )}
         </div>
@@ -244,7 +274,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           flexShrink: 0
         }}>
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => {
+              dismissSidebarOnMobile();
+              navigate('/dashboard');
+            }}
             title="Dashboard"
             style={{
               width: '100%',
@@ -428,82 +461,111 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* User Profile Card (New Addition) */}
         {user && (
-          <div className="profile-container" style={{
-            padding: isCollapsed ? '12px 6px' : '14px 16px',
-            borderTop: '1px solid rgba(255, 255, 255, 0.04)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: isCollapsed ? 'center' : 'space-between',
-            gap: '10px',
-            flexShrink: 0
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
-              <div 
-                className="animate-pulse-glow"
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  background: 'var(--gradient-brand)',
-                  color: '#0f172a',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '12px',
-                  flexShrink: 0
-                }}
-              >
-                {getInitials(user.name)}
-              </div>
-              {!isCollapsed && (
-                <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                  <span className="profile-text" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {user.name}
-                  </span>
-                  <span className="profile-text" style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {user.email}
-                  </span>
+          <>
+            <div className="profile-container" style={{
+              padding: isCollapsed ? '12px 6px' : '14px 16px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.04)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: isCollapsed ? 'center' : 'space-between',
+              gap: '10px',
+              flexShrink: 0
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+                <div 
+                  className="animate-pulse-glow"
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    background: 'var(--gradient-brand)',
+                    color: '#0f172a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 700,
+                    fontSize: '12px',
+                    flexShrink: 0
+                  }}
+                >
+                  {getInitials(user.name)}
                 </div>
+                {!isCollapsed && (
+                  <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <span className="profile-text" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {user.name}
+                    </span>
+                    <span className="profile-text" style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {user.email}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {!isCollapsed ? (
+                <button 
+                  onClick={handleSignOut}
+                  title="Sign Out"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    padding: '6px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '4px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = 'var(--loss)';
+                    e.currentTarget.style.background = 'rgba(251, 113, 133, 0.06)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                    e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  <LogOut size={14} />
+                </button>
+              ) : (
+                <button 
+                  onClick={handleSignOut}
+                  title="Sign Out"
+                  style={{
+                    display: 'none' // hidden or click avatar instead
+                  }}
+                />
               )}
             </div>
-
-            {!isCollapsed ? (
-              <button 
-                onClick={handleSignOut}
-                title="Sign Out"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-secondary)',
-                  padding: '6px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '4px'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = 'var(--loss)';
-                  e.currentTarget.style.background = 'rgba(251, 113, 133, 0.06)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = 'var(--text-secondary)';
-                  e.currentTarget.style.background = 'transparent';
-                }}
-              >
-                <LogOut size={14} />
-              </button>
-            ) : (
-              <button 
-                onClick={handleSignOut}
-                title="Sign Out"
-                style={{
-                  display: 'none' // hidden or click avatar instead
-                }}
-              />
+            {!isCollapsed && tokenUsage && (
+              <div style={{
+                padding: '0 16px 12px 16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                flexShrink: 0
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-secondary)' }}>
+                  <span>Weekly Usage</span>
+                  <span style={{ fontFamily: 'monospace' }}>
+                    {((tokenUsage.usage / tokenUsage.limit) * 100).toFixed(1)}%
+                  </span>
+                </div>
+                <div style={{ width: '100%', height: '4px', background: 'rgba(255, 255, 255, 0.06)', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${Math.min(100, (tokenUsage.usage / tokenUsage.limit) * 100)}%`,
+                    height: '100%',
+                    background: tokenUsage.usage >= tokenUsage.limit ? 'var(--loss)' : 'var(--accent-cyan)',
+                    borderRadius: '2px'
+                  }}></div>
+                </div>
+                <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>
+                  {tokenUsage.usage.toLocaleString()} / {tokenUsage.limit.toLocaleString()} tokens
+                </span>
+              </div>
             )}
-          </div>
+          </>
         )}
 
         {/* Footer Settings & Clear */}
@@ -552,6 +614,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={(e) => {
                   e.preventDefault();
                   localStorage.removeItem('prospektlab_onboarded');
+                  dismissSidebarOnMobile();
                   navigate('/onboarding');
                 }}
                 style={{
@@ -569,6 +632,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               title="Re-run Setup"
               onClick={() => {
                 localStorage.removeItem('prospektlab_onboarded');
+                dismissSidebarOnMobile();
                 navigate('/onboarding');
               }}
               style={{

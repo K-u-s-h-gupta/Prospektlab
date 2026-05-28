@@ -9,9 +9,9 @@ client = TestClient(app, raise_server_exceptions=False)
 @pytest.fixture(autouse=True)
 def reset_rate_limiters():
     # Reset rate limit histories before each test
-    auth_rate_limiter.local_history = {}
-    research_rate_limiter.local_history = {}
-    default_rate_limiter.local_history = {}
+    auth_rate_limiter.history = {}
+    research_rate_limiter.history = {}
+    default_rate_limiter.history = {}
     client.cookies.clear()
 
 def test_health_endpoint():
@@ -157,3 +157,21 @@ def test_global_exception_handler(mock_get_user):
     data = response.json()
     assert data["detail"] == "An internal server error occurred."
     assert data["error_type"] == "ValueError"
+
+@patch("httpx.get")
+def test_get_user_id_from_auth_via_api(mock_get):
+    from finagent.gateway.supabase_client import get_user_id_from_auth
+    
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "users": [
+            {"email": "test@example.com", "id": "uuid-1234"}
+        ]
+    }
+    mock_get.return_value = mock_resp
+    
+    user_id = get_user_id_from_auth("test@example.com")
+    assert user_id == "uuid-1234"
+    mock_get.assert_called_once()
+

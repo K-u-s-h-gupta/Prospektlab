@@ -137,8 +137,18 @@ export const Features: React.FC = () => {
         @media (max-width: 768px) {
           .feature-grid { grid-template-columns: 1fr !important; }
           .comparison-table { font-size: 11px !important; }
-          .comparison-table th, .comparison-table td { padding: 8px !important; }
-          .comparison-col:not(:first-child):not(:nth-child(2)) { display: none !important; }
+          .comparison-table th, .comparison-table td { padding: 6px 8px !important; }
+        }
+        @media (max-width: 600px) {
+          .comparison-table th:nth-child(4),
+          .comparison-table td:nth-child(4),
+          .comparison-table th:nth-child(5),
+          .comparison-table td:nth-child(5) { display: none !important; }
+          .comparison-table th, .comparison-table td { font-size: 10px !important; padding: 5px 6px !important; }
+        }
+        @media (max-width: 480px) {
+          .agent-grid { grid-template-columns: 1fr !important; }
+          .feature-grid { gap: 24px !important; }
         }
       `}</style>
 

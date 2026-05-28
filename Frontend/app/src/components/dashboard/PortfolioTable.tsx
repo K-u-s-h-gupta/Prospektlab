@@ -45,8 +45,8 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
           boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
         }}
       >
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+        <div className="portfolio-table-scroll" style={{ overflowX: 'auto' }}>
+          <table className="portfolio-table" style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
             <thead>
               <tr className="shimmer-overlay" style={{ 
                 background: 'rgba(255, 255, 255, 0.02)', 
@@ -56,13 +56,13 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
                 position: 'relative',
                 overflow: 'hidden'
               }}>
-                <th style={{ padding: '14px 16px' }}>TICKER</th>
-                <th style={{ padding: '14px 16px' }}>QTY</th>
-                <th style={{ padding: '14px 16px' }}>AVG PRICE</th>
-                <th style={{ padding: '14px 16px' }}>CURRENT</th>
-                <th style={{ padding: '14px 16px' }}>NET VALUE</th>
-                <th style={{ padding: '14px 16px', textAlign: 'right' }}>P&L</th>
-                <th style={{ padding: '14px 16px', textAlign: 'center' }}>ACTION</th>
+                <th style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>TICKER</th>
+                <th style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>QTY</th>
+                <th style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>AVG PRICE</th>
+                <th style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>CURRENT</th>
+                <th style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>NET VALUE</th>
+                <th style={{ padding: '14px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>P&L</th>
+                <th style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>ACTION</th>
               </tr>
             </thead>
             <tbody>
@@ -81,16 +81,16 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                     onClick={() => onSelectStock(item.symbol)}
                   >
-                    <td style={{ padding: '14px 16px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.name}</span>
+                    <td style={{ padding: '14px 16px', maxWidth: 200 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                        <span className="stock-name-ellipsis" style={{ fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }} title={item.name}>{item.name}</span>
                         <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{item.symbol}</span>
                       </div>
                     </td>
-                    <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)' }}>{item.qty}</td>
-                    <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)' }}>₹{item.avgCost.toLocaleString('en-IN')}</td>
-                    <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)' }}>₹{item.current.toLocaleString('en-IN')}</td>
-                    <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                    <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{item.qty}</td>
+                    <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>₹{item.avgCost.toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>₹{item.current.toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                       ₹{item.currentValue.toLocaleString('en-IN')}
                     </td>
                     <td style={{ 
@@ -98,7 +98,8 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
                       fontFamily: 'var(--font-mono)', 
                       textAlign: 'right',
                       fontWeight: 600,
-                      color: isProfit ? 'var(--profit)' : 'var(--loss)'
+                      color: isProfit ? 'var(--profit)' : 'var(--loss)',
+                      whiteSpace: 'nowrap'
                     }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                         <span>{isProfit ? '+' : ''}₹{item.pnl.toLocaleString('en-IN')}</span>
@@ -108,7 +109,7 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
                         </span>
                       </div>
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center' }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.symbol); }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.symbol); }}>
                       <button 
                         style={{ 
                           fontSize: '11px', 
@@ -119,7 +120,8 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
                           color: 'var(--accent-cyan)',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '4px'
+                          gap: '4px',
+                          whiteSpace: 'nowrap'
                         }}
                       >
                         <Activity size={10} />

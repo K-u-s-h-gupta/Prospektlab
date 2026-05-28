@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getAuthToken, apiLogin, apiSignup, apiLogout, apiGoogleAuth, getPortfolioMirror } from '../api/client';
 
 export interface User {
@@ -61,7 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(false);
   }, []);
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
     setToasts((prev) => [...prev, { id, message, type }]);
     
@@ -69,9 +69,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
-  };
+  }, [setToasts]);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
     try {
       const data = await apiLogin(email, password);
@@ -100,9 +100,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast, setToken, setUser, setIsLoading]);
 
-  const signup = async (name: string, email: string, password: string, mobile: string, verificationCode: string) => {
+  const signup = useCallback(async (name: string, email: string, password: string, mobile: string, verificationCode: string) => {
     setIsLoading(true);
     try {
       const data = await apiSignup(name, email, password, mobile, verificationCode);
@@ -119,9 +119,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast, setToken, setUser, setIsLoading]);
 
-  const googleLogin = async (credential: string) => {
+  const googleLogin = useCallback(async (credential: string) => {
     setIsLoading(true);
     try {
       const data = await apiGoogleAuth(credential);
@@ -152,9 +152,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast, setToken, setUser, setIsLoading]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     setIsLoading(true);
     try {
       await apiLogout();
@@ -172,15 +172,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast, setToken, setUser, setIsLoading]);
 
-  const updateUserMobile = (mobile: string) => {
-    if (user) {
-      const updatedUser = { ...user, mobile, require_mobile: false };
-      setUser(updatedUser);
-      localStorage.setItem('prospektlab_user', JSON.stringify(updatedUser));
-    }
-  };
+  const updateUserMobile = useCallback((mobile: string) => {
+    setUser((currentUser) => {
+      if (currentUser) {
+        const updatedUser = { ...currentUser, mobile, require_mobile: false };
+        localStorage.setItem('prospektlab_user', JSON.stringify(updatedUser));
+        return updatedUser;
+      }
+      return currentUser;
+    });
+  }, [setUser]);
 
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));

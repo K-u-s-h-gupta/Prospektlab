@@ -1,6 +1,10 @@
 import React from 'react';
 import { User, Brain } from 'lucide-react';
 import { RichResponse } from './RichResponse';
+import { AreaChart } from '../charts/AreaChart';
+import { BarChart } from '../charts/BarChart';
+import { DonutChart } from '../charts/DonutChart';
+import { MetricCard } from '../charts/MetricCard';
 
 const renderFormattedText = (text: string) => {
   if (!text) return '';
@@ -11,6 +15,62 @@ const renderFormattedText = (text: string) => {
     }
     return part;
   });
+};
+
+const parseMessageContent = (text: string) => {
+  if (!text) return [];
+
+  const regex = /```(chart|kpi)\s*([\s\S]*?)\s*```/g;
+  const segments: Array<{ type: 'text' | 'chart' | 'kpi'; content: any }> = [];
+  
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = regex.exec(text)) !== null) {
+    const type = match[1] as 'chart' | 'kpi';
+    const jsonStr = match[2];
+    const index = match.index;
+    
+    if (index > lastIndex) {
+      segments.push({ type: 'text', content: text.substring(lastIndex, index) });
+    }
+    
+    try {
+      const parsed = JSON.parse(jsonStr);
+      segments.push({ type, content: parsed });
+    } catch (e) {
+      segments.push({ type: 'text', content: match[0] });
+    }
+    
+    lastIndex = regex.lastIndex;
+  }
+  
+  if (lastIndex < text.length) {
+    segments.push({ type: 'text', content: text.substring(lastIndex) });
+  }
+  
+  return segments;
+};
+
+const groupSegments = (segments: Array<{ type: 'text' | 'chart' | 'kpi'; content: any }>) => {
+  const grouped: Array<{ type: string; content: any }> = [];
+  let currentKpis: any[] = [];
+  
+  for (const seg of segments) {
+    if (seg.type === 'kpi') {
+      currentKpis.push(seg.content);
+    } else {
+      if (currentKpis.length > 0) {
+        grouped.push({ type: 'kpi_group', content: currentKpis });
+        currentKpis = [];
+      }
+      grouped.push(seg);
+    }
+  }
+  if (currentKpis.length > 0) {
+    grouped.push({ type: 'kpi_group', content: currentKpis });
+  }
+  return grouped;
 };
 
 interface MessageBubbleProps {
@@ -96,10 +156,95 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           fontSize: '13.5px',
           color: 'var(--text-primary)',
           lineHeight: 1.55,
-          boxShadow: isUser ? '0 4px 20px rgba(0, 0, 0, 0.15)' : '0 4px 24px rgba(0, 0, 0, 0.25)',
-          whiteSpace: 'pre-line'
+          boxShadow: isUser ? '0 4px 20px rgba(0, 0, 0, 0.15)' : '0 4px 24px rgba(0, 0, 0, 0.25)'
         }}>
-          {renderFormattedText(text)}
+          {(() => {
+            const segments = parseMessageContent(text);
+            const grouped = groupSegments(segments);
+            return grouped.map((seg, idx) => {
+              if (seg.type === 'text') {
+                return (
+                  <div key={idx} style={{ whiteSpace: 'pre-line' }}>
+                    {renderFormattedText(seg.content)}
+                  </div>
+                );
+              }
+              if (seg.type === 'kpi_group') {
+                return (
+                  <div key={idx} style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                    gap: '10px',
+                    margin: '12px 0',
+                    width: '100%'
+                  }}>
+                    {seg.content.map((kpi: any, kIdx: number) => (
+                      <MetricCard
+                        key={kIdx}
+                        label={kpi.label}
+                        value={kpi.value}
+                        change={kpi.delta}
+                        changeType={kpi.trend === 'up' ? 'positive' : kpi.trend === 'down' ? 'negative' : 'neutral'}
+                      />
+                    ))}
+                  </div>
+                );
+              }
+              if (seg.type === 'chart') {
+                const chart = seg.content;
+                const hasLabels = chart.labels && chart.labels.length > 0;
+                const hasData = chart.datasets && chart.datasets.length > 0 && chart.datasets[0].data && chart.datasets[0].data.length > 0;
+                if (!hasLabels || !hasData) return null;
+
+                const labels = chart.labels;
+                const primaryDataset = chart.datasets[0];
+                const comparisonDataset = chart.datasets[1];
+
+                return (
+                  <div key={idx} className="glass animate-scale-pop" style={{
+                    padding: '16px',
+                    margin: '12px 0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    background: 'rgba(15, 23, 42, 0.45)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    borderRadius: '8px',
+                    width: '100%'
+                  }}>
+                    {chart.type === 'area' || chart.type === 'line' ? (
+                      <AreaChart
+                        labels={labels}
+                        data={primaryDataset.data}
+                        title={chart.title}
+                        unit={chart.unit || ''}
+                      />
+                    ) : chart.type === 'bar' ? (
+                      <BarChart
+                        labels={labels}
+                        data={primaryDataset.data}
+                        title={chart.title}
+                        unit={chart.unit || ''}
+                        comparisonData={comparisonDataset?.data}
+                        comparisonTitle={comparisonDataset?.label}
+                      />
+                    ) : chart.type === 'donut' ? (
+                      <DonutChart
+                        labels={labels}
+                        data={primaryDataset.data}
+                        title={chart.title}
+                      />
+                    ) : (
+                      <div style={{ color: 'var(--text-secondary)', fontSize: '11px', textAlign: 'center', padding: '16px' }}>
+                        Unsupported chart layout ({chart.type})
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              return null;
+            });
+          })()}
         </div>
 
         {/* Structured Visual Cards (Rich Renders) */}

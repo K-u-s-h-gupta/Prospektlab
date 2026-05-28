@@ -160,6 +160,14 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({
         bodyColor: ChartColors.textSecondary,
         borderColor: ChartColors.grid,
         borderWidth: 1,
+        callbacks: {
+          label: (context: any) => {
+            const label = context.dataset.label || '';
+            const val = context.parsed.y;
+            const formatted = Math.abs(val) < 100 ? val.toFixed(4) : val.toFixed(2);
+            return `${label}: ${formatted}${unit}`;
+          }
+        }
       },
     },
     scales: {
@@ -168,7 +176,11 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({
         grid: { color: ChartColors.grid },
         ticks: {
           color: ChartColors.textSecondary,
-          callback: (val: any) => (unit ? `${val} ${unit}` : val),
+          callback: (val: any) => {
+            const num = Number(val);
+            const formatted = Math.abs(num) < 100 ? num.toFixed(4) : num.toFixed(2);
+            return unit ? `${formatted} ${unit}` : formatted;
+          },
         },
       },
     },
@@ -176,13 +188,14 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: ChartColors.textPrimary }}>{title}</div>
-        <div style={{ display: 'flex', gap: 4 }}>
+      <div className="interactive-chart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: ChartColors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', flexShrink: 0 }}>{title}</div>
+        <div className="chart-range-buttons" style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {RANGES.map(r => (
             <button
               key={r}
               onClick={() => setSelectedRange(r)}
+              className="chart-range-btn"
               style={{
                 background: selectedRange === r ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
                 border: '1px solid',
@@ -193,6 +206,7 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({
                 fontSize: 11,
                 fontWeight: 600,
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
               }}
             >
               {r}

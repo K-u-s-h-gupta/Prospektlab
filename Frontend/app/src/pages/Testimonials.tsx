@@ -226,6 +226,9 @@ export const Testimonials: React.FC = () => {
           .reviews-grid { grid-template-columns: 1fr !important; }
           .stats-row { grid-template-columns: repeat(2, 1fr) !important; }
         }
+        @media (max-width: 480px) {
+          .stats-row { grid-template-columns: 1fr !important; }
+        }
       `}</style>
 
       <section style={{ padding: '80px 24px 40px', textAlign: 'center' }}>
@@ -281,7 +284,7 @@ export const Testimonials: React.FC = () => {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20 }} className="reviews-grid">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }} className="reviews-grid">
             {sorted.map((r, i) => (
               <div key={i} style={{ background: 'rgba(15,23,42,0.4)', border: '1px solid var(--border-subtle)', borderRadius: 16, padding: 28, display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -892,6 +892,7 @@ async def search_web(
     preferred_domains: list[str] | None = None,
     entity: ResolvedEntity | None = None,
     query_cache: dict[str, list[ScrapedDoc]] | None = None,
+    bypass_crawl4ai: bool = False,
 ) -> list[ScrapedDoc]:
     """Search with **Crawl4AI as the PRIMARY heavy content extraction engine**.
 
@@ -955,7 +956,12 @@ async def search_web(
     bing_results: list[tuple[str, str]] = []
 
     # Use DDG/Bing only as backup when combined results are weak
-    if len(combined_results) < (stage1_target // 2):
+    # Skip DDG/Bing direct scraping backup if bypass_crawl4ai is True and we already have sufficient candidates
+    need_backup = len(combined_results) < (stage1_target // 2)
+    if bypass_crawl4ai and len(combined_results) >= 3:
+        need_backup = False
+
+    if need_backup:
         ddg_task = asyncio.create_task(_search_ddg(query, max_results=stage1_target))
         bing_task = asyncio.create_task(_search_bing(query, max_results=stage1_target))
         ddg_raw, bing_raw = await asyncio.gather(ddg_task, bing_task, return_exceptions=True)
@@ -1023,6 +1029,15 @@ async def search_web(
     logger.info("SEARCH-STEP:07 preferred_sort_done count=%d", len(candidates))
 
     # ── Phase 3: Crawl4AI batch — browser-render candidate URLs ──────────────
+    if bypass_crawl4ai:
+        # For fast standard/chat modes, minimize slow HTTP page fetches.
+        # If we already have >=4 combined docs from Tavily/SearXNG, skip scraping entirely.
+        # Otherwise, restrict full page scraping to at most 2 candidate URLs.
+        if len(combined_docs) >= 4:
+            crawl_budget = 0
+        else:
+            crawl_budget = min(2, crawl_budget)
+
     crawl_urls = [
         h for h, _ in candidates[:crawl_budget]
         if not h.lower().split("?")[0].endswith(".pdf")
@@ -1033,19 +1048,50 @@ async def search_web(
 
 
     if crawl_urls:
-        logger.info(
-            "[CRAWL4AI PRIMARY] Starting deep browser extraction for %d URLs (heavy analysis/news path)",
-            len(crawl_urls)
-        )
+        if bypass_crawl4ai:
+            logger.info(
+                "[SEARCH] Bypassing Crawl4AI browser crawl; fetching %d URL(s) via parallel httpx",
+                len(crawl_urls)
+            )
+        else:
+            logger.info(
+                "[CRAWL4AI PRIMARY] Starting deep browser extraction for %d URLs (heavy analysis/news path)",
+                len(crawl_urls)
+            )
     else:
         logger.info("[CRAWL4AI] No URLs selected for deep extraction — using only Tavily snippets")
 
-    crawl4ai_docs = await _crawl4ai_fetch_batch(
-        crawl_urls,
-        query=query,
-        title_by_url=title_by_url,
-        timeout_s=25.0,
-    )
+    if bypass_crawl4ai:
+        if crawl_urls:
+            fallback_sem = asyncio.Semaphore(5)
+            async def _bounded_fallback(url: str) -> ScrapedDoc:
+                async with fallback_sem:
+                    try:
+                        return await fetch_and_parse(url)
+                    except Exception as exc:
+                        logger.warning("Fast httpx fetch failed for %r: %s", url, exc)
+                        return ScrapedDoc(
+                            url=url,
+                            final_url=url,
+                            domain=_domain_of(url),
+                            tier=_tier_for(_domain_of(url)),
+                            title=title_by_url.get(url, "")[:300],
+                            excerpt="",
+                            text_len=0,
+                            status=500,
+                            via="error",
+                        )
+            tasks = [_bounded_fallback(u) for u in crawl_urls]
+            crawl4ai_docs = list(await asyncio.gather(*tasks, return_exceptions=False))
+        else:
+            crawl4ai_docs = []
+    else:
+        crawl4ai_docs = await _crawl4ai_fetch_batch(
+            crawl_urls,
+            query=query,
+            title_by_url=title_by_url,
+            timeout_s=25.0,
+        )
 
     logger.info("SEARCH-STEP:09 crawl4ai_batch_returned docs=%d", len(crawl4ai_docs))
 
@@ -1097,6 +1143,7 @@ async def search_layered(
     preferred_domains: list[str] | None = None,
     entity: ResolvedEntity | None = None,
     timeout_s: float | None = None,
+    bypass_crawl4ai: bool = False,
 ) -> list[ScrapedDoc]:
     """Section 4.3 layered queries: authoritative / news / competitive / narrative.
 
@@ -1122,6 +1169,7 @@ async def search_layered(
                 max_results=per_query,
                 preferred_domains=preferred_domains,
                 entity=entity,
+                bypass_crawl4ai=bypass_crawl4ai,
             )
             if on_query:
                 on_query(q, "done", len(docs))
@@ -1144,24 +1192,41 @@ async def search_layered(
     per_query_timeout = float(os.getenv("SEARCH_PER_QUERY_TIMEOUT", "30.0"))
     results: list[tuple[str, list[ScrapedDoc]]] = []
     start = time.monotonic()
+
     budget_exhausted = False
 
+    # Launch all queries concurrently
+    tasks = []
     for q in queries:
-        if timeout_s is not None and (time.monotonic() - start) > timeout_s:
-            budget_exhausted = True
-            logger.info("Global search budget (%.1fs) exhausted; skipping remaining queries", timeout_s)
-            break
-        try:
-            res = await asyncio.wait_for(_one(q), timeout=per_query_timeout)
-            results.append(res)
-        except asyncio.TimeoutError:
-            logger.warning("query %r timed out after %.1fs", q, per_query_timeout)
-            if on_query:
-                on_query(q, "timeout", 0)
-            results.append((q, []))
-        except Exception as e:
-            logger.error("query %r error: %s", q, e)
-            results.append((q, []))
+        q_timeout = per_query_timeout
+        if timeout_s is not None:
+            remaining = timeout_s - (time.monotonic() - start)
+            if remaining <= 0:
+                budget_exhausted = True
+                logger.info("Global search budget (%.1fs) exhausted; skipping launching query %r", timeout_s, q)
+                results.append((q, []))
+                continue
+            q_timeout = min(per_query_timeout, remaining)
+
+        async def _run_with_timeout(query_str=q, limit_s=q_timeout):
+            return await asyncio.wait_for(_one(query_str), timeout=limit_s)
+
+        tasks.append((q, _run_with_timeout()))
+
+    if tasks:
+        coros = [t[1] for t in tasks]
+        g_results = await asyncio.gather(*coros, return_exceptions=True)
+        for (q, _), res in zip(tasks, g_results):
+            if isinstance(res, Exception):
+                if isinstance(res, asyncio.TimeoutError):
+                    logger.warning("query %r timed out", q)
+                    if on_query:
+                        on_query(q, "timeout", 0)
+                else:
+                    logger.error("query %r error: %s", q, res)
+                results.append((q, []))
+            else:
+                results.append(res)
 
     if budget_exhausted:
         logger.info("search_layered: %d/%d queries executed before budget exhaustion", len(results), len(queries))

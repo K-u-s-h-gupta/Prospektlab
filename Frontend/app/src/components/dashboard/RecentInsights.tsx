@@ -98,11 +98,11 @@ export const RecentInsights: React.FC<RecentInsightsProps> = ({ insights = [], o
               </div>
 
               {/* Title & Body */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
                   {item.title}
                 </h4>
-                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4, overflowWrap: 'break-word', wordBreak: 'break-word' }}>
                   {item.summary}
                 </p>
               </div>
