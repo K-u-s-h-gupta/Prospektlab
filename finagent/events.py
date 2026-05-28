@@ -148,8 +148,13 @@ class SessionBus:
             except asyncio.QueueFull:
                 pass
 
-    def remove(self, session_id: str) -> None:
-        self._queues.pop(session_id, None)
+    def remove(self, session_id: str, queue: asyncio.Queue[AgentEvent | None] | None = None) -> None:
+        if queue is None:
+            self._queues.pop(session_id, None)
+        else:
+            current_q = self._queues.get(session_id)
+            if current_q is queue:
+                self._queues.pop(session_id, None)
 
     def get(self, session_id: str) -> asyncio.Queue[AgentEvent | None] | None:
         return self._queues.get(session_id)

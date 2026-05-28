@@ -2513,10 +2513,9 @@ async def stream_session(
     if not BUS.known(session_id):
         raise HTTPException(status_code=404, detail="Unknown session")
 
-    # If the session is active but the queue was popped on previous disconnect,
-    # re-create/re-open it to catch new events.
-    q = BUS.get(session_id)
-    if q is None and not BUS.is_closed(session_id):
+    # Always open a fresh queue for the new connection request to avoid queue race conditions.
+    q = None
+    if not BUS.is_closed(session_id):
         q = BUS.open(session_id)
 
     # Determine starting event seq number
@@ -2562,7 +2561,7 @@ async def stream_session(
                         yield f"id: {idx}\nevent: {event.type}\ndata: {json.dumps(payload, default=str)}\n\n"
                         max_seen_seq = max(max_seen_seq, idx)
             finally:
-                BUS.remove(session_id)
+                BUS.remove(session_id, q)
         else:
             yield "event: done\ndata: {}\n\n"
 

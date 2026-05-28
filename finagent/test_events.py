@@ -58,3 +58,24 @@ def test_open_reset_starts_fresh_run_without_replaying_old_memo():
     assert len(history) == 1
     assert history[0][0] == 0
     assert history[0][1].type == "session_started"
+
+
+def test_session_bus_remove_with_queue_matching():
+    import asyncio
+    bus = SessionBus()
+    event_log = _FakeEventLog()
+    bus._session_dir = lambda session_id: None
+    bus._events_path = lambda session_id: event_log
+    bus._closed_path = lambda session_id: None
+    q1 = bus.open("test-session")
+    q2 = bus.open("test-session")
+    
+    assert bus.get("test-session") is q2
+    
+    # Removing with non-matching queue (q1) should not remove q2
+    bus.remove("test-session", q1)
+    assert bus.get("test-session") is q2
+    
+    # Removing with matching queue (q2) should remove it
+    bus.remove("test-session", q2)
+    assert bus.get("test-session") is None
