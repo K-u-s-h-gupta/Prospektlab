@@ -69,7 +69,7 @@ class ISINResolver:
 
     def _load_bundle(self) -> None:
         """Load bundled isin_master.json into memory."""
-        bundle_path = finagent_data_path("isin_master.json")
+        bundle_path = Path(__file__).resolve().parent.parent / "data" / "isin_master.json"
         if not bundle_path.exists():
             logger.warning("isin_master.json not found at %s; bundle empty", bundle_path)
             self.bundle = {}

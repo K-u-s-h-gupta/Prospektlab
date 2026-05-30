@@ -111,7 +111,7 @@ def create_zip():
         for root, dirs, files in os.walk(DIST_DIR):
             for file in files:
                 filePath = os.path.join(root, file)
-                archivePath = os.path.relpath(filePath, DIST_DIR)
+                archivePath = os.path.relpath(filePath, DIST_DIR).replace('\\', '/')
                 zipf.write(filePath, archivePath)
                 print(f"  Added {filePath} as {archivePath}")
 
