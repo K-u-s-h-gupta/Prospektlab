@@ -2,6 +2,8 @@ import os
 import httpx
 from fastapi import HTTPException
 
+_SUPABASE_TIMEOUT = httpx.Timeout(12.0, connect=5.0)
+
 def _get_supabase_url():
     return os.environ.get("SUPABASE_URL", "").rstrip("/")
 
@@ -19,6 +21,9 @@ def get_headers():
         "Content-Type": "application/json"
     }
 
+def _auth_timeout_error() -> HTTPException:
+    return HTTPException(status_code=504, detail="Authentication service timed out. Please try again.")
+
 async def create_admin_user(email: str, password: str, full_name: str, mobile: str = "", avatar_url: str = "", auth_provider: str = "email"):
     """Create a user via Supabase Admin API. This skips email confirmation checks."""
     url = f"{_get_supabase_url()}/auth/v1/admin/users"
@@ -34,30 +39,33 @@ async def create_admin_user(email: str, password: str, full_name: str, mobile: s
         }
     }
     
-    async with httpx.AsyncClient() as client:
-        res = await client.post(url, json=payload, headers=get_headers())
+    try:
+        async with httpx.AsyncClient(timeout=_SUPABASE_TIMEOUT) as client:
+            res = await client.post(url, json=payload, headers=get_headers())
+    except httpx.TimeoutException:
+        raise _auth_timeout_error()
         
-        if res.status_code == 422:
-            try:
-                data = res.json()
-                msg = data.get("msg", "") or data.get("message", "")
-                if "already registered" in msg.lower() or "already exists" in msg.lower():
-                    raise HTTPException(status_code=409, detail="An account with that email already exists.")
-                raise HTTPException(status_code=422, detail=msg or "Invalid user data.")
-            except HTTPException:
-                raise
-            except Exception:
-                pass
-                
-        if not res.is_success:
-            try:
-                data = res.json()
-                err = data.get("message") or data.get("msg") or "Failed to create user in Supabase"
-            except Exception:
-                err = "Failed to create user in Supabase"
-            raise HTTPException(status_code=res.status_code, detail=err)
-            
-        return res.json()
+    if res.status_code == 422:
+        try:
+            data = res.json()
+            msg = data.get("msg", "") or data.get("message", "")
+            if "already registered" in msg.lower() or "already exists" in msg.lower():
+                raise HTTPException(status_code=409, detail="An account with that email already exists.")
+            raise HTTPException(status_code=422, detail=msg or "Invalid user data.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    if not res.is_success:
+        try:
+            data = res.json()
+            err = data.get("message") or data.get("msg") or "Failed to create user in Supabase"
+        except Exception:
+            err = "Failed to create user in Supabase"
+        raise HTTPException(status_code=res.status_code, detail=err)
+
+    return res.json()
 
 async def update_admin_user_password(user_id: str, new_password: str):
     """Updates a user's password via the Admin API."""
@@ -66,11 +74,14 @@ async def update_admin_user_password(user_id: str, new_password: str):
         "password": new_password
     }
     
-    async with httpx.AsyncClient() as client:
-        res = await client.put(url, json=payload, headers=get_headers())
-        if not res.is_success:
-            raise HTTPException(status_code=res.status_code, detail="Failed to update password in Supabase.")
-        return res.json()
+    try:
+        async with httpx.AsyncClient(timeout=_SUPABASE_TIMEOUT) as client:
+            res = await client.put(url, json=payload, headers=get_headers())
+    except httpx.TimeoutException:
+        raise _auth_timeout_error()
+    if not res.is_success:
+        raise HTTPException(status_code=res.status_code, detail="Failed to update password in Supabase.")
+    return res.json()
 
 async def upsert_profile(user_id: str, email: str, full_name: str, auth_provider: str, mobile: str = "", avatar_url: str = ""):
     """Upserts the user profile into the public.profiles table."""
@@ -87,11 +98,14 @@ async def upsert_profile(user_id: str, email: str, full_name: str, auth_provider
     headers = get_headers()
     headers["Prefer"] = "resolution=merge-duplicates"
     
-    async with httpx.AsyncClient() as client:
-        res = await client.post(url, json=payload, headers=headers)
-        if not res.is_success:
-            print(f"Failed to upsert profile for {email}: {res.text}")
-        return res.is_success
+    try:
+        async with httpx.AsyncClient(timeout=_SUPABASE_TIMEOUT) as client:
+            res = await client.post(url, json=payload, headers=headers)
+    except httpx.TimeoutException:
+        return False
+    if not res.is_success:
+        print(f"Failed to upsert profile for {email}: {res.text}")
+    return res.is_success
 
 async def authenticate_user(email: str, password: str):
     """Authenticates a user with email and password via Supabase Auth."""
@@ -101,27 +115,33 @@ async def authenticate_user(email: str, password: str):
         "password": password
     }
     
-    async with httpx.AsyncClient() as client:
-        res = await client.post(url, json=payload, headers=get_headers())
-        if not res.is_success:
-            if res.status_code == 400:
-                raise HTTPException(status_code=401, detail="Invalid email or password.")
-            raise HTTPException(status_code=res.status_code, detail="Authentication failed.")
-        return res.json()
+    try:
+        async with httpx.AsyncClient(timeout=_SUPABASE_TIMEOUT) as client:
+            res = await client.post(url, json=payload, headers=get_headers())
+    except httpx.TimeoutException:
+        raise _auth_timeout_error()
+    if not res.is_success:
+        if res.status_code == 400:
+            raise HTTPException(status_code=401, detail="Invalid email or password.")
+        raise HTTPException(status_code=res.status_code, detail="Authentication failed.")
+    return res.json()
 
 async def get_user_by_email(email: str):
     """Fetches a user profile from the profiles table."""
     url = f"{_get_supabase_url()}/rest/v1/profiles?email=eq.{email}&select=*"
     
-    async with httpx.AsyncClient() as client:
-        res = await client.get(url, headers=get_headers())
-        if not res.is_success:
-            return None
-            
-        data = res.json()
-        if data and len(data) > 0:
-            return data[0]
+    try:
+        async with httpx.AsyncClient(timeout=_SUPABASE_TIMEOUT) as client:
+            res = await client.get(url, headers=get_headers())
+    except httpx.TimeoutException:
         return None
+    if not res.is_success:
+        return None
+
+    data = res.json()
+    if data and len(data) > 0:
+        return data[0]
+    return None
 
 async def update_admin_user_mobile(user_id: str, mobile: str):
     """Updates a user's mobile number via the Admin API (user_metadata only).
@@ -137,16 +157,19 @@ async def update_admin_user_mobile(user_id: str, mobile: str):
         }
     }
     
-    async with httpx.AsyncClient() as client:
-        res = await client.put(url, json=payload, headers=get_headers())
-        if not res.is_success:
-            detail = "Failed to update mobile number in Supabase."
-            try:
-                detail = res.json().get("message", detail) or detail
-            except Exception:
-                pass
-            raise HTTPException(status_code=res.status_code, detail=detail)
-        return res.json()
+    try:
+        async with httpx.AsyncClient(timeout=_SUPABASE_TIMEOUT) as client:
+            res = await client.put(url, json=payload, headers=get_headers())
+    except httpx.TimeoutException:
+        raise _auth_timeout_error()
+    if not res.is_success:
+        detail = "Failed to update mobile number in Supabase."
+        try:
+            detail = res.json().get("message", detail) or detail
+        except Exception:
+            pass
+        raise HTTPException(status_code=res.status_code, detail=detail)
+    return res.json()
 
 def get_user_id_from_auth(email: str) -> str | None:
     """Queries auth.users via GoTrue Admin Users API, falling back to psycopg2 using DB URL."""

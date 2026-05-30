@@ -12,6 +12,7 @@ export interface WatchlistStock {
 interface WatchlistCardProps {
   stocks: WatchlistStock[];
   onSelectStock: (symbol: string) => void;
+  onAskStock?: (symbol: string) => void;
   onAddStock?: (symbol: string) => void;
   onRemoveStock?: (symbol: string) => void;
 }
@@ -19,6 +20,7 @@ interface WatchlistCardProps {
 export const WatchlistCard: React.FC<WatchlistCardProps> = ({
   stocks = [],
   onSelectStock,
+  onAskStock,
   onAddStock,
   onRemoveStock
 }) => {
@@ -165,7 +167,7 @@ export const WatchlistCard: React.FC<WatchlistCardProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onSelectStock(stock.symbol);
+                      (onAskStock || onSelectStock)(stock.symbol);
                     }}
                     style={{
                       background: 'transparent',
@@ -177,7 +179,7 @@ export const WatchlistCard: React.FC<WatchlistCardProps> = ({
                       justifyContent: 'center',
                       cursor: 'pointer'
                     }}
-                    title="Ask Mark"
+                    title="Ask Arthik"
                   >
                     <MessageSquare size={12} />
                   </button>

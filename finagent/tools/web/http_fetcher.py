@@ -144,12 +144,26 @@ def desktop_headers_for_url(url: str, *, referer: str | None = None, accept_json
 
 
 def _get_shared_client(timeout_s: float):
-    """One pooled httpx.AsyncClient per process."""
+    """One pooled httpx.AsyncClient per process, bound to the current running event loop."""
 
     import httpx
 
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
     client = _client_ref.get("client")
-    if client is None:
+    cached_loop = _client_ref.get("loop")
+
+    if client is None or cached_loop is not loop or (client.is_closed if hasattr(client, 'is_closed') else False):
+        if client is not None:
+            try:
+                # Discard/close the old client asynchronously
+                if loop and loop.is_running():
+                    loop.create_task(client.aclose())
+            except Exception:
+                pass
         limits = httpx.Limits(max_keepalive_connections=20, max_connections=40, keepalive_expiry=30.0)
         kwargs = dict(
             follow_redirects=True,
@@ -165,6 +179,7 @@ def _get_shared_client(timeout_s: float):
         except ImportError:
             client = httpx.AsyncClient(**kwargs)
         _client_ref["client"] = client
+        _client_ref["loop"] = loop
     return client
 
 

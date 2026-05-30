@@ -245,16 +245,8 @@ def load_active_positions(
         }
         
         enriched = enrich_position(pos_dict)
-        clean_sym = enriched.get("symbol", "").split(".")[0].upper().strip()
         resolved_sector = enriched.get("sector") or ""
         resolved_name = enriched.get("name") or ""
-        
-        if clean_sym == 'INF247L01DA9' or clean_sym == 'MOMF':
-            resolved_sector = 'Thematic - Manufacturing'
-            resolved_name = 'Motilal Oswal Manufacturing Fund - Direct Growth'
-        elif clean_sym == 'INE0LP301011' or clean_sym == 'PHYSICSWALLAH':
-            resolved_sector = 'Education Services'
-            resolved_name = 'Physicswallah Limited'
             
         if not resolved_sector or resolved_sector == 'General' or resolved_sector == 'Other':
             resolved_sector = 'General'
@@ -262,8 +254,8 @@ def load_active_positions(
         positions.append(
             PositionMirror(
                 tenant_id=pos_dict["tenant_id"],
-                symbol=pos_dict["symbol"],
-                exchange=pos_dict["exchange"],
+                symbol=enriched.get("symbol") or pos_dict["symbol"],
+                exchange=enriched.get("exchange") or pos_dict["exchange"],
                 quantity=pos_dict["quantity"],
                 market_value=pos_dict["market_value"],
                 cost_basis=pos_dict["cost_basis"],
@@ -349,16 +341,8 @@ def replace_active_positions(
         if prepared_cost_basis == 0.0:
             prepared_cost_basis = round(prepared_avg_cost * prepared_qty, 2)
             
-        clean_sym = final_symbol.split(".")[0].upper().strip()
         resolved_sector = enriched.get("sector") or ""
         resolved_name = final_name
-        
-        if clean_sym == 'INF247L01DA9' or clean_sym == 'MOMF':
-            resolved_sector = 'Thematic - Manufacturing'
-            resolved_name = 'Motilal Oswal Manufacturing Fund - Direct Growth'
-        elif clean_sym == 'INE0LP301011' or clean_sym == 'PHYSICSWALLAH':
-            resolved_sector = 'Education Services'
-            resolved_name = 'Physicswallah Limited'
             
         if not resolved_sector or resolved_sector == 'General' or resolved_sector == 'Other':
             resolved_sector = 'General'

@@ -26,6 +26,8 @@ from finagent.output.intent_classifier import classify_output_mode, extract_fina
 from finagent.output.memo_formatter import MemoSection, format_memo
 from finagent.output.renderer import render_markdown, render_rich_json
 import finagent.rich_builder as teammate_rich_builder
+from finagent.router.intent_router import is_portfolio_scope_query
+from finagent.output.query_guards import is_portfolio_comparison_query
 
 from finagent.prompt_builder import default_system_prompt
 from finagent.runtime_provider import resolve_openai_config
@@ -135,6 +137,47 @@ def _scrub_prose(text: str) -> str:
     return cleaned.strip()
 
 
+_STRUCTURED_FENCE_RE = re.compile(r"```(?:chart|kpi|mermaid)\b[\s\S]*?```", re.IGNORECASE)
+
+
+def _substantive_text_len(text: str) -> int:
+    """Count prose characters after removing structured visual fences."""
+    if not text:
+        return 0
+    prose = _STRUCTURED_FENCE_RE.sub("", text)
+    prose = re.sub(r"[#*_`\|\-\s]+", " ", prose)
+    return len(prose.strip())
+
+
+def _ensure_balanced_memo(memo: str, artifact: AnswerArtifact) -> str:
+    """Guarantee the answer has substantive prose whenever visuals exist."""
+    visual_count = len(getattr(artifact, "metric_cards", []) or []) + len(getattr(artifact, "charts", []) or [])
+    if visual_count == 0:
+        return memo
+    if _substantive_text_len(memo) >= 400:
+        return memo
+    structured_memo = render_markdown(artifact)
+    if _substantive_text_len(structured_memo) > _substantive_text_len(memo):
+        logger.warning(
+            "[SYNTH-BALANCE] Replaced visual-heavy memo with structured prose fallback | visuals=%d | prose_chars=%d",
+            visual_count,
+            _substantive_text_len(memo),
+        )
+        return structured_memo
+    return memo
+
+
+def _attach_markdown_body(rich: dict | None, memo: str) -> dict | None:
+    """Keep the final rich payload self-contained for frontend fallbacks."""
+    if rich is None:
+        return None
+    try:
+        rich["markdown_body"] = memo
+    except Exception:
+        pass
+    return rich
+
+
 def _amount_to_usd(value: float, unit: str) -> float:
     u = (unit or "").upper()
     if u == "USD":
@@ -205,17 +248,17 @@ def _format_local_money(value: float | None, currency: str | None, fx: FxRate | 
 # ──────────────────────────────────────────────────────────────────────────
 
 
-def _build_source_digest(docs: list[ScrapedDoc]) -> tuple[str, int]:
+def _build_source_digest(docs: list[ScrapedDoc], *, budget_chars: int = _MEMO_BUDGET_CHARS) -> tuple[str, int]:
     lines: list[str] = []
     used = 0
     char_total = 0
     for d in docs:
-        if char_total >= _MEMO_BUDGET_CHARS:
+        if char_total >= budget_chars:
             break
         title = (d.title or "(no title)").strip()
         excerpt = (d.excerpt or "").strip().replace("\n", " ")
         block = (
-            f"### Source {used + 1}\n"
+            f"**Source {used + 1}**\n"
             f"- URL: {d.final_url}\n"
             f"- Domain: {d.domain} (tier {d.tier})\n"
             f"- Title: {title}\n"
@@ -452,7 +495,7 @@ You are an elite institutional equity research director and conversational finan
 CORE MANDATES & FINANCIAL COMPLIANCE:
 1. GEOGRAPHY & ACCOUNTING: Base your reasoning entirely on Indian corporate parameters, SEBI LODR regulations, RBI monetary guidelines, and Ind-AS accounting standards. Never use US SEC/GAAP syntax (e.g., use "Shareholding Pattern" instead of "13F", "Concall Transcript" instead of "Earnings Call").
 2. CURRENCY & UNIT FORMATTING: Present all monetary figures in Indian Rupee (INR) FIRST, enforcing strict Indian-style comma grouping and Crore/Lakh notation (e.g., ₹3.45 Cr or ₹45.6 L). Never lead with USD or apply Western million/billion formatting to domestic assets.
-3. DATA GROUNDING: Do not invent or smooth numbers. If a financial variable or metric is absent from the provided facts, state "data unavailable" — never present an assumption as an verified fact.
+3. DATA GROUNDING: Do not invent or smooth numbers. If a financial metric is absent from the provided facts, omit it from KPI/chart/table blocks entirely. In prose, write it as 'N/A' — do not write multi-word 'data unavailable' explanations.
 4. PORTFOLIO MIRROR GROUNDING: For portfolio questions, answer only from the synchronized `position_mirrors` holdings package and deterministic compute-core payloads supplied to you. If holdings are empty or ingestion is still active, tell the user to upload and synchronize holdings first instead of fabricating a sample portfolio.
 5. NO LLM ARITHMETIC: Never calculate HHI, beta, CCB, VaR, ratios, or portfolio weights in prose. Quote exact values returned by the quantitative kernel or mark the metric as data unavailable.
 6. CHAT EXPERIENCE: Write like a high-quality interactive assistant: direct first answer, clean sections when useful, concise bullets, and follow-up prompts only when they materially improve the user's next action. Avoid stiff research-report scaffolding unless the user explicitly asks for a full report.
@@ -463,7 +506,7 @@ Evaluate the active session intent state to determine your exact structural resp
 
 #### PROTOCOL A: INTENT IS 'comprehensive_profile'
 - OBJECTIVE: Generate a publication-grade, uncompromised, and comprehensive equity research report.
-- FORMATTING: Truncation or high-level summaries are strictly forbidden. Every single section below must be populated in full analytical depth (minimum 150 words per section) using clear Markdown headers, bold prose callouts, and clean markdown tables (`| HTML | Grids |`) for raw statements.
+- FORMATTING: Truncation or high-level summaries are strictly forbidden. Every single section below must be populated in full analytical depth (minimum 150 words per section) using clear Markdown headers (## for sections, **bold** for sub-emphasis — never ###), bold prose callouts, and clean markdown tables (`| HTML | Grids |`) for raw statements.
 - REQUIRED RESTRUCTURING TEMPLATE:
   ## Business Overview
   [Detailed corporate ancestry, business segments, group ownership, and manufacturing scale]
@@ -490,7 +533,7 @@ When the data package contains continuous forecasting arrays generated by the de
 
 ### DYNAMIC VISUAL CONTRACT (ChatGPT/Claude/Gemini-style structured output)
 When the answer involves data that is easier to grasp visually — allocations, time-series, comparisons, or KPI dashboards — embed structured fenced blocks inline. The frontend will render these as live charts and stat cards.
-For portfolio answers, use chart/kpi blocks for sector allocation, holding concentration, risk budget, VaR, beta, news impact, or ratio comparisons only when the source facts already provide the numbers.
+Aim for mostly prose with selective visuals. Emit KPI/chart blocks only when every displayed number exists in the verified facts or deterministic compute payload. Do not emit placeholder, empty, zero-filled, or `N/A` KPI/chart/table blocks. Do not append all visuals at the bottom; place any visual immediately after the paragraph it supports.
 
 Allowed fenced block types (emit ONLY when they genuinely aid comprehension; never force them for simple prose answers):
 
@@ -528,6 +571,9 @@ _FOCUSED_OUTPUT_MODES = {
     "valuation_model",
     "direct_answer",
     "filing_analysis",
+    "company_snapshot",
+    "investment_view",
+    "market_explainer",
     # New dynamic modes from intent-based agent selection
     "valuation_insights",      # Rich valuation output with statistical projections + model_used
     "forensic_insights",       # Forensic / anomaly detection output from AccountingAgent
@@ -535,26 +581,86 @@ _FOCUSED_OUTPUT_MODES = {
 }
 
 
+def _synthesis_profile(mode: OutputMode, depth: ResponseDepth, objective: str) -> dict[str, int | float]:
+    """Pick latency/quality budgets by response depth and output mode."""
+
+    lower_objective = (objective or "").lower()
+    is_deep = (
+        depth == ResponseDepth.DEEP
+        or mode == OutputMode.DEEP_RESEARCH_REPORT
+        or any(kw in lower_objective for kw in ("deep_research_report", "synthesis", "investment-grade", "full-scale"))
+    )
+    if is_deep:
+        return {
+            "timeout_s": 180.0,
+            "max_tokens": 8000,
+            "digest_budget_chars": _MEMO_BUDGET_CHARS,
+        }
+
+    if depth == ResponseDepth.CHAT:
+        return {
+            "timeout_s": 20.0,
+            "max_tokens": 1200,
+            "digest_budget_chars": 3200,
+        }
+
+    if mode == OutputMode.COMPANY_COMPARISON:
+        return {
+            "timeout_s": 55.0,
+            "max_tokens": 2600,
+            "digest_budget_chars": 7600,
+        }
+
+    if mode in {
+        OutputMode.COMPANY_SNAPSHOT,
+        OutputMode.INVESTMENT_VIEW,
+        OutputMode.MARKET_EXPLAINER,
+        OutputMode.NEWS_BRIEF,
+        OutputMode.DIRECT_ANSWER,
+        OutputMode.CONVERSATIONAL_CHAT,
+    }:
+        return {
+            "timeout_s": 35.0,
+            "max_tokens": 1800,
+            "digest_budget_chars": 5200,
+        }
+
+    return {
+        "timeout_s": 45.0,
+        "max_tokens": 2200,
+        "digest_budget_chars": 6800,
+    }
+
+
 def _compact_chat_history(
     chat_history: list[dict[str, str]] | None,
     *,
     focused: bool,
+    depth: ResponseDepth,
 ) -> list[dict[str, str]]:
     """Keep prior chat useful for entity continuity without drowning the next answer."""
 
     if not chat_history:
         return []
     compact: list[dict[str, str]] = []
-    for msg in chat_history[-8:]:
+    recent_messages = chat_history[-8:] if depth == ResponseDepth.DEEP else chat_history[-4:]
+    for msg in recent_messages:
         role = msg.get("role")
         content = (msg.get("content") or "").strip()
         if role not in {"user", "assistant"} or not content:
             continue
         if focused and role == "assistant":
             continue
-        limit = 600 if focused else (1800 if role == "assistant" else 900)
+        if depth == ResponseDepth.DEEP:
+            limit = 600 if focused else (1800 if role == "assistant" else 900)
+        elif depth == ResponseDepth.STANDARD:
+            limit = 420 if focused else (700 if role == "assistant" else 500)
+        else:
+            limit = 300 if focused else (450 if role == "assistant" else 350)
         compact.append({"role": role, "content": content[:limit]})
-    return compact[-4:] if focused else compact
+    if focused or depth != ResponseDepth.DEEP:
+        return compact[-4:]
+    return compact
 
 
 async def _openai_memo(
@@ -568,6 +674,7 @@ async def _openai_memo(
     synth_model: str | None = None,
     chat_history: list[dict[str, str]] | None = None,
     output_mode: str | None = None,
+    response_depth: str | None = None,
     force_non_stream: bool = False,
     user_email: str | None = None,
     session_id: str | None = None,
@@ -601,8 +708,9 @@ async def _openai_memo(
     system_prompt = default_system_prompt() + "\n" + _LLM_STYLE_GUIDE
 
     # Detect comparison queries to inject comparison-specific instructions
+    # Portfolio-vs-benchmark queries must NOT receive company-comparison instructions.
     _lower_obj = (objective or "").lower()
-    _is_comparison = any(t in _lower_obj for t in (" vs ", " versus ", "compare", "comparison", "against", "head to head"))
+    _is_comparison = any(t in _lower_obj for t in (" vs ", " versus ", "compare", "comparison", "against", "head to head")) and not is_portfolio_comparison_query(objective)
 
     if _is_comparison:
         comparison_instructions = (
@@ -625,7 +733,13 @@ async def _openai_memo(
     else:
         comparison_instructions = ""
 
-    focused_output = output_mode in _FOCUSED_OUTPUT_MODES
+    depth_mode = normalize_depth(response_depth)
+    try:
+        resolved_mode = OutputMode(output_mode) if output_mode else OutputMode.CONVERSATIONAL_CHAT
+    except ValueError:
+        resolved_mode = OutputMode.CONVERSATIONAL_CHAT
+    profile = _synthesis_profile(resolved_mode, depth_mode, objective)
+    focused_output = resolved_mode.value in _FOCUSED_OUTPUT_MODES
     focus_instruction = ""
     if focused_output:
         base_instruction = (
@@ -653,9 +767,15 @@ async def _openai_memo(
 
         focus_instruction = base_instruction + "\n"
     report_instruction = (
-        "Produce a focused answer addressing only the objective above.\n\n"
+        "Produce a focused, direct answer to the objective above. Use 2-3 sections max. "
+        "Include kpi/chart blocks only if real numeric data is in the source facts. "
+        "Skip visuals entirely for conversational or opinion-type questions.\n\n"
         if focused_output
-        else "Produce a comprehensive, structured research report addressing the objective above.\n\n"
+        else "Produce a balanced research response: 3-4 sections, dense prose, zero filler. "
+        "Only emit kpi blocks if actual financial metrics are retrieved from source data (never invent them). "
+        "Only emit 1 chart block if time-series data exists that meaningfully illustrates a trend. "
+        "Skip charts and tables for conversational questions. "
+        "For full research reports: use 6-8 sections with 1-2 charts only where time-series data exists.\n\n"
     )
 
     user_prompt = (
@@ -666,11 +786,14 @@ async def _openai_memo(
         f"{report_instruction}"
         "Requirements:\n"
         "- Use all available facts and source material provided below.\n"
-        "- Never hallucinate numbers or invent figures — cite every claim with [n].\n"
+        "- Never hallucinate numbers or invent figures — cite every claim with [SOURCE].\n"
         "- Use Markdown structure: ## section headings, tables for metrics, bullet points for lists.\n"
-        "- If a data point is missing from the provided facts, explicitly state it is unavailable.\n"
-        "- For follow-up answers, do not summarize the earlier memo; answer the user's new request.\n"
-        "- For deep research reports: produce ALL sections in full — do NOT abbreviate.\n\n"
+        "- For missing data: omit from kpi/chart/table blocks; write 'N/A' inline in prose only if the metric is directly asked about.\n"
+        "- For follow-up answers, do not summarize the earlier memo; answer the user's new request directly.\n"
+        "- Emit kpi blocks ONLY when actual financial metrics (price, PE, revenue, etc.) are present in the VERIFIED FACTS section.\n"
+        "- Emit chart blocks ONLY when time-series numeric data (multiple data points across years/quarters) is present in VERIFIED FACTS.\n"
+        "- For conversational questions or opinion queries: use prose only, no kpi/chart blocks.\n"
+        "- For portfolio queries and comparison queries: ALWAYS include at least 1 chart + 1-3 kpi blocks whenever source data permits.\n\n"
         f"=== VERIFIED FACTS ===\n{facts}\n\n"
         f"=== SOURCE DOCUMENTS ===\n{digest}\n\n"
         f"{_conflict_block(conflicts)}"
@@ -680,14 +803,11 @@ async def _openai_memo(
     model_to_use = synth_model or cfg.model
     messages = [{"role": "system", "content": system_prompt}]
     if chat_history:
-        messages.extend(_compact_chat_history(chat_history, focused=focused_output))
+        messages.extend(_compact_chat_history(chat_history, focused=focused_output, depth=depth_mode))
     messages.append({"role": "user", "content": user_prompt})
 
-    # Deep research reports need more tokens; standard chat can stay short.
-    _is_deep = any(kw in (objective or "").lower() for kw in (
-        "deep_research_report", "synthesis", "investment-grade", "full-scale"
-    ))
-    _max_tokens = 8000 if _is_deep else 4000
+    _is_deep = depth_mode == ResponseDepth.DEEP or resolved_mode == OutputMode.DEEP_RESEARCH_REPORT
+    _max_tokens = int(profile["max_tokens"])
 
     # ============================================================
     # DETAILED LLM CONTEXT LOGGING — what is actually sent to the model
@@ -718,9 +838,9 @@ async def _openai_memo(
     logger.debug("[LLM-CONTEXT] FULL_USER_PROMPT:\n%s", user_prompt)
 
     if force_non_stream:
-        logger.info("[LLM-CALL] Forcing non-streaming OpenAI call (post-timeout retry) | model=%s | max_tokens=%d", cfg.model, _max_tokens)
+        logger.info("[LLM-CALL] Forcing non-streaming OpenAI call (post-timeout retry) | model=%s | max_tokens=%d", model_to_use, _max_tokens)
         resp = await client.chat.completions.create(
-            model=cfg.model,
+            model=model_to_use,
             temperature=0.2,
             max_tokens=_max_tokens,
             messages=[
@@ -738,7 +858,7 @@ async def _openai_memo(
             )
         final = str(final).strip()
         if final:
-            logger.info("[LLM-RESPONSE] Synthesis completed via FORCED NON-STREAM (retry) | model=%s | output_len=%d chars", cfg.model, len(final))
+            logger.info("[LLM-RESPONSE] Synthesis completed via FORCED NON-STREAM (retry) | model=%s | output_len=%d chars", model_to_use, len(final))
             await _emit_token(on_token, final)
         return final
 
@@ -777,11 +897,11 @@ async def _openai_memo(
             if usage_data:
                 _record_usage(usage_data)
             return full
-        logger.warning("[LLM-FALLBACK] Streaming returned empty — falling back to non-streaming call | model=%s", cfg.model)
-        logger.info("[LLM-CONTEXT] FALLBACK non-stream call | model=%s | user_prompt_len=%d", cfg.model, len(user_prompt))
+        logger.warning("[LLM-FALLBACK] Streaming returned empty — falling back to non-streaming call | model=%s", model_to_use)
+        logger.info("[LLM-CONTEXT] FALLBACK non-stream call | model=%s | user_prompt_len=%d", model_to_use, len(user_prompt))
 
         resp = await client.chat.completions.create(
-            model=cfg.model,
+            model=model_to_use,
             temperature=0.2,
             max_tokens=_max_tokens,
             messages=[
@@ -799,7 +919,7 @@ async def _openai_memo(
             )
         final = str(final).strip()
         if final:
-            logger.info("[LLM-RESPONSE] Synthesis completed via NON-STREAM fallback | model=%s | output_len=%d chars", cfg.model, len(final))
+            logger.info("[LLM-RESPONSE] Synthesis completed via NON-STREAM fallback | model=%s | output_len=%d chars", model_to_use, len(final))
             await _emit_token(on_token, final)
         return final
     finally:
@@ -1596,8 +1716,8 @@ async def synthesize_memo(
     chat_history: list[dict[str, str]] | None = None,
     peer_targets: list[str] | None = None,
     user_email: str | None = None,
+    portfolio_context: dict | None = None,
 ) -> SynthesisResult:
-    digest, used = _build_source_digest(docs)
     conflicts = conflicts or []
     bundle = enrichment or EnrichmentBundle()
     depth = normalize_depth(response_depth)
@@ -1614,14 +1734,18 @@ async def synthesize_memo(
         mode = OutputMode.COMPANY_COMPARISON
 
     # ── Dynamic synthesis timeout (deep research reports need more time) ──
-    _obj = (objective or "").lower()
-    _is_deep = (
-        (response_depth or "").lower() in {"deep", "full"}
-        or any(kw in _obj for kw in ("deep_research_report", "synthesis", "investment-grade", "full-scale"))
-    )
+    profile = _synthesis_profile(mode, depth, objective)
+    digest, used = _build_source_digest(docs, budget_chars=int(profile["digest_budget_chars"]))
     if timeout_s is None:
-        timeout_s = 180.0 if _is_deep else 90.0
-    logger.info("[SYNTH] effective timeout_s=%.0fs (deep=%s)", timeout_s, _is_deep)
+        timeout_s = float(profile["timeout_s"])
+    logger.info(
+        "[SYNTH] effective timeout_s=%.0fs | depth=%s | mode=%s | max_tokens=%d | digest_budget=%d",
+        timeout_s,
+        depth.value,
+        mode.value,
+        int(profile["max_tokens"]),
+        int(profile["digest_budget_chars"]),
+    )
 
     # ── Fetch RICH peer enrichment in parallel (yahoo + india + wiki + news) ──
     peer_bundles = await _load_peer_bundles(peer_targets or [], objective, target, entity, mode)
@@ -1747,6 +1871,35 @@ async def synthesize_memo(
                 on_token = _wrapped_sync_sink
 
     facts = _build_facts_block(bundle)
+    if portfolio_context:
+        facts += "\n\n=== LIVE PORTFOLIO MIRROR STATUS ===\n"
+        facts += f"Total Portfolio Value: INR {portfolio_context.get('total_market_value', 0):,.2f}\n"
+        facts += f"Total Unrealized P&L: INR {portfolio_context.get('unrealized_pnl', 0):,.2f} ({portfolio_context.get('unrealized_pnl_pct', 0) * 100:.2f}%)\n"
+        facts += f"Day Change: INR {portfolio_context.get('day_change_total', 0):,.2f} ({portfolio_context.get('day_change_pct', 0) * 100:.2f}%)\n"
+        risk = portfolio_context.get("risk") or {}
+        facts += f"Concentration (HHI): {risk.get('hhi', 0):.4f}\n"
+        facts += f"Beta vs NIFTY50: {risk.get('beta_vs_nifty', 0):.2f}\n"
+        facts += f"Annualized Volatility: {risk.get('annualized_volatility_pct', 0):.2f}%\n"
+        facts += f"Max Drawdown: {risk.get('max_drawdown_pct', 0):.2f}%\n"
+        history = portfolio_context.get("history") or {}
+        port_hist = (history.get("portfolio") or {}).get("prices") or []
+        bench_hist = (history.get("benchmark") or {}).get("prices") or []
+        if port_hist and bench_hist:
+            facts += "\nPortfolio vs Benchmark NAV (indexed to 100):\n"
+            # Sample 6 points: today, -1m, -3m, -6m, -9m, -1y
+            n = len(port_hist)
+            idxs = [n - 1, max(0, n - 22), max(0, n - 66), max(0, n - 132), max(0, n - 198), 0]
+            for i in idxs:
+                facts += f"  Day {i+1}: Portfolio {port_hist[i]:.2f} | Benchmark {bench_hist[i]:.2f}\n"
+        positions = portfolio_context.get("positions") or []
+        if positions:
+            facts += "Holdings:\n"
+            for p in positions:
+                sym = p.get('symbol') or p.get('name') or '-'
+                val = p.get('market_value') or 0
+                weight = p.get('weight') or 0
+                pnl = p.get('unrealized_pnl_pct') or 0
+                facts += f"- {sym}: Market Value = INR {val:,.2f}, Weight = {weight * 100:.2f}%, Unrealized P&L = {pnl * 100:.2f}%\n"
     # ── Append specialist findings so the LLM sees agent outputs (valuation, risk, etc.) ──
     specialist_block = _build_specialist_findings_block(specialist_findings)
     if specialist_block:
@@ -1773,6 +1926,7 @@ async def synthesize_memo(
                     synth_model=synth_model,
                     chat_history=chat_history,
                     output_mode=mode.value,
+                    response_depth=depth.value,
                     user_email=user_email,
                     session_id=session_id,
                 ),
@@ -1796,6 +1950,7 @@ async def synthesize_memo(
                         synth_model=synth_model,
                         chat_history=chat_history,
                         output_mode=mode.value,
+                        response_depth=depth.value,
                         force_non_stream=True,
                         user_email=user_email,
                         session_id=session_id,
@@ -1813,6 +1968,7 @@ async def synthesize_memo(
             logger.warning("OpenAI synthesis failed (%s); using structured prose builder", exc)
 
         if memo:
+            memo = _ensure_balanced_memo(memo, artifact)
             rich = render_rich_json(artifact)
             # Try teammate's new rich_builder for richer structured output
             # (NOW passing real bundle + specialist_findings so it can build
@@ -1833,6 +1989,18 @@ async def synthesize_memo(
                     logger.info("[VISUALS-RICH] build_from_native returned None — falling back to render_rich_json artifact")
             except Exception:
                 logger.exception("[VISUALS-RICH] build_from_native failed; keeping artifact-based rich payload")
+            # Portfolio-scope: override rich with portfolio-specific payload when we have live context
+            if portfolio_context and is_portfolio_scope_query(objective):
+                try:
+                    from finagent.run_agent import _build_portfolio_rich_payload
+                    portfolio_rich = _build_portfolio_rich_payload(portfolio_context, benchmark="NIFTY50")
+                    if portfolio_rich:
+                        rich = portfolio_rich
+                        logger.info("[VISUALS-RICH] portfolio rich payload wired | charts=%d | tables=%d",
+                                    len(portfolio_rich.get("charts", [])), len(portfolio_rich.get("tables", [])))
+                except Exception:
+                    logger.exception("[VISUALS-RICH] portfolio rich payload failed; keeping existing rich")
+            rich = _attach_markdown_body(rich, memo)
             # Safety net: ensure visuals are emitted even if no tokens streamed
             await _emit_visuals_once()
             return SynthesisResult(memo=memo, via="openai", used_sources=used, artifact=artifact, rich=rich)
@@ -1855,6 +2023,18 @@ async def synthesize_memo(
             )
     except Exception:
         logger.exception("[VISUALS-RICH-FALLBACK] build_from_native failed; keeping artifact-based rich payload")
+    # Portfolio-scope: override rich with portfolio-specific payload when we have live context
+    if portfolio_context and is_portfolio_scope_query(objective):
+        try:
+            from finagent.run_agent import _build_portfolio_rich_payload
+            portfolio_rich = _build_portfolio_rich_payload(portfolio_context, benchmark="NIFTY50")
+            if portfolio_rich:
+                rich = portfolio_rich
+                logger.info("[VISUALS-RICH-FALLBACK] portfolio rich payload wired | charts=%d | tables=%d",
+                            len(portfolio_rich.get("charts", [])), len(portfolio_rich.get("tables", [])))
+        except Exception:
+            logger.exception("[VISUALS-RICH-FALLBACK] portfolio rich payload failed; keeping existing rich")
+    rich = _attach_markdown_body(rich, memo)
     # Safety net: emit visuals in fallback path too
     await _emit_visuals_once()
     return SynthesisResult(memo=memo, via=f"artifact:{mode.value}", used_sources=used, artifact=artifact, rich=rich)

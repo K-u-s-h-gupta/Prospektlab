@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from urllib.parse import quote_plus
@@ -22,6 +23,9 @@ from finagent.tools.web.http_fetcher import fetch
 logger = logging.getLogger("finagent.news_feed")
 
 _RSS_URL = "https://news.google.com/rss/search?q={q}&hl={hl}&gl={gl}&ceid={ceid}"
+
+_NEWS_CACHE: dict[str, tuple[float, list[NewsItem]]] = {}
+_CACHE_TTL_S = 120.0  # 2 minutes cache TTL
 
 
 @dataclass
@@ -59,6 +63,14 @@ async def fetch_news(
     gl: str = "IN",
     ceid: str = "IN:en",
 ) -> list[NewsItem]:
+    cache_key = f"{query}:{limit}:{hl}:{gl}:{ceid}"
+    now = time.time()
+    if cache_key in _NEWS_CACHE:
+        cached_time, cached_items = _NEWS_CACHE[cache_key]
+        if now - cached_time < _CACHE_TTL_S:
+            logger.info("Returning cached news for query: %r", query)
+            return cached_items
+
     logger.info("[MCP-USE] research_news | tool=search_news | args={'query': '%s'}", query)
     
     fallbacks = [
@@ -101,7 +113,7 @@ async def fetch_news(
     india_query = f"{query} NSE" if gl == "IN" and "nse" not in query.lower() else query
     url = _RSS_URL.format(q=quote_plus(india_query), hl=hl, gl=gl, ceid=ceid)
     try:
-        res = await fetch(url, respect_robots=False, timeout_s=12.0)
+        res = await fetch(url, respect_robots=False, timeout_s=5.0)
     except Exception as exc:
         logger.warning("news rss fetch failed: %s", exc)
         try:
@@ -145,4 +157,7 @@ async def fetch_news(
         )
         if len(items) >= limit:
             break
-    return items if items else fallbacks
+    res_items = items if items else fallbacks
+    if res_items:
+        _NEWS_CACHE[cache_key] = (now, res_items)
+    return res_items

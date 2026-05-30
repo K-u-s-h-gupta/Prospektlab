@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
@@ -157,6 +158,10 @@ class ReflectionLoop:
         per_query_limit: int = 6,
         per_query_timeout: float = 25.0,
         max_total_new_docs: int = 80,
+        max_queries_per_round: int = 4,
+        max_wall_clock_seconds: float | None = None,
+        early_accept_margin: float = 2.0,
+        min_score_gain: float = 0.75,
     ) -> None:
         self.target = target
         self.session_id = session_id
@@ -165,6 +170,10 @@ class ReflectionLoop:
         self.per_query_limit = per_query_limit
         self.per_query_timeout = per_query_timeout
         self.max_total_new_docs = max_total_new_docs
+        self.max_queries_per_round = max(1, max_queries_per_round)
+        self.max_wall_clock_seconds = max_wall_clock_seconds
+        self.early_accept_margin = max(0.0, early_accept_margin)
+        self.min_score_gain = max(0.0, min_score_gain)
 
     async def run(
         self,
@@ -200,6 +209,21 @@ class ReflectionLoop:
             except Exception:
                 pass
 
+        def _quality_payload(report: QualityReport) -> dict:
+            payload = report.to_dict()
+            payload["passes"] = report.score >= self.score_threshold
+            payload["target_score"] = self.score_threshold
+            return payload
+
+        started_at = time.monotonic()
+
+        def _budget_exceeded() -> bool:
+            if budget_exceeded is not None and budget_exceeded():
+                return True
+            if self.max_wall_clock_seconds is None:
+                return False
+            return (time.monotonic() - started_at) >= self.max_wall_clock_seconds
+
         initial_conflicts = conflicts_callable(docs)
         initial_report = score_research(
             target=self.target,
@@ -209,11 +233,17 @@ class ReflectionLoop:
             entity=entity,
             conflicts=initial_conflicts,
         )
-        _emit("quality_score", phase="initial", **initial_report.to_dict())
+        _emit("quality_score", phase="initial", **_quality_payload(initial_report))
 
         histories = [initial_report]
-        if initial_report.passes:
-            logger.info("reflection skipped — initial score %.1f >= %.1f", initial_report.score, self.score_threshold)
+        near_pass = initial_report.score >= (self.score_threshold - self.early_accept_margin)
+        if initial_report.score >= self.score_threshold or near_pass:
+            logger.info(
+                "reflection skipped - initial score %.1f within %.1f of target %.1f",
+                initial_report.score,
+                self.early_accept_margin,
+                self.score_threshold,
+            )
             return ReflectionResult(
                 rounds_run=0,
                 initial_score=initial_report.score,
@@ -228,7 +258,7 @@ class ReflectionLoop:
         rounds_done = 0
 
         for round_idx in range(self.max_rounds):
-            if budget_exceeded is not None and budget_exceeded():
+            if _budget_exceeded():
                 break
             rounds_done = round_idx + 1
             queries = _build_round_queries(
@@ -237,7 +267,7 @@ class ReflectionLoop:
                 round_idx,
                 country_code=getattr(entity, "country_code", "GLOBAL"),
             )
-            decorated = [(_decorate(q, k), q, k) for q, k in queries]
+            decorated = [(_decorate(q, k), q, k) for q, k in queries][: self.max_queries_per_round]
             _emit(
                 "reflection",
                 round=rounds_done,
@@ -267,10 +297,10 @@ class ReflectionLoop:
             )
             round_new = 0
             for batch in batches:
-                if budget_exceeded is not None and budget_exceeded():
+                if _budget_exceeded():
                     break
                 for doc in batch:
-                    if budget_exceeded is not None and budget_exceeded():
+                    if _budget_exceeded():
                         break
                     key = (doc.final_url or doc.url or "").split("#", 1)[0]
                     if not key or key in seen_urls:
@@ -297,17 +327,27 @@ class ReflectionLoop:
                 conflicts=new_conflicts,
             )
             histories.append(new_report)
+            score_gain = new_report.score - current_report.score
             _emit(
                 "quality_score",
                 phase=f"reflection_round_{rounds_done}",
                 round=rounds_done,
                 new_docs_this_round=round_new,
-                **new_report.to_dict(),
+                **_quality_payload(new_report),
             )
             current_report = new_report
 
-            if new_report.passes:
+            if new_report.score >= self.score_threshold:
                 logger.info("reflection passed at round %d with score %.1f", rounds_done, new_report.score)
+                break
+            if _budget_exceeded():
+                logger.info("reflection stopped after %.1fs wall-clock budget", time.monotonic() - started_at)
+                break
+            if new_report.score >= (self.score_threshold - self.early_accept_margin):
+                logger.info("reflection accepted near-pass score %.1f after round %d", new_report.score, rounds_done)
+                break
+            if rounds_done > 1 and score_gain < self.min_score_gain:
+                logger.info("reflection stopped after low score gain %.2f in round %d", score_gain, rounds_done)
                 break
             if round_new == 0:
                 logger.info("reflection round %d returned no new docs, stopping", rounds_done)

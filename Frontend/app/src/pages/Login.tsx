@@ -7,7 +7,7 @@ import { apiSendVerification, apiForgotPassword, apiResetPassword, apiUpdateMobi
 
 export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTab = 'login' }) => {
   const navigate = useNavigate();
-  const { user, login, signup, googleLogin, updateUserMobile, logout, showToast, isAuthenticated } = useAuth();
+  const { user, login, signup, googleLogin, updateUserMobile, logout, showToast, isAuthenticated, onboarded, setOnboarded } = useAuth();
 
   // Tab State
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>(initialTab);
@@ -51,10 +51,9 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
   // Redirect if already authenticated and doesn't require completing profile
   useEffect(() => {
     if (isAuthenticated && !user?.require_mobile) {
-      const onboarded = localStorage.getItem('prospektlab_onboarded') === 'true';
       navigate(onboarded ? '/dashboard' : '/onboarding');
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, navigate, onboarded, user]);
 
   // Handle signup countdown
   useEffect(() => {
@@ -88,7 +87,6 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
               if (res.require_mobile) {
                 setRequireMobileMode(true);
               } else {
-                const onboarded = localStorage.getItem('prospektlab_onboarded') === 'true';
                 navigate(onboarded ? '/dashboard' : '/onboarding');
               }
             } catch (err: any) {
@@ -224,8 +222,7 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
     if (!email || !password) return;
     setIsSubmitting(true);
     try {
-      await login(email, password);
-      const onboarded = localStorage.getItem('prospektlab_onboarded') === 'true';
+      await login(email, password, remember);
       navigate(onboarded ? '/dashboard' : '/onboarding');
     } catch (err) {
       // handled in context
@@ -248,6 +245,7 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
     setIsSubmitting(true);
     try {
       await signup(name, email, password, mobile, code);
+      setOnboarded(false);
       navigate('/onboarding');
     } catch (err) {
       // handled in context
@@ -293,7 +291,6 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
       updateUserMobile(formattedMobile);
       showToast('Profile completed successfully!', 'success');
       setRequireMobileMode(false);
-      const onboarded = localStorage.getItem('prospektlab_onboarded') === 'true';
       navigate(onboarded ? '/dashboard' : '/onboarding');
     } catch (err: any) {
       showToast(err.message || 'Failed to update mobile number.', 'error');

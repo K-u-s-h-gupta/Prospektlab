@@ -6,6 +6,7 @@ Uses the existing yfinance integration to fetch live quotes and historical price
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, timezone
 from typing import Any
 
@@ -19,6 +20,28 @@ logger = logging.getLogger("finagent.portfolio.analytics")
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 logging.getLogger("yfinance.utils").setLevel(logging.CRITICAL)
 logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
+
+
+def _finite_float(value: Any, default: float | None = None) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if math.isfinite(number) else default
+
+
+def _positive_float(value: Any, default: float = 0.0) -> float:
+    number = _finite_float(value)
+    return number if number is not None and number > 0 else default
+
+
+def _clean_price_series(values: list[Any] | None) -> list[float]:
+    clean: list[float] = []
+    for value in values or []:
+        number = _finite_float(value)
+        if number is not None and number > 0:
+            clean.append(number)
+    return clean
 
 
 def _is_valid_ticker(symbol: str) -> bool:
@@ -93,9 +116,19 @@ def _fetch_history(ticker: str, period: str = "1y") -> dict[str, Any]:
         hist = t.history(period=norm_period, auto_adjust=True)
         if hist.empty:
             return {}
+        dates: list[str] = []
+        prices: list[float] = []
+        for idx, value in zip(hist.index, hist["Close"].tolist()):
+            price = _finite_float(value)
+            if price is None or price <= 0:
+                continue
+            dates.append(idx.strftime("%Y-%m-%d"))
+            prices.append(price)
+        if not prices:
+            return {}
         return {
-            "dates": [d.strftime("%Y-%m-%d") for d in hist.index],
-            "prices": hist["Close"].tolist(),
+            "dates": dates,
+            "prices": prices,
             "currency": t.info.get("currency", "INR"),
         }
     except Exception as exc:
@@ -113,13 +146,18 @@ def _fetch_quote(ticker: str) -> dict[str, Any]:
         hist = t.history(period="5d", auto_adjust=True)
         if hist.empty:
             return {}
-        last = float(hist["Close"].iloc[-1])
-        prev = float(hist["Close"].iloc[-2]) if len(hist) > 1 else last
+        closes = _clean_price_series(hist["Close"].tolist())
+        if not closes:
+            return {}
+        last = closes[-1]
+        prev = closes[-2] if len(closes) > 1 else last
         return {
             "price": last,
             "prev_close": prev,
             "day_change_pct": (last - prev) / prev if prev else 0.0,
             "currency": t.info.get("currency", "INR"),
+            "source": "yfinance",
+            "as_of": datetime.now(timezone.utc).isoformat(),
         }
     except Exception as exc:
         logger.debug("Yahoo quote fetch failed for %s: %s", ticker, exc)
@@ -131,7 +169,7 @@ def _weighted_nav_history(
     period: str = "1y",
 ) -> dict[str, Any]:
     """Compute portfolio NAV series by weighting individual stock histories."""
-    total_value = sum(p.market_value for p in positions if p.market_value > 0)
+    total_value = sum(_positive_float(p.market_value) for p in positions)
     if total_value <= 0:
         return {"dates": [], "prices": []}
 
@@ -139,13 +177,14 @@ def _weighted_nav_history(
     histories: list[dict[str, Any]] = []
     weights: list[float] = []
     for pos in positions:
-        if pos.market_value <= 0:
+        market_value = _positive_float(pos.market_value)
+        if market_value <= 0:
             continue
         ticker = pos.exchange_symbol
         hist = _fetch_history_cached(ticker, period)
         if hist and hist.get("prices"):
             histories.append(hist)
-            weights.append(pos.market_value / total_value)
+            weights.append(market_value / total_value)
 
     if not histories:
         return {"dates": [], "prices": []}
@@ -170,10 +209,84 @@ def _weighted_nav_history(
         for h, w, dim in zip(histories, weights, date_index_maps):
             idx = dim.get(d)
             if idx is not None:
-                nav += h["prices"][idx] * w
+                price = _finite_float(h["prices"][idx])
+                if price is not None and price > 0:
+                    nav += price * w
         navs.append(nav)
 
     return {"dates": common_dates, "prices": navs}
+
+
+def _weighted_nav_history_from_enriched(
+    positions: list[dict[str, Any]],
+    period: str = "1y",
+) -> dict[str, Any]:
+    """Compute indexed portfolio history using repriced live market weights.
+
+    The history intentionally uses the union of available holding dates, not the
+    intersection. A newly listed or recently mapped holding should not collapse a
+    5Y/MAX comparison down to only the shortest available series.
+    """
+    total_value = sum(_positive_float(p.get("market_value")) for p in positions)
+    if total_value <= 0:
+        return {"dates": [], "prices": []}
+
+    weighted_series: list[tuple[float, dict[str, float]]] = []
+    for pos in positions:
+        market_value = _positive_float(pos.get("market_value"))
+        ticker = str(pos.get("symbol") or "")
+        if market_value <= 0 or not ticker:
+            continue
+        hist = _fetch_history_cached(ticker, period)
+        dates = hist.get("dates") or []
+        prices = hist.get("prices") or []
+        if not dates or not prices:
+            continue
+
+        clean_pairs: list[tuple[str, float]] = []
+        for date, price in zip(dates, prices):
+            px = _finite_float(price)
+            if not date or px is None or px <= 0:
+                continue
+            clean_pairs.append((str(date), px))
+        if len(clean_pairs) < 2:
+            continue
+
+        first_price = clean_pairs[0][1]
+        if first_price <= 0:
+            continue
+        index_by_date = {
+            date: (price / first_price) * 100.0
+            for date, price in clean_pairs
+        }
+        weighted_series.append((market_value / total_value, index_by_date))
+
+    if not weighted_series:
+        return {"dates": [], "prices": []}
+
+    all_dates = sorted({date for _, series in weighted_series for date in series})
+    if not all_dates:
+        return {"dates": [], "prices": []}
+
+    navs: list[float] = []
+    aligned_dates: list[str] = []
+    for d in all_dates:
+        weighted_nav = 0.0
+        active_weight = 0.0
+        for weight, series in weighted_series:
+            indexed_price = series.get(d)
+            if indexed_price is None or indexed_price <= 0:
+                continue
+            weighted_nav += indexed_price * weight
+            active_weight += weight
+        if active_weight <= 0:
+            continue
+        nav = weighted_nav / active_weight
+        if nav > 0 and math.isfinite(nav):
+            navs.append(nav)
+            aligned_dates.append(d)
+
+    return {"dates": aligned_dates, "prices": navs}
 
 
 def _compute_beta(portfolio_returns: np.ndarray, benchmark_returns: np.ndarray) -> float:
@@ -184,24 +297,30 @@ def _compute_beta(portfolio_returns: np.ndarray, benchmark_returns: np.ndarray) 
     min_len = min(len(portfolio_returns), len(benchmark_returns))
     p = portfolio_returns[-min_len:]
     b = benchmark_returns[-min_len:]
-    cov = np.cov(p, b)[0, 1]
-    var_b = np.var(b)
-    return float(cov / var_b) if var_b else 0.0
+    cov = _finite_float(np.cov(p, b)[0, 1], 0.0) or 0.0
+    var_b = _finite_float(np.var(b), 0.0) or 0.0
+    beta = cov / var_b if var_b else 0.0
+    return beta if math.isfinite(beta) else 0.0
 
 
 def _max_drawdown(prices: list[float]) -> float:
     if not prices:
         return 0.0
-    arr = np.array(prices)
+    clean = _clean_price_series(prices)
+    if not clean:
+        return 0.0
+    arr = np.array(clean)
     peak = np.maximum.accumulate(arr)
-    dd = (arr - peak) / peak
-    return float(np.min(dd))
+    dd = np.divide(arr - peak, peak, out=np.zeros_like(arr), where=peak > 0)
+    result = _finite_float(np.min(dd), 0.0) or 0.0
+    return result
 
 
 def _annualized_volatility(returns: np.ndarray) -> float:
     if len(returns) < 2:
         return 0.0
-    return float(np.std(returns, ddof=1) * np.sqrt(252))
+    result = _finite_float(np.std(returns, ddof=1) * np.sqrt(252), 0.0) or 0.0
+    return result
 
 
 def _compute_correlation_matrix(
@@ -209,8 +328,8 @@ def _compute_correlation_matrix(
     period: str = "1y",
 ) -> dict[str, Any]:
     """Compute pairwise log-return correlation for top 12 equity holdings."""
-    equity_positions = [p for p in positions if p.kind == "equity" and _is_valid_ticker(p.exchange_symbol)]
-    top = sorted(equity_positions, key=lambda p: p.market_value, reverse=True)[:12]
+    equity_positions = [p for p in positions if (p.kind or "equity").strip().lower() == "equity" and _is_valid_ticker(p.exchange_symbol)]
+    top = sorted(equity_positions, key=lambda p: _positive_float(p.market_value), reverse=True)[:12]
     if len(top) < 2:
         return {"labels": [], "matrix": []}
 
@@ -218,7 +337,7 @@ def _compute_correlation_matrix(
     for pos in top:
         hist = _fetch_history_cached(pos.exchange_symbol, period=period)
         if hist and hist.get("prices") and len(hist["prices"]) > 10:
-            histories[pos.exchange_symbol] = hist["prices"]
+            histories[pos.exchange_symbol] = _clean_price_series(hist["prices"])
 
     labels = list(histories.keys())
     n = len(labels)
@@ -228,8 +347,9 @@ def _compute_correlation_matrix(
     # Compute returns
     returns: dict[str, np.ndarray] = {}
     for sym, prices in histories.items():
-        arr = np.array(prices)
-        returns[sym] = np.diff(np.log(arr))
+        arr = np.array(_clean_price_series(prices))
+        if len(arr) > 10:
+            returns[sym] = np.diff(np.log(arr))
 
     # Pairwise correlation
     matrix: list[list[float | None]] = []
@@ -244,8 +364,8 @@ def _compute_correlation_matrix(
                 if ri is not None and rj is not None:
                     min_len = min(len(ri), len(rj))
                     if min_len >= 5:
-                        corr = float(np.corrcoef(ri[-min_len:], rj[-min_len:])[0, 1])
-                        row.append(round(corr, 2))
+                        corr = _finite_float(np.corrcoef(ri[-min_len:], rj[-min_len:])[0, 1])
+                        row.append(round(corr, 2) if corr is not None else None)
                     else:
                         row.append(None)
                 else:
@@ -265,60 +385,69 @@ def compute_portfolio_analytics(
     benchmark: str = "NIFTY50",
 ) -> dict[str, Any]:
     """Full analytics bundle for the portfolio mirror."""
-    total_value = sum(p.market_value for p in positions if p.market_value > 0)
-    total_cost = sum(p.cost_basis for p in positions if p.cost_basis > 0)
-    unrealized_pnl = total_value - total_cost
-    unrealized_pnl_pct = (unrealized_pnl / total_cost) if total_cost else 0.0
-
-    # Per-holding live quotes + P/L
     enriched_positions = []
-    day_change_total = 0.0
     for pos in positions:
         ticker = pos.exchange_symbol
-        quote = _fetch_quote(ticker) if pos.kind == "equity" else {}
-        price = quote.get("price", pos.last_price or 0)
-        day_change_pct = quote.get("day_change_pct", 0)
-        # For MFs, day change is not available intraday; skip
-        if pos.kind == "mf":
+        kind = (pos.kind or "equity").strip().lower()
+        quote = _fetch_quote(ticker) if kind == "equity" else {}
+        quote_price = _positive_float(quote.get("price"))
+        mirror_price = _positive_float(pos.last_price)
+        price = quote_price or mirror_price
+        day_change_pct = _finite_float(quote.get("day_change_pct"), 0.0) or 0.0
+        if kind == "mf":
             day_change_pct = 0.0
-        mkt_val = price * pos.quantity if price and pos.quantity else pos.market_value
-        cost = pos.cost_basis or (pos.avg_cost * pos.quantity)
+        quantity = _positive_float(pos.quantity)
+        mkt_val = price * quantity if price and quantity else _positive_float(pos.market_value)
+        cost = _positive_float(pos.cost_basis) or (_positive_float(pos.avg_cost) * quantity)
         pnl = mkt_val - cost if cost else None
         pnl_pct = (pnl / cost) if cost else None
-        if pnl is not None:
-            day_change_total += mkt_val * (day_change_pct or 0)
         enriched_positions.append({
             "symbol": pos.exchange_symbol,
             "name": pos.name or pos.symbol,
             "exchange": pos.exchange,
-            "quantity": pos.quantity,
-            "avg_cost": pos.avg_cost,
+            "quantity": quantity,
+            "avg_cost": _positive_float(pos.avg_cost),
             "last_price": price,
             "market_value": mkt_val,
             "cost_basis": cost,
             "unrealized_pnl": pnl,
             "unrealized_pnl_pct": pnl_pct,
             "day_change_pct": day_change_pct,
-            "weight": mkt_val / total_value if total_value else 0,
-            "kind": pos.kind,
+            "day_change_value": mkt_val * day_change_pct,
+            "weight": 0.0,
+            "kind": kind,
             "sector": pos.sector,
             "industry": pos.industry,
             "isin": pos.isin,
             "amfi": pos.amfi,
+            "price_source": quote.get("source") if quote_price else ("mirror" if mirror_price else "unavailable"),
+            "as_of": quote.get("as_of") or pos.as_of,
         })
+
+    total_value = sum(_positive_float(p.get("market_value")) for p in enriched_positions)
+    total_cost = sum(_positive_float(p.get("cost_basis")) for p in enriched_positions)
+    unrealized_pnl = total_value - total_cost if total_cost else 0.0
+    unrealized_pnl_pct = (unrealized_pnl / total_cost) if total_cost else 0.0
+    day_change_total = sum(_finite_float(p.get("day_change_value"), 0.0) or 0.0 for p in enriched_positions)
+    for p in enriched_positions:
+        p["weight"] = (_positive_float(p.get("market_value")) / total_value) if total_value else 0.0
 
     # Benchmark ticker mapping
     benchmark_tickers = {
         "NIFTY50": "^NSEI",
         "NIFTYMIDCAP": "^NSEMDCP50",
+        "MIDCAP150": "^NSEMDCP50",
         "SENSEX": "^BSESN",
         "NIFTYBANK": "^NSEBANK",
         "NIFTYIT": "^CNXIT",
+        "NEXT50": "^NSMIDCP",
+        "SMALLCAP250": "^CNXSC",
     }
-    benchmark_ticker = benchmark_tickers.get(benchmark, "^NSEI")
+    benchmark_key = (benchmark or "NIFTY50").upper()
+    benchmark_ticker = benchmark_tickers.get(benchmark_key, "^NSEI")
 
     # Portfolio NAV history vs benchmark
-    port_hist = _weighted_nav_history(positions, period=period)
+    port_hist = _weighted_nav_history_from_enriched(enriched_positions, period=period)
     bench_hist = _fetch_history_cached(benchmark_ticker, period=period)
 
     # Risk metrics
@@ -326,11 +455,13 @@ def compute_portfolio_analytics(
     volatility = 0.0
     max_dd = 0.0
     if port_hist.get("prices") and len(port_hist["prices"]) > 10:
-        port_rets = np.diff(np.log(np.array(port_hist["prices"])))
+        port_prices = _clean_price_series(port_hist["prices"])
+        port_rets = np.diff(np.log(np.array(port_prices)))
         max_dd = _max_drawdown(port_hist["prices"])
         volatility = _annualized_volatility(port_rets)
         if bench_hist.get("prices") and len(bench_hist["prices"]) > 10:
-            bench_rets = np.diff(np.log(np.array(bench_hist["prices"])))
+            bench_prices = _clean_price_series(bench_hist["prices"])
+            bench_rets = np.diff(np.log(np.array(bench_prices)))
             beta = _compute_beta(port_rets, bench_rets)
 
     # Top-5 concentration

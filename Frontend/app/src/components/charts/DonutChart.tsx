@@ -9,9 +9,11 @@ interface DonutChartProps {
   labels: string[];
   data: number[];
   title: string;
+  valueKind?: 'currency' | 'percent';
+  unit?: string;
 }
 
-export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title }) => {
+export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, valueKind = 'currency', unit }) => {
   const PREDEFINED_COLORS = [
     '#38BDF8', // Cyan
     '#818CF8', // Indigo
@@ -55,15 +57,17 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title }) =
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'right' as const,
+        position: 'bottom' as const,
+        align: 'center' as const,
         labels: {
           color: ChartColors.textPrimary,
           font: {
-            size: 11
+            size: 10
           },
-          padding: 10,
+          padding: 8,
           boxWidth: 8,
-          boxHeight: 8
+          boxHeight: 8,
+          usePointStyle: true,
         }
       },
       title: {
@@ -74,13 +78,17 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title }) =
           size: 12,
           weight: 'normal' as const
         },
-        padding: { bottom: 12 }
+        padding: { bottom: 8 }
       },
       tooltip: {
         callbacks: {
           label: (context: any) => {
             const val = context.raw;
             const pct = totalVal > 0 ? (val / totalVal) * 100 : 0;
+            const isPercent = valueKind === 'percent' || unit === '%';
+            if (isPercent) {
+              return ` ${val.toFixed(1)}%`;
+            }
             const formattedVal = '₹' + val.toLocaleString('en-IN', { maximumFractionDigits: 0 });
             return ` ${formattedVal} · ${pct.toFixed(1)}% of portfolio`;
           }
@@ -97,7 +105,9 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title }) =
       const { ctx, width, height } = chart;
       ctx.save();
       
-      const formattedTotal = '₹' + Math.round(totalVal).toLocaleString('en-IN');
+      const isPercent = valueKind === 'percent' || unit === '%';
+      const centerLabel = isPercent ? '100%' : '₹' + Math.round(totalVal).toLocaleString('en-IN');
+      const subLabel = isPercent ? 'Allocation' : 'Total Value';
       
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -106,15 +116,15 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title }) =
       const textX = chart.getDatasetMeta(0).data[0]?.x || width / 2;
       const textY = chart.getDatasetMeta(0).data[0]?.y || height / 2;
       
-      // Draw "Total Value" label
-      ctx.font = 'normal 11px sans-serif';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.fillText('Total Value', textX, textY - 10);
+      // Draw sub label
+      ctx.font = 'normal 10px sans-serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.fillText(subLabel, textX, textY - 9);
       
-      // Draw the formatted price
-      ctx.font = 'bold 13px sans-serif';
+      // Draw the main center value (never fake currency for percent donuts)
+      ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = '#FFFFFF';
-      ctx.fillText(formattedTotal, textX, textY + 8);
+      ctx.fillText(centerLabel, textX, textY + 7);
       
       ctx.restore();
     }

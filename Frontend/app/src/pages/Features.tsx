@@ -21,7 +21,7 @@ const FEATURES: Feature[] = [
     icon: MessageSquare,
     title: "Ask Anything. Get Answers in 8 Seconds.",
     subtitle: "Natural language → Institutional analysis",
-    description: "Type in plain English. No jargon required. Mark understands context, follows up, and synthesizes data across multiple sources into a single, readable response with cited numbers.",
+    description: "Type in plain English. No jargon required. Arthik understands context, follows up, and synthesizes data across multiple sources into a single, readable response with cited numbers.",
     bullets: [
       "Is Reliance's debt ratio a long-term risk?",
       "Compare TCS vs Infosys on operating margins and capital efficiency",
@@ -35,7 +35,7 @@ const FEATURES: Feature[] = [
     icon: Activity,
     title: "Live Market Pulse. Not Yesterday's News.",
     subtitle: "Real-time NSE + global feeds",
-    description: "Your dashboard tracks Nifty, Sensex, Bank Nifty, currencies, crypto, and commodities in real-time. But unlike a screener, Mark interprets the moves and tells you what actually matters for your holdings.",
+    description: "Your dashboard tracks Nifty, Sensex, Bank Nifty, currencies, crypto, and commodities in real-time. But unlike a screener, Arthik interprets the moves and tells you what actually matters for your holdings.",
     bullets: [
       "Live NSE, BSE, and US market tickers with sparklines",
       "AI-generated market summaries from 4+ sources",
@@ -63,7 +63,7 @@ const FEATURES: Feature[] = [
     icon: FileText,
     title: "Deep Research Memos. In Minutes, Not Days.",
     subtitle: "8-phase research loops",
-    description: "Trigger an 8-phase deep research loop that reads annual filings, compares peer statement structures, checks news sentiment anomalies, and writes a full analyst-grade memo. What used to take a research associate 2 days, Mark does in 90 seconds.",
+    description: "Trigger an 8-phase deep research loop that reads annual filings, compares peer statement structures, checks news sentiment anomalies, and writes a full analyst-grade memo. What used to take a research associate 2 days, Arthik does in 90 seconds.",
     bullets: [
       "Automated annual report parsing and key metric extraction",
       "Peer benchmarking across up to 6 competitors",
@@ -77,7 +77,7 @@ const FEATURES: Feature[] = [
     icon: Shield,
     title: "Portfolio Risk Audit. Know Your Blind Spots.",
     subtitle: "Concentration, correlation, beta",
-    description: "Upload your trade statement. Mark cross-checks sector concentration, correlation heatmaps, portfolio beta, and hidden leverage. It will warn you when 60% of your wealth is silently exposed to one macro factor.",
+    description: "Upload your trade statement. Arthik cross-checks sector concentration, correlation heatmaps, portfolio beta, and hidden leverage. It will warn you when 60% of your wealth is silently exposed to one macro factor.",
     bullets: [
       "Sector concentration and overlap detection",
       "Portfolio beta vs Nifty correlation analysis",
@@ -91,7 +91,7 @@ const FEATURES: Feature[] = [
     icon: BarChart3,
     title: "Earnings Edge. Position Before the Move.",
     subtitle: "Pre-result intelligence",
-    description: "Most retail investors get blindsided by earnings gaps. Mark tracks upcoming result dates, whisper expectations, historical beat/miss rates, and options flow to help you position — or protect — before the announcement.",
+    description: "Most retail investors get blindsided by earnings gaps. Arthik tracks upcoming result dates, whisper expectations, historical beat/miss rates, and options flow to help you position — or protect — before the announcement.",
     bullets: [
       "Earnings calendar synced to your watchlist",
       "Historical beat/miss rate per company",
@@ -163,7 +163,7 @@ export const Features: React.FC = () => {
             That Institutions Pay Lakhs For
           </h1>
           <p style={{ fontSize: 17, color: 'var(--text-secondary)', lineHeight: 1.65, maxWidth: 620, margin: '0 auto 32px' }}>
-            Mark is not one chatbot. It is a coordinator of 8 specialist AI agents, each trained on a specific domain of financial analysis. Intent routing, market data, fundamentals, valuation, risk, news research, earnings, and portfolio audit. Working together, in parallel, in seconds.
+            Arthik is not one chatbot. It is a coordinator of 8 specialist AI agents, each trained on a specific domain of financial analysis. Intent routing, market data, fundamentals, valuation, risk, news research, earnings, and portfolio audit. Working together, in parallel, in seconds.
           </p>
           <button onClick={() => navigate('/onboarding')} style={{ background: 'var(--gradient-brand)', color: '#0f172a', border: 'none', padding: '16px 32px', borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: 'pointer', boxShadow: '0 0 24px rgba(56,189,248,0.15)' }}>
             Try It Free <ArrowRight size={18} style={{ display: 'inline', verticalAlign: 'middle', marginLeft: 6 }} />

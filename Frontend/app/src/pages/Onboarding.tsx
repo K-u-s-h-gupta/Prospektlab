@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { 
   Brain, 
   TrendingUp, 
@@ -42,6 +43,7 @@ const DEMO_PORTFOLIO: PortfolioItem[] = [
 
 export const Onboarding: React.FC = () => {
   const navigate = useNavigate();
+  const { setOnboarded } = useAuth();
   const [step, setStep] = useState(1);
 
   // Allow the page to scroll while on the onboarding screen.
@@ -195,30 +197,22 @@ export const Onboarding: React.FC = () => {
         'INE021A01026': 'ASIANPAINT',
         'INE155A01022': 'TATAMOTORS',
         'INE758T01015': 'ZOMATO',
-        'INE0LP301011': 'Physicswallah',
+        'INE0LP301011': 'PWL',
         'INF247L01DA9': 'MOMF'
       };
       const targetSym = ISIN_TO_SYMBOL[cleanSym] || cleanSym;
       let resolvedName = p.name || '';
       let resolvedSector = p.sector || 'General';
       
-      if (targetSym === 'MOMF') {
-        resolvedName = 'Motilal Oswal Manufacturing Fund - Direct Growth';
-        resolvedSector = 'Thematic - Manufacturing';
-      } else if (targetSym === 'Physicswallah') {
-        resolvedName = 'Physicswallah Limited';
-        resolvedSector = 'Education Services';
+      const mf = POPULAR_MUTUAL_FUNDS.find(f => f.symbol.toUpperCase() === targetSym);
+      if (mf) {
+        resolvedName = mf.name;
+        resolvedSector = mf.category;
       } else {
-        const mf = POPULAR_MUTUAL_FUNDS.find(f => f.symbol.toUpperCase() === targetSym);
-        if (mf) {
-          resolvedName = mf.name;
-          resolvedSector = mf.category;
-        } else {
-          const stock = INDIAN_STOCKS.find(s => s.symbol.toUpperCase() === targetSym);
-          if (stock) {
-            resolvedName = stock.name;
-            resolvedSector = stock.sector === 'Other' || !stock.sector ? 'General' : stock.sector;
-          }
+        const stock = INDIAN_STOCKS.find(s => s.symbol.toUpperCase() === targetSym);
+        if (stock) {
+          resolvedName = stock.name;
+          resolvedSector = stock.sector === 'Other' || !stock.sector ? 'General' : stock.sector;
         }
       }
 
@@ -409,7 +403,7 @@ export const Onboarding: React.FC = () => {
     
     const finalPortfolio = portfolio.length > 0 ? portfolio : DEMO_PORTFOLIO;
     localStorage.setItem('prospektlab_portfolio', JSON.stringify(finalPortfolio));
-    localStorage.setItem('prospektlab_onboarded', 'true');
+    setOnboarded(true);
     
     // Clear old onboarding progress
     localStorage.removeItem('prospektlab_onboarding_step');
@@ -483,7 +477,7 @@ export const Onboarding: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div style={{ textAlign: 'center' }}>
               <h2 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--text-primary)' }}>Your Institutional Edge Starts Here</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px' }}>Mark — your personal AI analyst — will address you by name and tailor every insight to your risk profile. Let's build your command center.</p>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px' }}>Arthik — your personal AI analyst — will address you by name and tailor every insight to your risk profile. Let's build your command center.</p>
             </div>
 
             {/* Name capture - new and critical */}
@@ -496,8 +490,8 @@ export const Onboarding: React.FC = () => {
             />
 
             <div style={{ textAlign: 'center', marginTop: '8px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>How do you want Mark to think for you?</h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>This determines which red flags and opportunities Mark prioritizes in your daily briefings.</p>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>How do you want Arthik to think for you?</h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>This determines which red flags and opportunities Arthik prioritizes in your daily briefings.</p>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -577,7 +571,7 @@ export const Onboarding: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             <div style={{ textAlign: 'center' }}>
               <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Upload Your Portfolio. See the Hidden Risks.</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>In 8 seconds, Mark will audit your real holdings for concentration risk, overlap, and leverage — the things your broker won't tell you.</p>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>In 8 seconds, Arthik will audit your real holdings for concentration risk, overlap, and leverage — the things your broker won't tell you.</p>
             </div>
 
             {/* Error Message Box */}
@@ -973,7 +967,7 @@ export const Onboarding: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             <div style={{ textAlign: 'center' }}>
               <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Build Your Opportunity Radar</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Add the stocks you are watching. Mark will track earnings dates, run valuation screens, and alert you before the crowd moves.</p>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Add the stocks you are watching. Arthik will track earnings dates, run valuation screens, and alert you before the crowd moves.</p>
             </div>
 
             {/* Custom Input Form with Autocomplete Suggestions */}
@@ -1141,12 +1135,12 @@ export const Onboarding: React.FC = () => {
           </div>
         )}
 
-        {/* STEP 4: MEET MARK */}
+        {/* STEP 4: MEET ARTHIK */}
         {step === 4 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             <div style={{ textAlign: 'center' }}>
               <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Your Edge Is Live. Deploy It.</h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Mark is calibrated on your risk profile, portfolio, and watchlist. Ask your first question. Get institutional-grade analysis in 8 seconds.</p>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>Arthik is calibrated on your risk profile, portfolio, and watchlist. Ask your first question. Get institutional-grade analysis in 8 seconds.</p>
             </div>
 
             {/* Glass Avatar Card */}
@@ -1180,7 +1174,7 @@ export const Onboarding: React.FC = () => {
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>Mark · Online</span>
+                <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>Arthik · Online</span>
                 <span className="badge badge-success" style={{ fontSize: '10px', alignSelf: 'center' }}>Status: Live</span>
               </div>
 

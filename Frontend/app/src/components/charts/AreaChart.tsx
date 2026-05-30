@@ -7,34 +7,53 @@ interface AreaChartProps {
   data: number[];
   title: string;
   unit?: string;
+  comparisonData?: number[];
+  comparisonTitle?: string;
 }
 
-export const AreaChart: React.FC<AreaChartProps> = ({ labels, data, title, unit = 'Cr' }) => {
+export const AreaChart: React.FC<AreaChartProps> = ({ labels, data, title, unit = 'Cr', comparisonData, comparisonTitle }) => {
+  const datasets: any[] = [
+    {
+      fill: true,
+      label: title,
+      data: data,
+      borderColor: ChartColors.primary,
+      backgroundColor: (context: any) => {
+        const chart = context.chart;
+        const { ctx, chartArea } = chart;
+        if (!chartArea) return null;
+        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        gradient.addColorStop(0, ChartColors.primaryGradStart);
+        gradient.addColorStop(1, ChartColors.primaryGradStop);
+        return gradient;
+      },
+      borderWidth: 2,
+      tension: 0.3,
+      pointBackgroundColor: ChartColors.primary,
+      pointBorderColor: '#0D0D0D',
+      pointHoverRadius: 6,
+      pointHoverBackgroundColor: ChartColors.primary,
+    },
+  ];
+  if (comparisonData && comparisonData.length > 0) {
+    datasets.push({
+      fill: false,
+      label: comparisonTitle || 'Comparison',
+      data: comparisonData,
+      borderColor: ChartColors.accentCyan,
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderDash: [5, 5],
+      tension: 0.3,
+      pointBackgroundColor: ChartColors.accentCyan,
+      pointBorderColor: '#0D0D0D',
+      pointHoverRadius: 6,
+      pointHoverBackgroundColor: ChartColors.accentCyan,
+    });
+  }
   const chartData = {
     labels,
-    datasets: [
-      {
-        fill: true,
-        label: title,
-        data: data,
-        borderColor: ChartColors.primary,
-        backgroundColor: (context: any) => {
-          const chart = context.chart;
-          const { ctx, chartArea } = chart;
-          if (!chartArea) return null;
-          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          gradient.addColorStop(0, ChartColors.primaryGradStart);
-          gradient.addColorStop(1, ChartColors.primaryGradStop);
-          return gradient;
-        },
-        borderWidth: 2,
-        tension: 0.3,
-        pointBackgroundColor: ChartColors.primary,
-        pointBorderColor: '#0D0D0D',
-        pointHoverRadius: 6,
-        pointHoverBackgroundColor: ChartColors.primary,
-      },
-    ],
+    datasets,
   };
 
   const options = {
@@ -42,7 +61,13 @@ export const AreaChart: React.FC<AreaChartProps> = ({ labels, data, title, unit 
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        display: false,
+        display: datasets.length > 1,
+        labels: {
+          color: ChartColors.textPrimary,
+          font: { size: 11 },
+          boxWidth: 12,
+          usePointStyle: true,
+        },
       },
       title: {
         display: true,

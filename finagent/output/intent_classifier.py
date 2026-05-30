@@ -4,6 +4,7 @@ import re
 
 from finagent.geo.entity_resolver import ResolvedEntity, resolve_entities
 from finagent.output.contracts import OutputMode, ResponseDepth
+from finagent.output.query_guards import is_portfolio_comparison_query
 
 
 _COMPARE_TERMS = ("compare", " vs ", " versus ", "peer", "peers", "against")
@@ -49,7 +50,8 @@ def classify_output_mode(
 
     # ── Comparison detection takes priority over depth override ──
     # "TCS vs Infosys" should always produce a comparison, even in deep mode
-    if any(term in lower for term in _COMPARE_TERMS):
+    # But portfolio-vs-benchmark queries must NOT be misclassified as company comparisons.
+    if any(term in lower for term in _COMPARE_TERMS) and not is_portfolio_comparison_query(query):
         return OutputMode.COMPANY_COMPARISON
 
     if depth == ResponseDepth.DEEP:

@@ -14,8 +14,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement; requireOnboarded?
   children, 
   requireOnboarded = false 
 }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-  const onboarded = localStorage.getItem('prospektlab_onboarded') === 'true';
+  const { isAuthenticated, isLoading, onboarded } = useAuth();
 
   if (isLoading) {
     return (
@@ -42,8 +41,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement; requireOnboarded?
 
 // Route for anonymous users only
 const PublicRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-  const onboarded = localStorage.getItem('prospektlab_onboarded') === 'true';
+  const { isAuthenticated, isLoading, onboarded } = useAuth();
 
   if (isLoading) {
     return (

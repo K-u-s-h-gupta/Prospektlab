@@ -40,6 +40,7 @@ export const ChartColors = {
   secondary: '#818CF8', // Indigo
   secondaryDim: 'rgba(129, 140, 248, 0.12)',
 
+  accentCyan: '#22D3EE', // Bright cyan accent
   tertiary: '#34D399', // Emerald / Profit
   profit: '#34D399',
   loss: '#FB7185',

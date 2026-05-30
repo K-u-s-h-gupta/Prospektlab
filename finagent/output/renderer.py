@@ -1,48 +1,58 @@
 from __future__ import annotations
 
-import base64
+from finagent.output.contracts import AnswerArtifact, ResponseDepth
 
-from finagent.output.contracts import AnswerArtifact, ResponseDepth, VisualSection
+_MISSING_VALUES = {"", "n/a", "na", "none", "null", "-", "\u2014"}
+
+
+def _has_display_value(value) -> bool:
+    if value is None:
+        return False
+    return str(value).strip().lower() not in _MISSING_VALUES
+
+
+def _table_rows_with_values(table) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for row in table.rows or []:
+        if isinstance(row, dict):
+            cells = [row.get(col, "") for col in table.columns]
+        elif isinstance(row, (list, tuple)):
+            cells = list(row)
+        else:
+            cells = [row]
+        padded = cells[: len(table.columns)] + [""] * max(0, len(table.columns) - len(cells))
+        if any(_has_display_value(cell) for cell in padded[1:]):
+            rows.append([str(cell) for cell in padded])
+    return rows
 
 
 def render_markdown(artifact: AnswerArtifact) -> str:
-    """Render artifact as markdown with visual section support."""
+    """Render a prose-first markdown answer.
+
+    Visual widgets are delivered through `render_rich_json`; this markdown path
+    intentionally omits visual placeholders so fallback answers do not end with
+    duplicate or empty chart sections.
+    """
     lines: list[str] = []
-    
-    # Header
+
     if artifact.depth == ResponseDepth.DEEP:
-        lines.extend([
-            f"# {artifact.title}",
-            "",
-            artifact.summary,
-            "",
-        ])
+        lines.extend([f"# {artifact.title}", "", artifact.summary, ""])
     else:
-        lines.extend([
-            f"### {artifact.title}",
-            "",
-            artifact.summary,
-            "",
-        ])
-    
-    # Render visual sections in order
-    if artifact.visual_sections:
-        for section in sorted(artifact.visual_sections, key=lambda s: s.order):
-            lines.extend(_render_visual_section_markdown(section))
-    
-    # Traditional tables (fallback)
+        lines.extend([f"### {artifact.title}", "", artifact.summary, ""])
+
     for table in artifact.tables:
         if not table.columns:
+            continue
+        rows = _table_rows_with_values(table)
+        if not rows:
             continue
         lines.append(f"#### {table.title}")
         lines.append("| " + " | ".join(table.columns) + " |")
         lines.append("|" + "|".join("---" for _ in table.columns) + "|")
-        for row in table.rows:
-            padded = list(row[: len(table.columns)]) + [""] * max(0, len(table.columns) - len(row))
-            lines.append("| " + " | ".join(str(cell) for cell in padded) + " |")
+        for row in rows:
+            lines.append("| " + " | ".join(row) + " |")
         lines.append("")
-    
-    # Traditional sections (fallback)
+
     for section in artifact.sections:
         if not section.body:
             continue
@@ -51,33 +61,30 @@ def render_markdown(artifact: AnswerArtifact) -> str:
         if section.confidence:
             lines.append(f"\nConfidence: {section.confidence}")
         lines.append("")
-    
-    # Limitations
+
     if artifact.limitations:
         lines.append("#### Limitations")
         for item in artifact.limitations:
             lines.append(f"- {item}")
         lines.append("")
-    
-    # Follow-ups
+
     if artifact.follow_up_suggestions:
         lines.append("#### Useful follow-ups")
         for item in artifact.follow_up_suggestions[:4]:
             lines.append(f"- {item}")
         lines.append("")
-    
-    # Citations
+
     if artifact.citations:
         lines.append("#### Sources")
         for i, citation in enumerate(artifact.citations[:20], 1):
             label = citation.title or citation.domain or citation.url
             lines.append(f"{i}. [{label}]({citation.url})")
-    
+
     return "\n".join(lines).strip() + "\n"
 
 
 def render_rich_json(artifact: AnswerArtifact) -> dict:
-    """Return a backend/frontend-friendly structured payload converging on RichResponse."""
+    """Return a backend/frontend-friendly structured payload."""
     return {
         "mode": getattr(artifact.mode, "value", str(artifact.mode)),
         "title": artifact.title,
@@ -93,6 +100,7 @@ def render_rich_json(artifact: AnswerArtifact) -> dict:
                 "is_partial": c.is_partial,
             }
             for c in artifact.metric_cards
+            if _has_display_value(c.value)
         ],
         "charts": [
             {
@@ -109,10 +117,12 @@ def render_rich_json(artifact: AnswerArtifact) -> dict:
                         "unit": s.unit,
                     }
                     for s in ch.series
+                    if s.data
                 ],
                 "is_partial": ch.is_partial,
             }
             for ch in artifact.charts
+            if ch.series and any(s.data for s in ch.series)
         ],
         "comparison_rows": [
             {
@@ -123,141 +133,8 @@ def render_rich_json(artifact: AnswerArtifact) -> dict:
                 "delta": r.delta,
             }
             for r in artifact.comparison_results
+            if _has_display_value(r.primary_value) and _has_display_value(r.secondary_value)
         ],
         "data_sources": [{"label": c.title, "url": c.url} for c in artifact.citations],
         "disclaimer": "Generated by finagent renderer. Verify with source filings and market data.",
     }
-
-
-def _render_visual_section_markdown(section: VisualSection) -> list[str]:
-    """Render a visual section as markdown with placeholders."""
-    lines = []
-    
-    # Partial data warning
-    if section.is_partial:
-        lines.append("> ⚠️ **Partial Data**: Some metrics may be incomplete")
-        lines.append("")
-    
-    # Hero metrics section
-    if section.section_type == "hero_metrics":
-        lines.append(f"#### {section.title}")
-        lines.append("")
-        
-        content = section.content if isinstance(section.content, dict) else {}
-        metric_cards = content.get("cards", []) if isinstance(content, dict) else []
-        
-        for card in metric_cards:
-            if not isinstance(card, dict):
-                continue
-            # Emoji indicators for change type
-            change_emoji = {
-                "positive": "📈",
-                "negative": "📉",
-                "neutral": "➡️"
-            }.get(card.get("change_type", "neutral"), "➡️")
-            
-            partial_note = " ⚠️" if card.get("is_partial") else ""
-            value = card.get("value", "N/A")
-            label = card.get("label", "")
-            change = card.get("change", "")
-            tooltip = card.get("tooltip", "")
-            
-            lines.append(f"**{label}**: {value}{partial_note} {change_emoji} {change}")
-            if tooltip:
-                lines.append(f"  *{tooltip}*")
-        
-        lines.append("")
-    
-    # Charts grid section
-    elif section.section_type == "charts_grid":
-        lines.append(f"#### {section.title}")
-        lines.append("")
-        
-        content = section.content if isinstance(section.content, dict) else {}
-        charts = content.get("charts", []) if isinstance(content, dict) else []
-        
-        for chart in charts:
-            if not isinstance(chart, dict):
-                continue
-            lines.append(f"**{chart.get('title', 'Chart')}**")
-            if chart.get("subtitle"):
-                lines.append(f"*{chart['subtitle']}*")
-            svg_data = chart.get("svg_data") or ""
-            if svg_data:
-                if svg_data.lstrip().startswith("<svg"):
-                    b64 = base64.b64encode(svg_data.encode("utf-8")).decode("ascii")
-                    lines.append(f"![](data:image/svg+xml;base64,{b64})")
-                else:
-                    lines.append(f"![](data:image/svg+xml;base64,{svg_data})")
-            else:
-                chart_id = chart.get("id", "chart")
-                lines.append(f"`[CHART:{chart_id}]`")
-            
-            if chart.get("is_partial"):
-                lines.append("⚠️ *Chart shows partial data*")
-            lines.append("")
-    
-    # Comparison section
-    elif section.section_type == "comparison":
-        lines.append(f"#### {section.title}")
-        lines.append("")
-        
-        content = section.content if isinstance(section.content, dict) else {}
-        
-        # Verdict
-        verdict = content.get("verdict", "") if isinstance(content, dict) else ""
-        if verdict:
-            lines.append(f"**Verdict**: {verdict}")
-            lines.append("")
-        
-        # Comparison table
-        results = content.get("results", []) if isinstance(content, dict) else []
-        if results and len(results) > 0:
-            first_result = results[0]
-            entity1 = first_result.get("primary_entity", "Company 1") if isinstance(first_result, dict) else "Company 1"
-            entity2 = first_result.get("secondary_entity", "Company 2") if isinstance(first_result, dict) else "Company 2"
-            
-            lines.append(f"| Metric | {entity1} | {entity2} | Winner |")
-            lines.append("|--------|------|------|--------|")
-            
-            for result in results:
-                if not isinstance(result, dict):
-                    continue
-                metric = result.get("metric", "")
-                p_val = result.get("primary_value", "")
-                s_val = result.get("secondary_value", "")
-                winner = result.get("winner", "")
-                delta = result.get("delta", "")
-                
-                # Winner emoji
-                winner_emoji = {
-                    "primary": "✅",
-                    "secondary": "❌",
-                    "tie": "⚖️"
-                }.get(winner, "")
-                
-                lines.append(f"| {metric} | {p_val} | {s_val} | {winner_emoji} {delta} |")
-            
-            lines.append("")
-    
-    # Insights/text section
-    elif section.section_type == "insights":
-        lines.append(f"#### {section.title}")
-        lines.append("")
-        
-        content = section.content if isinstance(section.content, dict) else {}
-        text_sections = content.get("sections", []) if isinstance(content, dict) else []
-        
-        for text_section in text_sections:
-            if not isinstance(text_section, dict):
-                continue
-            title = text_section.get("title", "")
-            body = text_section.get("body", "")
-            
-            if title:
-                lines.append(f"**{title}**")
-            if body:
-                lines.append(body)
-            lines.append("")
-    
-    return lines

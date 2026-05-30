@@ -40,10 +40,11 @@ export const IndexTickerCard: React.FC<IndexTickerCardProps> = ({ data, active, 
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.02em', color: 'var(--text-primary)' }}>
+        <span className="index-ticker-symbol" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.02em', color: 'var(--text-primary)' }}>
           {data.symbol}
         </span>
         <span
+          className="index-ticker-change-pct"
           style={{
             fontSize: 11,
             fontWeight: 600,
@@ -56,11 +57,11 @@ export const IndexTickerCard: React.FC<IndexTickerCardProps> = ({ data, active, 
         </span>
       </div>
 
-      <div style={{ fontSize: 18, fontWeight: 600, fontFamily: 'var(--font-mono)', letterSpacing: '-0.3px', color: 'var(--text-primary)' }}>
+      <div className="index-ticker-value" style={{ fontSize: 18, fontWeight: 600, fontFamily: 'var(--font-mono)', letterSpacing: '-0.3px', color: 'var(--text-primary)' }}>
         {data.value}
       </div>
 
-      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+      <div className="index-ticker-change" style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
         {data.change}
       </div>
 

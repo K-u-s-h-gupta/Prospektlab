@@ -3,6 +3,9 @@ import { AreaChart } from '../charts/AreaChart';
 import { BarChart } from '../charts/BarChart';
 import { DonutChart } from '../charts/DonutChart';
 import { MetricCard } from '../charts/MetricCard';
+import { RadarChart } from '../charts/RadarChart';
+import { TreemapChart } from '../charts/TreemapChart';
+import { TableBlock } from '../charts/TableBlock';
 import { AlertCircle, CheckCircle, ExternalLink, Newspaper, Scale, BarChart2 } from 'lucide-react';
 
 interface RichResponseProps {
@@ -14,6 +17,7 @@ interface RichResponseProps {
     secondary_entity?: any;
     metric_cards?: any[];
     charts?: any[];
+    tables?: any[];
     comparison_rows?: any[];
     strengths_risks?: any[];
     headlines?: any[];
@@ -29,14 +33,19 @@ export const RichResponse: React.FC<RichResponseProps> = ({ data }) => {
     title,
     subtitle,
     primary_entity,
-    metric_cards = [],
-    charts = [],
+    metric_cards: raw_metric_cards = [],
+    charts: raw_charts = [],
+    tables = [],
     comparison_rows = [],
     strengths_risks = [],
     headlines = [],
     data_sources = [],
     disclaimer
   } = data;
+
+  // Balance enforcer: prevent visuals from overwhelming prose
+  const metric_cards = raw_metric_cards.slice(0, 8);
+  const charts = raw_charts.slice(0, 4);
 
   return (
     <div style={{
@@ -98,8 +107,8 @@ export const RichResponse: React.FC<RichResponseProps> = ({ data }) => {
       {metric_cards.length > 0 && (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-          gap: '10px'
+          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+          gap: '8px'
         }}>
           {metric_cards.map((card, i) => (
             <MetricCard
@@ -160,6 +169,31 @@ export const RichResponse: React.FC<RichResponseProps> = ({ data }) => {
                     labels={labels}
                     data={primarySeries.values}
                     title={chart.title}
+                    valueKind={chart.valueKind}
+                    unit={primarySeries.unit}
+                  />
+                ) : chart.kind === 'multi_line' ? (
+                  <AreaChart
+                    labels={labels}
+                    data={primarySeries.values}
+                    title={chart.title}
+                    unit={chart.y_unit || 'Cr'}
+                    comparisonData={comparisonSeries?.values}
+                    comparisonTitle={comparisonSeries?.name}
+                  />
+                ) : chart.kind === 'radar' ? (
+                  <RadarChart
+                    labels={labels}
+                    data={primarySeries.values}
+                    title={chart.title}
+                    comparisonData={comparisonSeries?.values}
+                    comparisonTitle={comparisonSeries?.name}
+                  />
+                ) : chart.kind === 'treemap' ? (
+                  <TreemapChart
+                    labels={labels}
+                    data={primarySeries.values}
+                    title={chart.title}
                   />
                 ) : (
                   <div style={{ color: 'var(--text-secondary)', fontSize: '11px', textAlign: 'center', padding: '16px' }}>
@@ -173,14 +207,30 @@ export const RichResponse: React.FC<RichResponseProps> = ({ data }) => {
         </div>
       )}
 
+      {/* Portfolio / Custom Tables (e.g. Top Holdings, Risk) - horizontal scroll on mobile */}
+      {tables.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {tables.map((tbl: any, i: number) => (
+            <TableBlock
+              key={i}
+              headers={tbl.headers || []}
+              rows={tbl.rows || []}
+              title={tbl.title}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Peer Comparison Table */}
       {comparison_rows.length > 0 && (
         <div className="glass" style={{ overflow: 'hidden', background: 'rgba(15, 23, 42, 0.45)' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
           <table style={{
             width: '100%',
             borderCollapse: 'collapse',
             fontSize: '12px',
-            textAlign: 'left'
+            textAlign: 'left',
+            minWidth: '420px'
           }}>
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)', backgroundColor: 'rgba(3, 7, 18, 0.3)' }}>
@@ -215,6 +265,7 @@ export const RichResponse: React.FC<RichResponseProps> = ({ data }) => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

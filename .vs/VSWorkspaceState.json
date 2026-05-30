@@ -1,6 +1,9 @@
 {
   "ExpandedNodes": [
-    ""
+    "",
+    "\\finagent",
+    "\\finagent\\gateway",
+    "\\finagent\\portfolio"
   ],
   "PreviewInSolutionExplorer": false
 }

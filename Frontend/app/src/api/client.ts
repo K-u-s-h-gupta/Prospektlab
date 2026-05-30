@@ -11,6 +11,7 @@ export interface FinalResponse {
   mode?: string;
   final?: any;
   memo?: string;
+  memo_event?: any;
   error?: any;
 }
 
@@ -25,6 +26,23 @@ export interface AgentEventData {
     status?: 'active' | 'completed' | 'planned';
     [key: string]: any;
   };
+}
+
+export type MarketHistoryPeriod = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'MAX';
+
+export interface MarketHistoryResponse {
+  symbol: string;
+  name?: string;
+  asset_type?: string;
+  period: MarketHistoryPeriod;
+  currency?: string;
+  source: string;
+  dates: string[];
+  prices: number[];
+  change_pct?: number;
+  as_of?: string;
+  status?: string;
+  message?: string;
 }
 
 export interface PositionInput {
@@ -65,9 +83,43 @@ function apiUrl(path: string): string {
   return `${base}${p}`;
 }
 
+const AUTH_REQUEST_TIMEOUT_MS = 15000;
+const MIRROR_STATUS_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number, timeoutMessage: string): Promise<Response> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error(timeoutMessage);
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 // Token and User Helpers
 export function getAuthToken(): string | null {
-  return localStorage.getItem('prospektlab_token');
+  return localStorage.getItem('prospektlab_token') || sessionStorage.getItem('prospektlab_token');
+}
+
+function getAuthStorage(remember: boolean): Storage {
+  return remember ? localStorage : sessionStorage;
+}
+
+function removeAuthSessionKeys(storage: Storage) {
+  storage.removeItem('prospektlab_token');
+  storage.removeItem('prospektlab_user');
+}
+
+export function getStoredAuthUser(): string | null {
+  return localStorage.getItem('prospektlab_user') || sessionStorage.getItem('prospektlab_user');
 }
 
 export function getAuthHeaders(): HeadersInit {
@@ -84,7 +136,7 @@ export function getAuthHeaders(): HeadersInit {
 }
 
 function handleSessionSwitch(email: string) {
-  const lastEmail = localStorage.getItem('prospektlab_last_email');
+  const lastEmail = localStorage.getItem('prospektlab_last_email') || sessionStorage.getItem('prospektlab_last_email');
   if (lastEmail && lastEmail.toLowerCase().trim() !== email.toLowerCase().trim()) {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
@@ -94,6 +146,14 @@ function handleSessionSwitch(email: string) {
       }
     }
     keysToRemove.forEach(key => localStorage.removeItem(key));
+    const sessionKeysToRemove: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key && key.startsWith('prospektlab_')) {
+        sessionKeysToRemove.push(key);
+      }
+    }
+    sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
   }
   localStorage.setItem('prospektlab_last_email', email);
 }
@@ -107,6 +167,14 @@ function handleAuthFailure() {
     }
   }
   keysToRemove.forEach(key => localStorage.removeItem(key));
+  const sessionKeysToRemove: string[] = [];
+  for (let i = 0; i < sessionStorage.length; i++) {
+    const key = sessionStorage.key(i);
+    if (key && key.startsWith('prospektlab_')) {
+      sessionKeysToRemove.push(key);
+    }
+  }
+  sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
   if (typeof window !== 'undefined') {
     window.location.hash = '#/login';
   }
@@ -122,14 +190,19 @@ async function fetchApi(url: string, options?: RequestInit): Promise<Response> {
 
 // ── Auth Endpoints ──────────────────────────────────────────────────────
 
-export async function apiLogin(email: string, password: string): Promise<any> {
-  const res = await fetch(apiUrl('/auth/login'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+export async function apiLogin(email: string, password: string, remember: boolean = true): Promise<any> {
+  const res = await fetchWithTimeout(
+    apiUrl('/auth/login'),
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
     },
-    body: JSON.stringify({ email, password }),
-  });
+    AUTH_REQUEST_TIMEOUT_MS,
+    'Login is taking too long. Please try again in a moment.'
+  );
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -140,29 +213,38 @@ export async function apiLogin(email: string, password: string): Promise<any> {
   if (data.token) {
     const emailToSet = data.user?.email || email;
     handleSessionSwitch(emailToSet);
-    localStorage.setItem('prospektlab_token', data.token);
-    localStorage.setItem('prospektlab_user', JSON.stringify({
+    const storage = getAuthStorage(remember);
+    const otherStorage = remember ? sessionStorage : localStorage;
+    removeAuthSessionKeys(otherStorage);
+    storage.setItem('prospektlab_token', data.token);
+    storage.setItem('prospektlab_user', JSON.stringify({
       email: emailToSet,
       name: data.user?.name || 'Researcher',
     }));
+    storage.setItem('prospektlab_last_email', emailToSet);
   }
   return data;
 }
 
 export async function apiSignup(name: string, email: string, password: string, mobile: string, verificationCode: string): Promise<any> {
-  const res = await fetch(apiUrl('/auth/signup'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  const res = await fetchWithTimeout(
+    apiUrl('/auth/signup'),
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+        mobile,
+        verification_code: verificationCode,
+      }),
     },
-    body: JSON.stringify({
-      name,
-      email,
-      password,
-      mobile,
-      verification_code: verificationCode,
-    }),
-  });
+    AUTH_REQUEST_TIMEOUT_MS,
+    'Signup is taking too long. Please try again in a moment.'
+  );
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -234,13 +316,18 @@ export async function apiResetPassword(email: string, code: string, newPassword:
 }
 
 export async function apiGoogleAuth(credential: string): Promise<any> {
-  const res = await fetch(apiUrl('/auth/google'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  const res = await fetchWithTimeout(
+    apiUrl('/auth/google'),
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ credential }),
     },
-    body: JSON.stringify({ credential }),
-  });
+    AUTH_REQUEST_TIMEOUT_MS,
+    'Google sign-in is taking too long. Please try again in a moment.'
+  );
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -305,14 +392,30 @@ export async function apiLogout(): Promise<void> {
     }
   }
   keysToRemove.forEach(key => localStorage.removeItem(key));
+  const sessionKeysToRemove: string[] = [];
+  for (let i = 0; i < sessionStorage.length; i++) {
+    const key = sessionStorage.key(i);
+    if (key && key.startsWith('prospektlab_')) {
+      sessionKeysToRemove.push(key);
+    }
+  }
+  sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
 }
 
 // ── Portfolio Endpoints ──────────────────────────────────────────────────
 
 export async function getPortfolioMirror(): Promise<any> {
-  const res = await fetchApi(apiUrl('/portfolio/mirror'), {
-    headers: getAuthHeaders(),
-  });
+  const res = await fetchWithTimeout(
+    apiUrl('/portfolio/mirror'),
+    {
+      headers: getAuthHeaders(),
+    },
+    MIRROR_STATUS_TIMEOUT_MS,
+    'Portfolio status check timed out.'
+  );
+  if (res.status === 401) {
+    handleAuthFailure();
+  }
   if (!res.ok) {
     throw new Error(`Failed to load portfolio mirror: ${res.statusText}`);
   }
@@ -732,7 +835,7 @@ export function streamSession(
             }
           }
           
-          if (evType === "agent_event" || evType === "phase" || evType === "deep_pass") {
+          if (evType !== "final" && evType !== "error") {
             try {
               const parsed = JSON.parse(evData);
               onEvent({
@@ -744,7 +847,7 @@ export function streamSession(
             } catch (err) {
               console.error(`Failed to parse ${evType} event data`, err);
             }
-          } else if (evType === "memo" || evType === "final") {
+          } else if (evType === "final") {
             try {
               const parsed = JSON.parse(evData);
               closeStream();
@@ -753,7 +856,7 @@ export function streamSession(
                 onFinal(parsed);
               }
             } catch (err) {
-              console.error(`Failed to parse ${evType} event data`, err);
+              console.error(`Failed to parse final event data`, err);
             }
           } else if (evType === "error") {
             try {
@@ -829,6 +932,27 @@ export async function getMarketIndices(): Promise<any> {
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch market indices: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function getMarketHistory(
+  symbol: string,
+  period: MarketHistoryPeriod,
+  assetType?: string
+): Promise<MarketHistoryResponse> {
+  const params = new URLSearchParams({
+    symbol,
+    period,
+  });
+  if (assetType) params.set('asset_type', assetType);
+
+  const res = await fetchApi(apiUrl(`/market/history?${params.toString()}`), {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch market history: ${res.statusText}`);
   }
   return res.json();
 }

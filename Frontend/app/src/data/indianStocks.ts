@@ -28,7 +28,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "360ONE",
     "name": "360 ONE WAM LIMITED",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -40,7 +40,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "3IINFOLTD",
     "name": "3i Infotech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -52,55 +52,55 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "3PLAND",
     "name": "3P Land Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "5PAISA",
     "name": "5Paisa Capital Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "63MOONS",
     "name": "63 moons technologies limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "A2ZINFRA",
     "name": "A2Z Infra Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "AAATECH",
     "name": "AAA Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "AADHARHFC",
     "name": "Aadhar Housing Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "AAKASH",
     "name": "Aakash Exploration Services Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "AAREYDRUGS",
     "name": "Aarey Drugs & Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "AARNAV",
     "name": "Aarnav Fashions Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -118,7 +118,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AARTIDRUGS",
     "name": "Aarti Drugs Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -130,13 +130,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AARTIPHARM",
     "name": "Aarti Pharmalabs Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "AARTISURF",
     "name": "Aarti Surfactants Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -148,7 +148,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AAVAS",
     "name": "Aavas Financiers Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -166,43 +166,43 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ABBOTINDIA",
     "name": "Abbott India Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "ABCAPITAL",
     "name": "Aditya Birla Capital Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ABCOTS",
     "name": "A B Cotspin India Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "ABDL",
     "name": "Allied Blenders and Distillers Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "ABFRL",
     "name": "Aditya Birla Fashion and Retail Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "ABINFRA",
     "name": "A B Infrabuild Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "ABLBL",
     "name": "Aditya Birla Lifestyle Brands Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -214,19 +214,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ABMKNO",
     "name": "ABM Knowledgeware Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "ABREL",
     "name": "Aditya Birla Real Estate Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
     "symbol": "ABSLAMC",
     "name": "Aditya Birla Sun Life AMC Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -244,13 +244,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ACCURACY",
     "name": "Accuracy Shipping Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ACE",
     "name": "Action Construction Equipment Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -262,97 +262,97 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ACI",
     "name": "Archean Chemical Industries Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "ACL",
     "name": "Andhra Cements Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
     "symbol": "ACMESOLAR",
     "name": "Acme Solar Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ACSTECH",
     "name": "ACS Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "ACUTAAS",
     "name": "Acutaas Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "ADANIENSOL",
     "name": "Adani Energy Solutions Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "ADANIENT",
     "name": "Adani Enterprises Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "ADANIGREEN",
     "name": "Adani Green Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "ADANIPORTS",
     "name": "Adani Ports and Special Economic Zone Limited",
-    "sector": "Other",
+    "sector": "Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ADANIPOWER",
     "name": "Adani Power Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "ADFFOODS",
     "name": "ADF Foods Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "ADL",
     "name": "Archidply Decor Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
     "symbol": "ADOR",
     "name": "Ador Welding Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "ADROITINFO",
     "name": "Adroit Infotech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "ADSL",
     "name": "Allied Digital Services Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "ADVAIT",
     "name": "Advait Energy Transitions Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -364,37 +364,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ADVANIHOTR",
     "name": "Advani Hotels & Resorts (India) Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ADVENTHTL",
     "name": "Advent Hotels International Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ADVENZYMES",
     "name": "Advanced Enzyme Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "AEGISLOG",
     "name": "Aegis Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "AEGISVOPAK",
     "name": "Aegis Vopak Terminals Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "AEPL",
     "name": "Artemis Electricals and Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -424,13 +424,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AETHER",
     "name": "Aether Industries Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "AFCONS",
     "name": "Afcons Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -448,7 +448,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AFIL",
     "name": "Akme Fintrade (India) Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -460,13 +460,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AGARIND",
     "name": "Agarwal Industrial Corporation Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "AGARWALEYE",
     "name": "Dr. Agarwal's Health Care Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -478,25 +478,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AGIIL",
     "name": "Agi Infra Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "AGRITECH",
     "name": "Agri-Tech (India) Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "AGROPHOS",
     "name": "Agro Phos India Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "AHCL",
     "name": "Anlon Healthcare Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -508,7 +508,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AHLEAST",
     "name": "Asian Hotels (East) Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -520,19 +520,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AHLWEST",
     "name": "Asian Hotels (West) Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "AIAENG",
     "name": "AIA Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "AIIL",
     "name": "Authum Investment & Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -550,37 +550,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AJANTPHARM",
     "name": "Ajanta Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "AJAXENGG",
     "name": "Ajax Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "AJMERA",
     "name": "Ajmera Realty & Infra India Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
     "symbol": "AJOONI",
     "name": "Ajooni Biotech Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "AKASH",
     "name": "Akash Infra-Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "AKCAPIT",
     "name": "AK Capital Services Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -598,7 +598,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AKSHAR",
     "name": "Akshar Spintex Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -616,7 +616,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AKUMS",
     "name": "Akums Drugs and Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -640,7 +640,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ALGOQUANT",
     "name": "Algoquant Fintech Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -658,43 +658,43 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ALKALI",
     "name": "Alkali Metals Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "ALKEM",
     "name": "Alkem Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "ALKYLAMINE",
     "name": "Alkyl Amines Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "ALLCARGO",
     "name": "Allcargo Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ALLDIGI",
     "name": "Alldigi Tech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "ALLTIME",
     "name": "All Time Plastics Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "ALMONDZ",
     "name": "Almondz Global Securities Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -706,7 +706,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ALPA",
     "name": "Alpa Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -718,13 +718,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AMAGI",
     "name": "Amagi Media Labs Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "AMANTA",
     "name": "Amanta Healthcare Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -748,13 +748,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AMBIKCO",
     "name": "Ambika Cotton Mills Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "AMBUJACEM",
     "name": "Ambuja Cements Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -772,7 +772,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AMJLAND",
     "name": "Amj Land Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -784,13 +784,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AMRUTANJAN",
     "name": "Amrutanjan Health Care Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "ANANDRATHI",
     "name": "Anand Rathi Wealth Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -832,7 +832,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ANTELOPUS",
     "name": "Antelopus Selan Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -844,19 +844,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ANTHEM",
     "name": "Anthem Biosciences Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "ANUHPHR",
     "name": "Anuh Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "ANUP",
     "name": "The Anup Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -874,7 +874,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "APCL",
     "name": "Anjani Portland Cement Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -886,7 +886,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "APEX",
     "name": "Apex Frozen Foods Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -898,37 +898,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "APLLTD",
     "name": "Alembic Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "APOLLO",
     "name": "Apollo Micro Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "APOLLOHOSP",
     "name": "Apollo Hospitals Enterprise Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "APOLLOPIPE",
     "name": "Apollo Pipes Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "APOLLOTYRE",
     "name": "Apollo Tyres Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "APOLSINHOT",
     "name": "Apollo Sindoori Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -940,7 +940,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "APTUS",
     "name": "Aptus Value Housing Finance India Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -964,7 +964,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ARE&M",
     "name": "Amara Raja Energy & Mobility Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -982,19 +982,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ARIES",
     "name": "Aries Agro Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "ARIHANT",
     "name": "Arihant Foundations & Housing Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ARIHANTCAP",
     "name": "Arihant Capital Markets Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -1012,7 +1012,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ARKADE",
     "name": "Arkade Developers Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -1054,7 +1054,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ARVEE",
     "name": "Arvee Laboratories (India) Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -1066,7 +1066,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ARVINDFASN",
     "name": "Arvind Fashions Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -1090,13 +1090,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ASAL",
     "name": "Automotive Stampings and Assemblies Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "ASALCBR",
     "name": "Associated Alcohols & Breweries Ltd.",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -1108,13 +1108,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ASHIANA",
     "name": "Ashiana Housing Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ASHIKA",
     "name": "Ashika Credit Capital Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -1144,19 +1144,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ASIANENE",
     "name": "Asian Energy Services Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "ASIANHOTNR",
     "name": "Asian Hotels (North) Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ASIANPAINT",
     "name": "Asian Paints Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -1168,7 +1168,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ASKAUTOLTD",
     "name": "ASK Automotive Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -1192,19 +1192,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ASTEC",
     "name": "Astec LifeSciences Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "ASTERDM",
     "name": "Aster DM Healthcare Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "ASTRAL",
     "name": "Astral Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -1216,7 +1216,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ASTRAZEN",
     "name": "AstraZeneca Pharma India Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -1234,25 +1234,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ATAM",
     "name": "Atam Valves Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "ATGL",
     "name": "Adani Total Gas Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
     "symbol": "ATHERENERG",
     "name": "Ather Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "ATL",
     "name": "Allcargo Terminals Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -1264,7 +1264,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ATLANTAELE",
     "name": "Atlanta Electricals Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -1282,13 +1282,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ATULAUTO",
     "name": "Atul Auto Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "AUBANK",
     "name": "AU Small Finance Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -1306,7 +1306,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AUROPHARMA",
     "name": "Aurobindo Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -1324,7 +1324,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AUTOAXLES",
     "name": "Automotive Axles Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -1336,19 +1336,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AVADHSUGAR",
     "name": "Avadh Sugar & Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "AVAILFC",
     "name": "Available Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "AVALON",
     "name": "Avalon Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -1366,7 +1366,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AVG",
     "name": "AVG Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -1378,7 +1378,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AVONMORE",
     "name": "Avonmore Capital & Management Services Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -1414,25 +1414,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AXISBANK",
     "name": "Axis Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "AXISCADES",
     "name": "AXISCADES Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "AXITA",
     "name": "Axita Cotton Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "AYE",
     "name": "Aye Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -1444,19 +1444,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "AZAD",
     "name": "Azad Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "BAFNAPH",
     "name": "Bafna Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "BAGFILMS",
     "name": "B.A.G Films and Media Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
@@ -1468,7 +1468,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BAJAJ-AUTO",
     "name": "Bajaj Auto Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -1480,37 +1480,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BAJAJELEC",
     "name": "Bajaj Electricals Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "BAJAJFINSV",
     "name": "Bajaj Finserv Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "BAJAJHCARE",
     "name": "Bajaj Healthcare Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "BAJAJHFL",
     "name": "Bajaj Housing Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "BAJAJHIND",
     "name": "Bajaj Hindusthan Sugar Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "BAJAJHLDNG",
     "name": "Bajaj Holdings & Investment Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -1522,25 +1522,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BAJAJST",
     "name": "Bajaj Steel Industries Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "BAJEL",
     "name": "Bajel Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "BAJFINANCE",
     "name": "Bajaj Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "BALAJEE",
     "name": "Shree Tirupati Balajee Agro Trading Company Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -1558,7 +1558,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BALAXI",
     "name": "BALAXI PHARMACEUTICALS LIMITED",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -1582,7 +1582,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BALPHARMA",
     "name": "Bal Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -1594,7 +1594,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BALUFORGE",
     "name": "Balu Forge Industries Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -1618,7 +1618,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BANDHANBNK",
     "name": "Bandhan Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -1636,19 +1636,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BANKBARODA",
     "name": "Bank of Baroda",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "BANKINDIA",
     "name": "Bank of India",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "BANSALWIRE",
     "name": "Bansal Wire Industries Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -1732,7 +1732,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BCPL",
     "name": "BCPL Railway Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -1762,19 +1762,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BEEKAY",
     "name": "Beekay Steel Industries Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "BEL",
     "name": "Bharat Electronics Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "BELLACASA",
     "name": "Bella Casa Fashion & Retail Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -1798,13 +1798,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BEPL",
     "name": "Bhansali Engineering Polymers Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "BERGEPAINT",
     "name": "Berger Paints (I) Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -1816,13 +1816,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BETA",
     "name": "Beta Drugs Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "BFINVEST",
     "name": "BF Investment Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -1834,13 +1834,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BGRENERGY",
     "name": "BGR Energy Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "BHAGCHEM",
     "name": "Bhagiradha Chemicals & Industries Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -1864,19 +1864,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BHARATCOAL",
     "name": "Bharat Coking Coal Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "BHARATFORG",
     "name": "Bharat Forge Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "BHARATGEAR",
     "name": "Bharat Gears Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -1894,13 +1894,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BHARATWIRE",
     "name": "Bharat Wire Ropes Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "BHARTIARTL",
     "name": "Bharti Airtel Limited",
-    "sector": "Other",
+    "sector": "Telecommunication",
     "exchange": "NSE"
   },
   {
@@ -1912,7 +1912,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BHEL",
     "name": "Bharat Heavy Electricals Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -1924,13 +1924,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BIGBLOC",
     "name": "Bigbloc Construction Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "BIKAJI",
     "name": "Bikaji Foods International Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -1942,7 +1942,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BIMETAL",
     "name": "Bimetal Bearings Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -1954,7 +1954,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BIOFILCHEM",
     "name": "Biofil Chemicals & Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -1984,7 +1984,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BIRLAPREC",
     "name": "Birla Precision Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -2002,7 +2002,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BLAL",
     "name": "BEML Land Assets Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -2014,13 +2014,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BLIL",
     "name": "Balmer Lawrie Investments Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "BLISSGVS",
     "name": "Bliss GVS Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -2050,7 +2050,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BLUECOAST",
     "name": "Blue Coast Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -2062,7 +2062,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BLUEJET",
     "name": "Blue Jet Healthcare Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -2074,7 +2074,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BLUESTONE",
     "name": "BlueStone Jewellery and Lifestyle Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -2104,7 +2104,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BODALCHEM",
     "name": "Bodal Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -2140,7 +2140,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BORORENEW",
     "name": "BOROSIL RENEWABLES LIMITED",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -2158,13 +2158,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BOSCHLTD",
     "name": "Bosch Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "BPCL",
     "name": "Bharat Petroleum Corporation Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -2182,25 +2182,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BRIGHOTEL",
     "name": "Brigade Hotel Ventures Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "BRITANNIA",
     "name": "Britannia Industries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "BRNL",
     "name": "Bharat Road Network Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "BROOKS",
     "name": "Brooks Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -2236,7 +2236,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BTTL",
     "name": "Bhilwara Technical Textiles Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -2248,25 +2248,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "BUTTERFLY",
     "name": "Butterfly Gandhimathi Appliances Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "BVCL",
     "name": "Barak Valley Cements Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
     "symbol": "BYKE",
     "name": "The Byke Hospitality Ltd",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "CALSOFT",
     "name": "California Software Company Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -2290,25 +2290,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CANBK",
     "name": "Canara Bank",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "CANFINHOME",
     "name": "Can Fin Homes Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "CANHLIFE",
     "name": "Canara HSBC Life Insurance Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "CANTABIL",
     "name": "Cantabil Retail India Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -2320,25 +2320,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CAPILLARY",
     "name": "Capillary Technologies India Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "CAPITALSFB",
     "name": "Capital Small Finance Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "CAPLIPOINT",
     "name": "Caplin Point Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "CAPTRUST",
     "name": "Capital Trust Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -2362,7 +2362,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CARTRADE",
     "name": "Cartrade Tech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -2386,13 +2386,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CCCL",
     "name": "Consolidated Construction Consortium Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "CCHHL",
     "name": "Country Club Hospitality & Holidays Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -2422,13 +2422,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CEINSYS",
     "name": "Ceinsys Tech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "CELEBRITY",
     "name": "Celebrity Fashions Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -2440,7 +2440,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CEMPRO",
     "name": "Cemindia Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -2458,13 +2458,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CENTRALBK",
     "name": "Central Bank of India",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "CENTRUM",
     "name": "Centrum Capital Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -2482,7 +2482,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CERA",
     "name": "Cera Sanitaryware Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -2494,49 +2494,49 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CEWATER",
     "name": "Concord Enviro Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "CGCL",
     "name": "Capri Global Capital Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "CGPOWER",
     "name": "CG Power and Industrial Solutions Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "CHALET",
     "name": "Chalet Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "CHAMBLFERT",
     "name": "Chambal Fertilizers & Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "CHEMBOND",
     "name": "Chembond Material Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "CHEMBONDCH",
     "name": "Chembond Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "CHEMCON",
     "name": "Chemcon Speciality Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -2554,7 +2554,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CHENNPETRO",
     "name": "Chennai Petroleum Corporation Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -2572,25 +2572,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CHOLAFIN",
     "name": "Cholamandalam Investment and Finance Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "CHOLAHLDNG",
     "name": "Cholamandalam Financial Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "CIEINDIA",
     "name": "CIE Automotive India Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "CIFL",
     "name": "Capital India Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -2608,7 +2608,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CIPLA",
     "name": "Cipla Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -2620,7 +2620,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CLEANMAX",
     "name": "Clean Max Enviro Energy Solutions Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -2644,7 +2644,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CMSINFO",
     "name": "CMS Info Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -2656,7 +2656,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "COALINDIA",
     "name": "Coal India Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -2668,7 +2668,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "COCHINSHIP",
     "name": "Cochin Shipyard Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -2680,7 +2680,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "COFFEEDAY",
     "name": "Coffee Day Enterprises Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -2692,13 +2692,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "COHANCE",
     "name": "Cohance Lifesciences Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "COLPAL",
     "name": "Colgate Palmolive (India) Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -2710,7 +2710,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "COMPUSOFT",
     "name": "Compucom Software Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -2728,31 +2728,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CONCORDBIO",
     "name": "Concord Biotech Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "CONFIPET",
     "name": "Confidence Petroleum India Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
     "symbol": "CONSOFINVT",
     "name": "Consolidated Finvest & Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "CONTROLPR",
     "name": "Control Print Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "CORALFINAC",
     "name": "Coral India Finance & Housing Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -2770,7 +2770,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CORONA",
     "name": "CORONA Remedies Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -2788,7 +2788,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CPCAP",
     "name": "CP Capital Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -2800,7 +2800,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CPPLUS",
     "name": "Aditya Infotech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -2812,7 +2812,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CRAMC",
     "name": "Canara Robeco Asset Management Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -2848,7 +2848,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CROMPTON",
     "name": "Crompton Greaves Consumer Electricals Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -2860,13 +2860,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CSBBANK",
     "name": "CSB Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "CSLFINANCE",
     "name": "CSL Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -2878,7 +2878,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CUB",
     "name": "City Union Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -2902,19 +2902,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "CURAA",
     "name": "Cura Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "CYBERMEDIA",
     "name": "Cyber Media (India) Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "CYBERTECH",
     "name": "Cybertech Systems And Software Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -2950,13 +2950,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DALMIASUG",
     "name": "Dalmia Bharat Sugar and Industries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "DAMCAPITAL",
     "name": "Dam Capital Advisors Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -2986,7 +2986,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DAVANGERE",
     "name": "Davangere Sugar Company Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -2998,7 +2998,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DBEIL",
     "name": "Deepak Builders & Engineers India Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -3016,7 +3016,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DBREALTY",
     "name": "Valor Estate Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -3034,13 +3034,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DCBBANK",
     "name": "DCB Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "DCI",
     "name": "Dc Infotech And Communication Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -3088,7 +3088,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DCXINDIA",
     "name": "DCX Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -3100,7 +3100,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DECCANCE",
     "name": "Deccan Cements Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -3118,7 +3118,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DEEPAKFERT",
     "name": "Deepak Fertilizers and Petrochemicals Corporation Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -3136,7 +3136,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DELHIVERY",
     "name": "Delhivery Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -3160,7 +3160,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DEN",
     "name": "Den Networks Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -3172,7 +3172,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DENTA",
     "name": "Denta Water and Infra Solutions Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -3202,13 +3202,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DHAMPURSUG",
     "name": "Dhampur Sugar Mills Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "DHANBANK",
     "name": "Dhanlaxmi Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -3226,31 +3226,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DHRUV",
     "name": "Dhruv Consultancy Services Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "DHUNINV",
     "name": "Dhunseri Investments Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "DIACABS",
     "name": "Diamond Power Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "DIAMINESQ",
     "name": "Diamines & Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "DIAMONDYD",
     "name": "Prataap Snacks Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -3274,7 +3274,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DIGISPICE",
     "name": "DiGiSPICE Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -3298,37 +3298,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DISHTV",
     "name": "Dish TV India Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "DIVGIITTS",
     "name": "Divgi Torqtransfer Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "DIVISLAB",
     "name": "Divi's Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "DIXON",
     "name": "Dixon Technologies (India) Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "DJML",
     "name": "DJ Mediaprint & Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "DLF",
     "name": "DLF Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -3346,19 +3346,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DMCC",
     "name": "DMCC SPECIALITY CHEMICALS LIMITED",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "DNAMEDIA",
     "name": "Diligent Media Corporation Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "DODLA",
     "name": "Dodla Dairy Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -3406,19 +3406,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DPWIRES",
     "name": "D P Wires Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "DRAGARWQ",
     "name": "Dr Agarwals Eye Hospital Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "DRCSYSTEMS",
     "name": "DRC Systems India Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -3436,25 +3436,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DRREDDY",
     "name": "Dr. Reddy's Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "DSFCL",
     "name": "DCM Shriram Fine Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "DSSL",
     "name": "Dynacons Systems & Solutions Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "DTIL",
     "name": "Dhunseri Tea & Industries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -3472,19 +3472,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "DWARKESH",
     "name": "Dwarikesh Sugar Industries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "DYCL",
     "name": "Dynamic Cables Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "DYNAMATECH",
     "name": "Dynamatic Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -3496,7 +3496,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "E2E",
     "name": "E2E Networks Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -3508,7 +3508,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "EASTSILK",
     "name": "Eastern Silk Industries Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -3526,7 +3526,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ECOSMOBLTY",
     "name": "Ecos (India) Mobility & Hospitality Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -3544,7 +3544,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "EICHERMOT",
     "name": "Eicher Motors Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -3556,19 +3556,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "EIEL",
     "name": "Enviro Infra Engineers Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "EIFFL",
     "name": "Euro India Fresh Foods Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "EIHAHOTELS",
     "name": "EIH Associated Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -3598,25 +3598,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ELCIDIN",
     "name": "EL CID Investments Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ELDEHSG",
     "name": "Eldeco Housing And Industries Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ELECON",
     "name": "Elecon Engineering Company Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "ELECTCAST",
     "name": "Electrosteel Castings Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -3652,7 +3652,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ELLEN",
     "name": "Ellenbarrie Industrial Gases Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -3676,7 +3676,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "EMAMIREAL",
     "name": "Emami Realty Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -3688,7 +3688,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "EMCURE",
     "name": "Emcure Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -3712,7 +3712,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "EMMVEE",
     "name": "Emmvee Photovoltaic Power Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -3736,13 +3736,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ENDURANCE",
     "name": "Endurance Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "ENERGYDEV",
     "name": "Energy Development Company Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -3754,19 +3754,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ENIL",
     "name": "Entertainment Network (India) Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "ENRIN",
     "name": "Siemens Energy India Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "ENTERO",
     "name": "Entero Healthcare Solutions Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -3778,7 +3778,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "EPACKPEB",
     "name": "EPack Prefab Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -3796,19 +3796,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "EQUIPPP",
     "name": "Equippp Social Impact Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "EQUITASBNK",
     "name": "Equitas Small Finance Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ERIS",
     "name": "Eris Lifesciences Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -3820,7 +3820,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ESAFSFB",
     "name": "ESAF Small Finance Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -3832,7 +3832,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ESSARSHPNG",
     "name": "Essar Shipping Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -3868,7 +3868,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "EUROBOND",
     "name": "Euro Panel Products Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -3904,19 +3904,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "EXCELSOFT",
     "name": "Excelsoft Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "EXICOM",
     "name": "Exicom Tele-Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "EXIDEIND",
     "name": "Exide Industries Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -3928,19 +3928,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "EXXARO",
     "name": "Exxaro Tiles Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
     "symbol": "FABTECH",
     "name": "Fabtech Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "FACT",
     "name": "Fertilizers and Chemicals Travancore Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -3958,13 +3958,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "FCL",
     "name": "Fineotex Chemical Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "FCSSOFT",
     "name": "FCS Software Solutions Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -3976,13 +3976,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "FEDDERSHOL",
     "name": "Fedders Holding Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "FEDERALBNK",
     "name": "The Federal Bank  Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -3994,7 +3994,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "FERMENTA",
     "name": "Fermenta Biotech Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -4018,19 +4018,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "FILATFASH",
     "name": "Filatex Fashions Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "FINCABLES",
     "name": "Finolex Cables Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "FINEORG",
     "name": "Fine Organic Industries Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -4042,7 +4042,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "FINOPB",
     "name": "Fino Payments Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -4066,7 +4066,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "FIVESTAR",
     "name": "Five-Star Business Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -4090,13 +4090,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "FMGOETZE",
     "name": "Federal-Mogul Goetze (India) Limited.",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "FMNL",
     "name": "Future Market Networks Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -4108,19 +4108,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "FOODSIN",
     "name": "Foods & Inns Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "FORCEMOT",
     "name": "FORCE MOTORS LTD",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "FORTIS",
     "name": "Fortis Healthcare Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -4150,7 +4150,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "FUSION",
     "name": "Fusion Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -4168,19 +4168,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GAIL",
     "name": "GAIL (India) Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
     "symbol": "GALAPREC",
     "name": "Gala Precision Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "GALAXYSURF",
     "name": "Galaxy Surfactants Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -4192,7 +4192,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GANDHAR",
     "name": "Gandhar Oil Refinery (India) Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -4216,13 +4216,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GANESHCP",
     "name": "Ganesh Consumer Products Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "GANESHHOU",
     "name": "GANESH HOUSING LIMITED",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -4234,7 +4234,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GANGESSECU",
     "name": "Ganges Securities Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -4246,19 +4246,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GARUDA",
     "name": "Garuda Construction and Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "GATECH",
     "name": "GACM Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "GATECHDVR",
     "name": "GACM Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -4270,19 +4270,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GAUDIUMIVF",
     "name": "Gaudium IVF and Women Health Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "GAYAHWS",
     "name": "Gayatri Highways Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "GAYAPROJ",
     "name": "Gayatri Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -4300,7 +4300,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GEEKAYWIRE",
     "name": "Geekay Wires Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -4312,7 +4312,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GENCON",
     "name": "Generic Engineering Construction and Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -4330,7 +4330,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GENUSPOWER",
     "name": "Genus Power Infrastructures Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -4342,7 +4342,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GESHIP",
     "name": "The Great Eastern Shipping Company Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -4360,13 +4360,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GHCLTEXTIL",
     "name": "GHCL Textiles Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "GICHSGFIN",
     "name": "GIC Housing Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -4378,7 +4378,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GICRE",
     "name": "General Insurance Corporation of India",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -4402,13 +4402,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GIPCL",
     "name": "Gujarat Industries Power Company Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "GKENERGY",
     "name": "GK Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -4426,19 +4426,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GLAND",
     "name": "Gland Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "GLAXO",
     "name": "GlaxoSmithKline Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "GLENMARK",
     "name": "Glenmark Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -4474,13 +4474,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GLOBECIVIL",
     "name": "Globe Civil Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "GLOBUSSPR",
     "name": "Globus Spirits Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -4498,7 +4498,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GMBREW",
     "name": "GM Breweries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -4522,7 +4522,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GMRP&UI",
     "name": "GMR Power and Urban Infra Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -4534,7 +4534,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GNFC",
     "name": "Gujarat Narmada Valley Fertilizers and Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -4546,7 +4546,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GOACARBON",
     "name": "Goa Carbon Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -4558,7 +4558,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GOCOLORS",
     "name": "Go Fashion (India) Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -4576,7 +4576,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GODIGIT",
     "name": "Go Digit General Insurance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -4588,7 +4588,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GODREJCP",
     "name": "Godrej Consumer Products Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -4600,7 +4600,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GODREJPROP",
     "name": "Godrej Properties Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -4618,7 +4618,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GOKULAGRO",
     "name": "Gokul Agro Resources Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -4630,7 +4630,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GOLDTECH",
     "name": "AION-TECH SOLUTIONS LIMITED",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -4648,7 +4648,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GOPAL",
     "name": "Gopal Snacks Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -4660,19 +4660,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GPIL",
     "name": "Godawari Power And Ispat limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "GPPL",
     "name": "Gujarat Pipavav Port Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "GPTHEALTH",
     "name": "GPT Healthcare Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -4690,7 +4690,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GRANDOAK",
     "name": "Grand Oak Canyons Distillery Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -4708,7 +4708,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GRASIM",
     "name": "Grasim Industries Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -4720,7 +4720,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GRAVISSHO",
     "name": "Graviss Hospitality Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -4732,7 +4732,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GREAVESCOT",
     "name": "Greaves Cotton Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -4756,7 +4756,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GREENPOWER",
     "name": "Orient Green Power Company Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -4780,7 +4780,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GROBTEA",
     "name": "The Grob Tea Company Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -4798,19 +4798,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GRSE",
     "name": "Garden Reach Shipbuilders & Engineers Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "GRWRHITECH",
     "name": "Garware Hi-Tech Films Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "GSFC",
     "name": "Gujarat State Fertilizers & Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -4828,7 +4828,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GSS",
     "name": "GSS Infotech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -4846,7 +4846,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GTLINFRA",
     "name": "GTL Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -4858,13 +4858,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GUFICBIO",
     "name": "Gufic Biosciences Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "GUJALKALI",
     "name": "Gujarat Alkalies and Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -4876,7 +4876,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GUJGASLTD",
     "name": "Gujarat Gas Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -4894,7 +4894,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GULFOILLUB",
     "name": "Gulf Oil Lubricants India Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -4912,19 +4912,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "GVKPIL",
     "name": "GVK Power & Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "GVPIL",
     "name": "GE Power India Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "GVPTECH",
     "name": "GVP Infotech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -4936,13 +4936,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HAL",
     "name": "Hindustan Aeronautics Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "HALDER",
     "name": "Halder Venture Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -4954,19 +4954,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HALEOSLABS",
     "name": "HALEOS LABS LIMITED",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "HAPPSTMNDS",
     "name": "Happiest Minds Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "HAPPYFORGE",
     "name": "Happy Forgings Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -4978,7 +4978,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HARIOMPIPE",
     "name": "Hariom Pipe Industries Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -5002,7 +5002,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HATSUN",
     "name": "Hatsun Agro Product Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -5014,7 +5014,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HAVISHA",
     "name": "Sri Havisha Hospitality and Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -5026,13 +5026,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HBESD",
     "name": "HB Estate Developers Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
     "symbol": "HBLENGINE",
     "name": "HBL Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -5044,13 +5044,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HCC",
     "name": "Hindustan Construction Company Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "HCG",
     "name": "Healthcare Global Enterprises Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -5062,7 +5062,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HCLTECH",
     "name": "HCL Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -5074,19 +5074,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HDFCAMC",
     "name": "HDFC Asset Management Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "HDFCBANK",
     "name": "HDFC Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "HDFCLIFE",
     "name": "HDFC Life Insurance Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -5098,13 +5098,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HEALTHX",
     "name": "Health X Platform Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "HECPROJECT",
     "name": "HEC Infra Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -5122,7 +5122,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HEMIPROP",
     "name": "Hemisphere Properties India Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -5134,19 +5134,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HERITGFOOD",
     "name": "Heritage Foods Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "HEROMOTOCO",
     "name": "Hero MotoCorp Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "HESTERBIO",
     "name": "Hester Biosciences Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -5158,7 +5158,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HEXT",
     "name": "Hexaware Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -5170,7 +5170,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HGINFRA",
     "name": "H.G. Infra Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -5194,7 +5194,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HILINFRA",
     "name": "Highway Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -5212,7 +5212,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HINDALCO",
     "name": "Hindalco Industries Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -5224,31 +5224,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HINDCON",
     "name": "Hindcon Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "HINDCOPPER",
     "name": "Hindustan Copper Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "HINDOILEXP",
     "name": "Hindustan Oil Exploration Company Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "HINDPETRO",
     "name": "Hindustan Petroleum Corporation Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
     "symbol": "HINDUNILVR",
     "name": "Hindustan Unilever Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -5260,7 +5260,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HINDZINC",
     "name": "Hindustan Zinc Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -5278,7 +5278,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HITECH",
     "name": "Hi-Tech Pipes Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -5290,7 +5290,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HITECHGEAR",
     "name": "The Hi-Tech Gears Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -5308,25 +5308,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HMAAGRO",
     "name": "HMA Agro Industries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "HMVL",
     "name": "Hindustan Media Ventures Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "HNDFDS",
     "name": "Hindustan Foods Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "HOMEFIRST",
     "name": "Home First Finance Company India Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -5344,7 +5344,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HONDAPOWER",
     "name": "Honda India Power Products Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -5362,19 +5362,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HPL",
     "name": "HPL Electric & Power Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "HSCL",
     "name": "Himadri Speciality Chemical Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "HTMEDIA",
     "name": "HT Media Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
@@ -5386,7 +5386,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "HUDCO",
     "name": "Housing & Urban Development Corporation Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -5428,25 +5428,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ICICIAMC",
     "name": "ICICI Prudential Asset Management Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ICICIBANK",
     "name": "ICICI Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ICICIGI",
     "name": "ICICI Lombard General Insurance Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ICICIPRULI",
     "name": "ICICI Prudential Life Insurance Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -5464,7 +5464,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "IDBI",
     "name": "IDBI Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -5482,19 +5482,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "IDFCFIRSTB",
     "name": "IDFC First Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "IEX",
     "name": "Indian Energy Exchange Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "IFBAGRO",
     "name": "IFB Agro Industries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -5512,13 +5512,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "IFGLEXPOR",
     "name": "IFGL Refractories Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "IGARASHI",
     "name": "Igarashi Motors India Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -5536,37 +5536,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "IGL",
     "name": "Indraprastha Gas Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
     "symbol": "IGPL",
     "name": "IG Petrochemicals Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
     "symbol": "IIFL",
     "name": "IIFL Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "IIFLCAPS",
     "name": "IIFL Capital Services Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "IITL",
     "name": "Industrial Investment Trust Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "IKIO",
     "name": "IKIO Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -5578,13 +5578,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "IMAGICAA",
     "name": "Imagicaaworld Entertainment Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "IMFA",
     "name": "Indian Metals & Ferro Alloys Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -5596,7 +5596,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "INA",
     "name": "Insolation Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -5608,7 +5608,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "INDBANK",
     "name": "Indbank Merchant Banking Services Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -5620,13 +5620,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "INDHOTEL",
     "name": "The Indian Hotels Company Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "INDIACEM",
     "name": "The India Cements Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -5644,37 +5644,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "INDIANB",
     "name": "Indian Bank",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "INDIANCARD",
     "name": "Indian Card Clothing Company Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "INDIANHUME",
     "name": "Indian Hume Pipe Company Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "INDIASHLTR",
     "name": "India Shelter Finance Corporation Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "INDIGO",
     "name": "InterGlobe Aviation Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "INDIGOPNTS",
     "name": "Indigo Paints Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -5686,7 +5686,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "INDNIPPON",
     "name": "India Nippon Electricals Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -5698,19 +5698,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "INDOBORAX",
     "name": "Indo Borax & Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "INDOCO",
     "name": "Indoco Remedies Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "INDOFARM",
     "name": "Indo Farm Equipment Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -5722,37 +5722,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "INDOSTAR",
     "name": "IndoStar Capital Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "INDOTECH",
     "name": "Indo Tech Transformers Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "INDOTHAI",
     "name": "Indo Thai Securities Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "INDOUS",
     "name": "Indo Us Biotech Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "INDOWIND",
     "name": "Indowind Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "INDPRUD",
     "name": "Industrial & Prudential Investment Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -5764,31 +5764,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "INDSWFTLAB",
     "name": "Ind-Swift Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "INDTERRAIN",
     "name": "Indian Terrain Fashions Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "INDUSINDBK",
     "name": "IndusInd Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "INDUSTOWER",
     "name": "Indus Towers Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "INFOBEAN",
     "name": "InfoBeans Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -5800,7 +5800,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "INFY",
     "name": "Infosys Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -5830,19 +5830,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "INOXGREEN",
     "name": "Inox Green Energy Services Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "INOXINDIA",
     "name": "INOX India Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "INOXWIND",
     "name": "Inox Wind Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -5866,7 +5866,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "INTENTECH",
     "name": "Intense Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -5884,31 +5884,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "INVENTURE",
     "name": "Inventure Growth & Securities Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "INVPRECQ",
     "name": "Investment & Precision Castings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "IOB",
     "name": "Indian Overseas Bank",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "IOC",
     "name": "Indian Oil Corporation Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
     "symbol": "IOLCP",
     "name": "IOL Chemicals and Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -5920,19 +5920,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "IPCALAB",
     "name": "IPCA Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "IPL",
     "name": "India Pesticides Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "IRB",
     "name": "IRB Infrastructure Developers Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -5944,19 +5944,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "IRCTC",
     "name": "Indian Railway Catering And Tourism Corporation Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "IREDA",
     "name": "Indian Renewable Energy Development Agency Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "IRFC",
     "name": "Indian Railway Finance Corporation Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -5974,43 +5974,43 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "IRMENERGY",
     "name": "IRM Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "ISFT",
     "name": "Intrasoft Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "ISGEC",
     "name": "Isgec Heavy Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "ISHANCH",
     "name": "Ishan Dyes and Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "ITC",
     "name": "ITC Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "ITCHOTELS",
     "name": "ITC Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ITDC",
     "name": "India Tourism Development Corporation Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -6028,7 +6028,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "IVC",
     "name": "IL&FS Investment Managers Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -6058,7 +6058,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "J&KBANK",
     "name": "The Jammu & Kashmir Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -6070,7 +6070,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JAGSNPHARM",
     "name": "Jagsonpal Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -6100,7 +6100,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JAMNAAUTO",
     "name": "Jamna Auto Industries Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -6112,13 +6112,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JASH",
     "name": "Jash Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "JAYAGROGN",
     "name": "Jayant Agro Organics Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -6142,37 +6142,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JAYSREETEA",
     "name": "Jayshree Tea & Industries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "JBCHEPHARM",
     "name": "JB Chemicals & Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "JBMA",
     "name": "JBM Auto Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "JETFREIGHT",
     "name": "Jet Freight Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "JGCHEM",
     "name": "J.G.Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "JHS",
     "name": "JHS Svendgaard Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -6184,7 +6184,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JINDALPOLY",
     "name": "Jindal Poly Films Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
@@ -6196,7 +6196,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JINDALSTEL",
     "name": "JINDAL STEEL LIMITED",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -6220,13 +6220,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JISLDVREQS",
     "name": "Jain Irrigation Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "JISLJALEQS",
     "name": "Jain Irrigation Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -6238,7 +6238,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JKCEMENT",
     "name": "JK Cement Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -6256,7 +6256,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JKLAKSHMI",
     "name": "JK Lakshmi Cement Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -6274,7 +6274,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JLHL",
     "name": "Jupiter Life Line Hospitals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -6304,19 +6304,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JPOLYINVST",
     "name": "Jindal Poly Investment and Finance Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "JPPOWER",
     "name": "Jaiprakash Power Ventures Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "JSFB",
     "name": "Jana Small Finance Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -6334,37 +6334,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JSWCEMENT",
     "name": "JSW Cement Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "JSWDULUX",
     "name": "JSW Dulux Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "JSWENERGY",
     "name": "JSW Energy Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "JSWHL",
     "name": "JSW Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "JSWINFRA",
     "name": "JSW Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "JSWSTEEL",
     "name": "JSW Steel Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -6382,13 +6382,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JUBLCPL",
     "name": "Jubilant Agri and Consumer Products Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "JUBLFOOD",
     "name": "Jubilant Foodworks Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -6406,7 +6406,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JUNIPER",
     "name": "Juniper Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -6424,7 +6424,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "JYOTHYLAB",
     "name": "Jyothy Labs Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -6448,13 +6448,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KAJARIACER",
     "name": "Kajaria Ceramics Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
     "symbol": "KAKATCEM",
     "name": "Kakatiya Cement Sugar & Industries Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -6478,25 +6478,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KALYANIFRG",
     "name": "Kalyani Forge Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "KALYANKJIL",
     "name": "Kalyan Jewellers India Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "KAMAHOLD",
     "name": "Kama Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "KAMATHOTEL",
     "name": "Kamat Hotels (I) Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -6526,7 +6526,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KANORICHEM",
     "name": "Kanoria Chemicals & Industries Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -6538,7 +6538,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KANSAINER",
     "name": "Kansai Nerolac Paints Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -6550,25 +6550,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KARMAENG",
     "name": "Karma Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "KARURVYSYA",
     "name": "Karur Vysya Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "KAUSHALYA",
     "name": "Kaushalya Infrastructure Development Corporation Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "KAVDEFENCE",
     "name": "Kavveri Defence & Wireless Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -6592,7 +6592,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KCPSUGIND",
     "name": "KCP Sugar and Industries Corporation Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -6628,7 +6628,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KELLTONTEC",
     "name": "Kellton Tech Solutions Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -6658,7 +6658,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KFINTECH",
     "name": "Kfin Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -6670,7 +6670,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KHAICHEM",
     "name": "Khaitan Chemicals & Fertilizers Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -6682,19 +6682,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KHANDSE",
     "name": "Khandwala Securities Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "KICL",
     "name": "Kalyani Investment Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "KILITCH",
     "name": "Kilitch Drugs (India) Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -6742,7 +6742,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KIRLOSENG",
     "name": "Kirloskar Oil Engines Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -6766,31 +6766,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KITEX",
     "name": "Kitex Garments Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "KKCL",
     "name": "Kewal Kiran Clothing Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "KLBRENG-B",
     "name": "Kilburn Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "KMEW",
     "name": "Knowledge Marine & Engineering Works Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "KMSUGAR",
     "name": "K.M.Sugar Mills Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -6808,7 +6808,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KOHINOOR",
     "name": "Kohinoor Foods Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -6820,7 +6820,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KOLTEPATIL",
     "name": "Kolte - Patil Developers Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -6832,19 +6832,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KOTAKBANK",
     "name": "Kotak Mahindra Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "KOTARISUG",
     "name": "Kothari Sugars And Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "KOTHARIPET",
     "name": "Kothari Petrochemicals Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -6856,7 +6856,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KOTIC",
     "name": "Kothari Industrial Corporation Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -6868,37 +6868,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KOVAI",
     "name": "Kovai Medical Center & Hospital Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "KPEL",
     "name": "K.P. Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "KPIGREEN",
     "name": "KPI Green Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "KPIL",
     "name": "Kalpataru Projects International Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "KPITTECH",
     "name": "KPIT Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "KPL",
     "name": "Kwality Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -6922,7 +6922,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KRIDHANINF",
     "name": "Kridhan Infra Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -6934,7 +6934,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KRISHIVAL",
     "name": "Krishival Foods Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -6952,7 +6952,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KRITIKA",
     "name": "Kritika Wires Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -6982,7 +6982,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KRSNAA",
     "name": "Krsnaa Diagnostics Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -7030,13 +7030,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "KSR",
     "name": "KSR Footwear Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "KTKBANK",
     "name": "The Karnataka Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -7054,7 +7054,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LAGNAM",
     "name": "Lagnam Spintex Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -7072,25 +7072,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LALPATHLAB",
     "name": "Dr. Lal Path Labs Ltd.",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "LAMBODHARA",
     "name": "Lambodhara Textiles Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "LANCORHOL",
     "name": "Lancor Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "LANDMARK",
     "name": "Landmark Cars Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -7126,13 +7126,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LAURUSLABS",
     "name": "Laurus Labs Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "LAXMICOT",
     "name": "Laxmi Cotspin Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -7144,13 +7144,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LAXMIINDIA",
     "name": "Laxmi India Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "LCCINFOTEC",
     "name": "LCC Infotech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -7162,7 +7162,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LEMONTREE",
     "name": "Lemon Tree Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -7180,7 +7180,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LFIC",
     "name": "Lakshmi Finance & Industrial Corporation Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -7204,31 +7204,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LIBAS",
     "name": "Libas Consumer Products Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "LIBERTSHOE",
     "name": "Liberty Shoes Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "LICHSGFIN",
     "name": "LIC Housing Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "LICI",
     "name": "Life Insurance Corporation Of India",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "LIKHITHA",
     "name": "Likhitha Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -7240,7 +7240,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LINCOLN",
     "name": "Lincoln Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -7252,7 +7252,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LLOYDSENGG",
     "name": "LLOYDS ENGINEERING WORKS LIMITED",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -7264,7 +7264,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LLOYDSME",
     "name": "Lloyds Metals And Energy Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -7276,7 +7276,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LODHA",
     "name": "Lodha Developers Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -7288,19 +7288,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LORDSCHLO",
     "name": "Lords Chloro Alkali Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "LOTUSDEV",
     "name": "Sri Lotus Developers and Realty Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
     "symbol": "LOTUSEYE",
     "name": "Lotus Eye Hospital and Institute Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -7312,7 +7312,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LOYALTEX",
     "name": "Loyal Textile Mills Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -7324,19 +7324,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LT",
     "name": "Larsen & Toubro Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "LTF",
     "name": "L&T Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "LTFOODS",
     "name": "LT Foods Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -7360,7 +7360,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LUMAXTECH",
     "name": "Lumax Auto Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -7378,25 +7378,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "LXCHEM",
     "name": "Laxmi Organic Industries Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "LYKALABS",
     "name": "Lyka Labs Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "LYPSAGEMS",
     "name": "Lypsa Gems & Jewellery Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "M&M",
     "name": "Mahindra & Mahindra Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -7426,19 +7426,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MADHAVIPL",
     "name": "Madhav Infra Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "MADHUCON",
     "name": "Madhucon Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "MADRASFERT",
     "name": "Madras Fertilizers Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -7450,7 +7450,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MAGADSUGAR",
     "name": "Magadh Sugar & Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -7462,7 +7462,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MAHABANK",
     "name": "Bank of Maharashtra",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -7474,7 +7474,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MAHASTEEL",
     "name": "Mahamaya Steel Industries Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -7486,19 +7486,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MAHESHWARI",
     "name": "Maheshwari Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "MAHLIFE",
     "name": "Mahindra Lifespace Developers Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "MAHLOG",
     "name": "Mahindra Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -7516,13 +7516,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MAITHANALL",
     "name": "Maithan Alloys Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "MAJESAUT",
     "name": "Majestic Auto Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -7540,7 +7540,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MAMATA",
     "name": "Mamata Machinery Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -7552,7 +7552,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MANAKCOAT",
     "name": "Manaksia Coated Metals & Industries Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -7570,37 +7570,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MANALIPETC",
     "name": "Manali Petrochemicals Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
     "symbol": "MANAPPURAM",
     "name": "Manappuram Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "MANBA",
     "name": "Manba Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "MANCREDIT",
     "name": "Mangal Credit and Fincorp Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "MANGALAM",
     "name": "Mangalam Drugs And Organics Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "MANGLMCEM",
     "name": "Mangalam Cement Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -7618,7 +7618,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MANKIND",
     "name": "Mankind Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -7648,13 +7648,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MANYAVAR",
     "name": "Vedant Fashions Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "MAPMYINDIA",
     "name": "C.E. Info Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -7666,31 +7666,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MARATHON",
     "name": "Marathon Nextgen Realty Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
     "symbol": "MARICO",
     "name": "Marico Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "MARINE",
     "name": "Marine Electricals (India) Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "MARKOLINES",
     "name": "Markolines Pavement Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "MARKSANS",
     "name": "Marksans Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -7702,7 +7702,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MARUTI",
     "name": "Maruti Suzuki India Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -7714,7 +7714,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MASKINVEST",
     "name": "Mask Investments Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -7744,13 +7744,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MAXESTATES",
     "name": "Max Estates Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
     "symbol": "MAXHEALTH",
     "name": "Max Healthcare Institute Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -7774,25 +7774,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MAZDOCK",
     "name": "Mazagon Dock Shipbuilders Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "MBAPL",
     "name": "Madhya Bharat Agro Products Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "MBEL",
     "name": "M & B Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "MBLINFRA",
     "name": "MBL Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -7804,7 +7804,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MCL",
     "name": "Madhav Copper Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -7828,31 +7828,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MEDANTA",
     "name": "Global Health Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "MEDIASSIST",
     "name": "Medi Assist Healthcare Services Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "MEDICAMEQ",
     "name": "Medicamen Biotech Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "MEDICO",
     "name": "Medico Remedies Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "MEDPLUS",
     "name": "Medplus Health Services Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -7864,7 +7864,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MEGASTAR",
     "name": "Megastar Foods Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -7876,13 +7876,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MENNPIS",
     "name": "Menon Pistons Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "MENONBE",
     "name": "Menon Bearings Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -7906,7 +7906,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "METROPOLIS",
     "name": "Metropolis Healthcare Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -7930,7 +7930,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MGL",
     "name": "Mahanagar Gas Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -7942,7 +7942,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MHRIL",
     "name": "Mahindra Holidays & Resorts India Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -7990,7 +7990,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MITCON",
     "name": "MITCON Consultancy & Engineering Services Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -8008,7 +8008,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MMFL",
     "name": "MM Forgings Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -8026,13 +8026,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MMWL",
     "name": "Media Matrix Worldwide Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "MOBIKWIK",
     "name": "One Mobikwik Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -8092,7 +8092,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MOLDTECH",
     "name": "Mold-Tek Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -8104,31 +8104,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MONARCH",
     "name": "Monarch Networth Capital Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "MONEYBOXX",
     "name": "Moneyboxx Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "MONTECARLO",
     "name": "Monte Carlo Fashions Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "MOREPENLAB",
     "name": "Morepen Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "MOSCHIP",
     "name": "Moschip Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -8146,13 +8146,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MOTISONS",
     "name": "Motisons Jewellers Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "MOTOGENFIN",
     "name": "The Motor & General Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -8170,19 +8170,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MRF",
     "name": "MRF Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "MRPL",
     "name": "Mangalore Refinery and Petrochemicals Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
     "symbol": "MSPL",
     "name": "MSP Steel & Power Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -8200,7 +8200,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MTARTECH",
     "name": "Mtar Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -8218,7 +8218,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MUFIN",
     "name": "Mufin Green Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -8248,7 +8248,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MUNJALAU",
     "name": "Munjal Auto Industries Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -8260,19 +8260,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MURUDCERA",
     "name": "Murudeshwar Ceramics Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
     "symbol": "MUTHOOTCAP",
     "name": "Muthoot Capital Services Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "MUTHOOTFIN",
     "name": "Muthoot Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -8284,7 +8284,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "MVGJL",
     "name": "Manoj Vaibhav Gems N Jewellers Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -8302,7 +8302,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NAGREEKCAP",
     "name": "Nagreeka Capital & Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -8314,19 +8314,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NAHARCAP",
     "name": "Nahar Capital and Financial Services Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "NAHARINDUS",
     "name": "Nahar Industrial Enterprises Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "NAHARPOLY",
     "name": "Nahar Poly Films Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
@@ -8338,7 +8338,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NAM-INDIA",
     "name": "Nippon Life India Asset Management Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -8356,7 +8356,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NATCOPHARM",
     "name": "Natco Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -8416,7 +8416,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NAZARA",
     "name": "Nazara Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -8428,7 +8428,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NBIFIN",
     "name": "N. B. I. Industrial Finance Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -8452,7 +8452,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NDL",
     "name": "Nandan Denim Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -8464,19 +8464,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NDRAUTO",
     "name": "Ndr Auto Components Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "NDTV",
     "name": "New Delhi Television Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "NEAGI",
     "name": "Neelamalai Agro Industries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -8488,7 +8488,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NECLIFE",
     "name": "Nectar Lifesciences Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -8506,13 +8506,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NEOGEN",
     "name": "Neogen Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "NEPHROPLUS",
     "name": "Nephrocare Health Services Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -8524,31 +8524,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NESTLEIND",
     "name": "Nestle India Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "NETWEB",
     "name": "Netweb Technologies India Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "NETWORK18",
     "name": "Network18 Media & Investments Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "NEULANDLAB",
     "name": "Neuland Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "NEWGEN",
     "name": "Newgen Software Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -8560,7 +8560,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NFL",
     "name": "National Fertilizers Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -8572,7 +8572,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NGLFINE",
     "name": "NGL Fine-Chem Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -8602,7 +8602,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NIBL",
     "name": "NRB Industrial Bearings Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -8614,7 +8614,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NIITMTS",
     "name": "NIIT Learning Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -8644,13 +8644,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NIMBSPROJ",
     "name": "Nimbus Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "NINSYS",
     "name": "NINtec Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -8662,7 +8662,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NIRAJ",
     "name": "Niraj Cement Structurals Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -8704,7 +8704,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NIVABUPA",
     "name": "Niva Bupa Health Insurance Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -8740,13 +8740,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NORBTEAEXP",
     "name": "Norben Tea & Exports Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "NORTHARC",
     "name": "Northern Arc Capital Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -8764,7 +8764,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NPST",
     "name": "Network People Services Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -8788,31 +8788,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NSIL",
     "name": "Nalwa Sons Investments Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "NSLNISP",
     "name": "NMDC Steel Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "NTPC",
     "name": "NTPC Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "NTPCGREEN",
     "name": "NTPC Green Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "NUCLEUS",
     "name": "Nucleus Software Exports Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -8824,7 +8824,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NUVAMA",
     "name": "Nuvama Wealth Management Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -8836,7 +8836,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "NYKAA",
     "name": "FSN E-Commerce Ventures Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -8854,7 +8854,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "OBEROIRLTY",
     "name": "Oberoi Realty Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -8866,25 +8866,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ODIGMA",
     "name": "Odigma Consultancy Solutions Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "OFSS",
     "name": "Oracle Financial Services Software Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "OIL",
     "name": "Oil India Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
     "symbol": "OILCOUNTUB",
     "name": "Oil Country Tubular Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -8920,25 +8920,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "OMINFRAL",
     "name": "OM INFRA LIMITED",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "OMNI",
     "name": "Omnitech Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "OMPOWER",
     "name": "Om Power Transmission Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "ONELIFECAP",
     "name": "Onelife Capital Advisors Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -8950,13 +8950,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ONESOURCE",
     "name": "Onesource Specialty Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "ONGC",
     "name": "Oil & Natural Gas Corporation Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -8968,7 +8968,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ONWARDTEC",
     "name": "Onward Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -8992,7 +8992,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ORCHPHARMA",
     "name": "Orchid Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -9016,7 +9016,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ORIENTCEM",
     "name": "Orient Cement Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -9034,7 +9034,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ORIENTHOT",
     "name": "Oriental Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -9052,13 +9052,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ORIENTTECH",
     "name": "Orient Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "ORISSAMINE",
     "name": "The Orissa Minerals Development Company Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -9076,13 +9076,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "OSIAHYPER",
     "name": "Osia Hyper Retail Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "OSWALAGRO",
     "name": "Oswal Agro Mills Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -9094,13 +9094,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "OSWALPUMPS",
     "name": "Oswal Pumps Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "OSWALSEEDS",
     "name": "ShreeOswal Seeds And Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -9118,7 +9118,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PAISALO",
     "name": "Paisalo Digital Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -9130,13 +9130,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PALASHSECU",
     "name": "Palash Securities Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "PALREDTEC",
     "name": "Palred Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -9160,19 +9160,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PANSARI",
     "name": "Pansari Developers Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "PAR",
     "name": "Par Drugs And Chemicals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "PARACABLES",
     "name": "Paramount Communications Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -9184,13 +9184,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PARAGMILK",
     "name": "Parag Milk Foods Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "PARAS",
     "name": "Paras Defence and Space Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -9208,19 +9208,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PARKHOTELS",
     "name": "Apeejay Surrendra Park Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "PARSVNATH",
     "name": "Parsvnath Developers Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "PASHUPATI",
     "name": "Pashupati Cotspin Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -9232,25 +9232,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PATANJALI",
     "name": "Patanjali Foods Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "PATELENG",
     "name": "Patel Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "PATELRMART",
     "name": "Patel Retail Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "PATINTLOG",
     "name": "Patel Integrated Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -9268,13 +9268,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PAYTM",
     "name": "One 97 Communications Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "PCBL",
     "name": "PCBL Chemical Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -9298,7 +9298,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PEARLPOLY",
     "name": "Pearl Polymers Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -9310,25 +9310,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PENINLAND",
     "name": "Peninsula Land Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
     "symbol": "PERSISTENT",
     "name": "Persistent Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "PETRONET",
     "name": "Petronet LNG Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
     "symbol": "PFC",
     "name": "Power Finance Corporation Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -9358,13 +9358,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PGHH",
     "name": "Procter & Gamble Hygiene and Health Care Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "PGHL",
     "name": "Procter & Gamble Health Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -9382,19 +9382,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PICCADIL",
     "name": "Piccadily Agro Industries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "PIDILITIND",
     "name": "Pidilite Industries Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "PIGL",
     "name": "Power & Instrumentation (Gujarat) Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -9406,19 +9406,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PILANIINVS",
     "name": "Pilani Investment and Industries Corporation Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "PILITA",
     "name": "PIL ITALICA LIFESTYLE LIMITED",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "PINELABS",
     "name": "Pine Labs Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -9436,25 +9436,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PIRAMALFIN",
     "name": "Piramal Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "PITTIENG",
     "name": "Pitti Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "PIXTRANS",
     "name": "Pix Transmissions Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "PKTEA",
     "name": "The Peria Karamalai Tea & Produce Company Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -9472,7 +9472,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PLAZACABLE",
     "name": "Plaza Wires Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -9484,55 +9484,55 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PNB",
     "name": "Punjab National Bank",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "PNBGILTS",
     "name": "PNB Gilts Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "PNBHOUSING",
     "name": "PNB Housing Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "PNC",
     "name": "Pritish Nandy Communications Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "PNCINFRA",
     "name": "PNC Infratech Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "PNGJL",
     "name": "P N Gadgil Jewellers Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "PNGSREVA",
     "name": "PNGS Reva Diamond Jewellery Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "POCL",
     "name": "Pondy Oxides & Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "PODDARMENT",
     "name": "Poddar Pigments Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -9544,13 +9544,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "POLICYBZR",
     "name": "PB Fintech Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "POLYCAB",
     "name": "Polycab India Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -9574,13 +9574,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "POONAWALLA",
     "name": "Poonawalla Fincorp Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "POWERGRID",
     "name": "Power Grid Corporation of India Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -9592,43 +9592,43 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "POWERINDIA",
     "name": "Hitachi Energy India Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "POWERMECH",
     "name": "Power Mech Projects Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "PPAP",
     "name": "PPAP Automotive Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "PPL",
     "name": "Prakash Pipes Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "PPLPHARMA",
     "name": "Piramal Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "PRABHA",
     "name": "Prabha Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "PRADPME",
     "name": "Pradeep Metals Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -9664,7 +9664,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PRAXIS",
     "name": "Praxis Home Retail Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -9682,7 +9682,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PRECWIRE",
     "name": "Precision Wires India Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -9718,7 +9718,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PRESTIGE",
     "name": "Prestige Estates Projects Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -9730,19 +9730,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PRIMESECU",
     "name": "Prime Securities Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "PRIMO",
     "name": "Primo Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "PRINCEPIPE",
     "name": "Prince Pipes And Fittings Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -9754,31 +9754,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PRITIKAUTO",
     "name": "Pritika Auto Industries Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "PRIVISCL",
     "name": "Privi Speciality Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "PROSTARM",
     "name": "Prostarm Info Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "PROTEAN",
     "name": "Protean eGov Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "PROZONER",
     "name": "Prozone Realty Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -9796,19 +9796,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PRUDMOULI",
     "name": "Prudential Sugar Corporation Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "PSB",
     "name": "Punjab & Sind Bank",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "PSPPROJECT",
     "name": "PSP Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -9832,7 +9832,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PUNJABCHEM",
     "name": "Punjab Chemicals & Crop Protection Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -9850,19 +9850,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "PVRINOX",
     "name": "PVR INOX Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "PVSL",
     "name": "Popular Vehicles and Services Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "PWL",
     "name": "Physicswallah Limited",
-    "sector": "Other",
+    "sector": "Education Services",
     "exchange": "NSE"
   },
   {
@@ -9874,7 +9874,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "QPOWER",
     "name": "Quality Power Electrical Equipments Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -9892,13 +9892,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "QUICKHEAL",
     "name": "Quick Heal Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "QUINT",
     "name": "Quint Digital Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -9940,7 +9940,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RADIOCITY",
     "name": "Music Broadcast Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
@@ -9982,7 +9982,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RAJRATAN",
     "name": "Rajratan Global Wire Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -9994,13 +9994,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RAJSREESUG",
     "name": "Rajshree Sugars & Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "RAJTV",
     "name": "Raj Television Network Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
@@ -10024,13 +10024,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RAMASTEEL",
     "name": "Rama Steel Tubes Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "RAMCOCEM",
     "name": "The Ramco Cements Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -10042,19 +10042,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RAMCOSYS",
     "name": "Ramco Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "RAMKY",
     "name": "Ramky Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "RAMRAT",
     "name": "Ram Ratna Wires Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -10066,25 +10066,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RANEHOLDIN",
     "name": "Rane Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "RATEGAIN",
     "name": "Rategain Travel Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "RATNAMANI",
     "name": "Ratnamani Metals & Tubes Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "RATNAVEER",
     "name": "Ratnaveer Precision Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -10096,43 +10096,43 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RAYMONDLSL",
     "name": "Raymond Lifestyle Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "RAYMONDREL",
     "name": "Raymond Realty Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
     "symbol": "RBA",
     "name": "Restaurant Brands Asia Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "RBLBANK",
     "name": "RBL Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "RBZJEWEL",
     "name": "RBZ Jewellers Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "RCF",
     "name": "Rashtriya Chemicals and Fertilizers Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "RCOM",
     "name": "Reliance Communications Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -10168,7 +10168,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "REGENCERAM",
     "name": "Regency Ceramics Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -10192,7 +10192,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RELIANCE",
     "name": "Reliance Industries Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -10204,7 +10204,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RELTD",
     "name": "Ravindra Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -10222,7 +10222,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "REPCOHOME",
     "name": "Repco Home Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -10246,7 +10246,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RETAIL",
     "name": "JHS Svendgaard Retail Ventures Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -10270,31 +10270,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RHL",
     "name": "Robust Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "RICOAUTO",
     "name": "Rico Auto Industries Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "RIIL",
     "name": "Reliance Industrial Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "RISHABH",
     "name": "Rishabh Instruments Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "RITCO",
     "name": "Ritco Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -10306,19 +10306,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RKDL",
     "name": "Ravi Kumar Distilleries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "RKEC",
     "name": "RKEC Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "RKFORGE",
     "name": "Ramkrishna Forgings Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -10330,13 +10330,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RMC",
     "name": "RMC Switchgears Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "RMDRIP",
     "name": "R M Drip and Sprinklers Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -10354,7 +10354,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ROHLTD",
     "name": "Royal Orchid Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -10372,13 +10372,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ROML",
     "name": "Raj Oil Mills Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
     "symbol": "ROSSARI",
     "name": "Rossari Biotech Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -10396,13 +10396,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ROTO",
     "name": "Roto Pumps Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "ROUTE",
     "name": "ROUTE MOBILE LIMITED",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -10420,13 +10420,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RPOWER",
     "name": "Reliance Power Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "RPPINFRA",
     "name": "R.P.P. Infra Projects Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -10462,7 +10462,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RSDFIN",
     "name": "RSD Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -10474,7 +10474,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RSSOFTWARE",
     "name": "R. S. Software (India) Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -10486,7 +10486,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RSYSTEMS",
     "name": "R Systems International Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -10498,7 +10498,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RTNPOWER",
     "name": "RattanIndia Power Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -10522,7 +10522,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RUCHINFRA",
     "name": "Ruchi Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -10534,7 +10534,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RUDRA",
     "name": "Rudra Global Infra Products Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -10546,7 +10546,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RUSHIL",
     "name": "Rushil Decor Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -10570,31 +10570,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "RVTH",
     "name": "Revathi Equipment India Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "S&SPOWER",
     "name": "S&S Power Switchgears Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "SAATVIKGL",
     "name": "Saatvik Green Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "SADBHAV",
     "name": "Sadbhav Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "SADBHIN",
     "name": "Sadbhav Infrastructure Project Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -10612,13 +10612,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SAGARDEEP",
     "name": "Sagardeep Alloys Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "SAGCEM",
     "name": "Sagar Cements Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
@@ -10630,7 +10630,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SAHLIBHFI",
     "name": "Shalibhadra Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -10642,7 +10642,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SAIL",
     "name": "Steel Authority of India Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -10660,7 +10660,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SAKAR",
     "name": "Sakar Healthcare Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -10684,19 +10684,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SALASAR",
     "name": "Salasar Techno Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "SALONA",
     "name": "Salona Cotspin Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "SALSTEEL",
     "name": "S.A.L. Steel Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -10708,25 +10708,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SAMBHAAV",
     "name": "Sambhaav Media Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "SAMBHV",
     "name": "Sambhv Steel Tubes Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "SAMHI",
     "name": "Samhi Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "SAMMAANCAP",
     "name": "Sammaan Capital Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -10738,7 +10738,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SANATHAN",
     "name": "Sanathan Textiles Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -10750,13 +10750,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SANDHAR",
     "name": "Sandhar Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "SANDUMA",
     "name": "Sandur Manganese & Iron Ores Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -10774,7 +10774,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SANGINITA",
     "name": "Sanginita Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -10786,13 +10786,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SANOFICONR",
     "name": "Sanofi Consumer Healthcare India Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "SANSERA",
     "name": "Sansera Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -10804,7 +10804,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SAPPHIRE",
     "name": "Sapphire Foods India Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -10816,7 +10816,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SARDAEN",
     "name": "Sarda Energy & Minerals Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -10834,13 +10834,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SARVESHWAR",
     "name": "Sarveshwar Foods Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "SASKEN",
     "name": "Sasken Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -10858,13 +10858,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SAURASHCEM",
     "name": "Saurashtra Cement Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
     "symbol": "SAYAJIHOTL",
     "name": "Sayaji Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -10882,7 +10882,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SBFC",
     "name": "SBFC Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -10894,19 +10894,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SBICARD",
     "name": "SBI Cards and Payment Services Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "SBILIFE",
     "name": "SBI Life Insurance Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "SBIN",
     "name": "State Bank of India",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -10930,19 +10930,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SCHNEIDER",
     "name": "Schneider Electric Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "SCI",
     "name": "Shipping Corporation Of India Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "SCILAL",
     "name": "Shipping Corporation of India Land and Assets Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -10960,7 +10960,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SDBL",
     "name": "Som Distilleries & Breweries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -10972,13 +10972,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SECMARK",
     "name": "SecMark Consultancy Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "SECURKLOUD",
     "name": "SECUREKLOUD TECHNOLOGIES LIMITED",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -11008,7 +11008,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SEMAC",
     "name": "Semac Construction Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -11020,7 +11020,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SENORES",
     "name": "Senores Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -11032,7 +11032,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SERVOTECH",
     "name": "Servotech Renewable Power System Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -11044,13 +11044,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SETCO",
     "name": "Setco Automotive Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "SETL",
     "name": "Standard Engineering Technology Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -11092,7 +11092,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SHADOWFAX",
     "name": "Shadowfax Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -11104,19 +11104,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SHAHALLOYS",
     "name": "Shah Alloys Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "SHAILY",
     "name": "Shaily Engineering Plastics Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "SHAKTIPUMP",
     "name": "Shakti Pumps (India) Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -11128,7 +11128,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SHALPAINTS",
     "name": "Shalimar Paints Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -11146,7 +11146,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SHANTIGEAR",
     "name": "Shanthi Gears Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -11170,13 +11170,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SHARDUL",
     "name": "Shardul Securities Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "SHAREINDIA",
     "name": "Share India Securities Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -11194,13 +11194,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SHEMAROO",
     "name": "Shemaroo Entertainment Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "SHILCTECH",
     "name": "Shilchar Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -11260,37 +11260,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SHRADHA",
     "name": "Shradha Realty Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
     "symbol": "SHREDIGCEM",
     "name": "Shree Digvijay Cement Co.Ltd",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
     "symbol": "SHREECEM",
     "name": "SHREE CEMENT LIMITED",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
     "symbol": "SHREEJISPG",
     "name": "Shreeji Shipping Global Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "SHREEPUSHK",
     "name": "Shree Pushkar Chemicals & Fertilisers Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "SHREERAMA",
     "name": "Shree Rama Multi-Tech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -11314,19 +11314,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SHRIPISTON",
     "name": "Shriram Pistons & Rings Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "SHRIRAMFIN",
     "name": "Shriram Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "SHRIRAMPPS",
     "name": "Shriram Properties Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -11338,13 +11338,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SHYAMMETL",
     "name": "Shyam Metalics and Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "SHYAMTEL",
     "name": "Shyam Telecom Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -11356,7 +11356,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SICALLOG",
     "name": "Sical Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -11386,7 +11386,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SIGMAADV",
     "name": "SIGMA ADVANCED SYSTEMS LIMITED",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -11404,7 +11404,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SIKA",
     "name": "Sika Interplant Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -11422,25 +11422,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SILGO",
     "name": "Silgo Retail Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "SILINV",
     "name": "SIL Investments Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "SILLYMONKS",
     "name": "Silly Monks Entertainment Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "SILVERTUC",
     "name": "Silver Touch Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -11452,7 +11452,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SINCLAIR",
     "name": "Sinclairs Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -11476,7 +11476,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SIRCA",
     "name": "Sirca Paints India Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -11488,7 +11488,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SIYSIL",
     "name": "Siyaram Silk Mills Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -11512,7 +11512,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SKFINDUS",
     "name": "SKF India (Industrial) Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -11536,7 +11536,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SMARTLINK",
     "name": "Smartlink Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -11548,7 +11548,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SMCGLOBAL",
     "name": "SMC Global Securities Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -11560,19 +11560,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SMLT",
     "name": "Sarthak Metals Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "SMSPHARMA",
     "name": "SMS Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "SNOWMAN",
     "name": "Snowman Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -11590,37 +11590,37 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SOLARA",
     "name": "Solara Active Pharma Sciences Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "SOLARINDS",
     "name": "Solar Industries India Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "SOLARWORLD",
     "name": "Solarworld Energy Solutions Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "SOLEX",
     "name": "Solex Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "SOMANYCERA",
     "name": "Somany Ceramics Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
     "symbol": "SOMATEX",
     "name": "Soma Textiles & Industries Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -11632,7 +11632,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SONACOMS",
     "name": "Sona BLW Precision Forgings Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -11650,25 +11650,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SONATSOFTW",
     "name": "Sonata Software Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "SOTL",
     "name": "Savita Oil Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "SOUTHBANK",
     "name": "The South Indian Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "SOUTHWEST",
     "name": "South West Pinnacle Exploration Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -11686,7 +11686,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SPARC",
     "name": "Sun Pharma Advanced Research Company Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -11698,7 +11698,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SPECIALITY",
     "name": "Speciality Restaurants Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -11710,13 +11710,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SPENCERS",
     "name": "Spencer's Retail Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "SPIC",
     "name": "Southern Petrochemicals Industries Corporation  Limited",
-    "sector": "Other",
+    "sector": "Oil Gas & Consumable Fuels",
     "exchange": "NSE"
   },
   {
@@ -11734,7 +11734,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SPMLINFRA",
     "name": "SPML Infra Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -11746,7 +11746,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SRD",
     "name": "Shankar Lal Rampal Dye-Chem Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -11764,7 +11764,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SRGHFL",
     "name": "SRG Housing Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -11776,7 +11776,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SRM",
     "name": "SRM Contractors Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -11794,7 +11794,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SSWL",
     "name": "Steel Strips Wheels Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -11806,25 +11806,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "STANLEY",
     "name": "Stanley Lifestyles Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "STAR",
     "name": "Strides Pharma Science Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "STARCEMENT",
     "name": "Star Cement Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
     "symbol": "STARHEALTH",
     "name": "Star Health and Allied Insurance Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -11836,7 +11836,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "STARTECK",
     "name": "Starteck Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -11854,19 +11854,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "STEELCITY",
     "name": "Steel City Securities Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "STEELXIND",
     "name": "STEEL EXCHANGE INDIA LIMITED",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "STEL",
     "name": "Stel Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -11878,13 +11878,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "STLNETWORK",
     "name": "STL Networks Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "STLTECH",
     "name": "Sterlite Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -11902,7 +11902,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "STYL",
     "name": "Seshaasai Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -11914,7 +11914,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "STYLEBAAZA",
     "name": "Baazar Style Retail Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -11944,19 +11944,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SUDARSCHEM",
     "name": "Sudarshan Chemical Industries Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "SUDEEPPHRM",
     "name": "Sudeep Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "SUKHJITS",
     "name": "Sukhjit Starch & Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -11974,7 +11974,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SUMICHEM",
     "name": "Sumitomo Chemical India Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -11986,7 +11986,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SUMMITSEC",
     "name": "Summit Securities Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -12004,7 +12004,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SUNDARMFIN",
     "name": "Sundaram Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -12028,25 +12028,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SUNFLAG",
     "name": "Sunflag Iron And Steel Company Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "SUNPHARMA",
     "name": "Sun Pharmaceutical Industries Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "SUNTECK",
     "name": "Sunteck Realty Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
     "symbol": "SUNTV",
     "name": "Sun TV Network Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
@@ -12064,13 +12064,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SUPRAJIT",
     "name": "Suprajit Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "SUPREME",
     "name": "Supreme Holdings & Hospitality (India) Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -12082,7 +12082,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SUPREMEINF",
     "name": "Supreme Infrastructure India Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -12094,7 +12094,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SURAJEST",
     "name": "Suraj Estate Developers Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -12106,19 +12106,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SURAKSHA",
     "name": "Suraksha Diagnostic Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "SURANASOL",
     "name": "Surana Solar Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "SURANAT&P",
     "name": "Surana Telecom and Power Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -12130,7 +12130,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SURYALAXMI",
     "name": "Suryalakshmi Cotton Mills Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -12142,13 +12142,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SURYODAY",
     "name": "Suryoday Small Finance Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "SUTLEJTEX",
     "name": "Sutlej Textiles and Industries Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -12172,19 +12172,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SUZLON",
     "name": "Suzlon Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "SVLL",
     "name": "Shree Vasu Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "SVPGLOB",
     "name": "SVP GLOBAL TEXTILES LIMITED",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -12208,7 +12208,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SWELECTES",
     "name": "Swelect Energy Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -12220,7 +12220,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "SWSOLAR",
     "name": "Sterling and Wilson Renewable Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -12256,19 +12256,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TAALTECH",
     "name": "Taal Tech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "TAINWALCHM",
     "name": "Tainwala Chemical and Plastic (I) Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "TAJGVK",
     "name": "Taj GVK Hotels & Resorts Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -12280,7 +12280,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TALBROAUTO",
     "name": "Talbros Automotive Components Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -12304,7 +12304,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TARAPUR",
     "name": "Tarapur Transformers Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -12316,7 +12316,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TARIL",
     "name": "Transformers And Rectifiers (India) Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -12340,25 +12340,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TATACAP",
     "name": "Tata Capital Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "TATACHEM",
     "name": "Tata Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "TATACOMM",
     "name": "Tata Communications Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "TATACONSUM",
     "name": "TATA CONSUMER PRODUCTS LIMITED",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -12370,31 +12370,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TATAINVEST",
     "name": "Tata Investment Corporation Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "TATAPOWER",
     "name": "Tata Power Company Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "TATASTEEL",
     "name": "Tata Steel Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "TATATECH",
     "name": "Tata Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "TATVA",
     "name": "Tatva Chintan Pharma Chem Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -12418,7 +12418,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TCI",
     "name": "Transport Corporation of India Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -12430,7 +12430,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TCIFINANCE",
     "name": "TCI Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -12442,13 +12442,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TCS",
     "name": "Tata Consultancy Services Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "TDPOWERSYS",
     "name": "TD Power Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -12466,13 +12466,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TECHM",
     "name": "Tech Mahindra Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "TECHNOE",
     "name": "Techno Electric & Engineering Company Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -12484,7 +12484,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TECILCHEM",
     "name": "TECIL Chemicals and Hydro Power Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -12496,7 +12496,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TEJASNET",
     "name": "Tejas Networks Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -12514,43 +12514,43 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TERASOFT",
     "name": "Tera Software Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "TEXINFRA",
     "name": "Texmaco Infrastructure & Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "TEXMOPIPES",
     "name": "Texmo Pipes and Products Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "TEXRAIL",
     "name": "Texmaco Rail & Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "TFCILTD",
     "name": "Tourism Finance Corporation of India Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "TFL",
     "name": "Transwarranty Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "TGBHOTELS",
     "name": "TGB Banquets And Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -12562,31 +12562,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "THAKDEV",
     "name": "Thakkers Developers Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "THANGAMAYL",
     "name": "Thangamayil Jewellery Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "THEINVEST",
     "name": "The Investment Trust Of India Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "THEJO",
     "name": "Thejo Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "THELEELA",
     "name": "Leela Palaces Hotels & Resorts Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -12616,7 +12616,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "THYROCARE",
     "name": "Thyrocare Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -12628,13 +12628,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TICL",
     "name": "Twamev Construction and Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "TIGERLOGS",
     "name": "Tiger Logistics (India) Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -12646,7 +12646,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TIINDIA",
     "name": "Tube Investments of India Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -12682,61 +12682,61 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TINNARUBR",
     "name": "Tinna Rubber and Infrastructure Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "TIPSFILMS",
     "name": "Tips Films Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "TIPSMUSIC",
     "name": "Tips Music Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "TIRUMALCHM",
     "name": "Thirumalai Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "TIRUPATIFL",
     "name": "Tirupati Forge Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "TITAGARH",
     "name": "TITAGARH RAIL SYSTEMS LIMITED",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "TITAN",
     "name": "Titan Company Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "TMB",
     "name": "Tamilnad Mercantile Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "TMCV",
     "name": "Tata Motors Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "TMPV",
     "name": "Tata Motors Passenger Vehicles Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -12754,7 +12754,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TNTELE",
     "name": "Tamilnadu Telecommunication Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -12766,31 +12766,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TOLINS",
     "name": "Tolins Tyres Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "TORNTPHARM",
     "name": "Torrent Pharmaceuticals Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "TORNTPOWER",
     "name": "Torrent Power Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "TOTAL",
     "name": "Total Transport Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "TOUCHWOOD",
     "name": "Touchwood Entertainment Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
@@ -12808,7 +12808,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TRACXN",
     "name": "Tracxn Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -12826,13 +12826,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TRANSWORLD",
     "name": "TRANSWORLD SHIPPING LINES LIMITED",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "TRAVELFOOD",
     "name": "Travel Food Services Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -12850,13 +12850,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TREL",
     "name": "Transindia Real Estate Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
     "symbol": "TRENT",
     "name": "Trent Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -12874,25 +12874,25 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TRIGYN",
     "name": "Trigyn Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "TRITURBINE",
     "name": "Triveni Turbine Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "TRIVENI",
     "name": "Triveni Engineering & Industries Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "TRU",
     "name": "TruCap Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -12904,19 +12904,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TSFINV",
     "name": "TSF INVESTMENTS LIMITED",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "TTKHLTCARE",
     "name": "TTK Healthcare Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "TTKPRESTIG",
     "name": "TTK Prestige Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -12940,13 +12940,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TVSHLTD",
     "name": "TVS Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "TVSMOTOR",
     "name": "TVS Motor Company Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -12964,19 +12964,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "TVTODAY",
     "name": "TV Today Network Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "TVVISION",
     "name": "TV Vision Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
     "symbol": "UBL",
     "name": "United Breweries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -12988,7 +12988,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "UCOBANK",
     "name": "UCO Bank",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -13000,7 +13000,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "UEL",
     "name": "Ujaas Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -13024,31 +13024,31 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "UGARSUGAR",
     "name": "The Ugar Sugar Works Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "UGROCAP",
     "name": "Ugro Capital Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "UJJIVANSFB",
     "name": "Ujjivan Small Finance Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "ULTRACEMCO",
     "name": "UltraTech Cement Limited",
-    "sector": "Other",
+    "sector": "Construction Materials",
     "exchange": "NSE"
   },
   {
     "symbol": "ULTRAMAR",
     "name": "Ultramarine & Pigments Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -13072,7 +13072,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "UNICHEMLAB",
     "name": "Unichem Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -13096,19 +13096,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "UNIINFO",
     "name": "Uniinfo Telecom Services Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "UNIMECH",
     "name": "Unimech Aerospace and Manufacturing Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "UNIONBANK",
     "name": "Union Bank of India",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -13120,7 +13120,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "UNITDSPR",
     "name": "United Spirits Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -13138,7 +13138,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "UNITEDTEA",
     "name": "The United Nilgiri Tea Estates Company Limited",
-    "sector": "Other",
+    "sector": "Realty",
     "exchange": "NSE"
   },
   {
@@ -13150,7 +13150,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "UNIVCABLES",
     "name": "Universal Cables Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -13198,43 +13198,43 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "USK",
     "name": "Udayshivakumar Infra Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "UTIAMC",
     "name": "UTI Asset Management Company Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "UTKARSHBNK",
     "name": "Utkarsh Small Finance Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "UTLSOLAR",
     "name": "Fujiyama Power Systems Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "UTTAMSUGAR",
     "name": "Uttam Sugar Mills Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
     "symbol": "UYFINCORP",
     "name": "U. Y. Fincorp Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "V2RETAIL",
     "name": "V2 Retail Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -13252,7 +13252,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VAISHALI",
     "name": "Vaishali Pharma Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -13264,7 +13264,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VALIANTLAB",
     "name": "Valiant Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -13288,7 +13288,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VARROC",
     "name": "Varroc Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
@@ -13306,7 +13306,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VBL",
     "name": "Varun Beverages Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -13318,7 +13318,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VEDL",
     "name": "Vedanta Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -13342,19 +13342,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VENTIVE",
     "name": "Ventive Hospitality Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
     "symbol": "VENUSPIPES",
     "name": "Venus Pipes & Tubes Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "VENUSREM",
     "name": "Venus Remedies Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -13378,7 +13378,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VETO",
     "name": "Veto Switchgears And Cables Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
@@ -13396,13 +13396,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VHL",
     "name": "Vardhman Holdings Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "VHLTD",
     "name": "Viceroy Hotels Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -13414,19 +13414,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VIDYAWIRES",
     "name": "Vidya Wires Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "VIJAYA",
     "name": "Vijaya Diagnostic Centre Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "VIJIFIN",
     "name": "Viji Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -13444,19 +13444,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VIKRAMSOLR",
     "name": "Vikram Solar Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "VIKRAN",
     "name": "Vikran Engineering Limited",
-    "sector": "Other",
+    "sector": "Construction",
     "exchange": "NSE"
   },
   {
     "symbol": "VIMTALABS",
     "name": "Vimta Labs Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -13468,7 +13468,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VINCOFE",
     "name": "Vintage Coffee And Beverages Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -13480,7 +13480,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VINEETLAB",
     "name": "Vineet Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -13492,13 +13492,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VINYLINDIA",
     "name": "Vinyl Chemicals (India) Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "VIPCLOTHNG",
     "name": "VIP Clothing Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -13534,13 +13534,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VISHNU",
     "name": "Vishnu Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
     "symbol": "VISHWARAJ",
     "name": "Vishwaraj Sugar Industries Limited",
-    "sector": "Other",
+    "sector": "Fast Moving Consumer Goods",
     "exchange": "NSE"
   },
   {
@@ -13558,7 +13558,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VIVIMEDLAB",
     "name": "Vivimed Labs Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -13576,13 +13576,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VLSFINANCE",
     "name": "VLS Finance Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "VMART",
     "name": "V-Mart Retail Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -13600,7 +13600,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VOLTAMP",
     "name": "Voltamp Transformers Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -13618,13 +13618,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VRAJ",
     "name": "Vraj Iron and Steel Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "VRLLOG",
     "name": "VRL Logistics Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -13642,19 +13642,19 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "VSTL",
     "name": "Vibhor Steel Tubes Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "VSTTILLERS",
     "name": "V.S.T Tillers Tractors Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "VTL",
     "name": "Vardhman Textiles Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
@@ -13672,13 +13672,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "WAAREERTL",
     "name": "Waaree Renewable Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "WABAG",
     "name": "VA Tech Wabag Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -13708,13 +13708,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "WEALTH",
     "name": "Wealth First Portfolio Managers Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
     "symbol": "WEBELSOLAR",
     "name": "Websol Energy System Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
@@ -13726,7 +13726,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "WEL",
     "name": "Wonder Electricals Limited",
-    "sector": "Other",
+    "sector": "Capital Goods",
     "exchange": "NSE"
   },
   {
@@ -13744,7 +13744,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "WELINV",
     "name": "Welspun Investments and Commercials Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -13786,7 +13786,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "WHEELS",
     "name": "Wheels India Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
@@ -13810,7 +13810,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "WINDLAS",
     "name": "Windlas Biotech Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -13828,7 +13828,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "WIPRO",
     "name": "Wipro Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -13840,7 +13840,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "WONDERLA",
     "name": "Wonderla Holidays Limited",
-    "sector": "Other",
+    "sector": "Consumer Services",
     "exchange": "NSE"
   },
   {
@@ -13876,7 +13876,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "XELPMOC",
     "name": "Xelpmoc Design And Tech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -13888,7 +13888,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "XTGLOBAL",
     "name": "Xtglobal Infotech Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
@@ -13900,7 +13900,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "YATHARTH",
     "name": "Yatharth Hospital & Trauma Care Services Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -13912,7 +13912,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "YESBANK",
     "name": "Yes Bank Limited",
-    "sector": "Other",
+    "sector": "Financial Services",
     "exchange": "NSE"
   },
   {
@@ -13930,7 +13930,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ZEEL",
     "name": "Zee Entertainment Enterprises Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
@@ -13942,7 +13942,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ZEEMEDIA",
     "name": "Zee Media Corporation Limited",
-    "sector": "Other",
+    "sector": "Media & Entertainment",
     "exchange": "NSE"
   },
   {
@@ -13954,55 +13954,55 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ZENITHSTL",
     "name": "Zenith Steel Pipes & Industries Limited",
-    "sector": "Other",
+    "sector": "Metals & Mining",
     "exchange": "NSE"
   },
   {
     "symbol": "ZENSARTECH",
     "name": "Zensar Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "ZENTEC",
     "name": "Zen Technologies Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "ZFCVINDIA",
     "name": "ZF Commercial Vehicle Control Systems India Limited",
-    "sector": "Other",
+    "sector": "Information Technology",
     "exchange": "NSE"
   },
   {
     "symbol": "ZFSTEERING",
     "name": "ZF Steering Gear (India) Limited",
-    "sector": "Other",
+    "sector": "Automobile and Auto Components",
     "exchange": "NSE"
   },
   {
     "symbol": "ZIMLAB",
     "name": "Zim Laboratories Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "ZODIAC",
     "name": "Zodiac Energy Limited",
-    "sector": "Other",
+    "sector": "Power",
     "exchange": "NSE"
   },
   {
     "symbol": "ZODIACLOTH",
     "name": "Zodiac Clothing Company Limited",
-    "sector": "Other",
+    "sector": "Consumer Durables",
     "exchange": "NSE"
   },
   {
     "symbol": "ZOTA",
     "name": "Zota Health Care LImited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
@@ -14014,7 +14014,7 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ZUARI",
     "name": "Zuari Agro Chemicals Limited",
-    "sector": "Other",
+    "sector": "Chemicals",
     "exchange": "NSE"
   },
   {
@@ -14026,13 +14026,13 @@ export const INDIAN_STOCKS: StockItem[] = [
   {
     "symbol": "ZYDUSLIFE",
     "name": "Zydus Lifesciences Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   },
   {
     "symbol": "ZYDUSWELL",
     "name": "Zydus Wellness Limited",
-    "sector": "Other",
+    "sector": "Healthcare",
     "exchange": "NSE"
   }
 ];
@@ -14109,6 +14109,12 @@ export const POPULAR_MUTUAL_FUNDS: MutualFundItem[] = [
     "name": "Quant Value Fund",
     "category": "Value",
     "amc": "Quant Mutual Fund"
+  },
+  {
+    "symbol": "MOMF",
+    "name": "Motilal Oswal Manufacturing Fund - Direct Growth",
+    "category": "Thematic - Manufacturing",
+    "amc": "Motilal Oswal Mutual Fund"
   }
 ];
 

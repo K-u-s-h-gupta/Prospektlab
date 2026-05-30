@@ -166,9 +166,15 @@ class SessionBus:
             if events:
                 self._history[session_id] = events
         events = events or []
-        capped = max(1, min(limit, 2000))
+        capped = max(1, min(limit, 5000))
         selected = [event for event in events if event.seq >= max(0, after)][:capped]
         return [(event.seq, event) for event in selected]
+
+    def subscribe(self, session_id: str, *, after: int = 0, limit: int = 500) -> tuple[list[tuple[int, AgentEvent]], asyncio.Queue[AgentEvent | None] | None]:
+        """Atomic history + live queue snapshot. Prevents race between replay and new events."""
+        hist = self.history(session_id, after=after, limit=limit)
+        q = self.get(session_id)
+        return hist, q
 
     def is_closed(self, session_id: str) -> bool:
         if session_id in self._closed:

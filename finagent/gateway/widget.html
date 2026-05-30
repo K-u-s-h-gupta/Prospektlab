@@ -390,16 +390,19 @@
       top: 3px;
       bottom: 3px;
       left: 3px;
-      width: calc(100% - 6px);
+      width: calc((100% - 6px) / 2);
       background: var(--surface-4);
       border-radius: 999px;
       transition: transform 0.35s var(--ease), background 0.25s var(--ease);
       z-index: 0;
     }
-    .mode-pill-container[data-mode="marathon"] .mode-pill-indicator {
+    .mode-pill-container[data-mode="standard"] .mode-pill-indicator {
+      background: linear-gradient(135deg, rgba(52,211,153,0.16), rgba(52,211,153,0.06));
+      box-shadow: 0 0 0 1px rgba(52,211,153,0.22);
+    }
+    .mode-pill-container[data-mode="marathon"] .mode-pill-indicator,
+    .mode-pill-container[data-mode="deep"] .mode-pill-indicator {
       transform: translateX(100%);
-      background: linear-gradient(135deg, rgba(167,139,250,0.18), rgba(167,139,250,0.08));
-      box-shadow: 0 0 0 1px rgba(167,139,250,0.25);
     }
     .mode-pill-container[data-mode="deep"] .mode-pill-indicator {
       background: linear-gradient(135deg, rgba(96,165,250,0.18), rgba(96,165,250,0.08));
@@ -1539,12 +1542,17 @@
     </div>
 
     <!-- ── MODE SELECTOR (animated pill toggle - Hidden) ─────────────────── -->
-    <div id="modeSelector" class="mode-pill-container hidden" data-mode="deep" role="tablist" aria-label="Research mode">
+    <div id="modeSelector" class="mode-pill-container" data-mode="standard" role="tablist" aria-label="Research mode">
       <span class="mode-pill-indicator"></span>
-      <button id="modeDeep" class="mode-pill mode-toggle active" role="tab" aria-selected="true"
-        title="Bounded 8-phase Deep Research">
+      <button id="modeStandardBtn" class="mode-pill mode-toggle active" role="tab" aria-selected="true"
+        data-mode="standard" title="Bounded standard research">
+        <span class="material-symbols-outlined">manage_search</span>
+        Standard
+      </button>
+      <button id="modeDeep" class="mode-pill mode-toggle" role="tab" aria-selected="false"
+        data-mode="deep" title="Bounded 8-phase Deep Research">
         <span class="material-symbols-outlined">search</span>
-        Deep Research
+        Deep
       </button>
     </div>
 
@@ -2122,7 +2130,7 @@
       enrichment: "Enrichment · pulling NSE / Yahoo / Moneycontrol / News",
       "breadth-survey": "Breadth survey · layered DDG + Bing queries",
       "deep-dive": "Deep-dive · iterative gap-driven follow-ups",
-      reflection: "Reflection · self-critique loop closing coverage gaps",
+      reflection: "Reflection - closing coverage gaps",
       "multi-agent": "Multi-agent · 8 specialists in parallel + verifier",
       blindspot: "Blind-spot · auto-dispatching gap-coverage queries",
       analysis: "Analysis · cross-source conflict scan",
@@ -2588,7 +2596,7 @@
       // when the query text lacks obvious keywords like "chart" or "revenue")
       const alwaysVisualModes = new Set([
         "company_snapshot", "company_comparison", "valuation_model",
-        "investment_view", "deep_research_report", "forensic_insights"
+        "investment_view", "standard_research", "deep_research_report", "forensic_insights"
       ]);
       if (alwaysVisualModes.has(outputMode)) return true;
 
@@ -3006,8 +3014,7 @@
 
     function renderTurnVisuals(turnId) {
       const turn = getTurn(turnId);
-      if (!turn || !shouldShowVisuals(turn.query, turn.outputMode)) {
-        if (turn?.visualEl) turn.visualEl.classList.add("hidden");
+      if (!turn) {
         return;
       }
       // ── Guard: comparison queries should ONLY get comparison visuals ──
@@ -4095,7 +4102,7 @@
     // ────────────────────────────────────────────────────────────────────
     // Run flow
     // ────────────────────────────────────────────────────────────────────
-    let researchMode = "deep";
+    let researchMode = "standard";
     // ── Smart scroll: only auto-scroll when user is near the bottom ──
     let _userScrolledUp = false;
     const _SCROLL_THRESHOLD = 150;
@@ -4289,9 +4296,14 @@
             $("stopBtn").classList.remove("hidden");
             $("executeBtn").classList.add("hidden");
 
+            const selectedMode = researchMode === "deep" ? "deep" : "standard";
+            if (turn) turn.outputMode = selectedMode === "deep" ? "deep_research_report" : "standard_research";
+
             const bar = $("processingBar");
             bar.classList.remove("research-mode", "marathon-mode");
-            $("processingPhaseLabel").innerHTML = `<span style="color: var(--research);">Deep Research · bounded 8-phase pipeline</span>`;
+            $("processingPhaseLabel").innerHTML = selectedMode === "deep"
+              ? `<span style="color: var(--research);">Deep Research - bounded 8-phase pipeline</span>`
+              : `<span style="color: var(--success);">Standard Research - bounded single-pass pipeline</span>`;
             bar.classList.add("research-mode");
 
             startedAt = Date.now();
@@ -4299,8 +4311,8 @@
             tickHandle = setInterval(tickElapsed, 250);
 
             let resp;
-            const endpoint = "/research/start";
-            const payload = { target, mode: "deep" };
+            const endpoint = selectedMode === "deep" ? "/research/deep" : "/research/start";
+            const payload = { target, mode: selectedMode };
 
             try {
               const email = currentUserEmail();
@@ -4319,7 +4331,7 @@
               });
             } catch (e) {
               if (runToken !== activeRunToken) return;
-              pushActivity("error", "Gateway", "Could not reach /research/start: " + e.message, "error");
+              pushActivity("error", "Gateway", `Could not reach ${endpoint}: ${e.message}`, "error");
               return;
             }
             // Defensive: stale session_id from a previous user causes 403 ownership mismatch.
@@ -4339,7 +4351,7 @@
                 });
               } catch (e) {
                 if (runToken !== activeRunToken) return;
-                pushActivity("error", "Gateway", "Could not reach /research/start: " + e.message, "error");
+                pushActivity("error", "Gateway", `Could not reach ${endpoint}: ${e.message}`, "error");
                 return;
               }
             }
@@ -4463,8 +4475,6 @@
               }
             }
 
-            _connectSSE();
-
             eventSource.addEventListener("session_started", (e) => {
               const d = JSON.parse(e.data);
               pushActivity("compass_calibration", "Planner", `Plan built for ${d.target}`, "done");
@@ -4518,6 +4528,14 @@
             });
 
             // ── Multi-agent orchestration events ─────────────────────────────
+            eventSource.addEventListener("log", (e) => {
+              const d = JSON.parse(e.data);
+              const level = (d.level || "info").toLowerCase();
+              const status = level === "error" ? "error" : level === "warning" || level === "warn" ? "warning" : "info";
+              const icon = status === "error" ? "error" : status === "warning" ? "warning" : "terminal";
+              pushActivity(icon, d.source || "Runtime", d.message || "", status);
+            });
+
             eventSource.addEventListener("orchestrator_started", (e) => {
               const d = JSON.parse(e.data);
               initAgentGrid(d.agents || []);
@@ -4681,7 +4699,14 @@
               if (runToken !== activeRunToken) return;
               const d = JSON.parse(e.data);
               if (!turn) return;
-              if (!shouldShowVisuals(turn.query, turn.outputMode)) return;
+              const hasVisualPayload = Boolean(
+                d.rich
+                || (Array.isArray(d.metric_cards) && d.metric_cards.length)
+                || (Array.isArray(d.charts) && d.charts.length)
+                || (Array.isArray(d.comparison_results) && d.comparison_results.length)
+                || (Array.isArray(d.comparison) && d.comparison.length)
+              );
+              if (!hasVisualPayload) return;
               turn.visualEl.classList.remove("hidden");
 
               // For comparison queries: ONLY render the head-to-head scoreboard.
@@ -4716,7 +4741,7 @@
                 renderTurnVisuals(turn.turnId);
 
                 // Render rich payload if available — use proper card renderers
-                if (d.rich && shouldShowVisuals(turn.query, turn.outputMode)) {
+                if (d.rich) {
                   const _isCompFinal = /\bvs\.?\b|\bversus\b|\bcompare\b|\bcomparison\b/i.test(turn.query || "");
                   // For comparison queries, skip single-entity metric cards and charts.
                   // They would show data for only one company and confuse the user.
@@ -4838,6 +4863,11 @@
               if (runToken !== activeRunToken) return;
               // SSE errors handled by retry logic above
             };
+
+            // Start the stream only after every typed listener above is wired.
+            // The backend replays events quickly on reconnect; opening earlier
+            // can consume log/memo events before the activity panel is ready.
+            _connectSSE();
           }
 
           // ────────────────────────────────────────────────────────────────────
@@ -4889,9 +4919,9 @@
           }
           document.querySelectorAll(".mode-toggle").forEach((btn) => btn.addEventListener("click", () => {
             const isMarathon = false;
-            researchMode = "deep";
+            researchMode = btn.dataset.mode === "deep" ? "deep" : "standard";
             // Update pill indicator via data attribute (CSS handles the slide)
-            modeSelector.setAttribute("data-mode", "deep");
+            modeSelector?.setAttribute("data-mode", researchMode);
             // Toggle active state on buttons
             document.querySelectorAll(".mode-toggle").forEach((b) => {
               b.classList.toggle("active", b === btn);
@@ -4899,16 +4929,16 @@
             });
             // Update mode indicator text near input
             if (modeIndicator) {
-              modeIndicator.textContent = "deep research";
-              modeIndicator.style.color = "var(--research)";
+              modeIndicator.textContent = researchMode === "deep" ? "deep research" : "standard research";
+              modeIndicator.style.color = researchMode === "deep" ? "var(--research)" : "var(--success)";
             }
             // Show/hide marathon coming-soon overlay
             _setMarathonComingSoon(isMarathon);
           }));
           // Initialize indicator color
           if (modeIndicator) {
-            modeIndicator.textContent = "deep research";
-            modeIndicator.style.color = "var(--research)";
+            modeIndicator.textContent = "standard research";
+            modeIndicator.style.color = "var(--success)";
           }
 
           renderWatchlistRail();

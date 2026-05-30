@@ -4,6 +4,7 @@ import { AppShell } from '../components/layout/AppShell';
 import { WatchlistCard, WatchlistStock } from '../components/dashboard/WatchlistCard';
 import { InsightItem } from '../components/dashboard/RecentInsights';
 import { PortfolioTable } from '../components/dashboard/PortfolioTable';
+import { AssetHistoryModal, AssetHistoryTarget } from '../components/dashboard/AssetHistoryModal';
 import { DonutChart } from '../components/charts/DonutChart';
 import { IndexTickerCard, IndexTickerData } from '../components/dashboard/IndexTickerCard';
 import { InteractiveChart } from '../components/charts/InteractiveChart';
@@ -17,6 +18,7 @@ import {
   getSessionResult, 
   getMfAnalytics,
   getTodayQueue,
+  getPortfolioAnalytics,
   getPortfolioMirror,
   AgentEventData,
   getMarketIndices,
@@ -43,6 +45,8 @@ interface PortfolioItem {
   avgCost: number;
   current: number;
   sector: string;
+  assetClass?: string;
+  dayChangePct?: number;
 }
 
 const BENCHMARKS = [
@@ -333,6 +337,10 @@ export const Dashboard: React.FC = () => {
   const [isBypassEnabled, setIsBypassEnabled] = useState(
     () => typeof window !== 'undefined' && localStorage.getItem('prospektlab_bypass_token_limit') === 'true'
   );
+  // Pre-filled chat query state (set by external dashboard buttons instead of auto-executing)
+  const [pendingChatQuery, setPendingChatQuery] = useState<{ id: string; text: string; depth: 'standard' | 'deep' } | null>(null);
+  const [isChatHighlighted, setIsChatHighlighted] = useState(false);
+  const [assetHistoryTarget, setAssetHistoryTarget] = useState<AssetHistoryTarget | null>(null);
 
   const toggleBypassLimit = (val: boolean) => {
     localStorage.setItem('prospektlab_bypass_token_limit', val ? 'true' : 'false');
@@ -379,6 +387,8 @@ export const Dashboard: React.FC = () => {
   const [newsFeed, setNewsFeed] = useState<any[]>([]);
   const [newsLoading, setNewsLoading] = useState(true);
   const [newsError, setNewsError] = useState<string | null>(null);
+  const [portfolioAnalytics, setPortfolioAnalytics] = useState<any>(null);
+  const [portfolioAnalyticsError, setPortfolioAnalyticsError] = useState<string | null>(null);
 
   // Fetch token usage helper
   const fetchTokenUsage = async () => {
@@ -432,6 +442,54 @@ export const Dashboard: React.FC = () => {
     const interval = setInterval(fetchQuotes, 60000);
     return () => clearInterval(interval);
   }, [userUniverseSymbols]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchRealtimePortfolioAnalytics = async () => {
+      try {
+        const data = await getPortfolioAnalytics(selectedBenchmark, '1Y');
+        if (!data || cancelled) return;
+        setPortfolioAnalytics(data);
+        setPortfolioAnalyticsError(null);
+
+        if (Array.isArray(data.positions) && data.positions.length > 0) {
+          const mapped: PortfolioItem[] = data.positions.map((p: any) => {
+            const cleanSym = String(p.symbol || '').split('.')[0].toUpperCase().trim();
+            const stock = INDIAN_STOCKS.find(s => s.symbol.toUpperCase() === cleanSym);
+            const mf = POPULAR_MUTUAL_FUNDS.find(f => f.symbol.toUpperCase() === cleanSym);
+            const quantity = Number(p.quantity) || 0;
+            const livePrice = Number.isFinite(Number(p.last_price)) ? Number(p.last_price) : 0;
+            const costBasis = Number(p.cost_basis) || 0;
+            const avgCost = Number(p.avg_cost) || (quantity > 0 ? costBasis / quantity : 0);
+            const assetClass = p.kind === 'mf' || mf ? 'Mutual Fund' : 'Equity';
+            return {
+              symbol: cleanSym || String(p.symbol || ''),
+              name: p.name || stock?.name || mf?.name || cleanSym || 'Holding',
+              qty: quantity,
+              avgCost,
+              current: livePrice,
+              sector: p.sector || stock?.sector || mf?.category || 'General',
+              assetClass,
+              dayChangePct: finiteNumber(p.day_change_pct) * 100,
+            };
+          });
+          setPortfolio(mapped);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setPortfolioAnalyticsError(e?.message || 'Failed to load live portfolio analytics');
+          console.error('Failed to fetch live portfolio analytics', e);
+        }
+      }
+    };
+
+    fetchRealtimePortfolioAnalytics();
+    const interval = setInterval(fetchRealtimePortfolioAnalytics, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [selectedBenchmark]);
 
   // Fetch indices on mount and periodically
   useEffect(() => {
@@ -546,7 +604,7 @@ export const Dashboard: React.FC = () => {
       
       if (chosenType === 'valuation') {
         title = `Valuation Assessment — ${resolvedName}`;
-        summary = `Mark-IT metrics for ${resolvedName} (currently at ${meta?.price || '—'}) indicate sector-specific dynamics in ${meta?.sector || 'General'}. Long-term multipliers suggest stabilization.`;
+        summary = ` metrics for ${resolvedName} (currently at ${meta?.price || '—'}) indicate sector-specific dynamics in ${meta?.sector || 'General'}. Long-term multipliers suggest stabilization.`;
       } else if (chosenType === 'risk') {
         title = `Beta & Volatility — ${resolvedName}`;
         summary = `Historical correlation data for ${resolvedName} (${meta?.sector || 'General'} sector) indicates a stable tracking coefficient relative to Nifty 50 benchmarks.`;
@@ -574,7 +632,7 @@ export const Dashboard: React.FC = () => {
           name: 'Reliance Industries Ltd',
           type: 'valuation',
           title: 'DCF Intrinsic Mismatch',
-          summary: 'Mark-IT\'s WACC valuation models calculate an intrinsic value of ₹3,240. Represents a 10.5% margin of safety relative to market pricing.',
+          summary: 'Arthik\'s WACC valuation models calculate an intrinsic value of ₹3,240. Represents a 10.5% margin of safety relative to market pricing.',
           timestamp: '1 hour ago'
         },
         {
@@ -793,120 +851,190 @@ export const Dashboard: React.FC = () => {
     const welcomeMsgs: Message[] = [
       {
         sender: 'ai',
-        text: `Mark-IT here. I don't do hope — I do numbers. Ask me anything about your book, a ticker, or the tape.`
+        text: `Arthik here. I don't do hope — I do numbers. Ask me anything about your book, a ticker, or the tape.`
       }
     ];
     setMessages(welcomeMsgs);
     localStorage.setItem(`prospektlab_messages_${convId}`, JSON.stringify(welcomeMsgs));
   };
 
-  // Scroll chat bubble container to bottom
+  // Keep the newest chat turn visible as messages and live pipeline events arrive.
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
-  }, [messages.length, isThinking]);
+    const node = chatContainerRef.current;
+    if (!node) return;
+
+    const scrollToBottom = () => {
+      node.scrollTop = node.scrollHeight;
+    };
+
+    const frame = window.requestAnimationFrame(scrollToBottom);
+    const timer = window.setTimeout(scrollToBottom, 120);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [messages.length, isThinking, thinkingEvents.length]);
 
   // Live index simulation removed - data is now loaded live from the backend API
 
-  // Calculations for total portfolio NAV summary
-  const computedPortfolioDetails = enrichedPortfolio.map(item => {
-    const costBasis = item.qty * item.avgCost;
-    const currentValue = item.qty * item.current;
-    const pnl = currentValue - costBasis;
-    const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
-    return { ...item, currentValue, pnl, pnlPct };
-  });
+  const finiteNumber = (value: any, fallback = 0) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
 
-  const portfolioSummary = computedPortfolioDetails.reduce((acc, curr) => {
-    acc.totalCost += curr.qty * curr.avgCost;
-    acc.totalValue += curr.currentValue;
-    acc.totalPnL += curr.pnl;
-    return acc;
-  }, { totalCost: 0, totalValue: 0, totalPnL: 0 });
+  const normalizeMarketSymbol = (symbol: string) =>
+    String(symbol || '').split('.')[0].toUpperCase().trim();
+
+  const lookupLiveQuote = (symbol: string) => {
+    const base = normalizeMarketSymbol(symbol);
+    return (
+      quotesData[symbol] ||
+      quotesData[base] ||
+      quotesData[`${base}.NS`] ||
+      quotesData[`${base}.BO`] ||
+      null
+    );
+  };
+
+  const analyticsPositions = Array.isArray(portfolioAnalytics?.positions) ? portfolioAnalytics.positions : [];
+
+  // Calculations for total portfolio NAV summary from backend live analytics first,
+  // with quote-normalized local holdings as fallback while analytics loads.
+  const computedPortfolioDetails: Array<PortfolioItem & { currentValue: number; pnl: number; pnlPct: number; dayChangePct?: number }> = (analyticsPositions.length > 0
+    ? analyticsPositions.map((p: any) => {
+        const symbol = normalizeMarketSymbol(p.symbol || '');
+        const liveQuote = lookupLiveQuote(symbol);
+        const qty = finiteNumber(p.quantity);
+        const current = finiteNumber(liveQuote?.price, finiteNumber(p.last_price));
+        const currentValue = qty > 0 && current > 0 ? qty * current : finiteNumber(p.market_value);
+        const costBasis = finiteNumber(p.cost_basis);
+        const pnl = costBasis > 0 ? currentValue - costBasis : finiteNumber(p.unrealized_pnl, currentValue - costBasis);
+        const pnlPct = finiteNumber(p.unrealized_pnl_pct) * 100;
+        return {
+          symbol,
+          name: p.name || symbol,
+          qty,
+          avgCost: finiteNumber(p.avg_cost, qty > 0 ? costBasis / qty : 0),
+          current,
+          sector: p.sector || 'General',
+          assetClass: p.kind === 'mf' ? 'Mutual Fund' : 'Equity',
+          currentValue,
+          pnl,
+          pnlPct: costBasis > 0 ? (pnl / costBasis) * 100 : pnlPct,
+          dayChangePct: finiteNumber(liveQuote?.change_pct, finiteNumber(p.day_change_pct) * 100),
+        };
+      })
+    : enrichedPortfolio.map(item => {
+        const liveQuote = lookupLiveQuote(item.symbol);
+        const livePrice = finiteNumber(liveQuote?.price, item.current);
+        const costBasis = item.qty * item.avgCost;
+        const currentValue = item.qty * livePrice;
+        const pnl = currentValue - costBasis;
+        const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
+        return { ...item, current: livePrice, currentValue, pnl, pnlPct };
+      })
+  ).filter((item: any) => Number.isFinite(item.currentValue) && item.currentValue >= 0);
+
+  const liveComputedTotalValue = computedPortfolioDetails.reduce((acc: number, curr: any) => acc + curr.currentValue, 0);
+  const liveComputedTotalCost = computedPortfolioDetails.reduce((acc: number, curr: any) => acc + curr.qty * curr.avgCost, 0);
+  const liveComputedTotalPnL = computedPortfolioDetails.reduce((acc: number, curr: any) => acc + curr.pnl, 0);
+
+  const hasLiveQuoteOverlay = computedPortfolioDetails.some((item) => !!lookupLiveQuote(item.symbol));
+
+  const portfolioSummary = {
+    totalCost: finiteNumber(portfolioAnalytics?.total_cost_basis,
+      liveComputedTotalCost
+    ),
+    totalValue: hasLiveQuoteOverlay ? liveComputedTotalValue : finiteNumber(portfolioAnalytics?.total_market_value, liveComputedTotalValue),
+    totalPnL: hasLiveQuoteOverlay ? liveComputedTotalPnL : finiteNumber(portfolioAnalytics?.unrealized_pnl, liveComputedTotalPnL),
+  };
 
   const portfolioTotalReturnPct = portfolioSummary.totalCost > 0 
     ? (portfolioSummary.totalPnL / portfolioSummary.totalCost) * 100 
     : 0;
 
   // Donut chart calculations for sector allocation
-  const sectorAllocations = enrichedPortfolio.reduce((acc, curr) => {
-    const currentValue = curr.qty * curr.current;
-    acc[curr.sector] = (acc[curr.sector] || 0) + currentValue;
-    return acc;
-  }, {} as Record<string, number>);
+  const sectorAllocations: Record<string, number> = Object.keys(portfolioAnalytics?.sector_breakdown || {}).length > 0
+    ? Object.fromEntries(
+        Object.entries(portfolioAnalytics.sector_breakdown)
+          .map(([sec, weight]) => [sec, finiteNumber(weight) * portfolioSummary.totalValue] as [string, number])
+          .filter(([, value]) => value > 0)
+      ) as Record<string, number>
+    : computedPortfolioDetails.reduce((acc: Record<string, number>, curr: any) => {
+        acc[curr.sector] = (acc[curr.sector] || 0) + curr.currentValue;
+        return acc;
+      }, {} as Record<string, number>);
 
   const sectorChartData = {
     labels: Object.keys(sectorAllocations),
-    data: Object.values(sectorAllocations)
+    data: Object.values(sectorAllocations) as number[]
   };
 
   // Donut chart calculations for Asset Allocation (Equity vs MF vs Cash/Bonds)
-  const assetAllocations = enrichedPortfolio.reduce((acc, curr) => {
-    const value = curr.qty * curr.current;
-    acc[curr.assetClass] = (acc[curr.assetClass] || 0) + value;
-    return acc;
-  }, {} as Record<string, number>);
+  const assetAllocations: Record<string, number> = Object.keys(portfolioAnalytics?.kind_breakdown || {}).length > 0
+    ? Object.fromEntries(
+        Object.entries(portfolioAnalytics.kind_breakdown)
+          .map(([kind, weight]) => [kind === 'mf' ? 'Mutual Fund' : 'Equity', finiteNumber(weight) * portfolioSummary.totalValue] as [string, number])
+          .filter(([, value]) => value > 0)
+      ) as Record<string, number>
+    : computedPortfolioDetails.reduce((acc: Record<string, number>, curr: any) => {
+        const value = curr.currentValue;
+        const assetClass = curr.assetClass || 'Equity';
+        acc[assetClass] = (acc[assetClass] || 0) + value;
+        return acc;
+      }, {} as Record<string, number>);
 
   const assetChartData = {
     labels: Object.keys(assetAllocations).length > 0 ? Object.keys(assetAllocations) : ['Equity'],
-    data: Object.values(assetAllocations).length > 0 ? Object.values(assetAllocations) : [1]
+    data: Object.values(assetAllocations).length > 0 ? (Object.values(assetAllocations) as number[]) : [1]
   };
 
-  // --- Portfolio vs Benchmark Comparative Data Walks ---
+  // --- Portfolio vs Benchmark Comparative Data from backend live analytics ---
   const compareChartData = useMemo(() => {
-    const days = 252; // 1 year daily chart
-    const labels: string[] = [];
-    const benchValues: number[] = [];
-    const portValues: number[] = [];
-    const today = new Date();
+    const portHist = portfolioAnalytics?.history?.portfolio || {};
+    const benchHist = portfolioAnalytics?.history?.benchmark || {};
+    const portDates: string[] = Array.isArray(portHist.dates) ? portHist.dates : [];
+    const benchDates: string[] = Array.isArray(benchHist.dates) ? benchHist.dates : [];
 
-    // Seed variables based on benchmark ID to get consistent lines
-    let bSeed = selectedBenchmark === 'NIFTY50' ? 42 : selectedBenchmark === 'SENSEX' ? 88 : selectedBenchmark === 'NIFTYBANK' ? 104 : 12;
-    const bRand = () => {
-      bSeed = (bSeed * 9301 + 49297) % 233280;
-      return bSeed / 233280;
-    };
+    const portMap = new Map<string, number>(
+      portDates
+        .map((date, idx) => [date, finiteNumber(portHist.prices?.[idx])] as [string, number])
+        .filter(([date, value]) => Boolean(date) && value > 0)
+    );
+    const benchMap = new Map<string, number>(
+      benchDates
+        .map((date, idx) => [date, finiteNumber(benchHist.prices?.[idx])] as [string, number])
+        .filter(([date, value]) => Boolean(date) && value > 0)
+    );
+    const commonDates = Array.from(portMap.keys()).filter(date => benchMap.has(date)).sort();
+    const latestCommonDate = commonDates.length > 0 ? new Date(commonDates[commonDates.length - 1]) : null;
+    const oneYearCutoff = latestCommonDate && !Number.isNaN(latestCommonDate.getTime())
+      ? new Date(latestCommonDate.getFullYear() - 1, latestCommonDate.getMonth(), latestCommonDate.getDate())
+      : null;
+    const oneYearCommonDates = oneYearCutoff
+      ? commonDates.filter(date => {
+          const parsed = new Date(date);
+          return !Number.isNaN(parsed.getTime()) && parsed >= oneYearCutoff;
+        })
+      : commonDates;
 
-    let pSeed = 99; // portfolio seed
-    const pRand = () => {
-      pSeed = (pSeed * 9301 + 49297) % 233280;
-      return pSeed / 233280;
-    };
-
-    let benchPrice = 100; // indexed starting at 100
-    let portPrice = 100;  // indexed starting at 100
-
-    // Portfolio beta factor (simulated based on size of portfolio)
-    const beta = 1.05 + enrichedPortfolio.length * 0.01;
-
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      if (d.getDay() === 0 || d.getDay() === 6) continue;
-
-      const drift = 0.0003; // benchmark drift
-      const vol = 0.012;   // benchmark volatility
-      const bShock = (bRand() - 0.5) * 2 * vol;
-      const bReturn = drift + bShock;
-      benchPrice = benchPrice * (1 + bReturn);
-
-      // Portfolio returns = beta * benchmark_return + alpha + tracking_error
-      const alpha = 0.00015; // 3.8% annual alpha outperformance
-      const trackingError = 0.005;
-      const pShock = (pRand() - 0.5) * 2 * trackingError;
-      const pReturn = beta * bReturn + alpha + pShock;
-      portPrice = portPrice * (1 + pReturn);
-
-      labels.push(d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }));
-      benchValues.push(parseFloat(benchPrice.toFixed(2)));
-      portValues.push(parseFloat(portPrice.toFixed(2)));
+    if (oneYearCommonDates.length > 1) {
+      return {
+        labels: oneYearCommonDates,
+        portValues: oneYearCommonDates.map(date => portMap.get(date) || 0),
+        benchValues: oneYearCommonDates.map(date => benchMap.get(date) || 0),
+      };
     }
 
-    return { labels, benchValues, portValues };
-  }, [selectedBenchmark, enrichedPortfolio]);
+    return {
+      labels: [],
+      portValues: [],
+      benchValues: [],
+    };
+  }, [portfolioAnalytics]);
 
-  // Portfolio derived risk metrics (Value at Risk, Beta, Sharpe, HHI)
+  // Portfolio derived risk metrics from backend live analytics.
   const portfolioStats = (() => {
     if (computedPortfolioDetails.length === 0) return null;
     const sorted = [...computedPortfolioDetails].sort((a, b) => b.pnlPct - a.pnlPct);
@@ -922,41 +1050,81 @@ export const Dashboard: React.FC = () => {
     const topSectorPct = topSector ? (topSector[1] / totalVal) * 100 : 0;
     
     // Herfindahl-Hirschman Index (HHI) for concentration risk
-    const hhi = computedPortfolioDetails.reduce((sum, p) => {
-      const weight = (p.currentValue / totalVal) * 100;
-      return sum + (weight * weight);
-    }, 0);
-    
-    // Beta
-    const beta = 0.95 + (computedPortfolioDetails.length * 0.02);
-    
-    // Value at Risk (95% 1-day)
-    const var95 = totalVal * 0.0165 * beta;
+    const backendHhi = finiteNumber(portfolioAnalytics?.risk?.hhi);
+    const hhi = backendHhi > 0
+      ? backendHhi * 10000
+      : computedPortfolioDetails.reduce((sum: number, p: any) => {
+          const weight = totalVal > 0 ? (p.currentValue / totalVal) * 100 : 0;
+          return sum + (weight * weight);
+        }, 0);
+    const beta = finiteNumber(portfolioAnalytics?.risk?.beta_vs_nifty, 0);
+    const annualVolPct = finiteNumber(portfolioAnalytics?.risk?.annualized_volatility_pct, 0);
+    const oneDayVol = annualVolPct > 0 ? annualVolPct / 100 / Math.sqrt(252) : 0.0165;
+    const var95 = totalVal * oneDayVol * 1.65 * (beta > 0 ? beta : 1);
 
     return { best, worst, winners, losers, topSector, topSectorPct, beta, hhi, var95 };
   })();
 
-  // Tracked universe movers
-  const allTrackedStocks = [...enrichedPortfolio, ...watchlistStocks.filter(w => !enrichedPortfolio.find(p => p.symbol === w.symbol)).map(w => ({
-    symbol: w.symbol, name: w.name, qty: 0, avgCost: 0,
-    current: parseFloat(w.price.replace(/,/g, '')) || 0,
-    sector: 'Watchlist',
-  } as PortfolioItem))];
+  // Tracked universe movers — resolve live change_pct by normalizing symbol format
+  // quotesData may be keyed as "RELIANCE.NS" but portfolio symbols may be "RELIANCE"
+  const lookupQuote = (sym: string) => {
+    return lookupLiveQuote(sym);
+  };
+
+  const allTrackedStocks = [
+    ...computedPortfolioDetails,
+    ...watchlist
+      .filter(sym => {
+        const wBase = normalizeMarketSymbol(sym);
+        return !computedPortfolioDetails.find(p => normalizeMarketSymbol(p.symbol) === wBase);
+      })
+      .map(sym => {
+        const base = normalizeMarketSymbol(sym);
+        const info = allStockData[sym] || allStockData[base] || allStockData[base + '.NS'];
+        return ({
+        symbol: sym,
+        name: info?.name || `${base} Limited`,
+        qty: 0,
+        avgCost: 0,
+        current: info?.price ? parseFloat(info.price.replace(/,/g, '')) || 0 : 0,
+        sector: 'Watchlist',
+        dayChangePct: info?.changePct || 0,
+      } as PortfolioItem);
+      })
+  ];
 
   const stocksWithChange = allTrackedStocks.map(s => {
-    const meta = allStockData[s.symbol];
+    const q = lookupQuote(s.symbol);
+    const changePct = q && Number.isFinite(Number(q.change_pct)) ? Number(q.change_pct) : null;
+    const livePrice = q?.price;
+    const displayPrice = livePrice != null
+      ? livePrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : s.current > 0 ? s.current.toFixed(2) : '—';
+    const baseSymbol = normalizeMarketSymbol(s.symbol);
     return {
-      symbol: s.symbol,
-      name: s.name,
-      price: meta?.price || s.current.toFixed(2),
-      changePct: meta?.changePct ?? 0,
-      isOwned: enrichedPortfolio.some(p => p.symbol === s.symbol),
+      symbol: baseSymbol,
+      name: q?.company_name || s.name,
+      price: displayPrice,
+      changePct,
+      hasLiveQuote: q != null && changePct != null,
+      isOwned: computedPortfolioDetails.some(
+        p => normalizeMarketSymbol(p.symbol) === baseSymbol
+      ),
     };
-  });
+  }).filter(s => s.hasLiveQuote && s.changePct !== null);
 
-  const gainers = [...stocksWithChange].filter(s => s.changePct > 0).sort((a, b) => b.changePct - a.changePct).slice(0, 4);
-  const losersList = [...stocksWithChange].filter(s => s.changePct < 0).sort((a, b) => a.changePct - b.changePct).slice(0, 4);
-  const mostActive = [...stocksWithChange].sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct)).slice(0, 4);
+  const gainers = [...stocksWithChange]
+    .filter(s => (s.changePct ?? 0) > 0)
+    .sort((a, b) => (b.changePct ?? 0) - (a.changePct ?? 0))
+    .slice(0, 4);
+  const losersList = [...stocksWithChange]
+    .filter(s => (s.changePct ?? 0) < 0)
+    .sort((a, b) => (a.changePct ?? 0) - (b.changePct ?? 0))
+    .slice(0, 4);
+  const mostActive = [...stocksWithChange]
+    .filter(s => Math.abs(s.changePct ?? 0) > 0.005)
+    .sort((a, b) => Math.abs(b.changePct ?? 0) - Math.abs(a.changePct ?? 0))
+    .slice(0, 4);
 
   // News feed is now fetched dynamically from the API and stored in state
 
@@ -1076,7 +1244,7 @@ export const Dashboard: React.FC = () => {
     const scope = detectPortfolioScope(query);
     if (scope === 'portfolio_scope') {
       const breakdownSectors = Object.entries(sectorAllocations)
-        .map(([sec, val]) => `${sec} ${((val / portfolioSummary.totalValue) * 100).toFixed(0)}%`)
+        .map(([sec, val]) => `${sec} ${((finiteNumber(val) / portfolioSummary.totalValue) * 100).toFixed(0)}%`)
         .join(', ');
       
       const holdingsStr = enrichedPortfolio
@@ -1130,7 +1298,12 @@ export const Dashboard: React.FC = () => {
 
     // 2. Start Thinking & SSE Stream
     setIsThinking(true);
-    setThinkingEvents([]);
+    setThinkingEvents([{
+      seq: 0,
+      type: 'phase',
+      timestamp: new Date().toISOString(),
+      payload: { phase: 'queued', note: 'Preparing the live research run' },
+    }]);
 
     const enrichedObjective = enrichQueryWithPortfolio(message);
     const startMs = performance.now();
@@ -1147,33 +1320,67 @@ export const Dashboard: React.FC = () => {
           // Push event to thinking stack
           setThinkingEvents((prev) => [...prev, event]);
         },
-        async () => {
+        async (parsedEvent: any) => {
           // Finished research Turn
-          setIsThinking(false);
           const elapsed = Math.round(performance.now() - startMs);
 
           // Get full synthesized result
+          let aiResponse: Message;
           try {
             const finalResult = await getSessionResult(backendSessionId);
-            const aiResponse: Message = {
+            console.log('[DASHBOARD] getSessionResult success:', finalResult);
+            const richPayload = finalResult.final?.rich || null;
+            const memoText =
+              finalResult.memo ||
+              finalResult.final?.memo ||
+              finalResult.final?.memo_preview ||
+              richPayload?.markdown_body ||
+              finalResult.memo_event?.preview ||
+              'Analysis complete.';
+            aiResponse = {
               sender: 'ai',
-              text: finalResult.memo || 'Analysis complete.',
-              richData: finalResult.final?.payload?.rich || finalResult.final || null,
+              text: memoText,
+              richData: richPayload,
               depth: depth,
               elapsedMs: elapsed
             };
-
-            setMessages((prev) => {
-              const merged = [...prev, aiResponse];
-              localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(merged));
-              return merged;
-            });
           } catch (resErr) {
-            console.error('Failed to retrieve final memo details', resErr);
+            console.error('[DASHBOARD] Failed to retrieve final memo details', resErr);
+            // Fallback: try to show preview from the event data if available
+            const fallbackRich = parsedEvent?.rich || null;
+            const fallbackText =
+              parsedEvent?.memo ||
+              parsedEvent?.memo_preview ||
+              parsedEvent?.preview ||
+              fallbackRich?.markdown_body ||
+              'Analysis complete.';
+            aiResponse = {
+              sender: 'ai',
+              text: fallbackText,
+              richData: fallbackRich,
+              depth: depth,
+              elapsedMs: elapsed
+            };
+            // Also show a toast so the user knows something went wrong
+            showToast('Failed to load full answer. Showing cached preview.', 'error');
           }
+
+          // Update React state first, then persist to localStorage separately
+          setMessages((prev) => {
+            const next = [...prev, aiResponse];
+            try {
+              localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(next));
+            } catch (storageErr) {
+              console.warn('[DASHBOARD] localStorage persist failed (quota may be full)', storageErr);
+            }
+            return next;
+          });
+          setIsThinking(false);
+          setThinkingEvents([]);
         },
         (error) => {
           setIsThinking(false);
+          setThinkingEvents([]);
           showToast(error.message || 'Stream processing failed.', 'error');
         }
       );
@@ -1181,6 +1388,7 @@ export const Dashboard: React.FC = () => {
       abortStreamRef.current = unsubscribe;
     } catch (err: any) {
       setIsThinking(false);
+      setThinkingEvents([]);
       const errMsg = err.message || 'Failed to connect to Quant engine.';
       showToast(errMsg, 'error');
       
@@ -1190,21 +1398,21 @@ export const Dashboard: React.FC = () => {
           text: `Weekly Token Limit Exceeded`,
           tokenLimitDetail: err.detail
         };
-        setMessages((prev) => {
-          const merged = [...prev, limitResponse];
+        setMessages((prev) => [...prev, limitResponse]);
+        try {
+          const merged = [...messages, limitResponse];
           localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(merged));
-          return merged;
-        });
+        } catch (e) { /* ignore storage errors */ }
       } else {
         const errResponse: Message = {
           sender: 'ai',
           text: `**Connection Error**: ${errMsg}`
         };
-        setMessages((prev) => {
-          const merged = [...prev, errResponse];
+        setMessages((prev) => [...prev, errResponse]);
+        try {
+          const merged = [...messages, errResponse];
           localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(merged));
-          return merged;
-        });
+        } catch (e) { /* ignore storage errors */ }
       }
     }
   };
@@ -1290,8 +1498,38 @@ export const Dashboard: React.FC = () => {
     bootstrapWelcomeMessage(newId);
   };
 
-  const handleSelectStock = (symbol: string) => {
-    handleSendMessage(`Analyse ${symbol} and check its core ratios.`, 'standard');
+  /** Pre-fills the chat input with a query (shows query for user review instead of auto-executing) */
+  const handleSuggestQuery = (query: string, depth: 'standard' | 'deep' = 'standard') => {
+    // Auto-open chat if it's hidden
+    if (isChatHidden) {
+      setIsChatHidden(false);
+      const w = 380;
+      setChatWidth(w);
+      localStorage.setItem('prospektlab_chat_width', w.toString());
+    }
+    // Set pending query — ChatInput will pick this up and auto-populate
+    setPendingChatQuery({ id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, text: query, depth });
+    // Pulse the chat rail border
+    setIsChatHighlighted(true);
+    setTimeout(() => setIsChatHighlighted(false), 1600);
+    // Scroll chat body to bottom so user sees the populated input
+    setTimeout(() => {
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      }
+    }, 120);
+  };
+
+  const openAssetHistory = (symbol: string, name?: string, assetType?: string) => {
+    setAssetHistoryTarget({ symbol, name, assetType });
+  };
+
+  const handleSelectStock = (symbol: string, item?: { name?: string; assetClass?: string }) => {
+    openAssetHistory(symbol, item?.name, item?.assetClass || 'equity');
+  };
+
+  const handleAnalyzeStock = (symbol: string) => {
+    handleSuggestQuery(`Analyse ${symbol} and check its core ratios.`, 'standard');
   };
 
   const handleAddStock = (symbol: string) => {
@@ -1516,7 +1754,7 @@ export const Dashboard: React.FC = () => {
               <IndexTickerCard
                 key={idx.symbol}
                 data={idx}
-                onClick={() => handleSendMessage(`Give me a quick read on ${idx.symbol} — what's moving it today?`, 'standard')}
+                onClick={() => openAssetHistory(idx.symbol, idx.symbol, 'index')}
               />
             ))}
           </div>
@@ -1558,21 +1796,21 @@ export const Dashboard: React.FC = () => {
               height={300}
             />
 
-            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>Comparison is indexed to 100 to show proportional performance over time</span>
+            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span>{portfolioAnalyticsError || 'Comparison is indexed to 100 using live backend portfolio analytics'}</span>
               <span style={{ marginLeft: 'auto', color: 'var(--accent-cyan)', cursor: 'pointer' }}
-                onClick={() => handleSendMessage(`Explain how my portfolio is performing compared to ${selectedBenchmark}.`, 'standard')}
+                onClick={() => handleSuggestQuery(`Explain how my portfolio is performing compared to ${selectedBenchmark}.`, 'standard')}
               >
                 Analyse return spread →
               </span>
             </div>
           </div>
 
-          {/* Mark's read on your book stats */}
+          {/* Arthik's read on your book stats */}
           {portfolioStats && (
             <>
               <div className="section-head">
-                <div className="section-title">Mark-IT's read on your book</div>
+                <div className="section-title">Arthik's read on your book</div>
                 <span className="section-sublabel">PERSONAL • {portfolio.length} POSITIONS</span>
               </div>
               <div className="stats-grid">
@@ -1633,8 +1871,8 @@ export const Dashboard: React.FC = () => {
                   <div className="stat-tile-value" style={{ color: 'var(--loss)' }}>₹{portfolioStats.var95.toFixed(0)}</div>
                   <div className="stat-tile-sub">Estimated 1-day max loss</div>
                 </div>
-                <div className="stat-tile stat-tile-cta" onClick={() => handleSendMessage('Audit my portfolio — what is the single biggest risk hiding in my book right now?', 'deep')}>
-                  <div className="stat-tile-label" style={{ color: 'var(--accent-cyan)' }}>ASK MARK-IT</div>
+                <div className="stat-tile stat-tile-cta" onClick={() => handleSuggestQuery('Audit my portfolio — what is the single biggest risk hiding in my book right now?', 'deep')}>
+                  <div className="stat-tile-label" style={{ color: 'var(--accent-cyan)' }}>ASK ARTHIK</div>
                   <div style={{ fontSize: 13, lineHeight: 1.4, marginTop: 6, color: 'var(--text-primary)' }}>
                     "What's the one thing I'm missing about my book today?"
                   </div>
@@ -1651,7 +1889,7 @@ export const Dashboard: React.FC = () => {
                   <div className="data-panel-title" style={{ fontSize: '13px', fontWeight: 600 }}>Sector Allocation</div>
                   <button
                     className="data-panel-link"
-                    onClick={() => handleSendMessage('Audit my sector allocation — where am I over- or under-exposed?', 'standard')}
+                    onClick={() => handleSuggestQuery('Audit my sector allocation — where am I over- or under-exposed?', 'standard')}
                   >
                     Audit →
                   </button>
@@ -1663,7 +1901,7 @@ export const Dashboard: React.FC = () => {
                   <div className="data-panel-title" style={{ fontSize: '13px', fontWeight: 600 }}>Asset Allocation</div>
                   <button
                     className="data-panel-link"
-                    onClick={() => handleSendMessage('Audit my asset allocation classes.', 'standard')}
+                    onClick={() => handleSuggestQuery('Audit my asset allocation classes.', 'standard')}
                   >
                     Audit →
                   </button>
@@ -1732,7 +1970,7 @@ export const Dashboard: React.FC = () => {
                       <div style={{ color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '6px' }}>Action Queue Items</div>
                       <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>{actionQueue.length} Alerts</div>
                       <div style={{ color: 'var(--accent-cyan)', marginTop: '4px', fontSize: '11px', cursor: 'pointer' }}
-                        onClick={() => handleSendMessage('Check my portfolio action items.', 'standard')}
+                        onClick={() => handleSuggestQuery('Check my portfolio action items.', 'standard')}
                       >
                         Inspect Queue →
                       </div>
@@ -1915,19 +2153,19 @@ export const Dashboard: React.FC = () => {
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Simulate shocks on your portfolio holdings NAV:</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px' }}>
                       <button
-                        onClick={() => handleSendMessage('Simulate Nifty down 10% on my portfolio.', 'standard')}
+                        onClick={() => handleSuggestQuery('Simulate Nifty down 10% on my portfolio.', 'standard')}
                         style={{ padding: '8px', fontSize: '11px', background: 'rgba(251, 113, 133, 0.05)', borderColor: 'var(--loss)' }}
                       >
                         Nifty -10% Crash
                       </button>
                       <button
-                        onClick={() => handleSendMessage('Simulate Nifty down 20% on my portfolio.', 'standard')}
+                        onClick={() => handleSuggestQuery('Simulate Nifty down 20% on my portfolio.', 'standard')}
                         style={{ padding: '8px', fontSize: '11px', background: 'rgba(251, 113, 133, 0.08)', borderColor: 'var(--loss)' }}
                       >
                         Nifty -20% Crash
                       </button>
                       <button
-                        onClick={() => handleSendMessage('Simulate the 2020 COVID crash scenarios on my book.', 'standard')}
+                        onClick={() => handleSuggestQuery('Simulate the 2020 COVID crash scenarios on my book.', 'standard')}
                         style={{ padding: '8px', fontSize: '11px', background: 'rgba(129, 140, 248, 0.05)', borderColor: 'var(--accent-indigo)' }}
                       >
                         2020 COVID Crash
@@ -1950,14 +2188,14 @@ export const Dashboard: React.FC = () => {
               {gainers.length === 0 ? (
                 <div className="movers-empty">No green names today.</div>
               ) : gainers.map(s => (
-                <div key={s.symbol} className="mover-row" onClick={() => handleSendMessage(`Why is ${s.symbol} up today? Walk me through it.`, 'standard')}>
+                <div key={s.symbol} className="mover-row" onClick={() => openAssetHistory(s.symbol, s.name, 'equity')}>
                   <div>
                     <div className="mover-sym">{s.symbol} {s.isOwned && <span className="owned-dot" title="You own this" />}</div>
                     <div className="mover-name">{s.name}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div className="mover-price">₹{s.price}</div>
-                    <div className="mover-pct" style={{ color: 'var(--profit)' }}>+{s.changePct.toFixed(2)}%</div>
+                    <div className="mover-pct" style={{ color: 'var(--profit)' }}>+{(s.changePct ?? 0).toFixed(2)}%</div>
                   </div>
                 </div>
               ))}
@@ -1967,30 +2205,32 @@ export const Dashboard: React.FC = () => {
               {losersList.length === 0 ? (
                 <div className="movers-empty">All green. Enjoy it while it lasts.</div>
               ) : losersList.map(s => (
-                <div key={s.symbol} className="mover-row" onClick={() => handleSendMessage(`Why is ${s.symbol} down today? Should I be worried?`, 'standard')}>
+                <div key={s.symbol} className="mover-row" onClick={() => openAssetHistory(s.symbol, s.name, 'equity')}>
                   <div>
                     <div className="mover-sym">{s.symbol} {s.isOwned && <span className="owned-dot" title="You own this" />}</div>
                     <div className="mover-name">{s.name}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div className="mover-price">₹{s.price}</div>
-                    <div className="mover-pct" style={{ color: 'var(--loss)' }}>{s.changePct.toFixed(2)}%</div>
+                    <div className="mover-pct" style={{ color: 'var(--loss)' }}>{(s.changePct ?? 0).toFixed(2)}%</div>
                   </div>
                 </div>
               ))}
             </div>
             <div className="movers-col">
               <div className="movers-col-head">⚡ Most active</div>
-              {mostActive.map(s => (
-                <div key={s.symbol} className="mover-row" onClick={() => handleSendMessage(`Quick read on ${s.symbol} — what's the institutional view?`, 'standard')}>
+              {mostActive.length === 0 ? (
+                <div className="movers-empty">Waiting for live NSE/BSE movement.</div>
+              ) : mostActive.map(s => (
+                <div key={s.symbol} className="mover-row" onClick={() => openAssetHistory(s.symbol, s.name, 'equity')}>
                   <div>
                     <div className="mover-sym">{s.symbol} {s.isOwned && <span className="owned-dot" title="You own this" />}</div>
                     <div className="mover-name">{s.name}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div className="mover-price">₹{s.price}</div>
-                    <div className="mover-pct" style={{ color: s.changePct >= 0 ? 'var(--profit)' : 'var(--loss)' }}>
-                      {s.changePct >= 0 ? '+' : ''}{s.changePct.toFixed(2)}%
+                    <div className="mover-pct" style={{ color: (s.changePct ?? 0) >= 0 ? 'var(--profit)' : 'var(--loss)' }}>
+                      {(s.changePct ?? 0) >= 0 ? '+' : ''}{(s.changePct ?? 0).toFixed(2)}%
                     </div>
                   </div>
                 </div>
@@ -2001,7 +2241,7 @@ export const Dashboard: React.FC = () => {
           {/* AI Market summary */}
           <div className="section-head">
             <div className="section-title">India market summary</div>
-            <span className="section-sublabel">MARK-IT'S BRIEF • {marketSummary.sourcesCount} sources</span>
+            <span className="section-sublabel">ARTHIK'S BRIEF • {marketSummary.sourcesCount} sources</span>
           </div>
 
           <div className="summary-card">
@@ -2009,9 +2249,9 @@ export const Dashboard: React.FC = () => {
             <div className="summary-card-body">{marketSummary.body}</div>
             <button
               className="summary-cta"
-              onClick={() => handleSendMessage('Dive deeper on today\'s market moves — what should I actually do about my portfolio?', 'deep')}
+              onClick={() => handleSuggestQuery('Dive deeper on today\'s market moves — what should I actually do about my portfolio?', 'deep')}
             >
-              <Sparkles size={13} /> Have Mark-IT dig into it
+              <Sparkles size={13} /> Have Arthik dig into it
             </button>
           </div>
 
@@ -2041,12 +2281,11 @@ export const Dashboard: React.FC = () => {
                     Watchlist
                   </button>
                 </div>
-                <button className="data-panel-link" onClick={() => navigate('/onboarding')}>Manage →</button>
               </div>
 
               {activeTab === 'portfolio' ? (
                 enrichedPortfolio.length > 0 ? (
-                  <PortfolioTable portfolio={enrichedPortfolio} onSelectStock={handleSelectStock} />
+                  <PortfolioTable portfolio={enrichedPortfolio} onSelectStock={handleSelectStock} onAnalyzeStock={handleAnalyzeStock} />
                 ) : (
                   <div style={{ padding: 32, textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
                     No holdings yet.{' '}
@@ -2062,6 +2301,7 @@ export const Dashboard: React.FC = () => {
                 <WatchlistCard
                   stocks={watchlistStocks}
                   onSelectStock={handleSelectStock}
+                  onAskStock={handleAnalyzeStock}
                   onAddStock={handleAddStock}
                   onRemoveStock={handleRemoveStock}
                 />
@@ -2078,7 +2318,7 @@ export const Dashboard: React.FC = () => {
                   <div
                     key={ins.id}
                     className="insight-row"
-                    onClick={() => handleSendMessage(`Walk me through the ${ins.title} for ${ins.ticker}.`, 'standard')}
+                    onClick={() => handleSuggestQuery(`Walk me through the ${ins.title} for ${ins.ticker}.`, 'standard')}
                   >
                     <div className="insight-row-meta" style={{ flexWrap: 'wrap', rowGap: '4px' }}>
                       <span>{ins.ticker}</span>
@@ -2095,7 +2335,7 @@ export const Dashboard: React.FC = () => {
           {/* News Feed */}
           <div className="section-head" style={{ marginTop: 24 }}>
             <div className="section-title">What's moving the tape</div>
-            <span className="section-sublabel">LIVE NEWS · MARK-IT'S SENTIMENT</span>
+            <span className="section-sublabel">LIVE NEWS · ARTHIK'S SENTIMENT</span>
           </div>
           <div className="news-grid">
             {newsLoading && (
@@ -2149,7 +2389,7 @@ export const Dashboard: React.FC = () => {
               </div>
             )}
             {!newsLoading && !newsError && newsFeed.map(n => (
-              <div key={n.id} className="news-card" onClick={() => handleSendMessage(`Tell me more about: ${n.headline}`, 'standard')}>
+              <div key={n.id} className="news-card" onClick={() => handleSuggestQuery(`Tell me more about: ${n.headline}`, 'standard')}>
                 <div className="news-card-meta">
                   <span className="news-source">{n.source}</span>
                   <span className="news-time">· {n.time}</span>
@@ -2182,7 +2422,7 @@ export const Dashboard: React.FC = () => {
               const countdown = getCountdownLabel(e.date);
               
               return (
-                <div key={e.ticker} className="earnings-row" style={{ gap: '16px', padding: '12px 16px' }} onClick={() => handleSendMessage(`What should I expect from ${e.name}'s upcoming ${e.period} earnings?`, 'standard')}>
+                <div key={e.ticker} className="earnings-row" style={{ gap: '16px', padding: '12px 16px' }} onClick={() => handleSuggestQuery(`What should I expect from ${e.name}'s upcoming ${e.period} earnings?`, 'standard')}>
                   {/* Calendar Sheet Card on Left */}
                   <CalendarSheet dateStr={e.date} dateLabel={e.dateLabel} />
                   
@@ -2243,7 +2483,8 @@ export const Dashboard: React.FC = () => {
           flexDirection: 'column',
           borderLeft: isChatHidden ? 'none' : undefined,
           overflow: 'visible',
-          transition: isDraggingChat ? 'none' : undefined
+          transition: isDraggingChat ? 'none' : 'box-shadow 0.4s ease',
+          boxShadow: isChatHighlighted ? '0 0 0 2px rgba(56, 189, 248, 0.45), -4px 0 24px rgba(56, 189, 248, 0.08)' : undefined
         }}>
           {/* Boundary toggle removed — use header close button + floating restore ball */}
 
@@ -2276,7 +2517,7 @@ export const Dashboard: React.FC = () => {
           />
 
           <div className="chat-rail-head">
-            <div className="chat-rail-title">Mark-IT</div>
+            <div className="chat-rail-title">Arthik</div>
             <div className="chat-rail-actions">
                <button className="chat-rail-iconbtn" title="New session" onClick={handleNewConversation}>
                  <Edit3 size={16} color="#38BDF8" style={{ minWidth: 16, minHeight: 16, display: 'block' }} />
@@ -2295,11 +2536,11 @@ export const Dashboard: React.FC = () => {
             {!hasEngaged ? (
               <>
                 <div className="chat-rail-greeting">
-                  {timeGreeting}, {username}. I'm Mark-IT — your market read, unfiltered. What are we hunting today?
+                  {timeGreeting}, {username}. I'm Arthik — your market read, unfiltered. What are we hunting today?
                 </div>
 
                 {suggestions.map((s, i) => (
-                  <button key={i} className="suggestion-card" onClick={() => handleSendMessage(s, 'standard')}>
+                  <button key={i} className="suggestion-card" onClick={() => handleSuggestQuery(s, 'standard')}>
                     <span>{s}</span>
                     <span className="suggestion-card-icon"><Search size={11} /></span>
                   </button>
@@ -2309,19 +2550,19 @@ export const Dashboard: React.FC = () => {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   <button
                     className="mode-chip"
-                    onClick={() => handleSendMessage('Deep research: build a complete investment thesis on RELIANCE.', 'deep')}
+                    onClick={() => handleSuggestQuery('Deep research: build a complete investment thesis on RELIANCE.', 'deep')}
                   >
                     <Sparkles size={12} /> Full thesis
                   </button>
                   <button
                     className="mode-chip"
-                    onClick={() => handleSendMessage('Run a DCF valuation on my largest holding.', 'standard')}
+                    onClick={() => handleSuggestQuery('Run a DCF valuation on my largest holding.', 'standard')}
                   >
                     DCF valuation
                   </button>
                   <button
                     className="mode-chip"
-                    onClick={() => handleSendMessage('Compare TCS vs Infosys on margins, growth, and quality.', 'standard')}
+                    onClick={() => handleSuggestQuery('Compare TCS vs Infosys on margins, growth, and quality.', 'standard')}
                   >
                     Head-to-head
                   </button>
@@ -2418,19 +2659,26 @@ export const Dashboard: React.FC = () => {
                     </div>
                   );
                 })}
-                <AgentThinking events={thinkingEvents} isActive={isThinking} />
               </>
             )}
           </div>
 
+          {isThinking && (
+            <div className="chat-live-pipeline-panel" aria-live="polite" aria-label="Arthik live pipeline">
+              <AgentThinking events={thinkingEvents} isActive={isThinking} />
+            </div>
+          )}
+
           <div className="chat-rail-dock">
-            <ChatInput 
-              onSend={handleSendMessage} 
-              onStop={handleStopGeneration} 
-              disabled={isThinking} 
+            <ChatInput
+              onSend={handleSendMessage}
+              onStop={handleStopGeneration}
+              disabled={isThinking}
+              pendingDraft={pendingChatQuery}
+              onPendingConsumed={() => setPendingChatQuery(null)}
             />
             <div className="chat-rail-footer">
-              Mark-IT • every NSE name • Standard / Deep • Esc to stop
+              Arthik • every NSE name • Standard / Deep • Esc to stop
             </div>
           </div>
           </div>
@@ -2464,6 +2712,11 @@ export const Dashboard: React.FC = () => {
           <MessageSquare size={20} />
         </button>
       )}
+
+      <AssetHistoryModal
+        asset={assetHistoryTarget}
+        onClose={() => setAssetHistoryTarget(null)}
+      />
     </AppShell>
   );
 };

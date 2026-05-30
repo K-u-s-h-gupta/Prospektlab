@@ -1,19 +1,24 @@
 # ==============================================
-# Start All FinAgent MCP Servers
+# Start ProspektLab v3 MCP Servers
 # ==============================================
-# This script starts all 5 MCP servers in separate windows.
+# This script starts only the v3 two-server topology:
+#   - discovery_server.py on :8003
+#   - quant_server.py on :8005
 
-$ErrorActionPreference = "SilentlyContinue"
+$ErrorActionPreference = "Stop"
 
-Write-Host "Starting FinAgent MCP Servers..." -ForegroundColor Cyan
+Write-Host "Starting ProspektLab v3 MCP Servers..." -ForegroundColor Cyan
 
-$basePath = "C:\Users\kusha\OneDrive\डेस्कटॉप\PROSPEKTLAB\finagent"
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$python = Join-Path $repoRoot ".venv-prospektlab311b\Scripts\python.exe"
+if (!(Test-Path $python)) {
+    $python = "python"
+}
 
-# Start each MCP server in a new PowerShell window
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$basePath'; python -m finagent.tools.mcp_servers.quant_server"
+Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "cd '$repoRoot'; & '$python' -m finagent.tools.mcp_servers.quant_server"
 Start-Sleep -Seconds 1
 
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$basePath'; python -m finagent.tools.mcp_servers.discovery_server"
+Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "cd '$repoRoot'; & '$python' -m finagent.tools.mcp_servers.discovery_server"
 
-Write-Host "`nAll MCP servers are starting in separate windows." -ForegroundColor Green
+Write-Host "`nQuant (:8005) and Discovery (:8003) servers are starting." -ForegroundColor Green
 Write-Host "You can now run the main API server." -ForegroundColor Yellow

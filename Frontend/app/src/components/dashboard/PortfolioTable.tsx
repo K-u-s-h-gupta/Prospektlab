@@ -8,14 +8,16 @@ interface PortfolioItem {
   avgCost: number;
   current: number;
   sector: string;
+  assetClass?: string;
 }
 
 interface PortfolioTableProps {
   portfolio: PortfolioItem[];
-  onSelectStock: (symbol: string) => void;
+  onSelectStock: (symbol: string, item?: PortfolioItem) => void;
+  onAnalyzeStock?: (symbol: string) => void;
 }
 
-export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSelectStock }) => {
+export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSelectStock, onAnalyzeStock }) => {
   // Calculations
   const computedPortfolio = portfolio.map(item => {
     const costBasis = item.qty * item.avgCost;
@@ -79,7 +81,7 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                    onClick={() => onSelectStock(item.symbol)}
+                    onClick={() => onSelectStock(item.symbol, item)}
                   >
                     <td style={{ padding: '14px 16px', maxWidth: 200 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -109,7 +111,7 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
                         </span>
                       </div>
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => { e.stopPropagation(); onSelectStock(item.symbol); }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }} onClick={(e) => { e.stopPropagation(); onAnalyzeStock ? onAnalyzeStock(item.symbol) : onSelectStock(item.symbol, item); }}>
                       <button 
                         style={{ 
                           fontSize: '11px', 

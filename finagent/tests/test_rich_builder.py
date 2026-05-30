@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from finagent import rich_builder
 
 
@@ -47,3 +49,34 @@ def test_wants_charts_filtering():
     # Regulatory lookup with explicit visual request should want charts
     assert rich_builder._wants_charts("plot a trend chart of promoter pledge SEBI filings for TCS")
 
+
+def test_native_valuation_does_not_chart_synthetic_terminal_placeholder():
+    bundle = SimpleNamespace(
+        yahoo=SimpleNamespace(
+            name="Test Co",
+            ticker="TEST.NS",
+            exchange="NSE",
+            currency="INR",
+            price=100.0,
+            market_cap=None,
+            change_pct=None,
+            fifty_two_week_high=None,
+            fifty_two_week_low=None,
+            financial_metrics={},
+        )
+    )
+    findings = [
+        SimpleNamespace(
+            agent="valuation",
+            metrics={
+                "projected_terminal_revenue": 1_000.0,
+                "model_used": "statistical_cagr_2sigma",
+            },
+        )
+    ]
+
+    rich = rich_builder.build_from_native("valuation projection for TEST", bundle, [], findings, "memo text")
+
+    assert rich is not None
+    assert all(chart.id != "dcf-projection" for chart in rich.charts)
+    assert all(card.value.lower() != "n/a" for card in rich.metric_cards)

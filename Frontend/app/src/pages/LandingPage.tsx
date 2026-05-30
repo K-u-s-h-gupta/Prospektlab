@@ -20,21 +20,21 @@ const ACTIVITY_FEED = [
 ];
 
 const REVIEWS = [
-  { name: 'CA, Mumbai', location: 'Mumbai', role: 'CA & Part-time Investor', avatar: 'AM', stars: 5, title: 'Caught the Asian Paints drop before it happened', body: "Was about to add Asian Paints at ₹2,850. Mark flagged the promoter pledge increase. I held off. Stock dropped 14% in three weeks. That call saved me ₹2.3 Lakhs on a ₹16L position.", result: 'Saved ₹2.3L in 3 weeks' },
-  { name: 'Tech professional, Bengaluru', location: 'Bengaluru', role: 'Tech Lead, Flipkart', avatar: 'PK', stars: 5, title: 'Replaced my broker research entirely', body: "Broker's PDF said BUY on everything. Mark gave me a DCF on TCS in eight seconds. I changed the growth rate. Fair value updated in real time. Cancelled my ₹18K/yr subscription.", result: 'Cancelled ₹18K/yr broker research' },
-  { name: 'Business owner, Delhi', location: 'New Delhi', role: 'Business Owner', avatar: 'VG', stars: 4, title: 'Stopped losing money on Telegram tips', body: "Lost ₹4.8L over 18 months chasing tips. Mark shows me actual numbers. Piotroski. Debt ratios. Cash flows. Portfolio up 22% in eight months. I understand every position I hold.", result: 'Portfolio up 22% in 8 months' },
-  { name: 'Dentist, Chennai', location: 'Chennai', role: 'Dentist & HNI Investor', avatar: 'SI', stars: 5, title: 'Altman Z saved my capital', body: "Mark's Altman Z-Score flagged concentrated wholesale borrowing plus declining interest coverage. I passed. The company defaulted eleven weeks later. Paid for itself 100x in one decision.", result: 'Avoided a likely default' },
-  { name: 'Engineer, Jaipur', location: 'Jaipur', role: 'Civil Engineer', avatar: 'MT', stars: 5, title: 'Found a 34% margin-of-safety stock', body: "My advisor had me in 12 overlapping mutual funds. Mark surfaced a small-cap. 0.6x book. Zero debt. 18% ROE. Bought at ₹142. It's at ₹208 now.", result: '₹142 → ₹208 in 5 months' },
-  { name: 'Small business owner, Kochi', location: 'Kochi', role: 'Small Business Owner', avatar: 'KN', stars: 4, title: 'It took 20 minutes to trust it. Now I can\'t stop.', body: "First time I asked 'Should I average down on Zomato?' Mark gave me burn-rate analysis, competitive moat, and Graham valuation in one response. Goldman Sachs in my pocket.", result: 'First good Zomato call in 2 years' },
+  { name: 'CA, Mumbai', location: 'Mumbai', role: 'CA & Part-time Investor', avatar: 'AM', stars: 5, title: 'Caught the Asian Paints drop before it happened', body: "Was about to add Asian Paints at ₹2,850. Arthik flagged the promoter pledge increase. I held off. Stock dropped 14% in three weeks. That call saved me ₹2.3 Lakhs on a ₹16L position.", result: 'Saved ₹2.3L in 3 weeks' },
+  { name: 'Tech professional, Bengaluru', location: 'Bengaluru', role: 'Tech Lead, Flipkart', avatar: 'PK', stars: 5, title: 'Replaced my broker research entirely', body: "Broker's PDF said BUY on everything. Arthik gave me a DCF on TCS in eight seconds. I changed the growth rate. Fair value updated in real time. Cancelled my ₹18K/yr subscription.", result: 'Cancelled ₹18K/yr broker research' },
+  { name: 'Business owner, Delhi', location: 'New Delhi', role: 'Business Owner', avatar: 'VG', stars: 4, title: 'Stopped losing money on Telegram tips', body: "Lost ₹4.8L over 18 months chasing tips. Arthik shows me actual numbers. Piotroski. Debt ratios. Cash flows. Portfolio up 22% in eight months. I understand every position I hold.", result: 'Portfolio up 22% in 8 months' },
+  { name: 'Dentist, Chennai', location: 'Chennai', role: 'Dentist & HNI Investor', avatar: 'SI', stars: 5, title: 'Altman Z saved my capital', body: "Arthik's Altman Z-Score flagged concentrated wholesale borrowing plus declining interest coverage. I passed. The company defaulted eleven weeks later. Paid for itself 100x in one decision.", result: 'Avoided a likely default' },
+  { name: 'Engineer, Jaipur', location: 'Jaipur', role: 'Civil Engineer', avatar: 'MT', stars: 5, title: 'Found a 34% margin-of-safety stock', body: "My advisor had me in 12 overlapping mutual funds. Arthik surfaced a small-cap. 0.6x book. Zero debt. 18% ROE. Bought at ₹142. It's at ₹208 now.", result: '₹142 → ₹208 in 5 months' },
+  { name: 'Small business owner, Kochi', location: 'Kochi', role: 'Small Business Owner', avatar: 'KN', stars: 4, title: 'It took 20 minutes to trust it. Now I can\'t stop.', body: "First time I asked 'Should I average down on Zomato?' Arthik gave me burn-rate analysis, competitive moat, and Graham valuation in one response. Goldman Sachs in my pocket.", result: 'First good Zomato call in 2 years' },
 ];
 
 const FAQS = [
-  { q: "Is this SEBI-registered investment advice?", a: "No. ProspektLab is an analytical tool, not a SEBI-registered advisor. Mark pulls public data and runs standard models. You make the call. We recommend a SEBI-registered advisor for final decisions." },
-  { q: "How is this different from ChatGPT?", a: "ChatGPT trains on 2023 data. Mark pulls live NSE feeds. ChatGPT gives opinions. Mark shows you the math, with editable assumptions. Also: ChatGPT costs ₹1,650/month. Mark's free tier is actually useful." },
+  { q: "Is this SEBI-registered investment advice?", a: "No. ProspektLab is an analytical tool, not a SEBI-registered advisor. Arthik pulls public data and runs standard models. You make the call. We recommend a SEBI-registered advisor for final decisions." },
+  { q: "How is this different from ChatGPT?", a: "ChatGPT trains on 2023 data. Arthik pulls live NSE feeds. ChatGPT gives opinions. Arthik shows you the math, with editable assumptions. Also: ChatGPT costs ₹1,650/month. Arthik's free tier is actually useful." },
   { q: "What's the catch with the free tier?", a: "No catch. 20 queries per day. Live data. Basic valuations. Portfolio tracking. The free tier saves most users from one bad trade in week one. After that, ₹499/month feels cheap." },
   { q: "How accurate are the models?", a: "Same models as sell-side research. Two-stage DCF. Altman Z. Piotroski F-Score. Graham formula. The difference: every assumption is visible. Every number is editable. Broker research hides the math. We show it." },
   { q: "Where is my portfolio data stored?", a: "In your browser. Not on our servers. We never see your holdings. Clear your cache, you re-import. That's the trade-off for real privacy." },
-  { q: "Which brokers work for import?", a: "Zerodha, Groww, Upstox, ICICI Direct, and anything that exports a standard trade book CSV or PDF. If your broker gives you a statement, Mark can read it." },
+  { q: "Which brokers work for import?", a: "Zerodha, Groww, Upstox, ICICI Direct, and anything that exports a standard trade book CSV or PDF. If your broker gives you a statement, Arthik can read it." },
 ];
 
 /* ─────────────────────────────────────────────
@@ -407,7 +407,7 @@ export const LandingPage: React.FC = () => {
                 </div>
                 <div style={{ flex:1, background:'rgba(255,255,255,0.04)', borderRadius:6, padding:'4px 10px', fontSize:11, color:'var(--text-muted)', fontFamily:'var(--font-mono)', display:'flex', alignItems:'center', gap:6 }}>
                   <span style={{ width:6, height:6, borderRadius:'50%', background:marketDot, animation:'pulse2 2s infinite', display:'inline-block' }} />
-                  Mark · {ctx.marketStatus === 'open' ? 'Live · NSE Connected' : 'Standby · NSE Cached'}
+                  Arthik · {ctx.marketStatus === 'open' ? 'Live · NSE Connected' : 'Standby · NSE Cached'}
                 </div>
                 <Activity size={13} color="var(--profit)" />
               </div>
@@ -424,7 +424,7 @@ export const LandingPage: React.FC = () => {
                   <div style={{ width:28, height:28, borderRadius:'50%', background:'var(--gradient-brand)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 10px rgba(56,189,248,0.3)' }}><Brain size={14} color="#0f172a" /></div>
                   <div style={{ flex:1, background:'rgba(15,23,42,0.6)', border:'1px solid rgba(56,189,248,0.12)', borderRadius:'4px 14px 14px 14px', padding:'14px', fontSize:13, color:'var(--text-primary)', lineHeight:1.6 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:12 }}>
-                      <span style={{ fontSize:11, fontWeight:700, color:'var(--accent-cyan)', letterSpacing:'0.06em' }}>MARK · RELIANCE</span>
+                      <span style={{ fontSize:11, fontWeight:700, color:'var(--accent-cyan)', letterSpacing:'0.06em' }}>ARTHIK · RELIANCE</span>
                       <span style={{ fontSize:10, background:'rgba(52,211,153,0.1)', color:'var(--profit)', padding:'2px 6px', borderRadius:4, fontWeight:700 }}>LIVE</span>
                     </div>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:14 }}>
@@ -549,7 +549,7 @@ export const LandingPage: React.FC = () => {
               <Zap size={13} /> The Edge
             </div>
             <h2 style={{ fontSize:'clamp(26px,3.5vw,40px)', fontWeight:800, marginBottom:12, letterSpacing:'-0.5px' }}>
-              Mark is the <span style={{ background:'var(--gradient-brand)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>analyst team</span> you couldn't afford.
+              Arthik is the <span style={{ background:'var(--gradient-brand)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>analyst team</span> you couldn't afford.
             </h2>
             <p style={{ fontSize:16, color:'var(--text-secondary)', maxWidth:640, margin:'0 auto', lineHeight:1.65 }}>
               Eight specialist AI agents. Working in parallel. Reading what brokers won't tell you. Running the math sell-side hides. Answering in eight seconds. With zero incentive to make you trade.
@@ -561,8 +561,8 @@ export const LandingPage: React.FC = () => {
               { icon:TrendingUp, title:"Live NSE feeds", desc:"Real-time price action, volume anomalies, institutional flow. No delayed data.", metric:'265ms' },
               { icon:Shield, title:"Transparent valuation", desc:"DCF, Graham, Altman Z, Piotroski. Every assumption visible. Every number editable.", metric:'4 models' },
               { icon:FileText, title:"Deep research memos", desc:"Eight-phase loops read filings, compare peers, check sentiment, write analyst-grade memos.", metric:'90s' },
-              { icon:CheckCircle, title:"Zero conflict", desc:"Mark earns no brokerage. Has no incentive to push you to trade. Just the math.", metric:'0 bias' },
-              { icon:Lock, title:"Portfolio risk audit", desc:"Upload your statement. Mark flags concentration, overlap, hidden leverage, beta drift.", metric:'6 axes' },
+              { icon:CheckCircle, title:"Zero conflict", desc:"Arthik earns no brokerage. Has no incentive to push you to trade. Just the math.", metric:'0 bias' },
+              { icon:Lock, title:"Portfolio risk audit", desc:"Upload your statement. Arthik flags concentration, overlap, hidden leverage, beta drift.", metric:'6 axes' },
               { icon:Trophy, title:"Earnings edge", desc:"Pre-result positioning. Whisper expectations. Beat/miss rates. Implied volatility.", metric:'5-day lead' },
             ].map((f, i) => (
               <div key={i} className="card-hover" style={{ background:'rgba(15,23,42,0.4)', border:'1px solid var(--border-subtle)', borderRadius:16, padding:24, display:'flex', flexDirection:'column', gap:12 }}>
@@ -610,8 +610,8 @@ export const LandingPage: React.FC = () => {
               <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
                 <div style={{ fontSize:11, fontWeight:800, color:'var(--profit)', letterSpacing:'0.1em', textTransform:'uppercase', paddingBottom:10, borderBottom:'1px solid rgba(52,211,153,0.15)' }}>The Edge You</div>
                 {[
-                  "Ask Mark. Real DCF. Real risk score. Eight seconds. You decide.",
-                  "Tip arrives. Run it through Mark. Verified or rejected. Move on.",
+                  "Ask Arthik. Real DCF. Real risk score. Eight seconds. You decide.",
+                  "Tip arrives. Run it through Arthik. Verified or rejected. Move on.",
                   "Every position justified. Red days are buying opportunities.",
                 ].map((item,i) => (
                   <div key={i} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
@@ -640,7 +640,7 @@ export const LandingPage: React.FC = () => {
             <div style={{ width:30, height:1, background:'var(--border-hover)' }} />
           </div>
           <p style={{ fontSize:15, color:'var(--text-secondary)', lineHeight:1.75, maxWidth:620, margin:'0 auto' }}>
-            Mark answers both questions. About every stock. In every portfolio. In real time. That's the only kind of conviction worth having.
+            Arthik answers both questions. About every stock. In every portfolio. In real time. That's the only kind of conviction worth having.
           </p>
         </div>
       </section>
@@ -726,7 +726,7 @@ export const LandingPage: React.FC = () => {
               Free forever. No card. No tricks.
             </h2>
             <p style={{ fontSize:16, color:'var(--text-secondary)', maxWidth:600, margin:'0 auto 28px', lineHeight:1.7 }}>
-              Twenty queries per day. Live NSE data. Basic valuations. If Mark doesn't save you from one bad decision in your first week, you delete the tab. That's it. That's the deal.
+              Twenty queries per day. Live NSE data. Basic valuations. If Arthik doesn't save you from one bad decision in your first week, you delete the tab. That's it. That's the deal.
             </p>
             <div className="guarantee-items" style={{ display:'flex', justifyContent:'center', gap:'clamp(16px,3vw,32px)', flexWrap:'wrap', marginBottom:32 }}>
               {['Free forever tier','Cancel anytime','No hidden fees','Your data never sold'].map((item,i) => (
@@ -788,7 +788,7 @@ export const LandingPage: React.FC = () => {
             <span style={{ background:'var(--gradient-brand)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>It's telling signal from noise.</span>
           </h2>
           <p style={{ fontSize:17, color:'var(--text-secondary)', marginBottom:32, lineHeight:1.65 }}>
-            Mark does that part. You take the credit.
+            Arthik does that part. You take the credit.
           </p>
           <button onClick={handleCTA} className="cta-shimmer" style={{ color:'#0f172a', border:'none', padding:'20px 44px', borderRadius:16, fontSize:18, fontWeight:900, cursor:'pointer', marginBottom:20, letterSpacing:'-0.3px' }}>
             Claim Your Unfair Advantage →

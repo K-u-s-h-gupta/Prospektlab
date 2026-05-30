@@ -8,13 +8,18 @@ Pipeline:
 4. deep-dive — iterative targeted second-pass queries to fill gaps
 5. analysis — cross-source conflict detection, viral scoring
 6. synthesis — OpenAI / template memo using the *facts*, not just excerpts
+
+CANARY: portfolio_context injection code is present in this file.
 """
 
 from __future__ import annotations
 
+import sys
+print("[RUN_AGENT_LOADED]", __file__, "via", sys.executable, file=sys.stderr)
+
 import asyncio
 import logging
-import sys
+import math
 import re
 import time
 import uuid
@@ -47,7 +52,7 @@ from finagent.output.intent_classifier import classify_output_mode, normalize_de
 from finagent.output.contracts import ResponseDepth
 from finagent.state.checkpoint import Checkpoint, StepResult, empty_checkpoint
 from finagent.state.citation_log import Citation
-from finagent.synthesis import EnrichmentBundle, synthesize_memo
+from finagent.synthesis import EnrichmentBundle, SynthesisResult, synthesize_memo
 from finagent.tools.data import (
     FilingNarrative,
     FxRate,
@@ -80,6 +85,238 @@ from finagent.tools.web.scraper import ScrapedDoc, search_layered, search_web
 logger = logging.getLogger("finagent.run_agent")
 
 
+def _finite_float(value) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _has_number(value) -> bool:
+    return _finite_float(value) is not None
+
+
+def _format_inr_short(value: float | int | None) -> str:
+    n = _finite_float(value)
+    if n is None:
+        return "n/a"
+    sign = "-" if n < 0 else ""
+    n_abs = abs(n)
+    if n_abs >= 10_000_000:
+        return f"{sign}₹{n_abs / 10_000_000:.2f} Cr"
+    if n_abs >= 100_000:
+        return f"{sign}₹{n_abs / 100_000:.2f} L"
+    return f"{sign}₹{n_abs:,.0f}"
+
+
+def _format_pct(value: float | int | None, *, already_percent: bool = False) -> str:
+    n = _finite_float(value)
+    if n is None:
+        return "n/a"
+    if not already_percent:
+        n *= 100
+    return f"{n:+.2f}%"
+
+
+def _normalize_series(prices: list[float] | None, max_points: int = 40) -> tuple[list[int], list[float]]:
+    if not prices:
+        return [], []
+    clean = []
+    for p in prices:
+        n = _finite_float(p)
+        if n is not None and n > 0:
+            clean.append(n)
+    if not clean:
+        return [], []
+    step = max(1, len(clean) // max_points)
+    sampled = clean[::step]
+    if sampled[-1] != clean[-1]:
+        sampled.append(clean[-1])
+    base = sampled[0] or 1.0
+    return list(range(1, len(sampled) + 1)), [round((p / base) * 100, 2) for p in sampled]
+
+
+def _build_portfolio_rich_payload(portfolio: dict, *, benchmark: str = "NIFTY50") -> dict:
+    risk = portfolio.get("risk") or {}
+    sector_breakdown = portfolio.get("sector_breakdown") or {}
+    kind_breakdown = portfolio.get("kind_breakdown") or {}
+    positions = sorted(portfolio.get("positions") or [], key=lambda p: p.get("market_value") or 0, reverse=True)
+    history = portfolio.get("history") or {}
+    port_hist = (history.get("portfolio") or {}).get("prices") or []
+    bench_hist = (history.get("benchmark") or {}).get("prices") or []
+    x_idx, port_series = _normalize_series(port_hist)
+    _, bench_series = _normalize_series(bench_hist, max_points=len(x_idx) or 40)
+    if x_idx and bench_series:
+        min_len = min(len(x_idx), len(port_series), len(bench_series))
+        x_idx = x_idx[-min_len:]
+        port_series = port_series[-min_len:]
+        bench_series = bench_series[-min_len:]
+
+    charts = []
+    if sector_breakdown:
+        sector_items = [(k, _finite_float(v)) for k, v in sector_breakdown.items()]
+        sector_items = [(k, v) for k, v in sector_items if v is not None and v > 0]
+    else:
+        sector_items = []
+    if sector_items:
+        charts.append({
+            "kind": "donut",
+            "title": "Sector Allocation",
+            "valueKind": "percent",
+            "x_labels": [k for k, _ in sector_items],
+            "series": [{
+                "name": "Weight",
+                "values": [round(v * 100, 2) for _, v in sector_items],
+                "unit": "%",
+            }],
+        })
+    if kind_breakdown:
+        kind_items = [(k, _finite_float(v)) for k, v in kind_breakdown.items()]
+        kind_items = [(k, v) for k, v in kind_items if v is not None and v > 0]
+    else:
+        kind_items = []
+    if kind_items:
+        charts.append({
+            "kind": "donut",
+            "title": "Asset Allocation",
+            "valueKind": "percent",
+            "x_labels": [k for k, _ in kind_items],
+            "series": [{
+                "name": "Weight",
+                "values": [round(v * 100, 2) for _, v in kind_items],
+                "unit": "%",
+            }],
+        })
+    if x_idx and port_series and bench_series:
+        charts.append({
+            "kind": "line",
+            "title": f"Portfolio vs {benchmark}",
+            "y_unit": "indexed",
+            "x_labels": [str(i) for i in x_idx],
+            "series": [
+                {"name": "Portfolio", "values": port_series, "unit": "index"},
+                {"name": benchmark, "values": bench_series, "unit": "index"},
+            ],
+        })
+
+    tables = []
+    holding_rows = []
+    for p in positions[:8]:
+        market_value = _finite_float(p.get("market_value"))
+        weight = _finite_float(p.get("weight"))
+        pnl_pct = _finite_float(p.get("unrealized_pnl_pct"))
+        if market_value is None and weight is None and pnl_pct is None:
+            continue
+        holding_rows.append([
+            p.get("name") or p.get("symbol") or "-",
+            _format_inr_short(market_value),
+            f"{(weight or 0) * 100:.2f}%" if weight is not None else "n/a",
+            _format_pct(pnl_pct),
+        ])
+    if holding_rows:
+        tables.append({
+            "title": "Top Holdings",
+            "headers": ["Holding", "Value", "Weight", "P&L"],
+            "rows": holding_rows,
+        })
+
+    risk_rows = []
+    if _has_number(risk.get("hhi")):
+        risk_rows.append(["HHI concentration", f"{_finite_float(risk.get('hhi')):.4f}"])
+    if _has_number(risk.get("beta_vs_nifty")):
+        risk_rows.append([f"Beta vs {benchmark}", f"{_finite_float(risk.get('beta_vs_nifty')):.2f}"])
+    if _has_number(risk.get("annualized_volatility_pct")):
+        risk_rows.append(["Annualized volatility", f"{_finite_float(risk.get('annualized_volatility_pct')):.2f}%"])
+    if _has_number(risk.get("max_drawdown_pct")):
+        risk_rows.append(["Max drawdown", f"{_finite_float(risk.get('max_drawdown_pct')):.2f}%"])
+    if risk_rows:
+        tables.append({
+            "title": "Risk Metrics",
+            "headers": ["Metric", "Value"],
+            "rows": risk_rows,
+        })
+
+    metric_cards = []
+    if _has_number(portfolio.get("total_market_value")):
+        metric_cards.append({"label": "Total Market Value", "value": _format_inr_short(portfolio.get("total_market_value")), "change_type": "neutral"})
+    if _has_number(portfolio.get("unrealized_pnl")):
+        pnl = _finite_float(portfolio.get("unrealized_pnl")) or 0.0
+        card = {"label": "Unrealized P&L", "value": _format_inr_short(pnl), "change_type": "positive" if pnl >= 0 else "negative"}
+        if _has_number(portfolio.get("unrealized_pnl_pct")):
+            card["change"] = _format_pct(portfolio.get("unrealized_pnl_pct"))
+        metric_cards.append(card)
+    if _has_number(risk.get("hhi")):
+        hhi = _finite_float(risk.get("hhi")) or 0.0
+        metric_cards.append({"label": "HHI Concentration", "value": f"{hhi:.4f}", "change_type": "negative" if hhi >= 0.25 else "positive"})
+    if _has_number(risk.get("annualized_volatility_pct")):
+        metric_cards.append({"label": "Annualized Volatility", "value": f"{_finite_float(risk.get('annualized_volatility_pct')):.2f}%", "change_type": "neutral"})
+    if _has_number(risk.get("max_drawdown_pct")):
+        metric_cards.append({"label": "Max Drawdown", "value": f"{_finite_float(risk.get('max_drawdown_pct')):.2f}%", "change_type": "negative"})
+
+    return {
+        "mode": "portfolio",
+        "title": "Portfolio Mirror Analytics",
+        "subtitle": f"{portfolio.get('count', 0)} synchronized holding(s) vs {benchmark}",
+        "metric_cards": metric_cards,
+        "charts": charts,
+        "tables": tables,
+        "data_sources": [{"label": "position_mirrors", "url": None}, {"label": "portfolio analytics", "url": None}],
+        "disclaimer": "Portfolio analytics are computed from the synchronized local mirror. Not investment advice.",
+    }
+
+
+def _build_portfolio_memo(portfolio: dict, *, benchmark: str = "NIFTY50") -> str:
+    risk = portfolio.get("risk") or {}
+    sectors = sorted((portfolio.get("sector_breakdown") or {}).items(), key=lambda x: x[1], reverse=True)
+    positions = sorted(portfolio.get("positions") or [], key=lambda p: p.get("market_value") or 0, reverse=True)
+
+    lines = [
+        "## Portfolio Performance Snapshot",
+        (
+            f"Your synchronized portfolio is valued at **{_format_inr_short(portfolio.get('total_market_value'))}** "
+            f"with unrealized P&L of **{_format_inr_short(portfolio.get('unrealized_pnl'))} "
+            f"({_format_pct(portfolio.get('unrealized_pnl_pct'))})**.")
+    ]
+    risk_parts = []
+    if _has_number(risk.get("hhi")):
+        risk_parts.append(f"HHI concentration is **{_finite_float(risk.get('hhi')):.4f}**")
+    if _has_number(risk.get("beta_vs_nifty")):
+        risk_parts.append(f"beta vs {benchmark} is **{_finite_float(risk.get('beta_vs_nifty')):.2f}**")
+    if _has_number(risk.get("annualized_volatility_pct")):
+        risk_parts.append(f"annualized volatility is **{_finite_float(risk.get('annualized_volatility_pct')):.2f}%**")
+    if _has_number(risk.get("max_drawdown_pct")):
+        risk_parts.append(f"max drawdown is **{_finite_float(risk.get('max_drawdown_pct')):.2f}%**")
+    if risk_parts:
+        lines.extend(["## Risk Read", ", ".join(risk_parts) + "."])
+    else:
+        lines.extend(["## Risk Read", "Risk metrics were not available from the synchronized analytics payload for this run."])
+    if sectors:
+        sector_bits = ", ".join(
+            f"{name}: {weight_num * 100:.1f}%"
+            for name, weight in sectors[:5]
+            if (weight_num := _finite_float(weight)) is not None
+        )
+        if sector_bits:
+            lines.extend(["## Sector Allocation", f"Largest sector weights are {sector_bits}."])
+    if positions:
+        holding_bits = ", ".join(
+            f"{p.get('name') or p.get('symbol')} ({weight_num * 100:.1f}%)"
+            for p in positions[:5]
+            if (weight_num := _finite_float(p.get("weight"))) is not None
+        )
+        if holding_bits:
+            lines.extend(["## Top Holdings", f"Top holdings by market value are {holding_bits}."])
+    lines.extend([
+        "## Bottom Line",
+        (
+            "The charts and tables below are generated from backend portfolio analytics, not from model-estimated values. "
+            "Use the concentration, drawdown, and sector weights as the primary decision anchors."
+        ),
+    ])
+    return "\n\n".join(lines)
+
+
 @dataclass
 class AgentLoopConfig:
     max_steps: int = 40
@@ -100,10 +337,10 @@ class AgentLoopConfig:
     reflection_per_query_limit: int = 6
     reflection_per_query_timeout: float = 25.0
     reflection_max_new_docs: int = 80
-    # ── AutoCritique Loop ──
-    enable_auto_critique: bool = True
-    auto_critique_max_rounds: int = 3
-    auto_critique_score_threshold: int = 80
+    reflection_max_queries_per_round: int = 4
+    reflection_wall_clock_seconds: float | None = 45.0
+    reflection_early_accept_margin: float = 2.0
+    reflection_min_score_gain: float = 0.75
     breadth_search_timeout: float = 270.0 if sys.platform == "win32" else 90.0
     followup_search_timeout: float = 135.0 if sys.platform == "win32" else 45.0
     news_timeout: float = 25.0
@@ -126,10 +363,11 @@ class AgentLoopConfig:
     tenant_id: str | None = None
     # ── Comparison: when set, synthesis fetches rich enrichment for peers ──
     peer_targets: list[str] = field(default_factory=list)
+    fast_mode: bool = False
 
 
 def _auto_max_steps(objective: str, base: int) -> int:
-    """Scale total step budget by objective complexity. Defaults err big —
+    """Scale total step budget by objective complexity. Defaults err big --
     research quality matters more than wall-clock here."""
     obj = (objective or "").lower()
     complexity = 1.0
@@ -177,6 +415,7 @@ async def _run_enrichment(
     *,
     entity,
     news_timeout: float = 25.0,
+    fast_mode: bool = False,
 ) -> EnrichmentBundle:
     """Fan-out to Yahoo, Wikipedia, and Indian sources. None failures are non-fatal."""
     BUS.emit(session_id, "phase", phase="enrichment", note="Pulling authoritative APIs (NSE/BSE, Yahoo Finance, Moneycontrol)")
@@ -582,24 +821,41 @@ async def _run_enrichment(
     canonical_name = entity.canonical_name
 
     # ── Parallel fan-out: ALL enrichment ────────────────────
-    (
-        india_snap_result,
-        sebi_filing_result,
-        shareholding_result,
-        yahoo_quote,
-        wiki,
-        fx,
-        news_items,
-    ) = await asyncio.gather(
-        _india_snap(),
-        _sebi_filing_fetch(),
-        _shareholding_fetch(),
-        _yahoo(ticker),
-        _wiki(canonical_name),
-        _fx(),
-        _news(),
-        return_exceptions=True,
-    )
+    if fast_mode:
+        (
+            india_snap_result,
+            shareholding_result,
+            yahoo_quote,
+            news_items,
+        ) = await asyncio.gather(
+            _india_snap(),
+            _shareholding_fetch(),
+            _yahoo(ticker),
+            _news(),
+            return_exceptions=True,
+        )
+        sebi_filing_result = None
+        wiki = None
+        fx = None
+    else:
+        (
+            india_snap_result,
+            sebi_filing_result,
+            shareholding_result,
+            yahoo_quote,
+            wiki,
+            fx,
+            news_items,
+        ) = await asyncio.gather(
+            _india_snap(),
+            _sebi_filing_fetch(),
+            _shareholding_fetch(),
+            _yahoo(ticker),
+            _wiki(canonical_name),
+            _fx(),
+            _news(),
+            return_exceptions=True,
+        )
 
     sec_snap = None
     sec_filing = None
@@ -1071,13 +1327,7 @@ def _persist_session_memory(
     quality_score: float,
     user_email: str | None = None,
 ) -> None:
-    """Extract durable facts from this run and store them under the
-    canonical target key so the next run starts smarter.
-
-    We deliberately store *structured* facts (e.g. "FY2026 revenue =
-    $215.94B per 10-K filed 2026-02-25") rather than full prose so
-    recall is cheap and unambiguous.
-    """
+    """Extract durable facts from this run under the canonical target key."""
     new_facts: list[MemoryFact] = []
     sec = bundle.sec
     if sec:
@@ -1273,27 +1523,35 @@ async def run_research_session(
 
     response_depth = normalize_depth(cfg.response_depth)
 
-    # Force multi-agent specialists, scraping, reflection, and blindspots ONLY for deep research.
-    # For standard or chat modes, explicitly disable these heavy/expensive phases to ensure speed.
+    # Depth policy: chat is intentionally lightweight; standard preserves the
+    # bounded research config supplied by the gateway; deep forces every phase.
     if response_depth == ResponseDepth.DEEP:
         cfg.enable_multi_agent = True
         cfg.enable_scraping = True
         cfg.enable_reflection = True
         cfg.enable_blindspot = True
         cfg.enable_deep_dive = True
-    elif response_depth in {ResponseDepth.STANDARD, ResponseDepth.CHAT}:
+    elif response_depth == ResponseDepth.CHAT:
         cfg.enable_multi_agent = False
         cfg.enable_blindspot = False
         cfg.enable_reflection = False
         cfg.enable_deep_dive = False
-        cfg.enable_auto_critique = False  # Disable critique self-correction loop for speed
         cfg.max_steps = min(cfg.max_steps, 8)
-        # If the query is simple, we do not need web scraping at all; Yahoo Quote / Screener is enough
         if routing.query_complexity == "simple":
             cfg.enable_scraping = False
-        # Limit breadth queries to at most 2 to reduce search latency
         if retrieval_plan and retrieval_plan.breadth_queries:
             retrieval_plan.breadth_queries = retrieval_plan.breadth_queries[:2]
+    elif response_depth == ResponseDepth.STANDARD:
+        cfg.fast_mode = True
+        cfg.enable_multi_agent = False
+        cfg.enable_blindspot = False
+        cfg.enable_reflection = False
+        cfg.enable_deep_dive = False
+        cfg.max_steps = min(max(cfg.max_steps, 8), 18)
+        if routing.intent_key == "PORTFOLIO_AUDIT":
+            cfg.enable_scraping = False
+        elif retrieval_plan and retrieval_plan.breadth_queries:
+            retrieval_plan.breadth_queries = retrieval_plan.breadth_queries[:3]
     output_mode = classify_output_mode(
         query=objective,
         target=target,
@@ -1303,7 +1561,11 @@ async def run_research_session(
     )
     if routing.deep_research and response_depth == ResponseDepth.DEEP:
         cfg.max_steps = max(cfg.max_steps, 80)
-        cfg.reflection_max_rounds = max(cfg.reflection_max_rounds, 6)
+        cfg.reflection_max_rounds = min(cfg.reflection_max_rounds, 2)
+        cfg.reflection_per_query_limit = min(cfg.reflection_per_query_limit, 4)
+        cfg.reflection_per_query_timeout = min(cfg.reflection_per_query_timeout, 18.0)
+        cfg.reflection_max_new_docs = min(cfg.reflection_max_new_docs, 32)
+        cfg.reflection_wall_clock_seconds = min(cfg.reflection_wall_clock_seconds or 45.0, 45.0)
         cfg.blindspot_max_queries = max(cfg.blindspot_max_queries, 10)
 
     # ============================================================
@@ -1437,14 +1699,20 @@ async def run_research_session(
     if cfg.enable_enrichment:
         logger.info("[AGENT-PHASE] === PHASE: ENRICHMENT (Yahoo + Wiki + India/SEC) ===")
         logger.info("[AGENT-ENRICH] Starting parallel enrichment for target=%s", target)
-        bundle = await _run_enrichment(target, session_id, entity=entity, news_timeout=cfg.news_timeout)
+        bundle = await _run_enrichment(
+            target,
+            session_id,
+            entity=entity,
+            news_timeout=cfg.news_timeout,
+            fast_mode=cfg.fast_mode,
+        )
         logger.info("[AGENT-ENRICH] Done | Yahoo=%s | Wiki=%s | News=%d | India/SEC=%s",
                     bundle.yahoo is not None, bundle.wikipedia is not None, len(bundle.news), bundle.sec is not None)
 
     # ── Phase 3: breadth survey ───────────────────────────────────────────
     canonical_label = bundle.sec.name if bundle.sec else (bundle.yahoo.name if bundle.yahoo and bundle.yahoo.name else entity.canonical_name or target)
     if cfg.enable_scraping:
-        BUS.emit(session_id, "phase", phase="breadth-survey", note="Layered DuckDuckGo: filings / IR / earnings / competitors")
+        BUS.emit(session_id, "phase", phase="breadth-survey", note="Checking filings, market data, news, and peer context")
         logger.info("[AGENT-PHASE] === PHASE: BREADTH SURVEY (search_layered) ===")
         logger.info("[AGENT-SEARCH] Dispatching %d breadth queries for %s | preferred_domains=%s",
                     len(retrieval_plan.breadth_queries), canonical_label, preferred_domains[:6])
@@ -1598,9 +1866,9 @@ async def run_research_session(
             session_id,
             "phase",
             phase="reflection",
-            note=f"Self-critique loop · target ≥{cfg.quality_threshold:.0f} quality",
+            note=f"Reflection loop - target >={cfg.quality_threshold:.0f} quality",
         )
-        logger.info("Phase 4.5 (Reflection): Starting self-critique loop | Target Quality: >=%.1f", cfg.quality_threshold)
+        logger.info("Phase 4.5 (Reflection): Starting coverage reflection loop | Target Quality: >=%.1f", cfg.quality_threshold)
         step_ref: dict = {"v": step}
 
         async def _process_for_reflection(doc: ScrapedDoc, _i: int) -> None:
@@ -1639,6 +1907,10 @@ async def run_research_session(
                 per_query_limit=cfg.reflection_per_query_limit,
                 per_query_timeout=cfg.reflection_per_query_timeout,
                 max_total_new_docs=cfg.reflection_max_new_docs,
+                max_queries_per_round=cfg.reflection_max_queries_per_round,
+                max_wall_clock_seconds=cfg.reflection_wall_clock_seconds,
+                early_accept_margin=cfg.reflection_early_accept_margin,
+                min_score_gain=cfg.reflection_min_score_gain,
             )
             ref_result = await loop.run(
                 bundle=bundle,
@@ -1653,7 +1925,7 @@ async def run_research_session(
             step = step_ref["v"]
             reflection_payload = ref_result.to_dict()
             logger.info("[AGENT-PHASE] === PHASE: REFLECTION COMPLETE ===")
-            logger.info("[AGENT-REFLECTION] QualityScore=%.1f | rounds=%s", reflection_payload.get("quality_score", 0.0), reflection_payload.get("rounds", 0))
+            logger.info("[AGENT-REFLECTION] QualityScore=%.1f | rounds=%s", reflection_payload.get("final_score", 0.0), reflection_payload.get("rounds_run", 0))
             BUS.emit(session_id, "reflection_done", **reflection_payload)
         except Exception as exc:
             logger.warning("reflection loop failed: %s", exc)
@@ -1879,6 +2151,7 @@ async def run_research_session(
 
     synthesis = None
     memo_path = None
+    portfolio_analytics: dict | None = None
     if cfg.emit_memo:
         BUS.emit(
             session_id,
@@ -1893,6 +2166,23 @@ async def run_research_session(
 
         def _on_memo_token(chunk: str) -> None:
             BUS.emit(session_id, "memo_token", chunk=chunk)
+
+        # ── Fetch live portfolio analytics for portfolio-scoped queries ──
+        portfolio_analytics = None
+        try:
+            from finagent.router.intent_router import is_portfolio_scope_query
+            if is_portfolio_scope_query(objective):
+                from finagent.portfolio.analytics import compute_portfolio_analytics
+                from finagent.portfolio_mirrors import load_active_positions
+                tenant_id = getattr(cfg, "tenant_id", None)
+                if tenant_id:
+                    positions = load_active_positions(tenant_id)
+                    if positions:
+                        portfolio_analytics = compute_portfolio_analytics(positions, period="1y", benchmark="NIFTY50")
+                        logger.info("[PORTFOLIO-INJECT] Injecting live portfolio analytics | holdings=%d | value=%.0f",
+                                    len(positions), portfolio_analytics.get('total_market_value', 0))
+        except Exception as exc:
+            logger.warning("[PORTFOLIO-INJECT] Failed to fetch portfolio analytics: %s", exc)
 
         synthesis = await synthesize_memo(
             target,
@@ -1912,6 +2202,7 @@ async def run_research_session(
             session_id=session_id,
             peer_targets=cfg.peer_targets,
             user_email=cfg.user_email,
+            portfolio_context=portfolio_analytics,
         )
         memos_dir = finagent_data_path("memos")
         memos_dir.mkdir(parents=True, exist_ok=True)
@@ -1919,194 +2210,6 @@ async def run_research_session(
         memo_path.write_text(synthesis.memo, encoding="utf-8")
         logger.info("[AGENT-SYNTH] Memo synthesis COMPLETE | via=%s | length=%d chars | quality=%.1f | path=%s",
                     synthesis.via, len(synthesis.memo), final_quality.score, memo_path)
-
-        # ── AutoCritique & Re-research Loop ──
-        if cfg.enable_auto_critique:
-            from finagent.auto_critique import AutoCritique
-            
-            portfolio_ctx_str = ""
-            if portfolio_sentinel:
-                portfolio_ctx_str = (
-                    f"Active Holdings: {', '.join(portfolio_sentinel.symbols)}\n"
-                    f"Holdings Weights: {portfolio_sentinel.weights}\n"
-                    f"Portfolio Risk Metrics: {portfolio_sentinel.risk}"
-                )
-
-            critique_round = 0
-            max_critique_rounds = cfg.auto_critique_max_rounds
-            
-            BUS.emit(
-                session_id,
-                "phase",
-                phase="critique",
-                note="Evaluating research report quality via AutoCritique",
-            )
-            
-            critique_res = await AutoCritique.evaluate(
-                answer=synthesis.memo,
-                objective=objective,
-                docs=docs,
-                portfolio_context=portfolio_ctx_str,
-            )
-            
-            initial_critique_score = critique_res.score
-            logger.info("[CRITIQUE-LOOP] Initial AutoCritique Score: %d | Gaps: %s", 
-                        initial_critique_score, critique_res.gaps)
-            
-            score_before = initial_critique_score
-            score_after = initial_critique_score
-            all_gap_queries = []
-            critique_start_time = time.perf_counter()
-            
-            while critique_res.score < cfg.auto_critique_score_threshold and critique_round < max_critique_rounds:
-                critique_round += 1
-                logger.info("[CRITIQUE-LOOP] Starting Critique Round %d/%d (Score: %d < Threshold: %d)",
-                            critique_round, max_critique_rounds, critique_res.score, cfg.auto_critique_score_threshold)
-                
-                BUS.emit(
-                    session_id,
-                    "phase",
-                    phase="critique",
-                    note=f"Critique Round {critique_round}: score {critique_res.score}/100. Addressing gaps...",
-                )
-                
-                gap_queries = await AutoCritique.generate_gap_queries(critique_res.gaps)
-                if not gap_queries:
-                    logger.info("[CRITIQUE-LOOP] No gap queries generated. Stopping.")
-                    break
-                    
-                logger.info("[CRITIQUE-LOOP] Generated %d gap queries: %s", len(gap_queries), gap_queries)
-                all_gap_queries.extend(gap_queries)
-                
-                new_docs_found = 0
-                for query in gap_queries:
-                    BUS.emit(session_id, "query", query=query, status="running", count=0)
-                    try:
-                        localized_q = localize_search_query(query, entity)
-                        scraped = await search_web(
-                            localized_q,
-                            max_results=cfg.reflection_per_query_limit,
-                            preferred_domains=preferred_domains,
-                            entity=entity,
-                        )
-                        BUS.emit(session_id, "query", query=query, status="done", count=len(scraped))
-                        
-                        for doc in scraped:
-                            key = (doc.final_url or doc.url or "").split("#", 1)[0]
-                            if not key or any((d.final_url or d.url or "").split("#", 1)[0] == key for d in docs):
-                                continue
-                            docs.append(doc)
-                            new_docs_found += 1
-                            
-                            step += 1
-                            await _process_doc(
-                                doc,
-                                step,
-                                cp,
-                                harness,
-                                validator,
-                                session_id,
-                                enrichment_corroborates=(bundle.sec is not None),
-                            )
-                    except Exception as e:
-                        logger.warning("[CRITIQUE-LOOP] Search failed for query %r: %s", query, e)
-                        BUS.emit(session_id, "query", query=query, status="error", count=0)
-                
-                logger.info("[CRITIQUE-LOOP] Critique Round %d fetched %d new documents.", critique_round, new_docs_found)
-                
-                if new_docs_found == 0:
-                    logger.info("[CRITIQUE-LOOP] No new documents found. Stopping.")
-                    break
-                
-                BUS.emit(
-                    session_id,
-                    "phase",
-                    phase="synthesis",
-                    note=f"Re-synthesizing memo with {new_docs_found} new sources",
-                )
-                
-                conflicts = detect_conflicts(docs)
-                for conflict in conflicts:
-                    BUS.emit(
-                        session_id,
-                        "conflict",
-                        metric=conflict.metric,
-                        spread_pct=round(conflict.spread_pct, 1),
-                        note=conflict.note,
-                        observations=[
-                            {
-                                "domain": o.domain,
-                                "tier": o.tier,
-                                "raw": o.raw,
-                                "value": o.value,
-                                "url": o.url,
-                                "context": o.context,
-                            }
-                            for o in conflict.observations
-                        ],
-                    )
-                
-                final_quality = score_research(
-                    target=canonical_label,
-                    bundle=bundle,
-                    docs=docs,
-                    checkpoint=cp,
-                    entity=entity,
-                    conflicts=conflicts,
-                )
-                
-                synthesis = await synthesize_memo(
-                    target,
-                    objective,
-                    docs,
-                    cp,
-                    conflicts=conflicts,
-                    on_token=_on_memo_token,
-                    enrichment=bundle,
-                    synth_model=cfg.synth_model,
-                    output_mode=output_mode.value,
-                    response_depth=response_depth.value,
-                    entity=entity,
-                    specialist_findings=orchestration_findings,
-                    quality_report=final_quality,
-                    chat_history=cfg.chat_history,
-                    session_id=session_id,
-                    peer_targets=cfg.peer_targets,
-                    user_email=cfg.user_email,
-                )
-                
-                memo_path.write_text(synthesis.memo, encoding="utf-8")
-                
-                critique_res = await AutoCritique.evaluate(
-                    answer=synthesis.memo,
-                    objective=objective,
-                    docs=docs,
-                    portfolio_context=portfolio_ctx_str,
-                )
-                
-                score_after = critique_res.score
-                logger.info("[CRITIQUE-LOOP] Round %d AutoCritique Score: %d | Gaps: %s",
-                            critique_round, score_after, critique_res.gaps)
-            
-            critique_elapsed = int((time.perf_counter() - critique_start_time) * 1000)
-            AutoCritique.log_experiment(
-                session_id=session_id,
-                query=objective,
-                mode=output_mode.value or "standard",
-                score_before=initial_critique_score,
-                score_after=score_after,
-                iterations=critique_round,
-                gap_queries=all_gap_queries,
-                elapsed_ms=critique_elapsed,
-            )
-            
-            # Emit a final critique completion state
-            BUS.emit(
-                session_id,
-                "phase",
-                phase="critique",
-                note=f"AutoCritique complete. Final score: {critique_res.score}/100.",
-            )
 
         BUS.emit(
             session_id,
@@ -2178,6 +2281,8 @@ async def run_research_session(
         compressed_at=last_compression_step,
         memo_path=str(memo_path) if memo_path else "",
         memo_via=synthesis.via if synthesis else "suppressed",
+        memo=synthesis.memo if synthesis else "",
+        memo_preview=(synthesis.memo[:2400] if synthesis else ""),
         output_mode=output_mode.value,
         response_depth=response_depth.value,
         conflicts=len(conflicts),
@@ -2198,6 +2303,18 @@ async def run_research_session(
     # final handler can render them even if visual_data_ready was insufficient.
     if synthesis and getattr(synthesis, "rich", None):
         _final_payload["rich"] = synthesis.rich
+
+    # ── Deterministic portfolio rich payload ──
+    # Re-attached to final event so RichResponse fallback renders visuals.
+    # Inline visuals are a separate enhancement that will be injected into memo text.
+    if portfolio_analytics:
+        try:
+            rich = _build_portfolio_rich_payload(portfolio_analytics, benchmark="NIFTY50")
+            _final_payload["rich"] = rich
+            logger.info("[PORTFOLIO] portfolio rich payload attached to final event | mode=%s cards=%d charts=%d tables=%d",
+                        rich.get("mode"), len(rich.get("metric_cards", [])), len(rich.get("charts", [])), len(rich.get("tables", [])))
+        except Exception as e:
+            logger.warning("[PORTFOLIO] failed to compute rich payload: %s", e)
 
     if cfg.emit_memo:
         # Only emit "final" for the true synthesis pass — intermediate deep-research

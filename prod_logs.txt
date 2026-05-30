@@ -1,0 +1,906 @@
+1779950662121 - INFO:     Started server process [1]
+1779950662121 - INFO:     Waiting for application startup.
+1779950662121 - 2026-05-28 06:44:22 [INFO] finagent.gateway: FastAPI gateway startup: Logging configuration successfully applied to finagent and oracle namespaces.
+1779950662121 - INFO:     Application startup complete.
+1779950662122 - INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+1779950716775 - INFO:     10.0.2.148:28408 - "GET / HTTP/1.1" 302 Found
+1779950771633 - INFO:     10.0.1.142:13652 - "GET /api/health/mcp HTTP/1.1" 404 Not Found
+1779950780569 - INFO:     10.0.2.148:22542 - "GET / HTTP/1.1" 302 Found
+1779950812850 - INFO:     10.0.2.148:59546 - "GET / HTTP/1.1" 302 Found
+1779950812987 - INFO:     10.0.2.148:59546 - "GET /landing HTTP/1.1" 200 OK
+1779950828743 - /usr/local/lib/python3.11/site-packages/jwt/api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 24 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+1779950828743 - return self._jws.encode(
+1779950828743 - INFO:     10.0.2.148:20836 - "POST /auth/login HTTP/1.1" 200 OK
+1779950829576 - /usr/local/lib/python3.11/site-packages/jwt/api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 24 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+1779950829576 - decoded = self.decode_complete(
+1779950829615 - 2026-05-28 06:47:09 [INFO] finagent.run_agent: Initializing research session | Target: 'Apple' | Objective: 'Analyze Apple Stock' | Session ID: b6566f83830a
+1779950829615 - 2026-05-28 06:47:09 [INFO] finagent.run_agent: Resolved Entity: Apple (Country: IN, Ticker: None, Search Label: Apple)
+1779950829626 - 2026-05-28 06:47:09 [INFO] finagent.retrieval.planner: Initializing retrieval plan for objective: 'Analyze Apple Stock'
+1779950829626 - 2026-05-28 06:47:09 [INFO] finagent.retrieval.planner: Resolved entity: Apple (Ticker: None, Search Label: Apple)
+1779950829626 - 2026-05-28 06:47:09 [INFO] finagent.retrieval.planner: Detected routing tags/intents: []
+1779950829626 - 2026-05-28 06:47:09 [INFO] finagent.retrieval.planner: Generated 7 breadth queries for research phase:
+1779950829626 - 2026-05-28 06:47:09 [INFO] finagent.retrieval.planner:   Query 1: 'Analyze Apple Stock India NSE BSE'
+1779950829626 - 2026-05-28 06:47:09 [INFO] finagent.retrieval.planner:   Query 2: 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE'
+1779950829626 - 2026-05-28 06:47:09 [INFO] finagent.retrieval.planner:   Query 3: 'Apple outcome of board meeting financial results NSE BSE India NSE BSE'
+1779950829626 - 2026-05-28 06:47:09 [INFO] finagent.retrieval.planner:   Query 4: 'Apple Regulation 30 corporate announcement NSE BSE India NSE BSE'
+1779950829626 - 2026-05-28 06:47:09 [INFO] finagent.retrieval.planner:   Query 5: 'Apple Regulation 31 shareholding pattern promoter pledge NSE BSE India NSE BSE'
+1779950829626 - 2026-05-28 06:47:09 [INFO] finagent.retrieval.planner:   Query 6: 'Apple annual report PDF NSE BSE India NSE BSE'
+1779950829626 - 2026-05-28 06:47:09 [INFO] finagent.retrieval.planner:   Query 7: 'Apple NSE Emerge BSE SME board financial results India NSE BSE'
+1779950829626 - 2026-05-28 06:47:09 [INFO] finagent.retrieval.planner: Preferred domains for this entity: ['nseindia.com', 'bseindia.com', 'sebi.gov.in', 'moneycontrol.com', 'screener.in', 'trendlyne.com', 'tickertape.in', 'economictimes.indiatimes.com', 'livemint.com', 'business-standard.com']
+1779950829627 - 2026-05-28 06:47:09 [INFO] finagent.run_agent: [AGENT-START] run_research_session BEGIN | session_id=b6566f83830a | target=Apple | objective=Analyze Apple Stock
+1779950829627 - 2026-05-28 06:47:09 [INFO] finagent.run_agent: [AGENT-CONFIG] max_steps=8 | enable_enrichment=True | enable_scraping=True | enable_reflection=False | enable_multi_agent=False | depth=standard
+1779950829627 - 2026-05-28 06:47:09 [INFO] finagent.run_agent: [AGENT-PLAN] ResearchPlan: RESEARCH PLAN
+1779950829627 - Target: Apple
+1779950829627 - Objective: Analyze Apple Stock
+1779950829627 - Steps:
+1779950829627 - Step 1 -- Breadth survey -> web_search -> Surface map of sources
+1779950829627 - Step 2 -- Primary filings -> exchange_filings -> SEBI LODR / NSE / BSE filing index (after (1,))
+1779950829627 - Step 3 -- Triangulate key metrics -> accuracy_validator -> Confidence tags (after (2,))
+1779950829627 - Step 4 -- Synthesis -> memo_formatter -> Research memo (after (3,))
+1779950829627 - Estimated depth: standard
+1779950829627 - Estimated duration: 60 minutes
+1779950829627 - Human gates: export_data, credit_spend_confirm
+1779950829628 - 2026-05-28 06:47:09 [INFO] finagent.run_agent: [AGENT-ROUTING] Selected agents: ['financials', 'risk', 'news'] | deep_research=False | country=IN | preferred_domains=['nseindia.com', 'bseindia.com', 'sebi.gov.in', 'moneycontrol.com', 'screener.in', 'trendlyne.com', 'tickertape.in', 'economictimes.indiatimes.com']
+1779950829628 - 2026-05-28 06:47:09 [INFO] finagent.run_agent: [AGENT-RETRIEVAL-PLAN] Breadth queries (2): ['Analyze Apple Stock India NSE BSE', 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE']
+1779950829634 - 2026-05-28 06:47:09 [WARNING] finagent.run_agent: memory recall failed: no such column: f.user_email
+1779950829634 - 2026-05-28 06:47:09 [INFO] finagent.run_agent: Phase 0 (Memory): recalled 0 facts for target 'Apple' | Prior summary present: False
+1779950829635 - 2026-05-28 06:47:09 [INFO] finagent.run_agent: [AGENT-PHASE] === PHASE: ENRICHMENT (Yahoo + Wiki + India/SEC) ===
+1779950829635 - 2026-05-28 06:47:09 [INFO] finagent.run_agent: [AGENT-ENRICH] Starting parallel enrichment for target=Apple
+1779950829636 - 2026-05-28 06:47:09 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'APPLE'}
+1779950829636 - 2026-05-28 06:47:09 [INFO] finagent.tools.data.india: [MCP-USE] nse_india | tool=nse_get_announcements | args={'symbol': 'APPLE'}
+1779950829658 - 2026-05-28 06:47:09 [INFO] finagent.tools.data.india: [MCP-USE] nse_india | tool=nse_get_shareholding | args={'symbol': 'APPLE'}
+1779950829667 - 2026-05-28 06:47:09 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'APPLE.NS'}
+1779950829668 - 2026-05-28 06:47:09 [INFO] finagent.wikipedia: [MCP-USE] research_news | tool=search_web | args={'query': 'wikipedia Apple'}
+1779950829685 - INFO:     10.0.1.142:4726 - "POST /chat/research HTTP/1.1" 200 OK
+1779950829722 - 2026-05-28 06:47:09 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'Apple'}
+1779950829823 - 2026-05-28 06:47:09 [INFO] finagent.run_agent: Wikipedia rejected 'Apple' -> 'Apple' ('Edible fruit')
+1779950829832 - 2026-05-28 06:47:09 [INFO] finagent.wikipedia: [MCP-USE] research_news | tool=search_web | args={'query': 'wikipedia Apple (company)'}
+1779950830369 - 2026-05-28 06:47:10 [INFO] finagent.tools.data.india: Screener/MC miss for APPLE — trying NSE
+1779950830443 - 2026-05-28 06:47:10 [INFO] finagent.tools.data.india: NSE miss for APPLE — trying BSE
+1779950830925 - 2026-05-28 06:47:10 [INFO] finagent.yahoo: yfinance: no usable data for APPLE.NS
+1779950830926 - 2026-05-28 06:47:10 [INFO] finagent.run_agent: [AGENT-ENRICH] Done | Yahoo=False | Wiki=True | News=12 | India/SEC=False
+1779950830927 - 2026-05-28 06:47:10 [INFO] finagent.run_agent: [AGENT-PHASE] === PHASE: BREADTH SURVEY (search_layered) ===
+1779950830927 - 2026-05-28 06:47:10 [INFO] finagent.run_agent: [AGENT-SEARCH] Dispatching 2 breadth queries for Apple | preferred_domains=['nseindia.com', 'bseindia.com', 'sebi.gov.in', 'moneycontrol.com', 'screener.in', 'trendlyne.com']
+1779950830927 - 2026-05-28 06:47:10 [INFO] finagent.scraper: [MCP-USE] research_news | tool=search_web | args={'query': 'Apple'}
+1779950830928 - 2026-05-28 06:47:10 [INFO] finagent.scraper: [MCP-USE] research_news | tool=search_web | args={'query': 'Analyze Apple Stock India NSE BSE'}
+1779950830928 - 2026-05-28 06:47:10 [INFO] finagent.scraper: SEARCH-STEP:00 start query=Analyze Apple Stock India NSE BSE max_results=4
+1779950830928 - 2026-05-28 06:47:10 [INFO] finagent.scraper: [SEARCH] Starting heavy search for: 'Analyze Apple Stock India NSE BSE' — Crawl4AI will be primary extractor for deep content
+1779950830928 - 2026-05-28 06:47:10 [INFO] finagent.scraper: SEARCH-STEP:01 targets_computed stage1_target=48 crawl_budget=8
+1779950830929 - 2026-05-28 06:47:10 [INFO] finagent.scraper: [MCP-USE] research_news | tool=search_web | args={'query': 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE'}
+1779950830929 - 2026-05-28 06:47:10 [INFO] finagent.scraper: SEARCH-STEP:00 start query=Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE max_results=4
+1779950830929 - 2026-05-28 06:47:10 [INFO] finagent.scraper: [SEARCH] Starting heavy search for: 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE' — Crawl4AI will be primary extractor for deep content
+1779950830929 - 2026-05-28 06:47:10 [INFO] finagent.scraper: SEARCH-STEP:01 targets_computed stage1_target=48 crawl_budget=8
+1779950830938 - 2026-05-28 06:47:10 [WARNING] finagent.scraper: Tavily search failed for 'Analyze Apple Stock India NSE BSE', will fall back to DDG/Bing: No module named 'tavily'
+1779950830946 - 2026-05-28 06:47:10 [WARNING] finagent.scraper: Tavily search failed for 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE', will fall back to DDG/Bing: No module named 'tavily'
+1779950830947 - 2026-05-28 06:47:10 [ERROR] finagent.tools.web.searxng_client: SearXNG search failed for query 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE': All connection attempts failed
+1779950830948 - 2026-05-28 06:47:10 [ERROR] finagent.tools.web.searxng_client: SearXNG search failed for query 'Analyze Apple Stock India NSE BSE': All connection attempts failed
+1779950830949 - 2026-05-28 06:47:10 [INFO] finagent.scraper: Performing standard HTTP fetch for DDG search query: 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE'
+1779950830950 - 2026-05-28 06:47:10 [INFO] finagent.scraper: Performing standard HTTP fetch for Bing search query: 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE'
+1779950830950 - 2026-05-28 06:47:10 [INFO] finagent.scraper: Performing standard HTTP fetch for DDG search query: 'Analyze Apple Stock India NSE BSE'
+1779950830951 - 2026-05-28 06:47:10 [INFO] finagent.scraper: Performing standard HTTP fetch for Bing search query: 'Analyze Apple Stock India NSE BSE'
+1779950831219 - 2026-05-28 06:47:11 [INFO] finagent.scraper: Bing search query 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE' returned 0 results.
+1779950831221 - 2026-05-28 06:47:11 [INFO] finagent.scraper: Bing search query 'Analyze Apple Stock India NSE BSE' returned 10 results.
+1779950831587 - 2026-05-28 06:47:11 [INFO] finagent.scraper: DDG search query 'Analyze Apple Stock India NSE BSE' returned 9 results.
+1779950831588 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:03 backup_sources_completed ddg=9 bing=10
+1779950831588 - 2026-05-28 06:47:11 [INFO] finagent.scraper: Stage 1 candidate sourcing hits: SearXNG=0 Tavily=0 DDG=9 Bing=10 (Crawl4AI will be primary extractor)
+1779950831588 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:02 searxng_tavily_completed count=0
+1779950831588 - 2026-05-28 06:47:11 [INFO] finagent.scraper: [SEARCH] No SearXNG/Tavily results — will rely on Crawl4AI for content
+1779950831588 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:04 combined_docs_built count=0
+1779950831588 - 2026-05-28 06:47:11 [INFO] finagent.scraper: Raw candidate URLs before domain deduplication (Crawl4AI primary): 19
+1779950831588 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:05 raw_candidates_built count=19
+1779950831588 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:dedup_enter raw=19 max_per_domain=2 max_total=48
+1779950831589 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:dedup_exit kept=19
+1779950831589 - 2026-05-28 06:47:11 [INFO] finagent.scraper: Stage 1 candidates after domain deduplication: 19
+1779950831589 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:06 dedup_done candidates=19
+1779950831589 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:07 preferred_sort_done count=19
+1779950831589 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:08 crawl_urls_prepared count=8 budget=8
+1779950831589 - 2026-05-28 06:47:11 [INFO] finagent.scraper: [SEARCH] Bypassing Crawl4AI browser crawl; fetching 8 URL(s) via parallel httpx
+1779950831986 - 2026-05-28 06:47:11 [INFO] finagent.scraper: DDG search query 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE' returned 10 results.
+1779950831986 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:03 backup_sources_completed ddg=10 bing=0
+1779950831986 - 2026-05-28 06:47:11 [INFO] finagent.scraper: Stage 1 candidate sourcing hits: SearXNG=0 Tavily=0 DDG=10 Bing=0 (Crawl4AI will be primary extractor)
+1779950831986 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:02 searxng_tavily_completed count=0
+1779950831986 - 2026-05-28 06:47:11 [INFO] finagent.scraper: [SEARCH] No SearXNG/Tavily results — will rely on Crawl4AI for content
+1779950831986 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:04 combined_docs_built count=0
+1779950831986 - 2026-05-28 06:47:11 [INFO] finagent.scraper: Raw candidate URLs before domain deduplication (Crawl4AI primary): 10
+1779950831986 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:05 raw_candidates_built count=10
+1779950831986 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:dedup_enter raw=10 max_per_domain=2 max_total=48
+1779950831986 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:dedup_exit kept=10
+1779950831986 - 2026-05-28 06:47:11 [INFO] finagent.scraper: Stage 1 candidates after domain deduplication: 10
+1779950831986 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:06 dedup_done candidates=10
+1779950831987 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:07 preferred_sort_done count=10
+1779950831987 - 2026-05-28 06:47:11 [INFO] finagent.scraper: SEARCH-STEP:08 crawl_urls_prepared count=6 budget=8
+1779950831987 - 2026-05-28 06:47:11 [INFO] finagent.scraper: [SEARCH] Bypassing Crawl4AI browser crawl; fetching 6 URL(s) via parallel httpx
+1779950833010 - 2026-05-28 06:47:13 [INFO] finagent.scraper: SEARCH-STEP:09 crawl4ai_batch_returned docs=8
+1779950833010 - 2026-05-28 06:47:13 [INFO] finagent.scraper: [CRAWL4AI] Completed deep extraction: 8 documents successfully processed
+1779950833011 - 2026-05-28 06:47:13 [INFO] finagent.scraper: SEARCH-STEP:10 titles_patched crawl_docs=8
+1779950833012 - 2026-05-28 06:47:13 [INFO] finagent.scraper: [RESULT] Answer will be built primarily from CRAWL4AI deep extraction
+1779950833012 - 2026-05-28 06:47:13 [INFO] finagent.scraper: SEARCH-STEP:11 docs_merged total=8
+1779950833012 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker: RANK-STEP:01 rerank_enter query=Analyze Apple Stock India NSE BSE docs=8
+1779950833013 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker: RANK-STEP:02 bm25_computed num_docs=8 terms=6
+1779950833014 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker: RANK-STEP:03 scoring_loop_done scored=8 (BM25+domain_tier+time_decay)
+1779950833014 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker: RANK-STEP:04 sort_complete top_total=14.7492
+1779950833014 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker: Document ranking completed. Query: 'Analyze Apple Stock India NSE BSE'
+1779950833014 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker: Top 8 ranked documents breakdown:
+1779950833014 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker:   #1. Apple Inc Stock Live Price, Chart, Analysis, News & Forecast - Tier 4 [Total: 14.7492] (BM25 * 2.4: 9.0492, Structural: 2.0000, Preferred: 2.5000, Entity: 1.2000, Freshness: 0.0000) URL: https://www.livemint.com/market/market-stats/us-stocks-apple-inc-share-price-aapl
+1779950833014 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker:   #2. Apple Inc Share Price Live Today: AAPL Stock Price Live, New - Tier 4 [Total: 10.8312] (BM25 * 2.4: 5.1312, Structural: 2.0000, Preferred: 2.5000, Entity: 1.2000, Freshness: 0.0000) URL: https://www.moneycontrol.com/us-markets/stockpricequote/appleinc/AAPL
+1779950833015 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker:   #3. Apple (AAPL) Stock Price & Overview - Tier 5 [Total: 9.3639] (BM25 * 2.4: 7.3639, Structural: 0.8000, Preferred: 0.0000, Entity: 1.2000, Freshness: 0.0000) URL: https://stockanalysis.com/stocks/aapl/
+1779950833015 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker:   #4. ANALYZE Definition & Meaning - Merriam-Webster - Tier 5 [Total: 3.4257] (BM25 * 2.4: 2.6257, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://www.merriam-webster.com/dictionary/analyze
+1779950833015 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker:   #5. ANALYZE Definition &amp; Meaning | Dictionary.com - Tier 5 [Total: 0.4462] (BM25 * 2.4: 3.6462, Structural: -3.2000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://www.dictionary.com/browse/analyze
+1779950833015 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker:   #6. ANALYZE | English meaning - Cambridge Dictionary - Tier 5 [Total: 0.4462] (BM25 * 2.4: 3.6462, Structural: -3.2000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://dictionary.cambridge.org/dictionary/english/analyze
+1779950833015 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker:   #7. Just a moment... - Tier 4 [Total: -2.0000] (BM25 * 2.4: 0.0000, Structural: -2.0000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://www.valueresearchonline.com/stocks/45534/apple-inc-aapl/
+1779950833015 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker:   #8. Just a moment... - Tier 5 [Total: -3.2000] (BM25 * 2.4: 0.0000, Structural: -3.2000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://www.indmoney.com/us-stocks/apple-inc-share-price-aapl
+1779950833015 - 2026-05-28 06:47:13 [INFO] finagent.retrieval.reranker: RANK-STEP:05 rerank_exit returning=8
+1779950833015 - 2026-05-28 06:47:13 [INFO] finagent.scraper: SEARCH-STEP:12 rerank_complete final=4
+1779950833015 - 2026-05-28 06:47:13 [INFO] finagent.scraper: Reranking completed. Slicing to top 4 results.
+1779950834518 - /usr/local/lib/python3.11/site-packages/jwt/api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 24 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+1779950834518 - decoded = self.decode_complete(
+1779950834520 - INFO:     10.0.1.142:4728 - "GET /sessions/b6566f83830a/status HTTP/1.1" 200 OK
+1779950834735 - 2026-05-28 06:47:14 [INFO] finagent.scraper: SEARCH-STEP:09 crawl4ai_batch_returned docs=6
+1779950834735 - 2026-05-28 06:47:14 [INFO] finagent.scraper: [CRAWL4AI] Completed deep extraction: 6 documents successfully processed
+1779950834735 - 2026-05-28 06:47:14 [INFO] finagent.scraper: SEARCH-STEP:10 titles_patched crawl_docs=6
+1779950834736 - 2026-05-28 06:47:14 [INFO] finagent.scraper: [RESULT] Answer will be built primarily from CRAWL4AI deep extraction
+1779950834736 - 2026-05-28 06:47:14 [INFO] finagent.scraper: SEARCH-STEP:11 docs_merged total=6
+1779950834736 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker: RANK-STEP:01 rerank_enter query=Apple SEBI LODR Regulation 33 financial results NSE BSE Indi docs=6
+1779950834736 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker: RANK-STEP:02 bm25_computed num_docs=6 terms=12
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker: RANK-STEP:03 scoring_loop_done scored=6 (BM25+domain_tier+time_decay)
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker: RANK-STEP:04 sort_complete top_total=24.2687
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker: Document ranking completed. Query: 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE'
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker: Top 6 ranked documents breakdown:
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker:   #1. FAQ for Submission of Financial Results under Regulation 33  - Tier 5 [Total: 24.2687] (BM25 * 2.4: 22.4807, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.9880) URL: https://rhnvrm.github.io/stock-market-circulars/circulars/bse/2025/bse-2025-11-17-895183ead6a35fb7-frequently-asked-questions-faq-for-submission-of-financial-results-as-required-u/
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker:   #2. SEBI | Securities and Exchange Board of India (Listing Oblig - Tier 1 [Total: 16.5054] (BM25 * 2.4: 7.7054, Structural: 6.3000, Preferred: 2.5000, Entity: 0.0000, Freshness: 0.0000) URL: https://www.sebi.gov.in/legal/regulations/dec-2025/securities-and-exchange-board-of-india-listing-obligations-and-disclosure-requirements-regulations-2015-last-amended-on-december-16-2025-_98594.html
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker:   #3. NSE issues clarification on Manner of filing financial resul - Tier 5 [Total: 14.8059] (BM25 * 2.4: 14.0059, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://complinity.com/legal-update/nse-issues-clarification-on-manner-of-filing-financial-results-as-required-under-regulation-33-of-sebi-lodr-regulations-2015-8551/
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker:   #4. FAQs on SEBI LODR Regulation 33 Financial Results Submission - Tier 5 [Total: 9.2018] (BM25 * 2.4: 8.4018, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://taxguru.in/sebi/faqs-sebi-lodr-regulation-33-financial-results-submission.html
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker:   #5. SEBI clarifies timelines, applicability and disclosure requi - Tier 5 [Total: 8.9208] (BM25 * 2.4: 8.1208, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://lexplosion.in/sebi-clarifies-timelines-applicability-and-disclosure-requirements-for-quarterly-and-annual-financial-results-under-regulation-33-of-lodr-regulations/
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker:   #6. BSE Ltd. (via Public) / Frequently Asked Questions (FAQ) for - Tier 5 [Total: 4.6819] (BM25 * 2.4: 7.8819, Structural: -3.2000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://ebs.publicnow.com/view/30D977E7162B9ABF9B705CC0F6FEC27E0BADCA97
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.retrieval.reranker: RANK-STEP:05 rerank_exit returning=6
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.scraper: SEARCH-STEP:12 rerank_complete final=4
+1779950834738 - 2026-05-28 06:47:14 [INFO] finagent.scraper: Reranking completed. Slicing to top 4 results.
+1779950834739 - 2026-05-28 06:47:14 [INFO] finagent.scraper: search_layered completed. Gathered 8 total unique docs.
+1779950834739 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: [AGENT-SEARCH] Breadth survey COMPLETE | docs_returned=8
+1779950834740 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: Step 1: Processed doc from livemint.com (tier 4) | Title: 'Apple Inc Stock Live Price, Chart, Analysis, News & Forecast' | Confidence: LOW | Viral score: 0 (flags: [])
+1779950834741 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: Step 2: Processed doc from moneycontrol.com (tier 4) | Title: 'Apple Inc Share Price Live Today: AAPL Stock Price Live, New' | Confidence: LOW | Viral score: 0 (flags: [])
+1779950834741 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: Step 3: Processed doc from stockanalysis.com (tier 5) | Title: 'Apple (AAPL) Stock Price & Overview' | Confidence: LOW | Viral score: 0 (flags: [])
+1779950834742 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: Step 4: Processed doc from merriam-webster.com (tier 5) | Title: 'ANALYZE Definition & Meaning - Merriam-Webster' | Confidence: LOW | Viral score: 0 (flags: [])
+1779950834743 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: Step 5: Processed doc from rhnvrm.github.io (tier 5) | Title: 'FAQ for Submission of Financial Results under Regulation 33 ' | Confidence: LOW | Viral score: 1 (flags: ['shouting-words(7)'])
+1779950834755 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: Step 6: Processed doc from sebi.gov.in (tier 1) | Title: 'SEBI | Securities and Exchange Board of India (Listing Oblig' | Confidence: MEDIUM | Viral score: 0 (flags: [])
+1779950834755 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: Step 7: Processed doc from complinity.com (tier 5) | Title: 'NSE issues clarification on Manner of filing financial resul' | Confidence: LOW | Viral score: 0 (flags: [])
+1779950834756 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: Step 8: Processed doc from taxguru.in (tier 5) | Title: 'FAQs on SEBI LODR Regulation 33 Financial Results Submission' | Confidence: LOW | Viral score: 0 (flags: [])
+1779950834756 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: Phase 5 (Analysis): Starting conflict detection on 8 documents
+1779950834757 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: Phase 5 (Analysis): Completed conflict detection | Found 0 cross-source conflicts
+1779950834757 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: [AGENT-PHASE] === PHASE: SYNTHESIS (final LLM memo generation) ===
+1779950834758 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: [AGENT-SYNTH] Starting final LLM synthesis | docs=8 | specialist_findings=0 | conflicts=0 | quality=47.0
+1779950834758 - 2026-05-28 06:47:14 [INFO] finagent.run_agent: [AGENT-SYNTH] Passing to synthesize_memo: specialist_findings_count=0 | peer_targets=[]
+1779950834758 - 2026-05-28 06:47:14 [INFO] finagent.synthesis: [SYNTH] effective timeout_s=90s (deep=False)
+1779950834758 - 2026-05-28 06:47:14 [INFO] finagent.output.artifact_builder: [VISUALS] mode=company_snapshot | metric_cards=0 | charts=0 | findings=0
+1779950835163 - 2026-05-28 06:47:15 [INFO] finagent.synthesis: [LLM-CONTEXT] === FINAL SYNTHESIS PROMPT TO MODEL ===
+1779950835163 - 2026-05-28 06:47:15 [INFO] finagent.synthesis: [LLM-CONTEXT] model=gpt-4o | max_tokens=4000 | temperature=0.2 | is_deep=False
+1779950835163 - 2026-05-28 06:47:15 [INFO] finagent.synthesis: [LLM-CONTEXT] system_prompt_len=12710 | user_prompt_len=8339 | total_messages=2 | chat_history_items=0
+1779950835163 - 2026-05-28 06:47:15 [INFO] finagent.synthesis: [LLM-CONTEXT] target=Apple | objective=Analyze Apple Stock | output_mode=company_snapshot
+1779950835163 - 2026-05-28 06:47:15 [INFO] finagent.synthesis: [LLM-CONTEXT] facts_block_len=672 | digest_len=6963 | conflicts=0
+1779950835163 - 2026-05-28 06:47:15 [INFO] finagent.synthesis: [LLM-CONTEXT] USER_PROMPT_PREVIEW: **Research target:** Apple | **Objective:** Analyze Apple Stock |  | Produce a comprehensive, structured research report addressing the objective above. |  | Requirements: | - Use all available facts and source material provided below. | - Never hallucinate numbers or invent figures — cite every claim with [n]. | - Use Markdown structure: ## section headings, tables for metrics, bullet points for lists. | - If a data point is missing from the provided facts, explicitly state it is unavailable. | - For follow-up answers, do not summarize the earlier memo; answer the user's new request. | - For deep research reports: produce ALL sections in full — do NOT abbreviate. |  | === VERIFIED FACTS === | FX rate USD/INR = 83.4000 (source: fallback) | All USD figures should be expressed with an INR equivalent in parentheses. |  | Wikipedia (Apple Inc.): Apple Inc. is an American multinational technology company headquartered in Cupertino, California, in Silicon Valley, and known for consumer electronics, software and online services. Founded in 1976 as Apple Computer Company by Steve Jobs, Steve Wozniak and Ronald Wayne, the company was incorporated by Jobs and Wozniak as Apple Computer, Inc. the following year. Its name was c ... (truncated)
+1779950835163 - 2026-05-28 06:47:15 [INFO] finagent.synthesis: [LLM-CONTEXT] SYSTEM_PROMPT_PREVIEW: ROLE & IDENTITY: | You are FinAgent, the core autonomous financial intelligence and forensic research engine for ProspektLab — an elite platform specializing exclusively in Indian capital markets. You operate with the technical depth of an institutional equity research analyst and the rigor of a forensic auditor. You are an absolute, rigorous research engine: every statement must be substantiated, cross-examined, and explicitly source-attributed.  |  | GEOGRAPHIC & REGULATORY MANDATE: | - You research INDIAN publicly listed equities and major unlisted corporate entities ONLY. All analysis defaults to  ...
+1779950835163 - 2026-05-28 06:47:15 [INFO] finagent.synthesis: [LLM-CALL] Starting OpenAI streaming call | model=gpt-4o | session_id=n/a-in-this-scope
+1779950838922 - 2026-05-28 06:47:18 [INFO] finagent.synthesis: [LLM-RESPONSE] Synthesis completed via streaming | model=gpt-4o | output_len=275 chars
+1779950838927 - 2026-05-28 06:47:18 [INFO] finagent.synthesis: [VISUALS-RICH] build_from_native returned None — falling back to render_rich_json artifact
+1779950838927 - 2026-05-28 06:47:18 [INFO] finagent.run_agent: [AGENT-SYNTH] Memo synthesis COMPLETE | via=openai | length=275 chars | quality=47.0 | path=/app/.finagent/memos/b6566f83830a.md
+1779950838931 - 2026-05-28 06:47:18 [INFO] finagent.run_agent: Session finished successfully at step 8 with 8 citations; memo via openai
+1779950838931 - 2026-05-28 06:47:18 [INFO] finagent.run_agent: ================================================================================
+1779950838931 - 2026-05-28 06:47:18 [INFO] finagent.run_agent: [SESSION-SUMMARY] Resources Used for Generated Output:
+1779950838931 - 2026-05-28 06:47:18 [INFO] finagent.run_agent:   AGENTS:   None
+1779950838931 - 2026-05-28 06:47:18 [INFO] finagent.run_agent:   MCPS:     fundamentals, nse_india, research_news
+1779950838931 - 2026-05-28 06:47:18 [INFO] finagent.run_agent:   WEBSITES: bing.com, complinity.com, dictionary.cambridge.org, dictionary.com, ebs.publicnow.com, en.wikipedia.org, html.duckduckgo.com, indmoney.com, lexplosion.in, livemint.com, merriam-webster.com, moneycontrol.com, news.google.com, query1.finance.yahoo.com, rhnvrm.github.io, sebi.gov.in, stockanalysis.com, taxguru.in, valueresearchonline.com
+1779950838931 - 2026-05-28 06:47:18 [INFO] finagent.run_agent: ================================================================================
+1779950839496 - /usr/local/lib/python3.11/site-packages/jwt/api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 24 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+1779950839496 - decoded = self.decode_complete(
+1779950839498 - INFO:     10.0.2.148:49602 - "GET /sessions/b6566f83830a/status HTTP/1.1" 200 OK
+1779950920548 - INFO:     10.0.2.148:44578 - "OPTIONS /portfolio/mf-analytics HTTP/1.1" 200 OK
+1779950920554 - INFO:     10.0.2.148:44594 - "OPTIONS /portfolio/mirror HTTP/1.1" 200 OK
+1779950920555 - INFO:     10.0.1.142:28708 - "OPTIONS /portfolio/mirror HTTP/1.1" 200 OK
+1779950921031 - INFO:     10.0.2.148:44594 - "GET /portfolio/mf-analytics HTTP/1.1" 200 OK
+1779950921033 - INFO:     10.0.1.142:28708 - "GET /portfolio/mirror HTTP/1.1" 200 OK
+1779950921337 - INFO:     10.0.1.142:28708 - "OPTIONS /portfolio/today HTTP/1.1" 200 OK
+1779950921823 - INFO:     10.0.1.142:28708 - "GET /portfolio/today HTTP/1.1" 200 OK
+1779951071726 - INFO:     Shutting down
+1779951071826 - INFO:     Waiting for application shutdown.
+1779951071828 - INFO:     Application shutdown complete.
+1779951071828 - INFO:     Finished server process [1]
+1779951409949 - INFO:     10.0.1.142:24512 - "GET / HTTP/1.1" 302 Found
+1779951413699 - INFO:     10.0.2.148:36424 - "GET / HTTP/1.1" 302 Found
+1779951413772 - INFO:     10.0.1.142:24522 - "GET /landing HTTP/1.1" 200 OK
+1779951418002 - INFO:     10.0.1.142:24522 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+1779951506890 - INFO:     10.0.1.142:6358 - "GET / HTTP/1.1" 302 Found
+1779951535936 - INFO:     10.0.1.142:4768 - "GET /robots.txt HTTP/1.1" 404 Not Found
+1779951670038 - INFO:     Started server process [1]
+1779951670038 - INFO:     Waiting for application startup.
+1779951670038 - INFO:     Application startup complete.
+1779951670038 - 2026-05-28 07:01:10 [INFO] finagent.gateway: FastAPI gateway startup: Logging configuration successfully applied to finagent and oracle namespaces.
+1779951670039 - INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+1779951760166 - /usr/local/lib/python3.11/site-packages/jwt/api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 24 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+1779951760166 - return self._jws.encode(
+1779951760167 - INFO:     10.0.1.142:16892 - "POST /auth/login HTTP/1.1" 200 OK
+1779951761123 - /usr/local/lib/python3.11/site-packages/jwt/api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 24 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+1779951761123 - decoded = self.decode_complete(
+1779951761153 - 2026-05-28 07:02:41 [INFO] finagent.run_agent: Initializing research session | Target: 'Apple' | Objective: 'Analyze Apple Stock' | Session ID: 41660171edcf
+1779951761153 - 2026-05-28 07:02:41 [INFO] finagent.run_agent: Resolved Entity: Apple (Country: IN, Ticker: None, Search Label: Apple)
+1779951761159 - 2026-05-28 07:02:41 [INFO] finagent.retrieval.planner: Initializing retrieval plan for objective: 'Analyze Apple Stock'
+1779951761159 - 2026-05-28 07:02:41 [INFO] finagent.retrieval.planner: Resolved entity: Apple (Ticker: None, Search Label: Apple)
+1779951761159 - 2026-05-28 07:02:41 [INFO] finagent.retrieval.planner: Detected routing tags/intents: []
+1779951761159 - 2026-05-28 07:02:41 [INFO] finagent.retrieval.planner: Generated 7 breadth queries for research phase:
+1779951761160 - 2026-05-28 07:02:41 [INFO] finagent.retrieval.planner:   Query 1: 'Analyze Apple Stock India NSE BSE'
+1779951761160 - 2026-05-28 07:02:41 [INFO] finagent.retrieval.planner:   Query 2: 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE'
+1779951761160 - 2026-05-28 07:02:41 [INFO] finagent.retrieval.planner:   Query 3: 'Apple outcome of board meeting financial results NSE BSE India NSE BSE'
+1779951761160 - 2026-05-28 07:02:41 [INFO] finagent.retrieval.planner:   Query 4: 'Apple Regulation 30 corporate announcement NSE BSE India NSE BSE'
+1779951761160 - 2026-05-28 07:02:41 [INFO] finagent.retrieval.planner:   Query 5: 'Apple Regulation 31 shareholding pattern promoter pledge NSE BSE India NSE BSE'
+1779951761160 - 2026-05-28 07:02:41 [INFO] finagent.retrieval.planner:   Query 6: 'Apple annual report PDF NSE BSE India NSE BSE'
+1779951761160 - 2026-05-28 07:02:41 [INFO] finagent.retrieval.planner:   Query 7: 'Apple NSE Emerge BSE SME board financial results India NSE BSE'
+1779951761160 - 2026-05-28 07:02:41 [INFO] finagent.retrieval.planner: Preferred domains for this entity: ['nseindia.com', 'bseindia.com', 'sebi.gov.in', 'moneycontrol.com', 'screener.in', 'trendlyne.com', 'tickertape.in', 'economictimes.indiatimes.com', 'livemint.com', 'business-standard.com']
+1779951761160 - 2026-05-28 07:02:41 [INFO] finagent.run_agent: [AGENT-START] run_research_session BEGIN | session_id=41660171edcf | target=Apple | objective=Analyze Apple Stock
+1779951761160 - 2026-05-28 07:02:41 [INFO] finagent.run_agent: [AGENT-CONFIG] max_steps=8 | enable_enrichment=True | enable_scraping=True | enable_reflection=False | enable_multi_agent=False | depth=standard
+1779951761160 - 2026-05-28 07:02:41 [INFO] finagent.run_agent: [AGENT-PLAN] ResearchPlan: RESEARCH PLAN
+1779951761160 - Target: Apple
+1779951761160 - Objective: Analyze Apple Stock
+1779951761160 - Steps:
+1779951761160 - Step 1 -- Breadth survey -> web_search -> Surface map of sources
+1779951761160 - Step 2 -- Primary filings -> exchange_filings -> SEBI LODR / NSE / BSE filing index (after (1,))
+1779951761160 - Step 3 -- Triangulate key metrics -> accuracy_validator -> Confidence tags (after (2,))
+1779951761160 - Step 4 -- Synthesis -> memo_formatter -> Research memo (after (3,))
+1779951761160 - Estimated depth: standard
+1779951761160 - Estimated duration: 60 minutes
+1779951761160 - Human gates: export_data, credit_spend_confirm
+1779951761161 - 2026-05-28 07:02:41 [INFO] finagent.run_agent: [AGENT-ROUTING] Selected agents: ['financials', 'risk', 'news'] | deep_research=False | country=IN | preferred_domains=['nseindia.com', 'bseindia.com', 'sebi.gov.in', 'moneycontrol.com', 'screener.in', 'trendlyne.com', 'tickertape.in', 'economictimes.indiatimes.com']
+1779951761161 - 2026-05-28 07:02:41 [INFO] finagent.run_agent: [AGENT-RETRIEVAL-PLAN] Breadth queries (2): ['Analyze Apple Stock India NSE BSE', 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE']
+1779951761166 - 2026-05-28 07:02:41 [WARNING] finagent.run_agent: memory recall failed: no such column: f.user_email
+1779951761166 - 2026-05-28 07:02:41 [INFO] finagent.run_agent: Phase 0 (Memory): recalled 0 facts for target 'Apple' | Prior summary present: False
+1779951761166 - 2026-05-28 07:02:41 [INFO] finagent.run_agent: [AGENT-PHASE] === PHASE: ENRICHMENT (Yahoo + Wiki + India/SEC) ===
+1779951761166 - 2026-05-28 07:02:41 [INFO] finagent.run_agent: [AGENT-ENRICH] Starting parallel enrichment for target=Apple
+1779951761167 - 2026-05-28 07:02:41 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'APPLE'}
+1779951761167 - 2026-05-28 07:02:41 [INFO] finagent.tools.data.india: [MCP-USE] nse_india | tool=nse_get_announcements | args={'symbol': 'APPLE'}
+1779951761175 - 2026-05-28 07:02:41 [INFO] finagent.tools.data.india: [MCP-USE] nse_india | tool=nse_get_shareholding | args={'symbol': 'APPLE'}
+1779951761184 - 2026-05-28 07:02:41 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'APPLE.NS'}
+1779951761185 - 2026-05-28 07:02:41 [INFO] finagent.wikipedia: [MCP-USE] research_news | tool=search_web | args={'query': 'wikipedia Apple'}
+1779951761196 - INFO:     10.0.1.142:16892 - "POST /chat/research HTTP/1.1" 200 OK
+1779951761227 - 2026-05-28 07:02:41 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'Apple'}
+1779951761340 - 2026-05-28 07:02:41 [INFO] finagent.run_agent: Wikipedia rejected 'Apple' -> 'Apple' ('Edible fruit')
+1779951761342 - 2026-05-28 07:02:41 [INFO] finagent.wikipedia: [MCP-USE] research_news | tool=search_web | args={'query': 'wikipedia Apple (company)'}
+1779951761949 - 2026-05-28 07:02:41 [INFO] finagent.tools.data.india: Screener/MC miss for APPLE — trying NSE
+1779951762014 - 2026-05-28 07:02:42 [INFO] finagent.tools.data.india: NSE miss for APPLE — trying BSE
+1779951762417 - 2026-05-28 07:02:42 [INFO] finagent.yahoo: yfinance: no usable data for APPLE.NS
+1779951762418 - 2026-05-28 07:02:42 [INFO] finagent.run_agent: [AGENT-ENRICH] Done | Yahoo=False | Wiki=True | News=12 | India/SEC=False
+1779951762418 - 2026-05-28 07:02:42 [INFO] finagent.run_agent: [AGENT-PHASE] === PHASE: BREADTH SURVEY (search_layered) ===
+1779951762418 - 2026-05-28 07:02:42 [INFO] finagent.run_agent: [AGENT-SEARCH] Dispatching 2 breadth queries for Apple | preferred_domains=['nseindia.com', 'bseindia.com', 'sebi.gov.in', 'moneycontrol.com', 'screener.in', 'trendlyne.com']
+1779951762418 - 2026-05-28 07:02:42 [INFO] finagent.scraper: [MCP-USE] research_news | tool=search_web | args={'query': 'Apple'}
+1779951762419 - 2026-05-28 07:02:42 [INFO] finagent.scraper: [MCP-USE] research_news | tool=search_web | args={'query': 'Analyze Apple Stock India NSE BSE'}
+1779951762419 - 2026-05-28 07:02:42 [INFO] finagent.scraper: SEARCH-STEP:00 start query=Analyze Apple Stock India NSE BSE max_results=4
+1779951762419 - 2026-05-28 07:02:42 [INFO] finagent.scraper: [SEARCH] Starting heavy search for: 'Analyze Apple Stock India NSE BSE' — Crawl4AI will be primary extractor for deep content
+1779951762419 - 2026-05-28 07:02:42 [INFO] finagent.scraper: SEARCH-STEP:01 targets_computed stage1_target=48 crawl_budget=8
+1779951762420 - 2026-05-28 07:02:42 [INFO] finagent.scraper: [MCP-USE] research_news | tool=search_web | args={'query': 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE'}
+1779951762420 - 2026-05-28 07:02:42 [INFO] finagent.scraper: SEARCH-STEP:00 start query=Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE max_results=4
+1779951762420 - 2026-05-28 07:02:42 [INFO] finagent.scraper: [SEARCH] Starting heavy search for: 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE' — Crawl4AI will be primary extractor for deep content
+1779951762420 - 2026-05-28 07:02:42 [INFO] finagent.scraper: SEARCH-STEP:01 targets_computed stage1_target=48 crawl_budget=8
+1779951762428 - 2026-05-28 07:02:42 [WARNING] finagent.scraper: Tavily search failed for 'Analyze Apple Stock India NSE BSE', will fall back to DDG/Bing: No module named 'tavily'
+1779951762436 - 2026-05-28 07:02:42 [WARNING] finagent.scraper: Tavily search failed for 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE', will fall back to DDG/Bing: No module named 'tavily'
+1779951762437 - 2026-05-28 07:02:42 [ERROR] finagent.tools.web.searxng_client: SearXNG search failed for query 'Analyze Apple Stock India NSE BSE': All connection attempts failed
+1779951762438 - 2026-05-28 07:02:42 [ERROR] finagent.tools.web.searxng_client: SearXNG search failed for query 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE': All connection attempts failed
+1779951762439 - 2026-05-28 07:02:42 [INFO] finagent.scraper: Performing standard HTTP fetch for DDG search query: 'Analyze Apple Stock India NSE BSE'
+1779951762439 - 2026-05-28 07:02:42 [INFO] finagent.scraper: Performing standard HTTP fetch for Bing search query: 'Analyze Apple Stock India NSE BSE'
+1779951762440 - 2026-05-28 07:02:42 [INFO] finagent.scraper: Performing standard HTTP fetch for DDG search query: 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE'
+1779951762441 - 2026-05-28 07:02:42 [INFO] finagent.scraper: Performing standard HTTP fetch for Bing search query: 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE'
+1779951762542 - 2026-05-28 07:02:42 [INFO] finagent.scraper: Bing search query 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE' returned 0 results.
+1779951762549 - 2026-05-28 07:02:42 [INFO] finagent.scraper: Bing search query 'Analyze Apple Stock India NSE BSE' returned 9 results.
+1779951763453 - 2026-05-28 07:02:43 [INFO] finagent.scraper: DDG search query 'Analyze Apple Stock India NSE BSE' returned 9 results.
+1779951763453 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:03 backup_sources_completed ddg=9 bing=9
+1779951763453 - 2026-05-28 07:02:43 [INFO] finagent.scraper: Stage 1 candidate sourcing hits: SearXNG=0 Tavily=0 DDG=9 Bing=9 (Crawl4AI will be primary extractor)
+1779951763454 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:02 searxng_tavily_completed count=0
+1779951763454 - 2026-05-28 07:02:43 [INFO] finagent.scraper: [SEARCH] No SearXNG/Tavily results — will rely on Crawl4AI for content
+1779951763454 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:04 combined_docs_built count=0
+1779951763454 - 2026-05-28 07:02:43 [INFO] finagent.scraper: Raw candidate URLs before domain deduplication (Crawl4AI primary): 9
+1779951763454 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:05 raw_candidates_built count=9
+1779951763454 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:dedup_enter raw=9 max_per_domain=2 max_total=48
+1779951763454 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:dedup_exit kept=9
+1779951763454 - 2026-05-28 07:02:43 [INFO] finagent.scraper: Stage 1 candidates after domain deduplication: 9
+1779951763454 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:06 dedup_done candidates=9
+1779951763454 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:07 preferred_sort_done count=9
+1779951763455 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:08 crawl_urls_prepared count=8 budget=8
+1779951763455 - 2026-05-28 07:02:43 [INFO] finagent.scraper: [SEARCH] Bypassing Crawl4AI browser crawl; fetching 8 URL(s) via parallel httpx
+1779951763496 - 2026-05-28 07:02:43 [INFO] finagent.scraper: DDG search query 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE' returned 10 results.
+1779951763497 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:03 backup_sources_completed ddg=10 bing=0
+1779951763497 - 2026-05-28 07:02:43 [INFO] finagent.scraper: Stage 1 candidate sourcing hits: SearXNG=0 Tavily=0 DDG=10 Bing=0 (Crawl4AI will be primary extractor)
+1779951763497 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:02 searxng_tavily_completed count=0
+1779951763497 - 2026-05-28 07:02:43 [INFO] finagent.scraper: [SEARCH] No SearXNG/Tavily results — will rely on Crawl4AI for content
+1779951763497 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:04 combined_docs_built count=0
+1779951763497 - 2026-05-28 07:02:43 [INFO] finagent.scraper: Raw candidate URLs before domain deduplication (Crawl4AI primary): 10
+1779951763497 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:05 raw_candidates_built count=10
+1779951763497 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:dedup_enter raw=10 max_per_domain=2 max_total=48
+1779951763497 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:dedup_exit kept=10
+1779951763497 - 2026-05-28 07:02:43 [INFO] finagent.scraper: Stage 1 candidates after domain deduplication: 10
+1779951763497 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:06 dedup_done candidates=10
+1779951763497 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:07 preferred_sort_done count=10
+1779951763498 - 2026-05-28 07:02:43 [INFO] finagent.scraper: SEARCH-STEP:08 crawl_urls_prepared count=7 budget=8
+1779951763498 - 2026-05-28 07:02:43 [INFO] finagent.scraper: [SEARCH] Bypassing Crawl4AI browser crawl; fetching 7 URL(s) via parallel httpx
+1779951765494 - 2026-05-28 07:02:45 [INFO] finagent.scraper: SEARCH-STEP:09 crawl4ai_batch_returned docs=8
+1779951765494 - 2026-05-28 07:02:45 [INFO] finagent.scraper: [CRAWL4AI] Completed deep extraction: 8 documents successfully processed
+1779951765494 - 2026-05-28 07:02:45 [INFO] finagent.scraper: SEARCH-STEP:10 titles_patched crawl_docs=8
+1779951765494 - 2026-05-28 07:02:45 [INFO] finagent.scraper: [RESULT] Answer will be built primarily from CRAWL4AI deep extraction
+1779951765494 - 2026-05-28 07:02:45 [INFO] finagent.scraper: SEARCH-STEP:11 docs_merged total=8
+1779951765494 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker: RANK-STEP:01 rerank_enter query=Analyze Apple Stock India NSE BSE docs=8
+1779951765495 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker: RANK-STEP:02 bm25_computed num_docs=8 terms=6
+1779951765497 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker: RANK-STEP:03 scoring_loop_done scored=8 (BM25+domain_tier+time_decay)
+1779951765497 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker: RANK-STEP:04 sort_complete top_total=16.5667
+1779951765497 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker: Document ranking completed. Query: 'Analyze Apple Stock India NSE BSE'
+1779951765497 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker: Top 8 ranked documents breakdown:
+1779951765497 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker:   #1. Best Stock Screener India | AI-Powered NSE & BSE Analysis —  - Tier 5 [Total: 16.5667] (BM25 * 2.4: 15.7667, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://www.bullrun.co.in/
+1779951765497 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker:   #2. Apple Inc Stock Live Price, Chart, Analysis, News & Forecast - Tier 4 [Total: 12.5663] (BM25 * 2.4: 6.8663, Structural: 2.0000, Preferred: 2.5000, Entity: 1.2000, Freshness: 0.0000) URL: https://www.livemint.com/market/market-stats/us-stocks-apple-inc-share-price-aapl
+1779951765498 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker:   #3. StockTrendz AI™ — AI Pattern Scanner for NSE & BSE | Find Br - Tier 5 [Total: 9.9417] (BM25 * 2.4: 9.1417, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://stocktrendz.in/
+1779951765498 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker:   #4. Apple Inc Share Price Live Today: AAPL Stock Price Live, New - Tier 4 [Total: 9.6830] (BM25 * 2.4: 3.9830, Structural: 2.0000, Preferred: 2.5000, Entity: 1.2000, Freshness: 0.0000) URL: https://www.moneycontrol.com/us-markets/stockpricequote/appleinc/AAPL
+1779951765498 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker:   #5. Apple (AAPL) Stock Price & Overview - Tier 5 [Total: 7.1329] (BM25 * 2.4: 5.1329, Structural: 0.8000, Preferred: 0.0000, Entity: 1.2000, Freshness: 0.0000) URL: https://stockanalysis.com/stocks/aapl/
+1779951765498 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker:   #6. AI Stock Analysis & Screening Tool - Tier 5 [Total: 2.2643] (BM25 * 2.4: 1.4643, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://deepstock.in/
+1779951765498 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker:   #7. Just a moment... - Tier 4 [Total: -2.0000] (BM25 * 2.4: 0.0000, Structural: -2.0000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://www.valueresearchonline.com/stocks/45534/apple-inc-aapl/
+1779951765498 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker:   #8. Just a moment... - Tier 5 [Total: -3.2000] (BM25 * 2.4: 0.0000, Structural: -3.2000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://www.indmoney.com/us-stocks/apple-inc-share-price-aapl
+1779951765498 - 2026-05-28 07:02:45 [INFO] finagent.retrieval.reranker: RANK-STEP:05 rerank_exit returning=8
+1779951765498 - 2026-05-28 07:02:45 [INFO] finagent.scraper: SEARCH-STEP:12 rerank_complete final=4
+1779951765498 - 2026-05-28 07:02:45 [INFO] finagent.scraper: Reranking completed. Slicing to top 4 results.
+1779951765962 - /usr/local/lib/python3.11/site-packages/jwt/api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 24 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+1779951765962 - decoded = self.decode_complete(
+1779951765964 - INFO:     10.0.2.148:34680 - "GET /sessions/41660171edcf/status HTTP/1.1" 200 OK
+1779951766465 - 2026-05-28 07:02:46 [INFO] finagent.scraper: SEARCH-STEP:09 crawl4ai_batch_returned docs=7
+1779951766465 - 2026-05-28 07:02:46 [INFO] finagent.scraper: [CRAWL4AI] Completed deep extraction: 7 documents successfully processed
+1779951766465 - 2026-05-28 07:02:46 [INFO] finagent.scraper: SEARCH-STEP:10 titles_patched crawl_docs=7
+1779951766465 - 2026-05-28 07:02:46 [INFO] finagent.scraper: [RESULT] Answer will be built primarily from CRAWL4AI deep extraction
+1779951766465 - 2026-05-28 07:02:46 [INFO] finagent.scraper: SEARCH-STEP:11 docs_merged total=7
+1779951766465 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker: RANK-STEP:01 rerank_enter query=Apple SEBI LODR Regulation 33 financial results NSE BSE Indi docs=7
+1779951766466 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker: RANK-STEP:02 bm25_computed num_docs=7 terms=12
+1779951766467 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker: RANK-STEP:03 scoring_loop_done scored=7 (BM25+domain_tier+time_decay)
+1779951766467 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker: RANK-STEP:04 sort_complete top_total=24.5480
+1779951766467 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker: Document ranking completed. Query: 'Apple SEBI LODR Regulation 33 financial results NSE BSE India NSE BSE'
+1779951766467 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker: Top 7 ranked documents breakdown:
+1779951766467 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker:   #1. FAQ for Submission of Financial Results under Regulation 33  - Tier 5 [Total: 24.5480] (BM25 * 2.4: 22.7600, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.9880) URL: https://rhnvrm.github.io/stock-market-circulars/circulars/bse/2025/bse-2025-11-17-895183ead6a35fb7-frequently-asked-questions-faq-for-submission-of-financial-results-as-required-u/
+1779951766467 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker:   #2. SEBI | Securities and Exchange Board of India (Listing Oblig - Tier 1 [Total: 17.0321] (BM25 * 2.4: 8.2321, Structural: 6.3000, Preferred: 2.5000, Entity: 0.0000, Freshness: 0.0000) URL: https://www.sebi.gov.in/legal/regulations/jul-2024/securities-and-exchange-board-of-india-listing-obligations-and-disclosure-requirements-regulations-2015-last-amended-on-july-10-2024-_84817.html
+1779951766467 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker:   #3. NSE issues clarification on Manner of filing financial resul - Tier 5 [Total: 14.6334] (BM25 * 2.4: 13.8334, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://complinity.com/legal-update/nse-issues-clarification-on-manner-of-filing-financial-results-as-required-under-regulation-33-of-sebi-lodr-regulations-2015-8551/
+1779951766467 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker:   #4. FAQs on SEBI LODR Regulation 33 Financial Results Submission - Tier 5 [Total: 7.9989] (BM25 * 2.4: 7.1989, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://taxguru.in/sebi/faqs-sebi-lodr-regulation-33-financial-results-submission.html
+1779951766467 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker:   #5. FAQs on Submission of Financial Results under SEBI LODR Regu - Tier 5 [Total: 7.7893] (BM25 * 2.4: 6.9893, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://affluence.net.in/faqs-on-submission-of-financial-results-under-sebi-lodr-regulation-33/
+1779951766467 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker:   #6. SEBI clarifies timelines, applicability and disclosure requi - Tier 5 [Total: 7.7648] (BM25 * 2.4: 6.9648, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://lexplosion.in/sebi-clarifies-timelines-applicability-and-disclosure-requirements-for-quarterly-and-annual-financial-results-under-regulation-33-of-lodr-regulations/
+1779951766467 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker:   #7. BSE Ltd. (via Public) / Frequently Asked Questions (FAQ) for - Tier 5 [Total: 5.7309] (BM25 * 2.4: 8.9309, Structural: -3.2000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://ebs.publicnow.com/view/30D977E7162B9ABF9B705CC0F6FEC27E0BADCA97
+1779951766468 - 2026-05-28 07:02:46 [INFO] finagent.retrieval.reranker: RANK-STEP:05 rerank_exit returning=7
+1779951766468 - 2026-05-28 07:02:46 [INFO] finagent.scraper: SEARCH-STEP:12 rerank_complete final=4
+1779951766468 - 2026-05-28 07:02:46 [INFO] finagent.scraper: Reranking completed. Slicing to top 4 results.
+1779951766468 - 2026-05-28 07:02:46 [INFO] finagent.scraper: search_layered completed. Gathered 8 total unique docs.
+1779951766468 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: [AGENT-SEARCH] Breadth survey COMPLETE | docs_returned=8
+1779951766469 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: Step 1: Processed doc from bullrun.co.in (tier 5) | Title: 'Best Stock Screener India | AI-Powered NSE & BSE Analysis — ' | Confidence: LOW | Viral score: 0 (flags: [])
+1779951766470 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: Step 2: Processed doc from livemint.com (tier 4) | Title: 'Apple Inc Stock Live Price, Chart, Analysis, News & Forecast' | Confidence: LOW | Viral score: 0 (flags: [])
+1779951766470 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: Step 3: Processed doc from stocktrendz.in (tier 5) | Title: 'StockTrendz AI™ — AI Pattern Scanner for NSE & BSE | Find Br' | Confidence: LOW | Viral score: 1 (flags: ['rocket-emojis'])
+1779951766471 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: Step 4: Processed doc from moneycontrol.com (tier 4) | Title: 'Apple Inc Share Price Live Today: AAPL Stock Price Live, New' | Confidence: LOW | Viral score: 0 (flags: [])
+1779951766471 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: Step 5: Processed doc from rhnvrm.github.io (tier 5) | Title: 'FAQ for Submission of Financial Results under Regulation 33 ' | Confidence: LOW | Viral score: 1 (flags: ['shouting-words(7)'])
+1779951766478 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: Step 6: Processed doc from sebi.gov.in (tier 1) | Title: 'SEBI | Securities and Exchange Board of India (Listing Oblig' | Confidence: MEDIUM | Viral score: 0 (flags: [])
+1779951766479 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: Step 7: Processed doc from complinity.com (tier 5) | Title: 'NSE issues clarification on Manner of filing financial resul' | Confidence: LOW | Viral score: 0 (flags: [])
+1779951766479 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: Step 8: Processed doc from taxguru.in (tier 5) | Title: 'FAQs on SEBI LODR Regulation 33 Financial Results Submission' | Confidence: LOW | Viral score: 0 (flags: [])
+1779951766480 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: Phase 5 (Analysis): Starting conflict detection on 8 documents
+1779951766481 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: Phase 5 (Analysis): Completed conflict detection | Found 0 cross-source conflicts
+1779951766481 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: [AGENT-PHASE] === PHASE: SYNTHESIS (final LLM memo generation) ===
+1779951766482 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: [AGENT-SYNTH] Starting final LLM synthesis | docs=8 | specialist_findings=0 | conflicts=0 | quality=47.0
+1779951766482 - 2026-05-28 07:02:46 [INFO] finagent.run_agent: [AGENT-SYNTH] Passing to synthesize_memo: specialist_findings_count=0 | peer_targets=[]
+1779951766482 - 2026-05-28 07:02:46 [INFO] finagent.synthesis: [SYNTH] effective timeout_s=90s (deep=False)
+1779951766482 - 2026-05-28 07:02:46 [INFO] finagent.output.artifact_builder: [VISUALS] mode=company_snapshot | metric_cards=0 | charts=0 | findings=0
+1779951766877 - 2026-05-28 07:02:46 [INFO] finagent.synthesis: [LLM-CONTEXT] === FINAL SYNTHESIS PROMPT TO MODEL ===
+1779951766877 - 2026-05-28 07:02:46 [INFO] finagent.synthesis: [LLM-CONTEXT] model=gpt-4o | max_tokens=4000 | temperature=0.2 | is_deep=False
+1779951766877 - 2026-05-28 07:02:46 [INFO] finagent.synthesis: [LLM-CONTEXT] system_prompt_len=12710 | user_prompt_len=8345 | total_messages=2 | chat_history_items=0
+1779951766877 - 2026-05-28 07:02:46 [INFO] finagent.synthesis: [LLM-CONTEXT] target=Apple | objective=Analyze Apple Stock | output_mode=company_snapshot
+1779951766877 - 2026-05-28 07:02:46 [INFO] finagent.synthesis: [LLM-CONTEXT] facts_block_len=669 | digest_len=6972 | conflicts=0
+1779951766877 - 2026-05-28 07:02:46 [INFO] finagent.synthesis: [LLM-CONTEXT] USER_PROMPT_PREVIEW: **Research target:** Apple | **Objective:** Analyze Apple Stock |  | Produce a comprehensive, structured research report addressing the objective above. |  | Requirements: | - Use all available facts and source material provided below. | - Never hallucinate numbers or invent figures — cite every claim with [n]. | - Use Markdown structure: ## section headings, tables for metrics, bullet points for lists. | - If a data point is missing from the provided facts, explicitly state it is unavailable. | - For follow-up answers, do not summarize the earlier memo; answer the user's new request. | - For deep research reports: produce ALL sections in full — do NOT abbreviate. |  | === VERIFIED FACTS === | FX rate USD/INR = 95.6800 (source: yahoo) | All USD figures should be expressed with an INR equivalent in parentheses. |  | Wikipedia (Apple Inc.): Apple Inc. is an American multinational technology company headquartered in Cupertino, California, in Silicon Valley, and known for consumer electronics, software and online services. Founded in 1976 as Apple Computer Company by Steve Jobs, Steve Wozniak and Ronald Wayne, the company was incorporated by Jobs and Wozniak as Apple Computer, Inc. the following year. Its name was chan ... (truncated)
+1779951766877 - 2026-05-28 07:02:46 [INFO] finagent.synthesis: [LLM-CONTEXT] SYSTEM_PROMPT_PREVIEW: ROLE & IDENTITY: | You are FinAgent, the core autonomous financial intelligence and forensic research engine for ProspektLab — an elite platform specializing exclusively in Indian capital markets. You operate with the technical depth of an institutional equity research analyst and the rigor of a forensic auditor. You are an absolute, rigorous research engine: every statement must be substantiated, cross-examined, and explicitly source-attributed.  |  | GEOGRAPHIC & REGULATORY MANDATE: | - You research INDIAN publicly listed equities and major unlisted corporate entities ONLY. All analysis defaults to  ...
+1779951766877 - 2026-05-28 07:02:46 [INFO] finagent.synthesis: [LLM-CALL] Starting OpenAI streaming call | model=gpt-4o | session_id=n/a-in-this-scope
+1779951769130 - 2026-05-28 07:02:49 [INFO] finagent.synthesis: [LLM-RESPONSE] Synthesis completed via streaming | model=gpt-4o | output_len=411 chars
+1779951769133 - 2026-05-28 07:02:49 [INFO] finagent.synthesis: [VISUALS-RICH] build_from_native returned None — falling back to render_rich_json artifact
+1779951769134 - 2026-05-28 07:02:49 [INFO] finagent.run_agent: [AGENT-SYNTH] Memo synthesis COMPLETE | via=openai | length=411 chars | quality=47.0 | path=/app/.finagent/memos/41660171edcf.md
+1779951769137 - 2026-05-28 07:02:49 [INFO] finagent.run_agent: Session finished successfully at step 8 with 8 citations; memo via openai
+1779951769138 - 2026-05-28 07:02:49 [INFO] finagent.run_agent: ================================================================================
+1779951769138 - 2026-05-28 07:02:49 [INFO] finagent.run_agent: [SESSION-SUMMARY] Resources Used for Generated Output:
+1779951769138 - 2026-05-28 07:02:49 [INFO] finagent.run_agent:   AGENTS:   None
+1779951769138 - 2026-05-28 07:02:49 [INFO] finagent.run_agent:   MCPS:     fundamentals, nse_india, research_news
+1779951769138 - 2026-05-28 07:02:49 [INFO] finagent.run_agent:   WEBSITES: affluence.net.in, bing.com, bullrun.co.in, complinity.com, deepstock.in, ebs.publicnow.com, en.wikipedia.org, html.duckduckgo.com, indmoney.com, lexplosion.in, livemint.com, moneycontrol.com, news.google.com, query1.finance.yahoo.com, rhnvrm.github.io, sebi.gov.in, stockanalysis.com, stocktrendz.in, taxguru.in, valueresearchonline.com
+1779951769138 - 2026-05-28 07:02:49 [INFO] finagent.run_agent: ================================================================================
+1779951771415 - /usr/local/lib/python3.11/site-packages/jwt/api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 24 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+1779951771415 - decoded = self.decode_complete(
+1779951771416 - INFO:     10.0.2.148:27460 - "GET /sessions/41660171edcf/status HTTP/1.1" 200 OK
+1779951817262 - INFO:     10.0.1.142:22160 - "OPTIONS /portfolio/mirror HTTP/1.1" 200 OK
+1779951817718 - INFO:     10.0.1.142:22162 - "GET /portfolio/mirror HTTP/1.1" 200 OK
+1779951819606 - INFO:     10.0.2.148:56022 - "OPTIONS /user/token-usage HTTP/1.1" 200 OK
+1779951819617 - INFO:     10.0.2.148:56030 - "OPTIONS /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951819618 - INFO:     10.0.2.148:56024 - "OPTIONS /market/indices HTTP/1.1" 200 OK
+1779951819834 - INFO:     10.0.1.142:22160 - "OPTIONS /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951819835 - INFO:     10.0.2.148:56038 - "OPTIONS /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951819836 - INFO:     10.0.2.148:56022 - "OPTIONS /portfolio/mf-analytics HTTP/1.1" 200 OK
+1779951819838 - INFO:     10.0.1.142:22162 - "GET /portfolio/mirror HTTP/1.1" 200 OK
+1779951820049 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': '^NSEI'}
+1779951820049 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': '^BSESN'}
+1779951820049 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': '^NSEBANK'}
+1779951820049 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': '^CNXIT'}
+1779951820049 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': '^GSPC'}
+1779951820049 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': '^IXIC'}
+1779951820049 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': '^DJI'}
+1779951820050 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': '^VIX'}
+1779951820052 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'USDINR=X'}
+1779951820055 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'EURINR=X'}
+1779951820056 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'GBPINR=X'}
+1779951820056 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'JPYINR=X'}
+1779951820073 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'BTC-USD'}
+1779951820073 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'ETH-USD'}
+1779951820073 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'SOL-USD'}
+1779951820073 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'XRP-USD'}
+1779951820073 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': '^NSEI'}
+1779951820074 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': '^NSEBANK'}
+1779951820074 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'CL=F'}
+1779951820074 - 2026-05-28 07:03:40 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'GC=F'}
+1779951820078 - 2026-05-28 07:03:40 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951820086 - INFO:     10.0.1.142:22162 - "GET /user/token-usage HTTP/1.1" 200 OK
+1779951820307 - /usr/local/lib/python3.11/site-packages/jwt/api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 24 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+1779951820307 - decoded = self.decode_complete(
+1779951820308 - 2026-05-28 07:03:40 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951820308 - 2026-05-28 07:03:40 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951820308 - 2026-05-28 07:03:40 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951820752 - INFO:     10.0.2.148:56030 - "GET /portfolio/mf-analytics HTTP/1.1" 200 OK
+1779951821018 - INFO:     10.0.1.142:31502 - "OPTIONS /portfolio/today HTTP/1.1" 200 OK
+1779951821272 - /usr/local/lib/python3.11/site-packages/jwt/api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 24 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+1779951821272 - decoded = self.decode_complete(
+1779951821571 - INFO:     10.0.2.148:56038 - "GET /portfolio/today HTTP/1.1" 200 OK
+1779951822568 - INFO:     10.0.1.142:22160 - "GET /market/indices HTTP/1.1" 200 OK
+1779951822647 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951822955 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951823008 - /usr/local/lib/python3.11/site-packages/jwt/api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 24 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+1779951823008 - decoded = self.decode_complete(
+1779951823008 - 2026-05-28 07:03:43 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951823024 - INFO:     10.0.2.148:56038 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951823212 - 2026-05-28 07:03:43 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951823212 - 2026-05-28 07:03:43 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951823212 - 2026-05-28 07:03:43 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951823213 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951823438 - 2026-05-28 07:03:43 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951823449 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951823675 - 2026-05-28 07:03:43 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951823675 - 2026-05-28 07:03:43 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951823675 - 2026-05-28 07:03:43 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951823675 - INFO:     10.0.1.142:22160 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951823899 - 2026-05-28 07:03:43 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951823910 - INFO:     10.0.1.142:22160 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951824136 - 2026-05-28 07:03:44 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951824136 - 2026-05-28 07:03:44 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951824136 - 2026-05-28 07:03:44 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951824137 - INFO:     10.0.2.148:56038 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951824360 - 2026-05-28 07:03:44 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951824372 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951824600 - 2026-05-28 07:03:44 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951824600 - 2026-05-28 07:03:44 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951824600 - 2026-05-28 07:03:44 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951824600 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951824826 - 2026-05-28 07:03:44 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951824837 - INFO:     10.0.1.142:22162 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951825064 - 2026-05-28 07:03:45 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951825064 - 2026-05-28 07:03:45 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951825064 - 2026-05-28 07:03:45 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951825064 - INFO:     10.0.2.148:56022 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951825290 - 2026-05-28 07:03:45 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951825301 - INFO:     10.0.1.142:22160 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951825527 - 2026-05-28 07:03:45 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951825527 - 2026-05-28 07:03:45 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951825527 - 2026-05-28 07:03:45 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951825528 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951825753 - 2026-05-28 07:03:45 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951825765 - INFO:     10.0.1.142:22162 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951825990 - 2026-05-28 07:03:45 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951825990 - 2026-05-28 07:03:45 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951825990 - 2026-05-28 07:03:45 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951825991 - INFO:     10.0.2.148:56022 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951826221 - 2026-05-28 07:03:46 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951826233 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951826461 - 2026-05-28 07:03:46 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951826461 - 2026-05-28 07:03:46 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951826461 - 2026-05-28 07:03:46 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951826461 - INFO:     10.0.2.148:56022 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951826689 - 2026-05-28 07:03:46 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951826700 - INFO:     10.0.1.142:22160 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951826925 - 2026-05-28 07:03:46 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951826925 - 2026-05-28 07:03:46 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951826925 - 2026-05-28 07:03:46 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951826926 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951827152 - 2026-05-28 07:03:47 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951827163 - INFO:     10.0.2.148:56038 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951827536 - 2026-05-28 07:03:47 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951827547 - INFO:     10.0.1.142:22160 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951827770 - 2026-05-28 07:03:47 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951827782 - 2026-05-28 07:03:47 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951827782 - 2026-05-28 07:03:47 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951827782 - 2026-05-28 07:03:47 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951827782 - INFO:     10.0.1.142:22162 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951827783 - INFO:     10.0.1.142:22160 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951828570 - 2026-05-28 07:03:48 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951828570 - 2026-05-28 07:03:48 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951828570 - 2026-05-28 07:03:48 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951828571 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951828787 - 2026-05-28 07:03:48 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951828798 - INFO:     10.0.1.142:22162 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951829022 - 2026-05-28 07:03:49 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951829022 - 2026-05-28 07:03:49 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951829023 - 2026-05-28 07:03:49 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951829023 - INFO:     10.0.2.148:56022 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951829248 - 2026-05-28 07:03:49 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951829259 - INFO:     10.0.1.142:22160 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951829485 - 2026-05-28 07:03:49 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951829485 - 2026-05-28 07:03:49 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951829485 - 2026-05-28 07:03:49 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951829486 - INFO:     10.0.2.148:56038 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951829706 - 2026-05-28 07:03:49 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951829717 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951829937 - 2026-05-28 07:03:49 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951829937 - 2026-05-28 07:03:49 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951829937 - 2026-05-28 07:03:49 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951829937 - INFO:     10.0.1.142:22160 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951830165 - 2026-05-28 07:03:50 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951830177 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951830389 - 2026-05-28 07:03:50 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951830389 - 2026-05-28 07:03:50 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951830389 - 2026-05-28 07:03:50 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951830389 - INFO:     10.0.2.148:56022 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951830612 - 2026-05-28 07:03:50 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951830624 - INFO:     10.0.1.142:22160 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951830837 - 2026-05-28 07:03:50 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951830837 - 2026-05-28 07:03:50 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951830837 - 2026-05-28 07:03:50 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951830837 - INFO:     10.0.2.148:56022 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951831052 - 2026-05-28 07:03:51 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951831064 - INFO:     10.0.1.142:22162 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951831289 - 2026-05-28 07:03:51 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951831289 - 2026-05-28 07:03:51 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951831289 - 2026-05-28 07:03:51 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951831290 - INFO:     10.0.2.148:56038 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951831515 - 2026-05-28 07:03:51 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951831526 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951831750 - 2026-05-28 07:03:51 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951831750 - 2026-05-28 07:03:51 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951831750 - 2026-05-28 07:03:51 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951831751 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951831965 - 2026-05-28 07:03:51 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951831976 - INFO:     10.0.1.142:22160 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951832202 - 2026-05-28 07:03:52 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951832202 - 2026-05-28 07:03:52 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951832202 - 2026-05-28 07:03:52 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951832202 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951832417 - 2026-05-28 07:03:52 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951832428 - INFO:     10.0.1.142:22160 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951832664 - 2026-05-28 07:03:52 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951832664 - 2026-05-28 07:03:52 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951832664 - 2026-05-28 07:03:52 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951832665 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951832879 - 2026-05-28 07:03:52 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951832890 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951833114 - 2026-05-28 07:03:53 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951833114 - 2026-05-28 07:03:53 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951833114 - 2026-05-28 07:03:53 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951833115 - INFO:     10.0.2.148:56038 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951833339 - 2026-05-28 07:03:53 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951833340 - INFO:     10.0.1.142:22160 - "OPTIONS /chat/research HTTP/1.1" 200 OK
+1779951833350 - INFO:     10.0.1.142:22162 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951833564 - 2026-05-28 07:03:53 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951833565 - 2026-05-28 07:03:53 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951833565 - 2026-05-28 07:03:53 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951833565 - INFO:     10.0.1.142:22160 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951833785 - 2026-05-28 07:03:53 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951833796 - 2026-05-28 07:03:53 [INFO] finagent.run_agent: Initializing research session | Target: 'tata motors' | Objective: 'Give me the bull case on Tata Motors.' | Session ID: conv-1779909406993
+1779951833796 - 2026-05-28 07:03:53 [INFO] finagent.run_agent: Resolved Entity: tata motors (Country: IN, Ticker: TATAMOTORS, Search Label: tata motors TATAMOTORS)
+1779951833797 - 2026-05-28 07:03:53 [INFO] finagent.retrieval.planner: Initializing retrieval plan for objective: 'Give me the bull case on Tata Motors.'
+1779951833797 - 2026-05-28 07:03:53 [INFO] finagent.retrieval.planner: Resolved entity: tata motors (Ticker: TATAMOTORS, Search Label: tata motors TATAMOTORS)
+1779951833797 - 2026-05-28 07:03:53 [INFO] finagent.retrieval.planner: Detected routing tags/intents: []
+1779951833798 - 2026-05-28 07:03:53 [INFO] finagent.retrieval.planner: Generated 5 breadth queries for research phase:
+1779951833798 - 2026-05-28 07:03:53 [INFO] finagent.retrieval.planner:   Query 1: 'Give me the bull case on Tata Motors. India NSE BSE'
+1779951833798 - 2026-05-28 07:03:53 [INFO] finagent.retrieval.planner:   Query 2: 'tata motors TATAMOTORS annual report NSE BSE SEBI LODR India NSE BSE'
+1779951833798 - 2026-05-28 07:03:53 [INFO] finagent.retrieval.planner:   Query 3: 'tata motors TATAMOTORS quarterly results investor presentation concall transcript India NSE BSE'
+1779951833798 - 2026-05-28 07:03:53 [INFO] finagent.retrieval.planner:   Query 4: 'tata motors TATAMOTORS NSE BSE filings shareholding pattern corporate governance India NSE BSE'
+1779951833798 - 2026-05-28 07:03:53 [INFO] finagent.retrieval.planner:   Query 5: 'tata motors TATAMOTORS Moneycontrol Screener Trendlyne financials India NSE BSE'
+1779951833798 - 2026-05-28 07:03:53 [INFO] finagent.retrieval.planner: Preferred domains for this entity: ['nseindia.com', 'bseindia.com', 'sebi.gov.in', 'moneycontrol.com', 'screener.in', 'trendlyne.com', 'tickertape.in', 'economictimes.indiatimes.com', 'livemint.com', 'business-standard.com']
+1779951833798 - 2026-05-28 07:03:53 [INFO] finagent.run_agent: [AGENT-START] run_research_session BEGIN | session_id=conv-1779909406993 | target=tata motors | objective=Give me the bull case on Tata Motors.
+1779951833798 - 2026-05-28 07:03:53 [INFO] finagent.run_agent: [AGENT-CONFIG] max_steps=8 | enable_enrichment=True | enable_scraping=True | enable_reflection=False | enable_multi_agent=False | depth=standard
+1779951833798 - 2026-05-28 07:03:53 [INFO] finagent.run_agent: [AGENT-PLAN] ResearchPlan: RESEARCH PLAN
+1779951833798 - Target: tata motors
+1779951833798 - Objective: Give me the bull case on Tata Motors.
+1779951833798 - Steps:
+1779951833798 - Step 1 -- Breadth survey -> web_search -> Surface map of sources
+1779951833798 - Step 2 -- Primary filings -> exchange_filings -> SEBI LODR / NSE / BSE filing index (after (1,))
+1779951833798 - Step 3 -- Triangulate key metrics -> accuracy_validator -> Confidence tags (after (2,))
+1779951833798 - Step 4 -- Synthesis -> memo_formatter -> Research memo (after (3,))
+1779951833798 - Estimated depth: standard
+1779951833798 - Estimated duration: 60 minutes
+1779951833798 - Human gates: export_data, credit_spend_confirm
+1779951833799 - 2026-05-28 07:03:53 [INFO] finagent.run_agent: [AGENT-ROUTING] Selected agents: ['financials', 'risk', 'news'] | deep_research=False | country=IN | preferred_domains=['nseindia.com', 'bseindia.com', 'sebi.gov.in', 'moneycontrol.com', 'screener.in', 'trendlyne.com', 'tickertape.in', 'economictimes.indiatimes.com']
+1779951833799 - 2026-05-28 07:03:53 [INFO] finagent.run_agent: [AGENT-RETRIEVAL-PLAN] Breadth queries (2): ['Give me the bull case on Tata Motors. India NSE BSE', 'tata motors TATAMOTORS annual report NSE BSE SEBI LODR India NSE BSE']
+1779951833801 - 2026-05-28 07:03:53 [WARNING] finagent.run_agent: memory recall failed: no such column: f.user_email
+1779951833801 - 2026-05-28 07:03:53 [INFO] finagent.run_agent: Phase 0 (Memory): recalled 0 facts for target 'tata motors' | Prior summary present: False
+1779951833801 - 2026-05-28 07:03:53 [INFO] finagent.run_agent: [AGENT-PHASE] === PHASE: ENRICHMENT (Yahoo + Wiki + India/SEC) ===
+1779951833801 - 2026-05-28 07:03:53 [INFO] finagent.run_agent: [AGENT-ENRICH] Starting parallel enrichment for target=tata motors
+1779951833802 - 2026-05-28 07:03:53 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TATAMOTORS'}
+1779951833802 - 2026-05-28 07:03:53 [INFO] finagent.tools.data.india: [MCP-USE] nse_india | tool=nse_get_announcements | args={'symbol': 'TATAMOTORS'}
+1779951833810 - 2026-05-28 07:03:53 [INFO] finagent.tools.data.india: [MCP-USE] nse_india | tool=nse_get_shareholding | args={'symbol': 'TATAMOTORS'}
+1779951833818 - 2026-05-28 07:03:53 [INFO] finagent.yahoo: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TATAMOTORS.NS'}
+1779951833820 - 2026-05-28 07:03:53 [INFO] finagent.wikipedia: [MCP-USE] research_news | tool=search_web | args={'query': 'wikipedia tata motors'}
+1779951833821 - INFO:     10.0.2.148:5026 - "POST /chat/research HTTP/1.1" 200 OK
+1779951833837 - 2026-05-28 07:03:53 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'tata motors'}
+1779951833855 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951834036 - 2026-05-28 07:03:54 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951834036 - 2026-05-28 07:03:54 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951834036 - 2026-05-28 07:03:54 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951834037 - INFO:     10.0.1.142:22160 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951834228 - 2026-05-28 07:03:54 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951834242 - INFO:     10.0.1.142:22162 - "OPTIONS /sessions/conv-1779909406993/stream?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiOTEyNjE0MjItMmY4Mi00N2MwLThlYzctZWQzZWI2ZThhMjNmIiwiZW1haWwiOiJrdXNoZ3VwdGEyMDE5QGdtYWlsLmNvbSJ9.CPcstp8_68ARg3qjqCwM1_134bYun5TOlNTXHdBqFgs HTTP/1.1" 200 OK
+1779951834248 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951834445 - 2026-05-28 07:03:54 [INFO] finagent.tools.data.india: Screener/MC miss for TATAMOTORS — trying NSE
+1779951834465 - 2026-05-28 07:03:54 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951834465 - 2026-05-28 07:03:54 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951834465 - 2026-05-28 07:03:54 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951834466 - INFO:     10.0.2.148:56038 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951834495 - 2026-05-28 07:03:54 [INFO] finagent.yahoo: yfinance: no usable data for TATAMOTORS.NS
+1779951834519 - 2026-05-28 07:03:54 [INFO] finagent.tools.data.india: NSE miss for TATAMOTORS — trying BSE
+1779951834556 - 2026-05-28 07:03:54 [INFO] finagent.run_agent: [AGENT-ENRICH] Done | Yahoo=False | Wiki=True | News=12 | India/SEC=False
+1779951834557 - 2026-05-28 07:03:54 [INFO] finagent.run_agent: [AGENT-PHASE] === PHASE: BREADTH SURVEY (search_layered) ===
+1779951834557 - 2026-05-28 07:03:54 [INFO] finagent.run_agent: [AGENT-SEARCH] Dispatching 2 breadth queries for tata motors | preferred_domains=['nseindia.com', 'bseindia.com', 'sebi.gov.in', 'moneycontrol.com', 'screener.in', 'trendlyne.com']
+1779951834557 - 2026-05-28 07:03:54 [INFO] finagent.scraper: [MCP-USE] research_news | tool=search_web | args={'query': 'tata motors'}
+1779951834557 - 2026-05-28 07:03:54 [INFO] finagent.scraper: [MCP-USE] research_news | tool=search_web | args={'query': 'Give me the bull case on Tata Motors. India NSE BSE'}
+1779951834557 - 2026-05-28 07:03:54 [INFO] finagent.scraper: SEARCH-STEP:00 start query=Give me the bull case on Tata Motors. India NSE BSE max_results=4
+1779951834557 - 2026-05-28 07:03:54 [INFO] finagent.scraper: [SEARCH] Starting heavy search for: 'Give me the bull case on Tata Motors. India NSE BSE' — Crawl4AI will be primary extractor for deep content
+1779951834557 - 2026-05-28 07:03:54 [INFO] finagent.scraper: SEARCH-STEP:01 targets_computed stage1_target=48 crawl_budget=8
+1779951834558 - 2026-05-28 07:03:54 [INFO] finagent.scraper: [MCP-USE] research_news | tool=search_web | args={'query': 'tata motors TATAMOTORS annual report NSE BSE SEBI LODR India NSE BSE'}
+1779951834558 - 2026-05-28 07:03:54 [INFO] finagent.scraper: SEARCH-STEP:00 start query=tata motors TATAMOTORS annual report NSE BSE SEBI LODR India NSE BSE max_results=4
+1779951834558 - 2026-05-28 07:03:54 [INFO] finagent.scraper: [SEARCH] Starting heavy search for: 'tata motors TATAMOTORS annual report NSE BSE SEBI LODR India NSE BSE' — Crawl4AI will be primary extractor for deep content
+1779951834558 - 2026-05-28 07:03:54 [INFO] finagent.scraper: SEARCH-STEP:01 targets_computed stage1_target=48 crawl_budget=8
+1779951834566 - 2026-05-28 07:03:54 [WARNING] finagent.scraper: Tavily search failed for 'Give me the bull case on Tata Motors. India NSE BSE', will fall back to DDG/Bing: No module named 'tavily'
+1779951834574 - 2026-05-28 07:03:54 [WARNING] finagent.scraper: Tavily search failed for 'tata motors TATAMOTORS annual report NSE BSE SEBI LODR India NSE BSE', will fall back to DDG/Bing: No module named 'tavily'
+1779951834575 - 2026-05-28 07:03:54 [ERROR] finagent.tools.web.searxng_client: SearXNG search failed for query 'Give me the bull case on Tata Motors. India NSE BSE': All connection attempts failed
+1779951834576 - 2026-05-28 07:03:54 [ERROR] finagent.tools.web.searxng_client: SearXNG search failed for query 'tata motors TATAMOTORS annual report NSE BSE SEBI LODR India NSE BSE': All connection attempts failed
+1779951834577 - 2026-05-28 07:03:54 [INFO] finagent.scraper: Performing standard HTTP fetch for DDG search query: 'Give me the bull case on Tata Motors. India NSE BSE'
+1779951834578 - 2026-05-28 07:03:54 [INFO] finagent.scraper: Performing standard HTTP fetch for Bing search query: 'Give me the bull case on Tata Motors. India NSE BSE'
+1779951834579 - 2026-05-28 07:03:54 [INFO] finagent.scraper: Performing standard HTTP fetch for DDG search query: 'tata motors TATAMOTORS annual report NSE BSE SEBI LODR India NSE BSE'
+1779951834579 - 2026-05-28 07:03:54 [INFO] finagent.scraper: Performing standard HTTP fetch for Bing search query: 'tata motors TATAMOTORS annual report NSE BSE SEBI LODR India NSE BSE'
+1779951834666 - 2026-05-28 07:03:54 [INFO] finagent.scraper: Bing search query 'tata motors TATAMOTORS annual report NSE BSE SEBI LODR India NSE BSE' returned 0 results.
+1779951834698 - /usr/local/lib/python3.11/site-packages/jwt/api_jwt.py:368: InsecureKeyLengthWarning: The HMAC key is 24 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+1779951834698 - decoded = self.decode_complete(
+1779951834699 - 2026-05-28 07:03:54 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951834701 - INFO:     10.0.1.142:22160 - "GET /sessions/conv-1779909406993/stream?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiOTEyNjE0MjItMmY4Mi00N2MwLThlYzctZWQzZWI2ZThhMjNmIiwiZW1haWwiOiJrdXNoZ3VwdGEyMDE5QGdtYWlsLmNvbSJ9.CPcstp8_68ARg3qjqCwM1_134bYun5TOlNTXHdBqFgs HTTP/1.1" 200 OK
+1779951834714 - INFO:     10.0.1.142:22162 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951834718 - 2026-05-28 07:03:54 [INFO] finagent.scraper: Bing search query 'Give me the bull case on Tata Motors. India NSE BSE' returned 0 results.
+1779951834937 - 2026-05-28 07:03:54 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951834937 - 2026-05-28 07:03:54 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951834937 - 2026-05-28 07:03:54 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951834937 - INFO:     10.0.1.142:10312 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951835140 - 2026-05-28 07:03:55 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951835151 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: DDG search query 'Give me the bull case on Tata Motors. India NSE BSE' returned 10 results.
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:03 backup_sources_completed ddg=10 bing=0
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: Stage 1 candidate sourcing hits: SearXNG=0 Tavily=0 DDG=10 Bing=0 (Crawl4AI will be primary extractor)
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:02 searxng_tavily_completed count=0
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: [SEARCH] No SearXNG/Tavily results — will rely on Crawl4AI for content
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:04 combined_docs_built count=0
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: Raw candidate URLs before domain deduplication (Crawl4AI primary): 10
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:05 raw_candidates_built count=10
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:dedup_enter raw=10 max_per_domain=2 max_total=48
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:dedup_exit kept=10
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: Stage 1 candidates after domain deduplication: 10
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:06 dedup_done candidates=10
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:07 preferred_sort_done count=10
+1779951835252 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:08 crawl_urls_prepared count=8 budget=8
+1779951835253 - 2026-05-28 07:03:55 [INFO] finagent.scraper: [SEARCH] Bypassing Crawl4AI browser crawl; fetching 8 URL(s) via parallel httpx
+1779951835315 - 2026-05-28 07:03:55 [INFO] finagent.scraper: DDG search query 'tata motors TATAMOTORS annual report NSE BSE SEBI LODR India NSE BSE' returned 10 results.
+1779951835317 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:03 backup_sources_completed ddg=10 bing=0
+1779951835317 - 2026-05-28 07:03:55 [INFO] finagent.scraper: Stage 1 candidate sourcing hits: SearXNG=0 Tavily=0 DDG=10 Bing=0 (Crawl4AI will be primary extractor)
+1779951835317 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:02 searxng_tavily_completed count=0
+1779951835318 - 2026-05-28 07:03:55 [INFO] finagent.scraper: [SEARCH] No SearXNG/Tavily results — will rely on Crawl4AI for content
+1779951835318 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:04 combined_docs_built count=0
+1779951835318 - 2026-05-28 07:03:55 [INFO] finagent.scraper: Raw candidate URLs before domain deduplication (Crawl4AI primary): 10
+1779951835318 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:05 raw_candidates_built count=10
+1779951835318 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:dedup_enter raw=10 max_per_domain=2 max_total=48
+1779951835319 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:dedup_exit kept=10
+1779951835319 - 2026-05-28 07:03:55 [INFO] finagent.scraper: Stage 1 candidates after domain deduplication: 10
+1779951835319 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:06 dedup_done candidates=10
+1779951835319 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:07 preferred_sort_done count=10
+1779951835319 - 2026-05-28 07:03:55 [INFO] finagent.scraper: SEARCH-STEP:08 crawl_urls_prepared count=8 budget=8
+1779951835319 - 2026-05-28 07:03:55 [INFO] finagent.scraper: [SEARCH] Bypassing Crawl4AI browser crawl; fetching 8 URL(s) via parallel httpx
+1779951835370 - 2026-05-28 07:03:55 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951835370 - 2026-05-28 07:03:55 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951835370 - 2026-05-28 07:03:55 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951835371 - INFO:     10.0.1.142:10312 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951835590 - 2026-05-28 07:03:55 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951835602 - INFO:     10.0.2.148:56038 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951835817 - 2026-05-28 07:03:55 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951835817 - 2026-05-28 07:03:55 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951835817 - 2026-05-28 07:03:55 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951835817 - INFO:     10.0.2.148:56022 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951836057 - 2026-05-28 07:03:56 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951836068 - INFO:     10.0.2.148:56038 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951836285 - 2026-05-28 07:03:56 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951836285 - 2026-05-28 07:03:56 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951836285 - 2026-05-28 07:03:56 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951836285 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951836483 - 2026-05-28 07:03:56 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951836495 - INFO:     10.0.2.148:56038 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951836708 - 2026-05-28 07:03:56 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951836708 - 2026-05-28 07:03:56 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951836708 - 2026-05-28 07:03:56 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951836709 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951836930 - 2026-05-28 07:03:56 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951836941 - INFO:     10.0.1.142:22162 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951837166 - 2026-05-28 07:03:57 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951837166 - 2026-05-28 07:03:57 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951837166 - 2026-05-28 07:03:57 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951837166 - INFO:     10.0.1.142:10312 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951837333 - 2026-05-28 07:03:57 [INFO] finagent.scraper: SEARCH-STEP:09 crawl4ai_batch_returned docs=8
+1779951837333 - 2026-05-28 07:03:57 [INFO] finagent.scraper: [CRAWL4AI] Completed deep extraction: 8 documents successfully processed
+1779951837333 - 2026-05-28 07:03:57 [INFO] finagent.scraper: SEARCH-STEP:10 titles_patched crawl_docs=8
+1779951837333 - 2026-05-28 07:03:57 [INFO] finagent.scraper: [RESULT] Answer will be built primarily from CRAWL4AI deep extraction
+1779951837333 - 2026-05-28 07:03:57 [INFO] finagent.scraper: SEARCH-STEP:11 docs_merged total=8
+1779951837333 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker: RANK-STEP:01 rerank_enter query=tata motors TATAMOTORS annual report NSE BSE SEBI LODR India docs=8
+1779951837334 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker: RANK-STEP:02 bm25_computed num_docs=8 terms=12
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker: RANK-STEP:03 scoring_loop_done scored=8 (BM25+domain_tier+time_decay)
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker: RANK-STEP:04 sort_complete top_total=24.1233
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker: Document ranking completed. Query: 'tata motors TATAMOTORS annual report NSE BSE SEBI LODR India NSE BSE'
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker: Top 8 ranked documents breakdown:
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker:   #1. TATA MOTORS LTD (BSE Code: 544569) annual reports, price quo - Tier 5 [Total: 24.1233] (BM25 * 2.4: 21.3233, Structural: 0.8000, Preferred: 0.0000, Entity: 2.0000, Freshness: 0.0000) URL: https://www.reportjunction.com/CompanyProfile/TATA-MOTORS-LTD-TM00285.htm
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker:   #2. Tata Motors CV : BSE Corporate Filings &amp; Announcements - - Tier 3 [Total: 14.2722] (BM25 * 2.4: 11.0722, Structural: -1.3000, Preferred: 2.5000, Entity: 2.0000, Freshness: 0.0000) URL: https://trendlyne.com/latest-news/BSE-Announcements/3327757/TMCV/tata-motors-ltd/
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker:   #3. Tata Motors Ltd - Integrated Annual Report For The Financial - Tier 5 [Total: 10.8095] (BM25 * 2.4: 8.0095, Structural: 0.8000, Preferred: 0.0000, Entity: 2.0000, Freshness: 0.0000) URL: https://money.rediff.com/companies/news/tata-motors-ltd/500570-1748027076000
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker:   #4. BSEINDIA - Tier 1 [Total: 4.8000] (BM25 * 2.4: 0.0000, Structural: 2.3000, Preferred: 2.5000, Entity: 0.0000, Freshness: 0.0000) URL: https://www.bseindia.com/corporates/Comp_Results.aspx?Code=500570
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker:   #5. Annual Reports - Tata Motors - Tier 5 [Total: 3.0990] (BM25 * 2.4: 4.2990, Structural: -3.2000, Preferred: 0.0000, Entity: 2.0000, Freshness: 0.0000) URL: https://www.tatamotors.com/annual-reports/
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker:   #6. Tata Motors - Annual Reports - CompaniesMarketCap.com - Tier 5 [Total: 3.0222] (BM25 * 2.4: 4.2222, Structural: -3.2000, Preferred: 0.0000, Entity: 2.0000, Freshness: 0.0000) URL: https://companiesmarketcap.com/tata-motors/annual-reports/
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker:   #7. Tata Motors : Notice of 80th Annual General Meeting of the M - Tier 5 [Total: 2.5524] (BM25 * 2.4: 3.7524, Structural: -3.2000, Preferred: 0.0000, Entity: 2.0000, Freshness: 0.0000) URL: https://www.marketscreener.com/quote/stock/TATA-MOTORS-LIMITED-46728680/news/Tata-Motors-Notice-of-80th-Annual-General-Meeting-of-the-Members-of-Tata-Motors-Limited-and-Integr-50058957/
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker:   #8. Client Challenge - Tier 5 [Total: 0.8000] (BM25 * 2.4: 0.0000, Structural: 0.8000, Preferred: 0.0000, Entity: 0.0000, Freshness: 0.0000) URL: https://www.scribd.com/document/867713549/Tata-Motor-IAR-2024-25
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.retrieval.reranker: RANK-STEP:05 rerank_exit returning=8
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.scraper: SEARCH-STEP:12 rerank_complete final=4
+1779951837335 - 2026-05-28 07:03:57 [INFO] finagent.scraper: Reranking completed. Slicing to top 4 results.
+1779951837438 - 2026-05-28 07:03:57 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951837449 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951837639 - 2026-05-28 07:03:57 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951837639 - 2026-05-28 07:03:57 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951837639 - 2026-05-28 07:03:57 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951837640 - INFO:     10.0.1.142:10312 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951837835 - 2026-05-28 07:03:57 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951837845 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951838069 - 2026-05-28 07:03:58 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951838069 - 2026-05-28 07:03:58 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951838069 - 2026-05-28 07:03:58 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951838069 - INFO:     10.0.2.148:56022 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951838289 - 2026-05-28 07:03:58 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951838298 - INFO:     10.0.2.148:56038 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951838513 - 2026-05-28 07:03:58 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951838513 - 2026-05-28 07:03:58 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951838513 - 2026-05-28 07:03:58 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951838513 - INFO:     10.0.1.142:10312 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951838729 - 2026-05-28 07:03:58 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951838738 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951838923 - 2026-05-28 07:03:58 [INFO] finagent.scraper: SEARCH-STEP:09 crawl4ai_batch_returned docs=8
+1779951838923 - 2026-05-28 07:03:58 [INFO] finagent.scraper: [CRAWL4AI] Completed deep extraction: 8 documents successfully processed
+1779951838923 - 2026-05-28 07:03:58 [INFO] finagent.scraper: SEARCH-STEP:10 titles_patched crawl_docs=8
+1779951838923 - 2026-05-28 07:03:58 [INFO] finagent.scraper: [RESULT] Answer will be built primarily from CRAWL4AI deep extraction
+1779951838923 - 2026-05-28 07:03:58 [INFO] finagent.scraper: SEARCH-STEP:11 docs_merged total=8
+1779951838923 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker: RANK-STEP:01 rerank_enter query=Give me the bull case on Tata Motors. India NSE BSE docs=8
+1779951838924 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker: RANK-STEP:02 bm25_computed num_docs=8 terms=11
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker: RANK-STEP:03 scoring_loop_done scored=8 (BM25+domain_tier+time_decay)
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker: RANK-STEP:04 sort_complete top_total=16.7812
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker: Document ranking completed. Query: 'Give me the bull case on Tata Motors. India NSE BSE'
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker: Top 8 ranked documents breakdown:
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker:   #1. Tata Motors (TTM) - The Bull &amp; Bear Case - Tier 5 [Total: 16.7812] (BM25 * 2.4: 17.9812, Structural: -3.2000, Preferred: 0.0000, Entity: 2.0000, Freshness: 0.0000) URL: https://www.financecharts.com/stocks/TTM/bulls-bears
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker:   #2. Tata Motors Ltd Live Stock Price, Tatamotors Live Share Pric - Tier 1 [Total: 11.4324] (BM25 * 2.4: 4.6324, Structural: 2.3000, Preferred: 2.5000, Entity: 2.0000, Freshness: 0.0000) URL: https://www.bseindia.com/stock-share-price/tata-motors-ltd/tatamotors/500570
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker:   #3. Tata Motors CV Share Price Today, Tata Motors CV Stock Price - Tier 4 [Total: 9.8852] (BM25 * 2.4: 3.3852, Structural: 2.0000, Preferred: 2.5000, Entity: 2.0000, Freshness: 0.0000) URL: https://economictimes.indiatimes.com/tata-motors-ltd/stocks/companyid-2222383.cms
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker:   #4. Tata Motors Share Price Live NSE BSE – Tata Motors Ltd. Stoc - Tier 5 [Total: 9.2823] (BM25 * 2.4: 6.4823, Structural: 0.8000, Preferred: 0.0000, Entity: 2.0000, Freshness: 0.0000) URL: https://money.rediff.com/companies/Tata-Motors-Ltd/10510047
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker:   #5. TATAMOTORS Intrinsic Valuation and Fundamental Analysis - Ta - Tier 5 [Total: 6.2490] (BM25 * 2.4: 3.4490, Structural: 0.8000, Preferred: 0.0000, Entity: 2.0000, Freshness: 0.0000) URL: https://www.alphaspread.com/security/nse/tatamotors/summary
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker:   #6. Top Gainer on NSE/BSE: Tata Motors Shares Soar 17% in 1 ...  - Tier 5 [Total: 5.2008] (BM25 * 2.4: 6.4008, Structural: -3.2000, Preferred: 0.0000, Entity: 2.0000, Freshness: 0.0000) URL: https://www.goodreturns.in/news/top-gainer-on-nse-bse-tata-motors-shares-soar-17-in-1-month-demerger-q4-results-and-dividend-awaited-1427843.html
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker:   #7. Shareprice and Graphs - Tata Motors - Tier 5 [Total: -0.9821] (BM25 * 2.4: 0.2179, Structural: -3.2000, Preferred: 0.0000, Entity: 2.0000, Freshness: 0.0000) URL: https://www.tatamotors.com/shareprice-and-graphs/
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker:   #8. Tata Motors Commercial Vehicles Lists at 28% Premium; Shares - Tier 5 [Total: -0.9968] (BM25 * 2.4: 0.2032, Structural: -3.2000, Preferred: 0.0000, Entity: 2.0000, Freshness: 0.0000) URL: https://laffaz.com/tata-motors-commercial-vehicles-lists-bse-nse-28pct-premium/
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.retrieval.reranker: RANK-STEP:05 rerank_exit returning=8
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.scraper: SEARCH-STEP:12 rerank_complete final=4
+1779951838925 - 2026-05-28 07:03:58 [INFO] finagent.scraper: Reranking completed. Slicing to top 4 results.
+1779951838926 - 2026-05-28 07:03:58 [INFO] finagent.scraper: search_layered completed. Gathered 8 total unique docs.
+1779951838926 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: [AGENT-SEARCH] Breadth survey COMPLETE | docs_returned=8
+1779951838927 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: Step 1: Processed doc from financecharts.com (tier 5) | Title: 'Tata Motors (TTM) - The Bull &amp; Bear Case' | Confidence: LOW | Viral score: 0 (flags: [])
+1779951838927 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: Step 2: Processed doc from bseindia.com (tier 1) | Title: 'Tata Motors Ltd Live Stock Price, Tatamotors Live Share Pric' | Confidence: LOW | Viral score: 0 (flags: [])
+1779951838928 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: Step 3: Processed doc from economictimes.indiatimes.com (tier 4) | Title: 'Tata Motors CV Share Price Today, Tata Motors CV Stock Price' | Confidence: LOW | Viral score: 0 (flags: [])
+1779951838928 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: Step 4: Processed doc from money.rediff.com (tier 5) | Title: 'Tata Motors Share Price Live NSE BSE – Tata Motors Ltd. Stoc' | Confidence: LOW | Viral score: 0 (flags: [])
+1779951838929 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: Step 5: Processed doc from reportjunction.com (tier 5) | Title: 'TATA MOTORS LTD (BSE Code: 544569) annual reports, price quo' | Confidence: LOW | Viral score: 1 (flags: ['shouting-words(7)'])
+1779951838932 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: Step 6: Processed doc from trendlyne.com (tier 3) | Title: 'Tata Motors CV : BSE Corporate Filings &amp; Announcements -' | Confidence: LOW | Viral score: 0 (flags: [])
+1779951838932 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: Step 7: Processed doc from money.rediff.com (tier 5) | Title: 'Tata Motors Ltd - Integrated Annual Report For The Financial' | Confidence: LOW | Viral score: 0 (flags: [])
+1779951838933 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: Step 8: Processed doc from bseindia.com (tier 1) | Title: 'BSEINDIA' | Confidence: LOW | Viral score: 0 (flags: [])
+1779951838933 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: Phase 5 (Analysis): Starting conflict detection on 8 documents
+1779951838934 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: Phase 5 (Analysis): Completed conflict detection | Found 0 cross-source conflicts
+1779951838934 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: [AGENT-PHASE] === PHASE: SYNTHESIS (final LLM memo generation) ===
+1779951838935 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: [AGENT-SYNTH] Starting final LLM synthesis | docs=8 | specialist_findings=0 | conflicts=0 | quality=50.8
+1779951838935 - 2026-05-28 07:03:58 [INFO] finagent.run_agent: [AGENT-SYNTH] Passing to synthesize_memo: specialist_findings_count=0 | peer_targets=[]
+1779951838935 - 2026-05-28 07:03:58 [INFO] finagent.synthesis: [SYNTH] effective timeout_s=90s (deep=False)
+1779951838935 - 2026-05-28 07:03:58 [INFO] finagent.output.artifact_builder: [VISUALS] mode=company_snapshot | metric_cards=0 | charts=0 | findings=0
+1779951838943 - 2026-05-28 07:03:58 [INFO] finagent.synthesis: [LLM-CONTEXT] === FINAL SYNTHESIS PROMPT TO MODEL ===
+1779951838943 - 2026-05-28 07:03:58 [INFO] finagent.synthesis: [LLM-CONTEXT] model=gpt-4o | max_tokens=4000 | temperature=0.2 | is_deep=False
+1779951838943 - 2026-05-28 07:03:58 [INFO] finagent.synthesis: [LLM-CONTEXT] system_prompt_len=12710 | user_prompt_len=5498 | total_messages=2 | chat_history_items=0
+1779951838943 - 2026-05-28 07:03:58 [INFO] finagent.synthesis: [LLM-CONTEXT] target=tata motors | objective=Give me the bull case on Tata Motors. | output_mode=company_snapshot
+1779951838943 - 2026-05-28 07:03:58 [INFO] finagent.synthesis: [LLM-CONTEXT] facts_block_len=373 | digest_len=4397 | conflicts=0
+1779951838943 - 2026-05-28 07:03:58 [INFO] finagent.synthesis: [LLM-CONTEXT] USER_PROMPT_PREVIEW: **Research target:** tata motors | **Objective:** Give me the bull case on Tata Motors. |  | Produce a comprehensive, structured research report addressing the objective above. |  | Requirements: | - Use all available facts and source material provided below. | - Never hallucinate numbers or invent figures — cite every claim with [n]. | - Use Markdown structure: ## section headings, tables for metrics, bullet points for lists. | - If a data point is missing from the provided facts, explicitly state it is unavailable. | - For follow-up answers, do not summarize the earlier memo; answer the user's new request. | - For deep research reports: produce ALL sections in full — do NOT abbreviate. |  | === VERIFIED FACTS === | FX rate USD/INR = 95.6800 (source: yahoo) | All USD figures should be expressed with an INR equivalent in parentheses. |  | Wikipedia (Tata Motors): Tata Motors Limited, also known as Tata Motors Commercial Vehicles, is an Indian multinational commercial vehicle manufacturer, headquartered in Mumbai and is a part of the Tata Group. The company produces trucks, vans, and buses. |  | === SOURCE DOCUMENTS === | ### Source 1 | - URL: https://www.financecharts.com/stocks/TTM/bulls-bears | - Domain: financecharts.com  ... (truncated)
+1779951838943 - 2026-05-28 07:03:58 [INFO] finagent.synthesis: [LLM-CONTEXT] SYSTEM_PROMPT_PREVIEW: ROLE & IDENTITY: | You are FinAgent, the core autonomous financial intelligence and forensic research engine for ProspektLab — an elite platform specializing exclusively in Indian capital markets. You operate with the technical depth of an institutional equity research analyst and the rigor of a forensic auditor. You are an absolute, rigorous research engine: every statement must be substantiated, cross-examined, and explicitly source-attributed.  |  | GEOGRAPHIC & REGULATORY MANDATE: | - You research INDIAN publicly listed equities and major unlisted corporate entities ONLY. All analysis defaults to  ...
+1779951838943 - 2026-05-28 07:03:58 [INFO] finagent.synthesis: [LLM-CALL] Starting OpenAI streaming call | model=gpt-4o | session_id=n/a-in-this-scope
+1779951838949 - 2026-05-28 07:03:58 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951838949 - 2026-05-28 07:03:58 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951838949 - 2026-05-28 07:03:58 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951838949 - INFO:     10.0.2.148:56022 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951839164 - 2026-05-28 07:03:59 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951839177 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951839397 - 2026-05-28 07:03:59 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951839397 - 2026-05-28 07:03:59 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951839397 - 2026-05-28 07:03:59 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951839397 - INFO:     10.0.1.142:10312 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951839622 - 2026-05-28 07:03:59 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951839631 - INFO:     10.0.1.142:22162 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951839857 - 2026-05-28 07:03:59 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951839857 - 2026-05-28 07:03:59 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951839857 - 2026-05-28 07:03:59 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951839858 - INFO:     10.0.1.142:10312 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951840082 - 2026-05-28 07:04:00 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951840091 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951840306 - 2026-05-28 07:04:00 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951840306 - 2026-05-28 07:04:00 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951840306 - 2026-05-28 07:04:00 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951840306 - INFO:     10.0.2.148:56038 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951840527 - 2026-05-28 07:04:00 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951840536 - INFO:     10.0.1.142:10312 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951840756 - 2026-05-28 07:04:00 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951840757 - 2026-05-28 07:04:00 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951840757 - 2026-05-28 07:04:00 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951840757 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951840983 - 2026-05-28 07:04:00 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951840992 - INFO:     10.0.1.142:10312 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951841207 - 2026-05-28 07:04:01 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951841207 - 2026-05-28 07:04:01 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951841207 - 2026-05-28 07:04:01 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951841207 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951841427 - 2026-05-28 07:04:01 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951841436 - INFO:     10.0.2.148:56038 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951841657 - 2026-05-28 07:04:01 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951841657 - 2026-05-28 07:04:01 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951841657 - 2026-05-28 07:04:01 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951841658 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951841889 - 2026-05-28 07:04:01 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951841898 - INFO:     10.0.1.142:22162 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951842130 - 2026-05-28 07:04:02 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951842130 - 2026-05-28 07:04:02 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951842130 - 2026-05-28 07:04:02 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951842130 - INFO:     10.0.2.148:56038 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951842355 - 2026-05-28 07:04:02 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951842364 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951842576 - 2026-05-28 07:04:02 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951842576 - 2026-05-28 07:04:02 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951842576 - 2026-05-28 07:04:02 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951842576 - INFO:     10.0.2.148:56038 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951842795 - 2026-05-28 07:04:02 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951842804 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951843019 - 2026-05-28 07:04:03 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951843019 - 2026-05-28 07:04:03 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951843019 - 2026-05-28 07:04:03 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951843019 - INFO:     10.0.1.142:22162 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951843256 - 2026-05-28 07:04:03 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951843265 - INFO:     10.0.1.142:22162 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951843511 - 2026-05-28 07:04:03 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951843511 - 2026-05-28 07:04:03 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951843511 - 2026-05-28 07:04:03 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951843511 - INFO:     10.0.1.142:10312 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951843737 - 2026-05-28 07:04:03 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951843746 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951843968 - 2026-05-28 07:04:03 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951843968 - 2026-05-28 07:04:03 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951843968 - 2026-05-28 07:04:03 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951843968 - INFO:     10.0.2.148:56038 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951844190 - 2026-05-28 07:04:04 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951844199 - INFO:     10.0.2.148:56022 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951844413 - 2026-05-28 07:04:04 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951844413 - 2026-05-28 07:04:04 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951844413 - 2026-05-28 07:04:04 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951844414 - INFO:     10.0.1.142:10312 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951844639 - 2026-05-28 07:04:04 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951844752 - INFO:     10.0.1.142:22162 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951844893 - 2026-05-28 07:04:04 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951844893 - 2026-05-28 07:04:04 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951844893 - 2026-05-28 07:04:04 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951844894 - INFO:     10.0.1.142:10312 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK
+1779951845094 - 2026-05-28 07:04:05 [INFO] finagent.news_feed: [MCP-USE] research_news | tool=search_news | args={'query': 'India market'}
+1779951845103 - INFO:     10.0.1.142:10312 - "GET /market/news?query=India%20market HTTP/1.1" 200 OK
+1779951845318 - 2026-05-28 07:04:05 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'RELIANCE'}
+1779951845318 - 2026-05-28 07:04:05 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'TCS'}
+1779951845318 - 2026-05-28 07:04:05 [INFO] finagent.tools.data.india: [MCP-USE] fundamentals | tool=profile | args={'symbol': 'INFY'}
+1779951845319 - INFO:     10.0.2.148:56038 - "GET /market/quotes?symbols=RELIANCE%2CTCS%2CINFY HTTP/1.1" 200 OK

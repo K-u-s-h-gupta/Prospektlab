@@ -263,6 +263,11 @@ def _change_type(value: Optional[float]) -> Optional[str]:
     return "neutral"
 
 
+def _metric_card_has_value(card: MetricCard) -> bool:
+    value = (card.value or "").strip().lower()
+    return bool(value and value not in {"n/a", "na", "none", "-"})
+
+
 # ---------------------------------------------------------------------------
 # Tool output normalisation
 # ---------------------------------------------------------------------------
@@ -880,6 +885,8 @@ def _assemble_snapshot(message: str, outputs: list[ToolOutput], markdown_body: s
 
     is_partial = any(c.is_partial for c in cards) or any(c.is_partial for c in charts)
 
+    cards = [card for card in cards if _metric_card_has_value(card)]
+
     return RichResponse(
         mode=RICH_MODE_SNAPSHOT,
         title=title,
@@ -1406,6 +1413,7 @@ def _assemble_valuation(message: str, outputs: list[ToolOutput], markdown_body: 
     valuation_summary = summary if isinstance(summary, dict) else None
 
     title = f"Valuation: {entity.label}"
+    cards = [card for card in cards if _metric_card_has_value(card)]
     return RichResponse(
         mode=RICH_MODE_VALUATION,
         title=title,
@@ -1662,17 +1670,11 @@ def _native_valuation_assemble(
     for f in val_findings:
         metrics = getattr(f, "metrics", None)
         if isinstance(metrics, dict) and "projected_terminal_revenue" in metrics:
-            # If we have a point_forecast list, use it; otherwise make a 2-point
-            # placeholder from historical → terminal.
+            # Only chart actual forecast arrays; a single terminal estimate is
+            # not enough data for a sourced trajectory.
             pt = metrics.get("point_forecast")
             if isinstance(pt, list) and len(pt) >= 2:
                 proj_points = [_to_float(v) for v in pt]
-            else:
-                # Build synthetic trajectory
-                hist_cagr = metrics.get("historical_cagr")
-                terminal = _to_float(metrics.get("projected_terminal_revenue"))
-                if terminal:
-                    proj_points = [terminal * 0.8, terminal]  # placeholder
             p10_points = metrics.get("p10_terminal")
             p90_points = metrics.get("p90_terminal")
             break
@@ -1722,6 +1724,7 @@ def _native_valuation_assemble(
         }
 
     title = f"Valuation: {entity.label}"
+    cards = [card for card in cards if _metric_card_has_value(card)]
     return RichResponse(
         mode=RICH_MODE_VALUATION,
         title=title,
@@ -1805,13 +1808,58 @@ def _native_snapshot_assemble(
     if sr:
         sr_blocks.append(StrengthsRisksBlock(entity_label=entity.label, **sr))
 
+    # Build actual charts from bundle data
+    charts: list[Chart] = []
+    yahoo = getattr(bundle, "yahoo", None)
+    if yahoo:
+        series_dates = getattr(yahoo, "series_dates", None) or []
+        series_closes = getattr(yahoo, "series_closes", None) or []
+        if series_dates and series_closes and len(series_dates) == len(series_closes):
+            # Sample up to 40 points to avoid chart crowding
+            step = max(1, len(series_closes) // 40)
+            sampled_dates = [str(series_dates[i]) for i in range(0, len(series_dates), step)]
+            sampled_closes = [round(float(series_closes[i]), 2) for i in range(0, len(series_closes), step)]
+            if len(sampled_dates) > 1 and len(sampled_closes) > 1:
+                charts.append(Chart(
+                    id="price_history",
+                    kind="area",
+                    title="Price History",
+                    subtitle=f"{entity.ticker or entity.label} · {len(series_closes)} sessions",
+                    x_labels=sampled_dates,
+                    series=[ChartSeries(name="Close", values=sampled_closes, unit="price")],
+                    is_partial=False,
+                ))
+        annual_revenue = getattr(yahoo, "annual_revenue", None) or []
+        annual_revenue_dates = getattr(yahoo, "annual_revenue_dates", None) or []
+        annual_net_income = getattr(yahoo, "annual_net_income", None) or []
+        annual_net_income_dates = getattr(yahoo, "annual_net_income_dates", None) or []
+        if annual_revenue and annual_revenue_dates and len(annual_revenue) == len(annual_revenue_dates):
+            rev_values = [round(float(v) / 1e7, 2) for v in annual_revenue]  # crore
+            ni_values = None
+            if annual_net_income and annual_net_income_dates and len(annual_net_income) == len(annual_net_income_dates):
+                ni_values = [round(float(v) / 1e7, 2) for v in annual_net_income]
+            series_list = [ChartSeries(name="Revenue", values=rev_values, unit="Cr")]
+            if ni_values and len(ni_values) == len(rev_values):
+                series_list.append(ChartSeries(name="Net Income", values=ni_values, unit="Cr"))
+            charts.append(Chart(
+                id="revenue_income",
+                kind="multi_bar" if len(series_list) > 1 else "bar",
+                title="Revenue & Net Income",
+                subtitle="Annual · Cr",
+                x_labels=[str(d) for d in annual_revenue_dates],
+                series=series_list,
+                is_partial=False,
+            ))
+
+    cards = [card for card in cards if _metric_card_has_value(card)]
+
     return RichResponse(
         mode=RICH_MODE_SNAPSHOT,
         title=entity.label,
         subtitle=" | ".join(filter(None, [entity.exchange, entity.ticker, entity.sector])),
         primary_entity=entity,
         metric_cards=cards,
-        charts=[],
+        charts=charts,
         strengths_risks=sr_blocks,
         markdown_body=memo,
         data_sources=_default_sources(currency == "INR"),
@@ -1841,8 +1889,10 @@ def build_from_native(
                 or _native_snapshot_assemble(bundle, specialist_findings, memo)
         if mode == RICH_MODE_SNAPSHOT:
             return _native_snapshot_assemble(bundle, specialist_findings, memo)
-        # Comparison, news, filing modes not yet bridged — fallback to snapshot
-        return _native_snapshot_assemble(bundle, specialist_findings, memo)
+        # Do not fall back to generic snapshot visuals for news, filing, chat,
+        # or event-explainer queries. That made unrelated answers show the
+        # same repeated KPI cards instead of query-specific runtime visuals.
+        return None
     except Exception:
         logger.exception("rich_builder native bridge failed; falling back to markdown-only")
         return None

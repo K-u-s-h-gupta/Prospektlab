@@ -41,7 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   tokenUsage
 }) => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, setOnboarded } = useAuth();
   
   // Drag-to-resize state
   const [width, setWidth] = useState<number>(() => {
@@ -617,7 +617,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 href="/"
                 onClick={(e) => {
                   e.preventDefault();
-                  localStorage.removeItem('prospektlab_onboarded');
+                  setOnboarded(false);
                   dismissSidebarOnMobile();
                   navigate('/onboarding');
                 }}
@@ -635,7 +635,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               title="Re-run Setup"
               onClick={() => {
-                localStorage.removeItem('prospektlab_onboarded');
+                setOnboarded(false);
                 dismissSidebarOnMobile();
                 navigate('/onboarding');
               }}

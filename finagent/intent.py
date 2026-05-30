@@ -123,8 +123,11 @@ AGENT_SERVER_DEPENDENCIES: dict[str, list[str]] = {
 }
 
 
+from finagent.output.query_guards import is_portfolio_comparison_query
+
+
 def is_comparison_query(message: str) -> bool:
-    return bool(_COMPARISON_REGEX.search(message or ""))
+    return bool(_COMPARISON_REGEX.search(message or "")) and not is_portfolio_comparison_query(message)
 
 
 def is_calculation_valuation_query(message: str) -> bool:

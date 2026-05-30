@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 from urllib.parse import urlparse
 
@@ -18,6 +19,7 @@ from finagent.output.contracts import (
     ResponseSection,
     VisualSection,
 )
+from finagent.output.query_guards import is_portfolio_comparison_query
 from finagent.output.templates import SECTION_TEMPLATES
 
 logger = logging.getLogger("finagent.output.artifact_builder")
@@ -27,19 +29,79 @@ _TEXT_ONLY_MODES = {OutputMode.NEWS_BRIEF, OutputMode.FILING_ANALYSIS, OutputMod
 _VISUAL_QUERY_TERMS = (
     "chart", "graph", "historical", "history", "trend", "price", "valuation",
     "financial", "revenue", "profit", "margin", "market cap", "shareholding",
-    "pe ratio", "p/e", "performance",
+    "pe ratio", "p/e", "performance", "ratio", "ratios", "returns", "return",
+    "allocation", "exposure", "drawdown", "volatility", "beta", "compare",
+    "comparison", "vs", "peer", "DCF", "cash flow",
 )
+_ANALYTICAL_VISUAL_TERMS = (
+    "analyse", "analyze", "audit", "evaluate", "valuation", "value", "risk",
+    "ratios", "financials", "performance", "returns", "portfolio", "holdings",
+    "compare", "comparison", "vs", "peer",
+)
+_MISSING_DISPLAY_VALUES = {"", "n/a", "na", "none", "null", "-", "\u2014", "n/a - n/a"}
+
+
+def _has_real_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return math.isfinite(float(value))
+    text = str(value).strip().lower()
+    if text in _MISSING_DISPLAY_VALUES:
+        return False
+    return not all(part in _MISSING_DISPLAY_VALUES for part in text.replace("–", "-").split("-"))
+
+
+def _metric_card_has_value(card: MetricCard) -> bool:
+    return _has_real_value(getattr(card, "value", None))
+
+
+def _chart_has_real_data(chart: AnswerChart) -> bool:
+    for series in getattr(chart, "series", []) or []:
+        points = getattr(series, "data", []) or []
+        for point in points:
+            value = getattr(point, "value", None)
+            if isinstance(value, (int, float)) and math.isfinite(float(value)):
+                return True
+    return False
+
+
+def _clean_table(table: AnswerTable) -> AnswerTable | None:
+    if not table.columns:
+        return None
+    rows: list[list[str]] = []
+    for row in table.rows or []:
+        cells = [str(c) for c in (list(row.values()) if isinstance(row, dict) else list(row))]
+        if any(_has_real_value(c) for c in cells[1:]):
+            rows.append(cells)
+    if not rows:
+        return None
+    return AnswerTable(title=table.title, columns=table.columns, rows=rows)
+
+
+def _clean_artifact_payload(artifact: AnswerArtifact) -> None:
+    artifact.metric_cards = [card for card in artifact.metric_cards if _metric_card_has_value(card)]
+    artifact.charts = [chart for chart in artifact.charts if _chart_has_real_data(chart)]
+    artifact.tables = [table for table in (_clean_table(t) for t in artifact.tables) if table is not None]
+    artifact.comparison_results = [
+        row for row in artifact.comparison_results
+        if _has_real_value(row.primary_value) and _has_real_value(row.secondary_value)
+    ]
 
 
 def _objective_wants_visuals(objective: str, mode: OutputMode) -> bool:
     lower = (objective or "").lower()
     if mode == OutputMode.COMPANY_COMPARISON:
         return True
-    if mode == OutputMode.NEWS_BRIEF:
+    if mode in {OutputMode.NEWS_BRIEF, OutputMode.DIRECT_ANSWER, OutputMode.CONVERSATIONAL_CHAT, OutputMode.FILING_ANALYSIS}:
         return False
-    if mode in {OutputMode.COMPANY_SNAPSHOT, OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS, OutputMode.FORENSIC_INSIGHTS, OutputMode.INVESTMENT_VIEW, OutputMode.DEEP_RESEARCH_REPORT}:
+    if mode in {OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS, OutputMode.FORENSIC_INSIGHTS}:
         return True
-    return any(term in lower for term in _VISUAL_QUERY_TERMS)
+    if any(term.lower() in lower for term in _VISUAL_QUERY_TERMS):
+        return True
+    if mode in {OutputMode.COMPANY_SNAPSHOT, OutputMode.INVESTMENT_VIEW, OutputMode.DEEP_RESEARCH_REPORT}:
+        return any(term in lower for term in _ANALYTICAL_VISUAL_TERMS)
+    return False
 
 
 def _detect_visual_intent(objective: str, mode: OutputMode) -> str:
@@ -435,60 +497,64 @@ def _build_metric_cards(bundle, entity) -> list[MetricCard]:
     
     # Market Cap
     market_cap = getattr(y, "market_cap", None)
-    cards.append(MetricCard(
-        label="Market Cap",
-        value=_money(market_cap, currency),
-        tooltip="Total market value of company's outstanding shares",
-        icon="chart-pie"
-    ))
+    if market_cap is not None:
+        cards.append(MetricCard(
+            label="Market Cap",
+            value=_money(market_cap, currency),
+            tooltip="Total market value of company's outstanding shares",
+            icon="chart-pie"
+        ))
     
     # Revenue
     revenue = metrics.get("total_revenue")
-    cards.append(MetricCard(
-        label="Revenue",
-        value=_money(revenue, currency),
-        tooltip="Total revenue from operations",
-        icon="currency-dollar"
-    ))
+    if revenue is not None:
+        cards.append(MetricCard(
+            label="Revenue",
+            value=_money(revenue, currency),
+            tooltip="Total revenue from operations",
+            icon="currency-dollar"
+        ))
     
     # Net Margin
     net_margin = metrics.get("profit_margins")
-    cards.append(MetricCard(
-        label="Net Margin",
-        value=_pct(net_margin),
-        tooltip="Net income as percentage of revenue",
-        icon="percentage"
-    ))
+    if net_margin is not None:
+        cards.append(MetricCard(
+            label="Net Margin",
+            value=_pct(net_margin),
+            tooltip="Net income as percentage of revenue",
+            icon="percentage"
+        ))
     
     # ROE
     roe = metrics.get("return_on_equity")
-    cards.append(MetricCard(
-        label="ROE",
-        value=_pct(roe),
-        tooltip="Return on equity - net income relative to shareholders' equity",
-        icon="trending-up"
-    ))
+    if roe is not None:
+        cards.append(MetricCard(
+            label="ROE",
+            value=_pct(roe),
+            tooltip="Return on equity - net income relative to shareholders' equity",
+            icon="trending-up"
+        ))
     
     # P/E Ratio
     pe = metrics.get("trailing_pe")
-    cards.append(MetricCard(
-        label="P/E Ratio",
-        value=_num(pe, "x"),
-        tooltip="Price-to-earnings ratio - stock price relative to earnings per share",
-        icon="scale"
-    ))
+    if pe is not None:
+        cards.append(MetricCard(
+            label="P/E Ratio",
+            value=_num(pe, "x"),
+            tooltip="Price-to-earnings ratio - stock price relative to earnings per share",
+            icon="scale"
+        ))
     
     # 52-Week Range
     low = getattr(y, "fifty_two_week_low", None)
     high = getattr(y, "fifty_two_week_high", None)
-    range_str = _range(y)
-    cards.append(MetricCard(
-        label="52W Range",
-        value=range_str,
-        tooltip="Trading range over the past 52 weeks",
-        icon="arrows-expand",
-        is_partial=(low is None or high is None)
-    ))
+    if low is not None and high is not None:
+        cards.append(MetricCard(
+            label="52W Range",
+            value=_range(y),
+            tooltip="Trading range over the past 52 weeks",
+            icon="arrows-expand",
+        ))
     
     return cards
 
@@ -621,13 +687,17 @@ def _build_comparison_charts(artifact: AnswerArtifact, bundle, peer_quotes: dict
     y = getattr(bundle, "yahoo", None)
     primary_name = getattr(y, "name", "Primary") if y else "Primary"
     currency = getattr(y, "currency", None) or "INR"
-    labels.append(primary_name)
     # Bug fix: market_cap is on bundle.yahoo, NOT bundle directly
-    values.append(float(getattr(y, "market_cap", 0) or 0))
+    primary_market_cap = getattr(y, "market_cap", None)
+    if primary_market_cap is not None:
+        labels.append(primary_name)
+        values.append(float(primary_market_cap))
     
     for name, quote in peer_quotes.items():
-        labels.append(name)
-        values.append(float(getattr(quote, "market_cap", 0) or 0))
+        market_cap = getattr(quote, "market_cap", None)
+        if market_cap is not None:
+            labels.append(name)
+            values.append(float(market_cap))
     
     if len(labels) > 1:
         data_points = [ChartDataPoint(label=l, value=v) for l, v in zip(labels, values)]
@@ -673,14 +743,16 @@ def _build_comparison_results(bundle, peer_quotes: dict[str, object]) -> list[Co
     peer_name = getattr(peer, "name", peer_name)
     
     metrics_to_compare = [
-        ("Market Cap", getattr(y, "market_cap", 0), getattr(peer, "market_cap", 0)),
-        ("Revenue", primary_metrics.get("total_revenue", 0), peer_metrics.get("total_revenue", 0)),
-        ("Net Margin", primary_metrics.get("profit_margins", 0), peer_metrics.get("profit_margins", 0)),
-        ("ROE", primary_metrics.get("return_on_equity", 0), peer_metrics.get("return_on_equity", 0)),
-        ("P/E Ratio", primary_metrics.get("trailing_pe", 0), peer_metrics.get("trailing_pe", 0)),
+        ("Market Cap", getattr(y, "market_cap", None), getattr(peer, "market_cap", None)),
+        ("Revenue", primary_metrics.get("total_revenue"), peer_metrics.get("total_revenue")),
+        ("Net Margin", primary_metrics.get("profit_margins"), peer_metrics.get("profit_margins")),
+        ("ROE", primary_metrics.get("return_on_equity"), peer_metrics.get("return_on_equity")),
+        ("P/E Ratio", primary_metrics.get("trailing_pe"), peer_metrics.get("trailing_pe")),
     ]
     
     for metric, primary_val, secondary_val in metrics_to_compare:
+        if primary_val is None or secondary_val is None:
+            continue
         primary_str = _format_comparison_value(primary_val, metric, currency)
         secondary_str = _format_comparison_value(secondary_val, metric, currency)
         
@@ -697,11 +769,11 @@ def _build_comparison_results(bundle, peer_quotes: dict[str, object]) -> list[Co
                 winner = None
         
         # Calculate delta
-        if primary_val and secondary_val:
-            delta_pct = abs(primary_val - secondary_val) / secondary_val * 100 if secondary_val else 0
+        if secondary_val:
+            delta_pct = abs(primary_val - secondary_val) / secondary_val * 100
             delta_str = f"{delta_pct:.1f}%"
         else:
-            delta_str = "n/a"
+            delta_str = ""
         
         results.append(ComparisonResult(
             metric=metric,
@@ -879,10 +951,7 @@ def build_answer_artifact(
         comparison_results=comparison_results,
     )
 
-    # Add visual sections at the end
-    artifact.visual_sections = _build_visual_sections(artifact, bundle, mode)
-
-    if mode == OutputMode.COMPANY_COMPARISON:
+    if mode == OutputMode.COMPANY_COMPARISON and not is_portfolio_comparison_query(objective):
         _fill_comparison(artifact, bundle, peer_quotes or {}, specialist_findings or [], docs)
     elif mode in {OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS}:
         _fill_valuation(artifact, bundle, specialist_findings or [])
@@ -902,6 +971,12 @@ def build_answer_artifact(
         _fill_direct_answer(artifact, objective, bundle, docs)
     else:
         _fill_snapshot(artifact, bundle, docs, specialist_findings or [])
+
+    _clean_artifact_payload(artifact)
+
+    # Build layout sections only after prose/table sections are populated.
+    # Building this earlier produced rich payloads that described only visuals.
+    artifact.visual_sections = _build_visual_sections(artifact, bundle, mode)
 
     return artifact
 
@@ -1210,14 +1285,21 @@ def _financial_text(bundle) -> str:
     if not y:
         return "Financial data was not available from the enrichment layer."
     metrics = getattr(y, "financial_metrics", {}) or {}
-    parts = [
-        f"Price: {_price(y)}",
-        f"Market cap: {_money(getattr(y, 'market_cap', None), getattr(y, 'currency', None))}",
-        f"Revenue: {_money(metrics.get('total_revenue'), getattr(y, 'currency', None))}",
-        f"Net margin: {_pct(metrics.get('profit_margins'))}",
-        f"ROE: {_pct(metrics.get('return_on_equity'))}",
-    ]
-    return "; ".join(parts) + "."
+    currency = getattr(y, "currency", None)
+    parts: list[str] = []
+    if getattr(y, "price", None) is not None:
+        parts.append(f"Price: {_price(y)}")
+    if getattr(y, "market_cap", None) is not None:
+        parts.append(f"Market cap: {_money(getattr(y, 'market_cap', None), currency)}")
+    if metrics.get("total_revenue") is not None:
+        parts.append(f"Revenue: {_money(metrics.get('total_revenue'), currency)}")
+    if metrics.get("profit_margins") is not None:
+        parts.append(f"Net margin: {_pct(metrics.get('profit_margins'))}")
+    if metrics.get("return_on_equity") is not None:
+        parts.append(f"ROE: {_pct(metrics.get('return_on_equity'))}")
+    if parts:
+        return "; ".join(parts) + "."
+    return "The enrichment layer did not return usable financial metrics for this run."
 
 
 def _executive_view_text(bundle, docs, findings) -> str:

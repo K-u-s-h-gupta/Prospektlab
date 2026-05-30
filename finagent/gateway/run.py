@@ -76,7 +76,7 @@ from finagent.portfolio.analytics import compute_portfolio_analytics
 from finagent.portfolio.news import fetch_portfolio_news
 from finagent.gateway import supabase_client as supabase
 from finagent.gateway.auth_guard import decode_current_user_token
-from finagent.tools.data import fetch_news, fetch_yahoo_quote, fetch_india_snapshot
+from finagent.tools.data import fetch_news, fetch_yahoo_quote, fetch_india_snapshot, fetch_nse_snapshot
 import time
 
 class InMemSlidingWindowRateLimiter:
@@ -112,7 +112,7 @@ default_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=100, window_
 _PENDING_EXTRACTIONS: dict[str, dict[str, Any]] = {}
 
 # ── Token Usage Tracking ──────────────────────────────────────────────────
-WEEKLY_TOKEN_LIMIT = int(os.getenv("WEEKLY_TOKEN_LIMIT", "5000000"))
+WEEKLY_TOKEN_LIMIT = int(os.getenv("WEEKLY_TOKEN_LIMIT", "1000000"))
 
 
 def _ensure_token_usage_table() -> None:
@@ -790,6 +790,16 @@ def _save_session_meta(session_id: str, meta: dict[str, Any]) -> None:
         pass
 
 
+def _clear_session_memo(session_id: str) -> None:
+    """Remove stale rendered output before a fresh run reuses a session id."""
+    memo_path = _MEMOS_DIR / f"{session_id}.md"
+    if memo_path.is_file():
+        try:
+            memo_path.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Could not clear stale memo for session %s", session_id)
+
+
 def _event_payload(idx: int, event) -> dict[str, Any]:
     return {"id": idx, "type": event.type, "timestamp": event.timestamp, **event.payload}
 
@@ -937,24 +947,231 @@ def get_user_token_usage(current_user: dict = Depends(get_current_user)):
     }
 
 
+_HISTORY_PERIODS = {"1M", "3M", "6M", "YTD", "1Y", "MAX"}
+
+_HISTORY_SYMBOL_MAP = {
+    "NIFTY": "^NSEI",
+    "NIFTY50": "^NSEI",
+    "NIFTY 50": "^NSEI",
+    "NIFTY FUT": "^NSEI",
+    "SENSEX": "^BSESN",
+    "BSE SENSEX": "^BSESN",
+    "NIFTY BANK": "^NSEBANK",
+    "BANKNIFTY": "^NSEBANK",
+    "BANKNIFTY FUT": "^NSEBANK",
+    "NIFTY IT": "^CNXIT",
+    "S&P 500": "^GSPC",
+    "SP500": "^GSPC",
+    "NASDAQ": "^IXIC",
+    "DOW": "^DJI",
+    "VIX": "^VIX",
+    "USD/INR": "USDINR=X",
+    "EUR/INR": "EURINR=X",
+    "GBP/INR": "GBPINR=X",
+    "JPY/INR": "JPYINR=X",
+    "GOLD": "GC=F",
+    "SILVER": "SI=F",
+    "CRUDE": "CL=F",
+    "CRUDE OIL": "CL=F",
+    "BTC": "BTC-USD",
+    "ETH": "ETH-USD",
+    "SOL": "SOL-USD",
+    "XRP": "XRP-USD",
+}
+
+_KNOWN_ISIN_SYMBOLS = {
+    "INE002A01018": "RELIANCE",
+    "INE467B01029": "TCS",
+    "INE009A01021": "INFY",
+    "INE040A01034": "HDFCBANK",
+    "INE154A01025": "ITC",
+    "INE021A01026": "ASIANPAINT",
+    "INE155A01022": "TATAMOTORS",
+    "INE758T01015": "ZOMATO",
+}
+
+
+def _clean_history_symbol(symbol: str) -> str:
+    return re.sub(r"\s+", " ", (symbol or "").strip()).upper()
+
+
+def _history_candidates(symbol: str, asset_type: str | None) -> list[str]:
+    clean = _clean_history_symbol(symbol)
+    if not clean:
+        return []
+
+    clean = _KNOWN_ISIN_SYMBOLS.get(clean, clean)
+    mapped = _HISTORY_SYMBOL_MAP.get(clean)
+    if mapped:
+        return [mapped]
+    if clean.startswith("^") or "=" in clean or "-" in clean:
+        return [clean]
+
+    suffix_match = re.search(r"\.(NS|BO|NSE|BSE)$", clean)
+    if suffix_match:
+        normalized = clean.removesuffix(".NSE").removesuffix(".BSE")
+        if clean.endswith(".NSE"):
+            normalized = f"{normalized}.NS"
+        elif clean.endswith(".BSE"):
+            normalized = f"{normalized}.BO"
+        return [normalized]
+
+    kind = (asset_type or "").strip().lower()
+    if kind in {"index", "commodity", "currency", "crypto", "future", "futures"}:
+        return [clean]
+    if kind in {"mutual fund", "mutual_fund", "fund", "bond", "bonds"}:
+        if clean.endswith((".NS", ".BO")) or "=" in clean or "-" in clean:
+            return [clean]
+        return []
+
+    # Indian equity default: NSE first, then BSE. Raw is last for ETFs/global tickers.
+    return [f"{clean}.NS", f"{clean}.BO", clean]
+
+
+def _period_cutoff(period: str, latest: datetime) -> datetime | None:
+    if period == "MAX":
+        return None
+    if period == "YTD":
+        return datetime(latest.year, 1, 1, tzinfo=latest.tzinfo)
+    days = {
+        "1M": 31,
+        "3M": 93,
+        "6M": 186,
+        "1Y": 366,
+    }.get(period)
+    return latest - timedelta(days=days or 366)
+
+
+def _filter_history_period(dates: list[str], prices: list[float], period: str) -> tuple[list[str], list[float]]:
+    rows: list[tuple[datetime, str, float]] = []
+    for date_text, price in zip(dates, prices):
+        try:
+            parsed = datetime.fromisoformat(str(date_text)[:10]).replace(tzinfo=timezone.utc)
+            price_f = float(price)
+        except Exception:
+            continue
+        if price_f > 0:
+            rows.append((parsed, parsed.date().isoformat(), price_f))
+
+    rows.sort(key=lambda item: item[0])
+    if not rows:
+        return [], []
+
+    cutoff = _period_cutoff(period, rows[-1][0])
+    if cutoff is not None:
+        rows = [row for row in rows if row[0] >= cutoff]
+
+    return [row[1] for row in rows], [row[2] for row in rows]
+
+
+@app.get("/market/history")
+async def get_market_history(
+    symbol: str,
+    period: str = "1Y",
+    asset_type: str | None = None,
+    current_user: dict = Depends(get_current_user),
+):
+    requested_period = (period or "1Y").strip().upper()
+    if requested_period not in _HISTORY_PERIODS:
+        raise HTTPException(status_code=422, detail=f"Unsupported period '{period}'.")
+
+    clean_symbol = _clean_history_symbol(symbol)
+    if not clean_symbol:
+        raise HTTPException(status_code=422, detail="symbol is required.")
+
+    last_error = None
+    for candidate in _history_candidates(clean_symbol, asset_type):
+        try:
+            quote = await fetch_yahoo_quote(candidate, timeout_s=18.0)
+        except Exception as exc:
+            last_error = str(exc)
+            quote = None
+
+        if not quote or not quote.series_dates or not quote.series_closes:
+            continue
+
+        dates, prices = _filter_history_period(quote.series_dates, quote.series_closes, requested_period)
+        if len(prices) < 2:
+            continue
+
+        change_pct = None
+        if prices[0] > 0:
+            change_pct = (prices[-1] - prices[0]) / prices[0] * 100.0
+
+        return {
+            "symbol": quote.ticker or candidate,
+            "name": quote.name or clean_symbol,
+            "asset_type": asset_type or "market",
+            "period": requested_period,
+            "currency": quote.currency,
+            "source": quote.source_url or "Yahoo Finance",
+            "dates": dates,
+            "prices": prices,
+            "change_pct": change_pct,
+            "as_of": dates[-1],
+            "status": "ok",
+        }
+
+    return {
+        "symbol": clean_symbol,
+        "name": clean_symbol,
+        "asset_type": asset_type or "market",
+        "period": requested_period,
+        "currency": None,
+        "source": "unavailable",
+        "dates": [],
+        "prices": [],
+        "change_pct": None,
+        "as_of": None,
+        "status": "unavailable",
+        "message": "No data available right now.",
+    }
+
+
 @app.get("/market/quotes")
 async def get_market_quotes(symbols: str, current_user: dict = Depends(get_current_user)):
-    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()][:20]
+    def _clean_market_symbol(value: str) -> str:
+        sym = (value or "").strip().upper()
+        return sym.removesuffix(".NS").removesuffix(".BO").removesuffix(".NSE").removesuffix(".BSE")
+
+    symbol_list = []
+    for raw in symbols.split(","):
+        sym = _clean_market_symbol(raw)
+        if sym and sym not in symbol_list:
+            symbol_list.append(sym)
+    symbol_list = symbol_list[:30]
     results = {}
     
     async def fetch_one(sym: str):
         try:
-            snap = await fetch_india_snapshot(sym)
-            if snap:
+            # Use NSE/BSE-first live quote data for dashboard prices and movers.
+            snap = await fetch_nse_snapshot(sym)
+            if snap and snap.current_price is not None:
                 return sym, {
                     "symbol": snap.symbol,
                     "company_name": snap.company_name,
                     "price": snap.current_price,
-                    "change_pct": snap.change_pct,
+                    "change_pct": snap.change_pct if snap.change_pct is not None else 0.0,
                     "sector": snap.sector or snap.industry or "General",
                     "pe_ratio": snap.pe_ratio,
                     "market_cap": snap.market_cap_cr * 10000000 if snap.market_cap_cr else None,
-                    "isin": snap.isin
+                    "isin": snap.isin,
+                    "source": snap.source or "NSE/BSE",
+                    "source_url": snap.source_url,
+                }
+            snap = await fetch_india_snapshot(sym)
+            if snap and snap.current_price is not None:
+                return sym, {
+                    "symbol": snap.symbol,
+                    "company_name": snap.company_name,
+                    "price": snap.current_price,
+                    "change_pct": snap.change_pct if snap.change_pct is not None else 0.0,
+                    "sector": snap.sector or snap.industry or "General",
+                    "pe_ratio": snap.pe_ratio,
+                    "market_cap": snap.market_cap_cr * 10000000 if snap.market_cap_cr else None,
+                    "isin": snap.isin,
+                    "source": snap.source or "market data",
+                    "source_url": snap.source_url,
                 }
         except Exception as e:
             logger.error(f"Error fetching quote for {sym}: {e}")
@@ -965,6 +1182,8 @@ async def get_market_quotes(symbols: str, current_user: dict = Depends(get_curre
     for sym, res in fetched:
         if res:
             results[sym] = res
+            results[f"{sym}.NS"] = res
+            results[f"{sym}.BO"] = res
     return results
 
 
@@ -1921,6 +2140,23 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
     _require_no_active_ingestion(tenant_id)
     if is_portfolio_scope_query(raw_query):
         _require_synchronized_portfolio(tenant_id)
+
+    requested_mode = (req.mode or "chat").strip().lower()
+    if requested_mode == "marathon":
+        requested_mode = "deep"
+    if requested_mode == "deep":
+        return await start_deep_research(
+            DeepResearchRequest(
+                target=raw_query,
+                passes=8,
+                pass_depth=min(max(req.max_steps or 40, 10), 120),
+                max_wall_seconds=req.max_wall_seconds,
+                heartbeat_interval_s=min(max(req.heartbeat_interval_s, 5), 60),
+                user_email=req.user_email,
+                session_id=req.session_id,
+            ),
+            current_user=current_user,
+        )
     
     # ── Pure-LLM follow-up contextualization ─────────────────────────────
     # The LLM decides whether this is a follow-up to the prior conversation,
@@ -1972,14 +2208,16 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
     # Always start a fresh event history for this research execution (prevents
     # replay of previous run's "memo"/"final" events into the new turn's UI).
     BUS.open(session_id, reset=True)
-    mode = (req.mode or "chat").strip().lower()
-    if mode not in {"chat", "standard", "deep"}:
+    _clear_session_memo(session_id)
+    mode = requested_mode
+    if mode not in {"chat", "standard"}:
         mode = "chat"
     
     # ── Comparison detection: extract both entities ────────────────────
-    is_comparison_query = _is_comparison(raw_query)
+    from finagent.output.query_guards import is_portfolio_comparison_query
+    is_comparison_query = _is_comparison(raw_query) and not is_portfolio_comparison_query(raw_query)
     comparison_targets = _extract_comparison_targets(raw_query) if is_comparison_query else []
-    # Force comparison output mode for comparison queries
+    # Force comparison output mode for comparison queries (but NOT portfolio-vs-benchmark)
     forced_output_mode = req.output_mode
     if is_comparison_query and not forced_output_mode:
         forced_output_mode = "company_comparison"
@@ -1989,24 +2227,21 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
     async def _runner() -> None:
         try:
             # ── Speed-first config ──────────────────────────────────────
-            # Standard "Research" mode = single fast pass.
-            # Deep mode within /research/start = same path but with slightly higher budget
+            # Chat stays lightweight; standard keeps enrichment, reflection,
+            # multi-agent checks, and visual synthesis.
             if req.max_steps is not None:
                 base_steps = req.max_steps
-            elif mode == "deep":
-                base_steps = 60
             elif mode == "standard":
-                base_steps = 38
+                base_steps = 18
             else:
                 base_steps = 28
             
             chat_history = _MEMORY_MANAGER.get_history(user_email, session_id)
 
-            # Lightweight pipeline for standard/chat modes: skip expensive phases.
-            # The synthesis still has access to peer enrichment (added below
-            # in run_research_session via peer_targets).
-            is_fast_mode = mode in {"standard", "chat"}
-            is_deep_mode = mode == "deep"
+            is_chat_mode = mode == "chat"
+            is_standard_mode = mode == "standard"
+            is_portfolio_query = is_portfolio_scope_query(objective) or is_portfolio_scope_query(raw_query)
+            balanced_standard = is_standard_mode and (is_portfolio_query or is_comparison_query)
 
             await run_research_session(
                 target,
@@ -2018,21 +2253,22 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
                     auto_depth=req.max_steps is None,
                     response_depth=mode,
                     output_mode=forced_output_mode,
-                    synth_model="gpt-4o-mini" if is_fast_mode else os.getenv("FINAGENT_SYNTH_MODEL"),
+                    synth_model=os.getenv("FINAGENT_SYNTH_MODEL") or ("gpt-4o" if (mode == "deep" or balanced_standard) else "gpt-4o-mini"),
                     # ── Speed: aggressively disable expensive phases for fast modes
-                    enable_multi_agent=not is_fast_mode,
-                    enable_blindspot=not is_fast_mode,
-                    enable_reflection=True,
-                    reflection_max_rounds=(1 if is_fast_mode else (3 if is_deep_mode else 5)),
-                    reflection_max_new_docs=(20 if is_fast_mode else (60 if is_deep_mode else 80)),
-                    enable_deep_dive=True,
-                    quality_threshold=(60.0 if is_fast_mode else (70.0 if is_deep_mode else 75.0)),
+                    enable_multi_agent=balanced_standard,
+                    enable_blindspot=balanced_standard,
+                    enable_reflection=balanced_standard,
+                    reflection_max_rounds=1 if balanced_standard else 0,
+                    reflection_max_new_docs=12 if balanced_standard else 0,
+                    enable_deep_dive=balanced_standard,
+                    quality_threshold=(68.0 if balanced_standard else (55.0 if is_chat_mode else 60.0)),
                     # ── Tight timeouts for fast modes (skip 3.0x multiplier on win32 for fast modes)
-                    breadth_search_timeout=(15.0 if is_fast_mode else (90.0 if is_deep_mode else 150.0)) * (1.0 if is_fast_mode else (3.0 if sys.platform == "win32" else 1.0)),
-                    followup_search_timeout=(10.0 if is_fast_mode else (45.0 if is_deep_mode else 70.0)) * (1.0 if is_fast_mode else (3.0 if sys.platform == "win32" else 1.0)),
-                    reflection_per_query_timeout=(18.0 if is_fast_mode else (35.0 if is_deep_mode else 55.0)),
-                    blindspot_per_query_timeout=(15.0 if is_fast_mode else (30.0 if is_deep_mode else 45.0)),
-                    news_timeout=(5.0 if is_fast_mode else (25.0 if is_deep_mode else 40.0)),
+                    breadth_search_timeout=(20.0 if balanced_standard else (8.0 if is_chat_mode else 16.0)),
+                    followup_search_timeout=(12.0 if balanced_standard else (5.0 if is_chat_mode else 8.0)),
+                    reflection_per_query_timeout=8.0 if balanced_standard else 0.0,
+                    blindspot_per_query_timeout=8.0 if balanced_standard else 0.0,
+                    news_timeout=(10.0 if balanced_standard else (4.0 if is_chat_mode else 6.0)),
+                    fast_mode=not balanced_standard,
                     # ── Comparison: pass peer targets so synthesis has parallel enrichment
                     peer_targets=comparison_targets[1:] if len(comparison_targets) >= 2 else [],
                     chat_history=chat_history,
@@ -2041,8 +2277,15 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
                 ),
             )
             
+        except asyncio.CancelledError:
+            logger.warning("session %s cancelled before final synthesis", session_id)
+            if not BUS.is_closed(session_id):
+                BUS.emit(session_id, "log", source="gateway", level="warning", message="Research task was cancelled before final synthesis")
+                BUS.emit(session_id, "error", message="Research task was cancelled before final synthesis")
+                BUS.close(session_id)
         except Exception as exc:
             logger.exception("session %s crashed", session_id)
+            BUS.emit(session_id, "log", source="gateway", level="error", message=f"Research failed: {type(exc).__name__}: {exc}")
             BUS.emit(session_id, "error", message=str(exc))
             BUS.close(session_id)
         finally:
@@ -2213,11 +2456,13 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
         target = primary_target_from_query(raw_query)
 
     BUS.open(master_session, reset=True)
+    _clear_session_memo(master_session)
     
     _session_record(master_session, mode="deep", target=target, objective=raw_query, user_email=user_email, tenant_id=tenant_id)
 
     # ── Comparison detection for deep research ─────────────────────────
-    is_comparison_query = _is_comparison(raw_query)
+    from finagent.output.query_guards import is_portfolio_comparison_query
+    is_comparison_query = _is_comparison(raw_query) and not is_portfolio_comparison_query(raw_query)
     comparison_targets = _extract_comparison_targets(raw_query) if is_comparison_query else []
     peer_targets_list = comparison_targets[1:] if len(comparison_targets) >= 2 else []
 
@@ -2235,11 +2480,14 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                         return False
                 
                 is_last = (i == total_passes - 1)
-                objective = _DEEP_PASS_OBJECTIVES[i % len(_DEEP_PASS_OBJECTIVES)]
+                if is_last:
+                    objective = _DEEP_PASS_OBJECTIVES[-1]  # always "Final synthesis" (index 11)
+                else:
+                    objective = _DEEP_PASS_OBJECTIVES[i % (len(_DEEP_PASS_OBJECTIVES) - 1)]
                 pass_label = f"Synthesis Pass {i+1}/{total_passes}" if is_last else f"Pass {i+1}/{total_passes}"
                 
                 BUS.emit(master_session, "phase", phase="deep_research", note=f"{pass_label}: {objective[:60]}…")
-                BUS.emit(master_session, "deep_pass", pass_number=i+1, total_passes=total_passes, objective=objective, status="running")
+                BUS.emit(master_session, "deep_pass", pass_number=i+1, total_passes=total_passes, objective=objective, deep_pass_label=pass_label, status="running")
                 
                 pass_objective = f"{raw_query}\n\n{pass_label} - {objective}"
                 # For comparison queries, force comparison output mode on synthesis pass
@@ -2250,26 +2498,31 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                     pass_objective,
                     is_followup=is_followup_deep,
                     loop_config=AgentLoopConfig(
-                        max_steps=req.pass_depth,
+                        max_steps=(req.pass_depth if is_last else min(req.pass_depth, 12)),
                         session_id=master_session,
                         auto_depth=False,
                         enable_memory=True,
-                        reflection_max_rounds=(5 if is_last else 3),
+                        reflection_max_rounds=(2 if is_last else 0),
                         quality_threshold=(72.0 if is_last else 65.0),
-                        reflection_per_query_limit=(8 if is_last else 6),
-                        reflection_max_new_docs=(120 if is_last else 80),
-                        synth_model="gpt-4o",
+                        reflection_per_query_limit=(4 if is_last else 0),
+                        reflection_max_new_docs=(32 if is_last else 0),
+                        reflection_max_queries_per_round=(4 if is_last else 0),
+                        reflection_wall_clock_seconds=(45.0 if is_last else 0.0),
+                        reflection_early_accept_margin=(2.0 if is_last else 0.0),
+                        reflection_min_score_gain=(0.75 if is_last else 0.0),
+                        synth_model=os.getenv("FINAGENT_SYNTH_MODEL") or ("gpt-4o" if is_last else "gpt-4o-mini"),
                         response_depth=("deep" if is_last else "standard"),
                         output_mode=effective_output_mode,
                         emit_memo=is_last,
                         close_bus_on_finish=False,
                         chat_history=chat_history if (i == 0 or is_last) else None,
-                        breadth_search_timeout=180.0 * (3.0 if sys.platform == "win32" else 1.0),
-                        followup_search_timeout=75.0 * (3.0 if sys.platform == "win32" else 1.0),
-                        reflection_per_query_timeout=60.0,
-                        blindspot_per_query_timeout=50.0,
-                        news_timeout=45.0,
-                        enable_blindspot=True,
+                        breadth_search_timeout=(75.0 if is_last else 20.0),
+                        followup_search_timeout=(35.0 if is_last else 8.0),
+                        reflection_per_query_timeout=(18.0 if is_last else 0.0),
+                        blindspot_per_query_timeout=(25.0 if is_last else 0.0),
+                        news_timeout=(18.0 if is_last else 5.0),
+                        enable_blindspot=is_last,
+                        fast_mode=not is_last,
                         # ── Peer targets ensure synthesis fetches BOTH companies' enrichment
                         peer_targets=peer_targets_list,
                         user_email=user_email,
@@ -2277,7 +2530,7 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                     ),
                 )
                 
-                BUS.emit(master_session, "deep_pass", pass_number=i+1, total_passes=total_passes, objective=objective, status="done")
+                BUS.emit(master_session, "deep_pass", pass_number=i+1, total_passes=total_passes, objective=objective, deep_pass_label=pass_label, status="done")
                 return True
 
             # All enrichment passes parallel + final synthesis
@@ -2294,8 +2547,15 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                 completed_passes += 1
             
             BUS.emit(master_session, "deep_complete", passes=completed_passes, requested_passes=total_passes)
+        except asyncio.CancelledError:
+            logger.warning("deep research %s cancelled before final synthesis", master_session)
+            if not BUS.is_closed(master_session):
+                BUS.emit(master_session, "log", source="gateway", level="warning", message="Deep research task was cancelled before final synthesis")
+                BUS.emit(master_session, "error", message="Deep research task was cancelled before final synthesis")
+                BUS.close(master_session)
         except Exception as exc:
             logger.exception("deep research %s crashed on pass", master_session)
+            BUS.emit(master_session, "log", source="gateway", level="error", message=f"Deep research failed: {type(exc).__name__}: {exc}")
             BUS.emit(master_session, "error", message=f"Deep research failed: {exc}")
         finally:
             _TASKS.pop(master_session, None)
@@ -2403,7 +2663,7 @@ async def chat_research(req: ChatResearchRequest, current_user: dict = Depends(e
             objective=req.message,
             max_wall_seconds=req.max_wall_seconds,
             heartbeat_interval_s=20,
-            mode="standard",
+            mode=mode,
             session_id=req.session_id,
         ),
         current_user=current_user
@@ -2489,14 +2749,18 @@ def session_result(session_id: str, current_user: dict = Depends(get_current_use
     status = _session_status(session_id)
     memo_path = _MEMOS_DIR / f"{session_id}.md"
     memo_text = memo_path.read_text(encoding="utf-8") if memo_path.is_file() else None
+    final_payload = status.get("final") or {}
+    memo_event = status.get("memo") or {}
+    if memo_text is None:
+        memo_text = final_payload.get("memo") or final_payload.get("memo_preview") or memo_event.get("preview")
     return JSONResponse({
         "session_id": session_id,
         "status": status["status"],
         "target": status.get("target"),
         "mode": status.get("mode"),
-        "final": status.get("final"),
+        "final": final_payload or None,
         "memo": memo_text,
-        "memo_event": status.get("memo"),
+        "memo_event": memo_event or None,
         "error": status.get("error"),
     })
 
@@ -2513,11 +2777,6 @@ async def stream_session(
     if not BUS.known(session_id):
         raise HTTPException(status_code=404, detail="Unknown session")
 
-    # Always open a fresh queue for the new connection request to avoid queue race conditions.
-    q = None
-    if not BUS.is_closed(session_id):
-        q = BUS.open(session_id)
-
     # Determine starting event seq number
     after_seq = 0
     if after is not None:
@@ -2528,12 +2787,16 @@ async def stream_session(
         except ValueError:
             pass
 
+    # Atomic subscribe: history snapshot + live queue in one call
+    history_events, q = BUS.subscribe(session_id, after=after_seq, limit=5000)
+    if not q and not BUS.is_closed(session_id):
+        q = BUS.open(session_id)
+
     async def gen():
         yield f"event: open\ndata: {json.dumps({'session_id': session_id})}\n\n"
         
         # 1. Replay missed events from history
         max_seen_seq = after_seq - 1
-        history_events = BUS.history(session_id, after=after_seq, limit=5000)
         for idx, event in history_events:
             payload = _event_payload(idx, event)
             yield f"id: {idx}\nevent: {event.type}\ndata: {json.dumps(payload, default=str)}\n\n"
