@@ -5,6 +5,7 @@ import Pricing from './pages/Pricing';
 import Testimonials from './pages/Testimonials';
 import Features from './pages/Features';
 import Onboarding from './pages/Onboarding';
+import ContactUs from './pages/ContactUs';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -67,6 +68,7 @@ export const AppContent: React.FC = () => {
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/testimonials" element={<Testimonials />} />
         <Route path="/features" element={<Features />} />
+        <Route path="/contact" element={<ContactUs />} />
         
         {/* Auth Pages */}
         <Route 

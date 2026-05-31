@@ -304,6 +304,11 @@ export const LandingPage: React.FC = () => {
                 {label}
               </button>
             ))}
+            <button onClick={() => navigate('/contact')} style={{ background:'none', border:'none', color:'var(--text-secondary)', fontSize:13, fontWeight:500, cursor:'pointer', padding:'6px 12px', borderRadius:8, transition:'all 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'none'; }}>
+              Contact
+            </button>
           </div>
 
           <div style={{ display:'flex', gap:10, alignItems:'center', flexShrink:0 }}>
@@ -332,6 +337,7 @@ export const LandingPage: React.FC = () => {
             {[['hero','Home'],['pain','The Setup'],['mechanism','The Edge'],['reviews','Receipts'],['faq','FAQ']].map(([id,label]) => (
               <button key={id} onClick={() => scrollTo(id)} style={{ background:'none', border:'none', color:'var(--text-secondary)', fontSize:14, textAlign:'left', padding:'10px 0', cursor:'pointer', borderBottom:'1px solid var(--border-subtle)' }}>{label}</button>
             ))}
+            <button onClick={() => navigate('/contact')} style={{ background:'none', border:'none', color:'var(--text-secondary)', fontSize:14, textAlign:'left', padding:'10px 0', cursor:'pointer', borderBottom:'1px solid var(--border-subtle)' }}>Contact</button>
           </div>
         )}
       </nav>
