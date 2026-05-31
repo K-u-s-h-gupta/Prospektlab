@@ -10,6 +10,7 @@ import { HtmlArtifact } from './HtmlArtifact';
 import { TableBlock } from '../charts/TableBlock';
 import { RadarChart } from '../charts/RadarChart';
 import { TreemapChart } from '../charts/TreemapChart';
+import { chartHasRenderableData, normalizeChartForRender } from '../charts/chartNormalize';
 
 // ─── Inline markdown renderer ────────────────────────────────────────────────
 // Handles: **bold**, *italic*, `code`, [SOURCE:...], [AS-OF:...],
@@ -607,21 +608,19 @@ const renderSegment = (seg: { type: string; content: any }, idx: number): React.
   return null;
 };
 
-// ─── Rich chart renderer (rich_builder format: series[].values) ───────────────
+// ─── Rich chart renderer (supports x_labels/kind/series.values and legacy labels/chart_type/series.data) ──
 const renderRichChart = (chart: any, keyVal: number): React.ReactNode => {
-  if (!chart) return null;
-  const series = chart.series || [];
-  const xLabels = chart.x_labels || [];
-  // Allow donut/treemap with no x_labels (use labels from series or skip)
-  const kind = (chart.kind || 'bar').toLowerCase();
-  const hasData = series.length > 0 && (series[0].values || []).length > 0;
-  if (!hasData) return null;
+  const normalized = normalizeChartForRender(chart);
+  if (!normalized || !chartHasRenderableData(normalized)) return null;
 
-  const primaryVals: number[] = (series[0]?.values || []).map((v: any) => v ?? 0);
-  const secondaryVals: number[] | undefined = series[1]?.values?.map((v: any) => v ?? 0);
+  const series = normalized.series || [];
+  const xLabels = normalized.x_labels || [];
+  const kind = normalized.kind || 'bar';
+  const primaryVals: number[] = series[0]?.values || [];
+  const secondaryVals: number[] | undefined = series[1]?.values;
   const secondaryName: string | undefined = series[1]?.name;
-  const unit = chart.y_unit || series[0]?.unit || '';
-  const labels = xLabels.length > 0 ? xLabels : primaryVals.map((_: any, i: number) => String(i + 1));
+  const unit = normalized.y_unit || series[0]?.unit || '';
+  const labels = xLabels.length > 0 ? xLabels : primaryVals.map((_: number, i: number) => String(i + 1));
 
   return (
     <div
@@ -637,26 +636,33 @@ const renderRichChart = (chart: any, keyVal: number): React.ReactNode => {
       }}
     >
       {kind === 'area' || kind === 'line' || kind === 'multi_line' ? (
-        <AreaChart labels={labels} data={primaryVals} title={chart.title} unit={unit} />
+        <AreaChart
+          labels={labels}
+          data={primaryVals}
+          title={normalized.title}
+          unit={unit}
+          comparisonData={secondaryVals}
+          comparisonTitle={secondaryName}
+        />
       ) : kind === 'bar' || kind === 'multi_bar' ? (
         <BarChart
-          labels={labels} data={primaryVals} title={chart.title} unit={unit}
+          labels={labels} data={primaryVals} title={normalized.title} unit={unit}
           comparisonData={secondaryVals} comparisonTitle={secondaryName}
         />
       ) : kind === 'donut' ? (
-        <DonutChart labels={labels} data={primaryVals} title={chart.title}
-          valueKind={chart.valueKind} unit={unit} />
+        <DonutChart labels={labels} data={primaryVals} title={normalized.title}
+          valueKind={normalized.valueKind} unit={unit} />
       ) : kind === 'radar' ? (
         <RadarChart
-          labels={labels} data={primaryVals} title={chart.title}
+          labels={labels} data={primaryVals} title={normalized.title}
           comparisonData={secondaryVals} comparisonTitle={secondaryName}
         />
       ) : kind === 'treemap' ? (
-        <TreemapChart labels={labels} data={primaryVals} title={chart.title} unit="%" />
+        <TreemapChart labels={labels} data={primaryVals} title={normalized.title} unit="%" />
       ) : null}
-      {chart.subtitle && (
+      {normalized.subtitle && (
         <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '6px', textAlign: 'center' }}>
-          {chart.subtitle}
+          {normalized.subtitle}
         </div>
       )}
     </div>
@@ -670,11 +676,7 @@ const isMissingDisplayValue = (value: any): boolean => {
   return text === '' || text === 'n/a' || text === 'na' || text === 'nan' || text === 'infinity' || text === '-infinity' || text === 'none' || text === 'null' || text === '-' || text === '—';
 };
 
-const chartHasData = (chart: any): boolean => {
-  return (chart?.series || []).some((series: any) =>
-    (series?.values || []).some((value: any) => typeof value === 'number' && Number.isFinite(value))
-  );
-};
+const chartHasData = (chart: any): boolean => chartHasRenderableData(chart);
 
 const cleanTable = (table: any): any | null => {
   if (!table || !Array.isArray(table.headers) || !Array.isArray(table.rows)) return null;

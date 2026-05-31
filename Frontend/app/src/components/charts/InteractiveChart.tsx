@@ -107,6 +107,7 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({
     }
 
     const datedRows = rows.filter(row => row.date);
+    const undatedRows = rows.filter(row => !row.date);
     const latestDate = datedRows.length > 0 ? datedRows[datedRows.length - 1].date : null;
     let cutoffDate: Date | null = null;
     let fallbackStart = 0;
@@ -130,8 +131,8 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({
     const slicedRows = cutoffDate
       ? rows.filter(row => row.date && row.date >= cutoffDate)
       : rows.slice(fallbackStart);
-    
-    const usableRows = slicedRows;
+
+    const usableRows = slicedRows.length > 1 ? slicedRows : (undatedRows.length > 1 ? undatedRows : rows);
     const firstVal = usableRows[0]?.primary || 100;
     const firstComp = comparisonData ? (usableRows[0]?.comparison || 100) : 100;
     

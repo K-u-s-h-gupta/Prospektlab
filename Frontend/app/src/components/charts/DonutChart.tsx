@@ -30,6 +30,14 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
 
   const totalVal = data.reduce((a, b) => a + b, 0);
 
+  if (!labels.length || !data.length || totalVal <= 0) {
+    return (
+      <div style={{ height: '220px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: ChartColors.textMuted, fontSize: 12 }}>
+        No allocation data available
+      </div>
+    );
+  }
+
   // Format labels to include percentage in the legend: e.g. "IT (28%)"
   const formattedLabels = labels.map((label, idx) => {
     const val = data[idx];
@@ -112,9 +120,9 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
-      // Get donut center coordinates
-      const textX = chart.getDatasetMeta(0).data[0]?.x || width / 2;
-      const textY = chart.getDatasetMeta(0).data[0]?.y || height / 2;
+      const arcMeta = chart.getDatasetMeta(0)?.data?.[0];
+      const textX = arcMeta?.x ?? width / 2;
+      const textY = arcMeta?.y ?? height / 2;
       
       // Draw sub label
       ctx.font = 'normal 10px sans-serif';

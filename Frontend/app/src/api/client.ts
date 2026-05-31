@@ -738,6 +738,76 @@ export function streamSession(
     }
   };
 
+  async function finalizeFromResult() {
+    if (onFinalCalled || onErrorCalled) return;
+    try {
+      const result = await getSessionResult(sessionId);
+      const errorPayload = result.error;
+      const errorMessage =
+        typeof errorPayload === 'string'
+          ? errorPayload
+          : errorPayload?.message || errorPayload?.payload?.message || null;
+
+      if (errorMessage || result.status === 'error') {
+        if (!onErrorCalled) {
+          onErrorCalled = true;
+          onError(new Error(errorMessage || 'Research failed'));
+        }
+        return;
+      }
+
+      if (!onFinalCalled) {
+        onFinalCalled = true;
+        onFinal(result.final || result);
+      }
+    } catch (err) {
+      if (!onErrorCalled) {
+        onErrorCalled = true;
+        onError(err instanceof Error ? err : new Error('Failed to retrieve session result'));
+      }
+    }
+  }
+
+  function handleTerminalEvent(evType: string, evData: string) {
+    if (evType === 'final') {
+      try {
+        const parsed = JSON.parse(evData);
+        closeStream();
+        if (!onFinalCalled) {
+          onFinalCalled = true;
+          onFinal(parsed);
+        }
+      } catch (err) {
+        console.error('Failed to parse final event data', err);
+        void finalizeFromResult();
+      }
+      return;
+    }
+
+    if (evType === 'error') {
+      try {
+        const parsed = JSON.parse(evData);
+        closeStream();
+        if (!onErrorCalled) {
+          onErrorCalled = true;
+          onError(new Error(parsed.message || 'Stream processing error'));
+        }
+      } catch (err) {
+        closeStream();
+        if (!onErrorCalled) {
+          onErrorCalled = true;
+          onError(new Error('Stream encountered an error'));
+        }
+      }
+      return;
+    }
+
+    if (evType === 'done' || evType === 'deep_complete') {
+      closeStream();
+      void finalizeFromResult();
+    }
+  }
+
   async function connectSSE() {
     if (!sseActive) return;
     sseAbort = new AbortController();
@@ -786,6 +856,11 @@ export function streamSession(
 
     if (!resp.ok) {
       if (!sseActive) return;
+      if (resp.status === 404) {
+        closeStream();
+        void finalizeFromResult();
+        return;
+      }
       console.warn("SSE HTTP error status:", resp.status, "— retrying in 3s");
       clearTimeout(sseReconnectTimer);
       sseReconnectTimer = setTimeout(connectSSE, 3000);
@@ -795,17 +870,24 @@ export function streamSession(
     const reader = resp.body?.getReader();
     if (!reader) {
       console.error("SSE response body is not readable");
-      onError(new Error("Response body is not readable"));
+      if (!onErrorCalled) {
+        onErrorCalled = true;
+        onError(new Error("Response body is not readable"));
+      }
       return;
     }
 
     const decoder = new TextDecoder();
     let buf = "";
+    let streamEnded = false;
 
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          streamEnded = true;
+          break;
+        }
         buf += decoder.decode(value, { stream: true });
         
         let boundary;
@@ -834,45 +916,22 @@ export function streamSession(
               lastEventId = parsedId;
             }
           }
+
+          if (evType === 'final' || evType === 'error' || evType === 'done' || evType === 'deep_complete') {
+            handleTerminalEvent(evType, evData);
+            continue;
+          }
           
-          if (evType !== "final" && evType !== "error") {
-            try {
-              const parsed = JSON.parse(evData);
-              onEvent({
-                seq: parsed.id || (evId ? parseInt(evId, 10) : 0),
-                type: evType,
-                timestamp: parsed.timestamp || '',
-                payload: parsed,
-              });
-            } catch (err) {
-              console.error(`Failed to parse ${evType} event data`, err);
-            }
-          } else if (evType === "final") {
-            try {
-              const parsed = JSON.parse(evData);
-              closeStream();
-              if (!onFinalCalled) {
-                onFinalCalled = true;
-                onFinal(parsed);
-              }
-            } catch (err) {
-              console.error(`Failed to parse final event data`, err);
-            }
-          } else if (evType === "error") {
-            try {
-              const parsed = JSON.parse(evData);
-              closeStream();
-              if (!onErrorCalled) {
-                onErrorCalled = true;
-                onError(new Error(parsed.message || 'Stream processing error'));
-              }
-            } catch (err) {
-              closeStream();
-              if (!onErrorCalled) {
-                onErrorCalled = true;
-                onError(new Error('Stream encountered an error'));
-              }
-            }
+          try {
+            const parsed = JSON.parse(evData);
+            onEvent({
+              seq: parsed.id || (evId ? parseInt(evId, 10) : 0),
+              type: evType,
+              timestamp: parsed.timestamp || '',
+              payload: parsed,
+            });
+          } catch (err) {
+            console.error(`Failed to parse ${evType} event data`, err);
           }
         }
       }
@@ -882,6 +941,11 @@ export function streamSession(
       console.warn("SSE read error, retrying in 2s:", err);
       clearTimeout(sseReconnectTimer);
       sseReconnectTimer = setTimeout(connectSSE, 2000);
+      return;
+    }
+
+    if (streamEnded && sseActive && !onFinalCalled && !onErrorCalled) {
+      void finalizeFromResult();
     }
   }
 

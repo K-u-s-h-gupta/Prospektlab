@@ -955,14 +955,22 @@ export const Dashboard: React.FC = () => {
     : 0;
 
   // Donut chart calculations for sector allocation
-  const sectorAllocations: Record<string, number> = Object.keys(portfolioAnalytics?.sector_breakdown || {}).length > 0
+  const sectorBreakdownFromBackend = portfolioAnalytics?.sector_breakdown || {};
+  const hasBackendSectorBreakdown = Object.keys(sectorBreakdownFromBackend).length > 0;
+  const sectorUsesPercent = hasBackendSectorBreakdown && portfolioSummary.totalValue <= 0;
+  const sectorAllocations: Record<string, number> = hasBackendSectorBreakdown
     ? Object.fromEntries(
-        Object.entries(portfolioAnalytics.sector_breakdown)
-          .map(([sec, weight]) => [sec, finiteNumber(weight) * portfolioSummary.totalValue] as [string, number])
+        Object.entries(sectorBreakdownFromBackend)
+          .map(([sec, weight]) => {
+            const w = finiteNumber(weight);
+            const value = sectorUsesPercent ? w * 100 : w * portfolioSummary.totalValue;
+            return [sec, value] as [string, number];
+          })
           .filter(([, value]) => value > 0)
       ) as Record<string, number>
     : computedPortfolioDetails.reduce((acc: Record<string, number>, curr: any) => {
-        acc[curr.sector] = (acc[curr.sector] || 0) + curr.currentValue;
+        const sec = curr.sector || 'General';
+        acc[sec] = (acc[sec] || 0) + curr.currentValue;
         return acc;
       }, {} as Record<string, number>);
 
@@ -972,10 +980,17 @@ export const Dashboard: React.FC = () => {
   };
 
   // Donut chart calculations for Asset Allocation (Equity vs MF vs Cash/Bonds)
-  const assetAllocations: Record<string, number> = Object.keys(portfolioAnalytics?.kind_breakdown || {}).length > 0
+  const kindBreakdownFromBackend = portfolioAnalytics?.kind_breakdown || {};
+  const hasBackendKindBreakdown = Object.keys(kindBreakdownFromBackend).length > 0;
+  const assetUsesPercent = hasBackendKindBreakdown && portfolioSummary.totalValue <= 0;
+  const assetAllocations: Record<string, number> = hasBackendKindBreakdown
     ? Object.fromEntries(
-        Object.entries(portfolioAnalytics.kind_breakdown)
-          .map(([kind, weight]) => [kind === 'mf' ? 'Mutual Fund' : 'Equity', finiteNumber(weight) * portfolioSummary.totalValue] as [string, number])
+        Object.entries(kindBreakdownFromBackend)
+          .map(([kind, weight]) => {
+            const w = finiteNumber(weight);
+            const value = assetUsesPercent ? w * 100 : w * portfolioSummary.totalValue;
+            return [kind === 'mf' ? 'Mutual Fund' : 'Equity', value] as [string, number];
+          })
           .filter(([, value]) => value > 0)
       ) as Record<string, number>
     : computedPortfolioDetails.reduce((acc: Record<string, number>, curr: any) => {
@@ -1007,24 +1022,71 @@ export const Dashboard: React.FC = () => {
         .map((date, idx) => [date, finiteNumber(benchHist.prices?.[idx])] as [string, number])
         .filter(([date, value]) => Boolean(date) && value > 0)
     );
-    const commonDates = Array.from(portMap.keys()).filter(date => benchMap.has(date)).sort();
+
+    const normalizeTo100 = (values: number[]) => {
+      if (!values.length) return values;
+      const base = values.find((value) => value > 0) || values[0];
+      if (!base) return values;
+      return values.map((value) => (value / base) * 100);
+    };
+
+    const buildSeries = (dates: string[], portMapRef: Map<string, number>, benchMapRef: Map<string, number>) => ({
+      labels: dates,
+      portValues: normalizeTo100(dates.map((date) => portMapRef.get(date) || 0)),
+      benchValues: normalizeTo100(dates.map((date) => benchMapRef.get(date) || 0)),
+    });
+
+    const commonDates = Array.from(portMap.keys()).filter((date) => benchMap.has(date)).sort();
     const latestCommonDate = commonDates.length > 0 ? new Date(commonDates[commonDates.length - 1]) : null;
     const oneYearCutoff = latestCommonDate && !Number.isNaN(latestCommonDate.getTime())
       ? new Date(latestCommonDate.getFullYear() - 1, latestCommonDate.getMonth(), latestCommonDate.getDate())
       : null;
     const oneYearCommonDates = oneYearCutoff
-      ? commonDates.filter(date => {
+      ? commonDates.filter((date) => {
           const parsed = new Date(date);
           return !Number.isNaN(parsed.getTime()) && parsed >= oneYearCutoff;
         })
       : commonDates;
 
     if (oneYearCommonDates.length > 1) {
-      return {
-        labels: oneYearCommonDates,
-        portValues: oneYearCommonDates.map(date => portMap.get(date) || 0),
-        benchValues: oneYearCommonDates.map(date => benchMap.get(date) || 0),
-      };
+      return buildSeries(oneYearCommonDates, portMap, benchMap);
+    }
+
+    // Fallback: align on union of dates with last-known forward fill
+    const unionDates = Array.from(new Set([...portMap.keys(), ...benchMap.keys()])).sort();
+    if (unionDates.length > 1) {
+      let lastPort = 0;
+      let lastBench = 0;
+      const alignedDates: string[] = [];
+      const alignedPort: number[] = [];
+      const alignedBench: number[] = [];
+      for (const date of unionDates) {
+        const portValue = portMap.get(date);
+        const benchValue = benchMap.get(date);
+        if (portValue && portValue > 0) lastPort = portValue;
+        if (benchValue && benchValue > 0) lastBench = benchValue;
+        if (lastPort > 0 && lastBench > 0) {
+          alignedDates.push(date);
+          alignedPort.push(lastPort);
+          alignedBench.push(lastBench);
+        }
+      }
+      if (alignedDates.length > 1) {
+        return buildSeries(alignedDates, new Map(alignedDates.map((date, idx) => [date, alignedPort[idx]])), new Map(alignedDates.map((date, idx) => [date, alignedBench[idx]])));
+      }
+    }
+
+    // Benchmark-only fallback when portfolio history is unavailable (e.g. MF-heavy books)
+    if (benchDates.length > 1) {
+      const benchOnlyDates = benchDates.slice(-252);
+      const benchOnlyValues = (benchHist.prices || []).slice(-252).map((value: any) => finiteNumber(value)).filter((value: number) => value > 0);
+      if (benchOnlyValues.length > 1) {
+        return {
+          labels: benchOnlyDates.slice(-benchOnlyValues.length),
+          portValues: [],
+          benchValues: normalizeTo100(benchOnlyValues),
+        };
+      }
     }
 
     return {
@@ -1289,6 +1351,7 @@ export const Dashboard: React.FC = () => {
 
     // Update conversation title if needed
     const activeConv = conversations.find(c => c.id === activeConversationId);
+    const backendSessionForRequest = activeConv?.backendSessionId || activeConversationId;
     if (activeConv && (activeConv.title === 'Equity Analysis Session' || activeConv.title.startsWith('Analyze ') || activeConv.title.startsWith('Portfolio '))) {
       const cleanTitle = message.length > 28 ? message.substring(0, 28) + '...' : message;
       const updatedConvs = conversations.map(c => c.id === activeConversationId ? { ...c, title: cleanTitle } : c);
@@ -1310,8 +1373,15 @@ export const Dashboard: React.FC = () => {
 
     try {
       // API call to start background job
-      const startRes = await startResearch(message, depth, activeConversationId, enrichedObjective);
+      const startRes = await startResearch(message, depth, backendSessionForRequest, enrichedObjective);
       const backendSessionId = startRes.session_id;
+      if (backendSessionId && backendSessionId !== activeConv?.backendSessionId) {
+        const updatedConvs = conversations.map(c =>
+          c.id === activeConversationId ? { ...c, backendSessionId } : c
+        );
+        setConversations(updatedConvs);
+        localStorage.setItem('prospektlab_conversations', JSON.stringify(updatedConvs));
+      }
 
       // Subscribe to SSE updates
       const unsubscribe = streamSession(
@@ -1329,7 +1399,10 @@ export const Dashboard: React.FC = () => {
           try {
             const finalResult = await getSessionResult(backendSessionId);
             console.log('[DASHBOARD] getSessionResult success:', finalResult);
-            const richPayload = finalResult.final?.rich || null;
+            const richPayload =
+              finalResult.final?.rich ||
+              parsedEvent?.rich ||
+              null;
             const memoText =
               finalResult.memo ||
               finalResult.final?.memo ||
@@ -1381,7 +1454,21 @@ export const Dashboard: React.FC = () => {
         (error) => {
           setIsThinking(false);
           setThinkingEvents([]);
-          showToast(error.message || 'Stream processing failed.', 'error');
+          const errMsg = error.message || 'Stream processing failed.';
+          showToast(errMsg, 'error');
+          const errResponse: Message = {
+            sender: 'ai',
+            text: `**Research failed**: ${errMsg}\n\nPlease try again. If this keeps happening, switch to Standard mode or retry with a shorter query.`,
+          };
+          setMessages((prev) => {
+            const next = [...prev, errResponse];
+            try {
+              localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(next));
+            } catch (storageErr) {
+              console.warn('[DASHBOARD] localStorage persist failed', storageErr);
+            }
+            return next;
+          });
         }
       );
 
@@ -1422,9 +1509,11 @@ export const Dashboard: React.FC = () => {
       abortStreamRef.current();
       abortStreamRef.current = null;
     }
+
+    const activeConv = conversations.find(c => c.id === activeConversationId);
     
     try {
-      await stopSession(activeConversationId);
+      await stopSession(activeConv?.backendSessionId || activeConversationId);
     } catch (e) {
       // Already terminated on server
     }
@@ -1788,10 +1877,10 @@ export const Dashboard: React.FC = () => {
 
             <InteractiveChart
               labels={compareChartData.labels}
-              data={compareChartData.portValues}
-              title="Your Portfolio (base = 100)"
+              data={compareChartData.portValues.length > 1 ? compareChartData.portValues : compareChartData.benchValues}
+              title={compareChartData.portValues.length > 1 ? "Your Portfolio (base = 100)" : "Benchmark (base = 100)"}
               unit=""
-              comparisonData={compareChartData.benchValues}
+              comparisonData={compareChartData.portValues.length > 1 ? compareChartData.benchValues : undefined}
               comparisonTitle={BENCHMARKS.find(b => b.id === selectedBenchmark)?.name || 'Benchmark'}
               height={300}
             />
@@ -1894,7 +1983,13 @@ export const Dashboard: React.FC = () => {
                     Audit →
                   </button>
                 </div>
-                <DonutChart labels={sectorChartData.labels} data={sectorChartData.data} title="" />
+                <DonutChart
+                  labels={sectorChartData.labels}
+                  data={sectorChartData.data}
+                  title=""
+                  valueKind={sectorUsesPercent ? 'percent' : 'currency'}
+                  unit={sectorUsesPercent ? '%' : undefined}
+                />
               </div>
               <div className="data-panel">
                 <div className="data-panel-head">
@@ -1906,7 +2001,13 @@ export const Dashboard: React.FC = () => {
                     Audit →
                   </button>
                 </div>
-                <DonutChart labels={assetChartData.labels} data={assetChartData.data} title="" />
+                <DonutChart
+                  labels={assetChartData.labels}
+                  data={assetChartData.data}
+                  title=""
+                  valueKind={assetUsesPercent ? 'percent' : 'currency'}
+                  unit={assetUsesPercent ? '%' : undefined}
+                />
               </div>
             </div>
           )}

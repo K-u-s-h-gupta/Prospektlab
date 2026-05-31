@@ -2626,10 +2626,12 @@
     function getAuthToken() {
       try {
         const userStr = localStorage.getItem("prospektlab_user") || sessionStorage.getItem("prospektlab_user");
-        return userStr ? JSON.parse(userStr).token || "" : "";
-      } catch (_) {
-        return "";
-      }
+        if (userStr) {
+          const parsed = JSON.parse(userStr);
+          if (parsed?.token) return parsed.token;
+        }
+      } catch (_) {}
+      return localStorage.getItem("prospektlab_token") || sessionStorage.getItem("prospektlab_token") || "";
     }
 
     function getAuthHeaders(extra = {}) {
@@ -4720,8 +4722,7 @@
                 renderMetricCardsIntoTurn(turn, d.metric_cards);
               }
               if (!_isComp && Array.isArray(d.charts) && d.charts.length) {
-                // Filter out charts with no usable data (missing labels/series)
-                const validCharts = d.charts.filter(c => (c.labels?.length || c.series?.length));
+                const validCharts = d.charts.filter(c => chartHasRenderableData(c));
                 if (validCharts.length && !turn.visualEl.querySelector('.chart-container-native')) {
                   renderChartsIntoTurn(turn, validCharts);
                 }
@@ -4732,12 +4733,33 @@
               }
             });
 
+            function _finishRunUI(successLabel, successColor) {
+              finalizePendingQueries("timeout");
+              $("processingBar").style.width = "100%";
+              $("processingPercent").textContent = "100%";
+              $("processingPhaseLabel").innerHTML = `<span style="color: ${successColor};">${successLabel}</span>`;
+              $("stopBtn").classList.add("hidden");
+              $("executeBtn").classList.remove("hidden");
+              if (turn) {
+                const pc = turn.root.querySelector(".turn-progress-container");
+                if (pc) pc.remove();
+              }
+              if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
+            }
+
             eventSource.addEventListener("final", (e) => {
               if (runToken !== activeRunToken) return;
               const d = JSON.parse(e.data);
               if (turn) {
                 turn.outputMode = d.output_mode || turn.outputMode;
                 turn.rich = d.rich || null;
+                // Non-streaming synthesis paths emit the memo only on final — render it here.
+                const finalMemo = d.memo || d.memo_preview || "";
+                if (finalMemo && !(turn.memoBuffer || "").trim()) {
+                  turn.memoBuffer = finalMemo;
+                  renderTurnMemo(turn.turnId, finalMemo);
+                  window.__lastMemoMd = finalMemo;
+                }
                 renderTurnVisuals(turn.turnId);
 
                 // Render rich payload if available — use proper card renderers
@@ -4799,17 +4821,7 @@
               // Only mark complete and restore the UI for the true synthesis pass.
               // Intermediate passes (memo_via === "suppressed") must not reset progress.
               if (d.memo_via !== "suppressed") {
-                finalizePendingQueries("timeout");
-                $("processingBar").style.width = "100%";
-                $("processingPercent").textContent = "100%";
-                $("processingPhaseLabel").innerHTML = `<span style="color: var(--success);">Complete</span>`;
-                $("stopBtn").classList.add("hidden");
-                $("executeBtn").classList.remove("hidden");
-                // Remove inline progress from the turn
-                if (turn) {
-                  const pc = turn.root.querySelector(".turn-progress-container");
-                  if (pc) pc.remove();
-                }
+                _finishRunUI("Complete", "var(--success)");
                 pushActivity("flag", "Final", `${d.steps} steps · ${d.citations} citations · ${d.primary_citations} primary · ${(d.elapsed_ms / 1000).toFixed(1)}s`, "done", d.canonical || "");
                 // Show generation timing at the very end of the answer block
                 if (turn) {
@@ -4834,10 +4846,23 @@
                     assistantCard.appendChild(timingEl);
                   }
                 }
-                if (tickHandle) clearInterval(tickHandle);
-                tickHandle = null;
                 loadMemoLibrary();
               }
+            });
+            eventSource.addEventListener("error", (e) => {
+              if (runToken !== activeRunToken) return;
+              let message = "Research failed. Please try again.";
+              try {
+                const d = JSON.parse(e.data);
+                if (d?.message) message = d.message;
+              } catch (_) {}
+              _finishRunUI("Failed", "var(--error)");
+              pushActivity("error", "Gateway", message, "error");
+              if (turn && !(turn.memoBuffer || "").trim()) {
+                turn.memoBuffer = message;
+                renderTurnMemo(turn.turnId, message);
+              }
+              if (eventSource) { eventSource.close(); eventSource = null; }
             });
             eventSource.addEventListener("deep_pass", (e) => {
               const d = JSON.parse(e.data);
@@ -4855,6 +4880,10 @@
             eventSource.addEventListener("done", () => {
               if (runToken !== activeRunToken) return;
               finalizePendingQueries("timeout");
+              // If the stream closed without a final/error handler, unblock the UI.
+              if (!$("stopBtn")?.classList.contains("hidden")) {
+                _finishRunUI("Stream ended", "var(--warn)");
+              }
               if (eventSource) { eventSource.close(); eventSource = null; }
             });
             // onerror is handled inside _connectSSE's retry logic above.
@@ -5288,11 +5317,41 @@
             } catch(_) { return color + "22"; }
           }
 
+          // Backend rich payloads use x_labels/kind/series.values; legacy paths use labels/chart_type/series.data
+          function normalizeChartForRender(chart) {
+            const rawType = chart.chart_type || chart.kind || "line";
+            const chartType = rawType === "area" || rawType === "multi_line" ? "line"
+              : rawType === "multi_bar" ? "bar"
+              : rawType;
+            const labels = chart.labels || chart.x_labels || [];
+            const series = (chart.series || []).map((s) => {
+              const values = Array.isArray(s.values)
+                ? s.values
+                : Array.isArray(s.data)
+                  ? s.data.map((d) => (d && typeof d === "object" ? d.value : d))
+                  : [];
+              return { ...s, values };
+            });
+            return { ...chart, labels, chart_type: chartType, series };
+          }
+
+          function chartHasRenderableData(chart) {
+            const normalized = normalizeChartForRender(chart);
+            const labels = normalized.labels || [];
+            const series = normalized.series || [];
+            if (!series.length) return false;
+            const hasValues = series.some((s) => (s.values || []).some((v) => v != null && Number.isFinite(Number(v))));
+            if (normalized.chart_type === "donut") return labels.length > 0 && hasValues;
+            return labels.length > 0 && hasValues;
+          }
+
           function renderChartsIntoTurn(turn, charts) {
             if (!turn || !charts || !charts.length) return;
-            charts.forEach((chart, idx) => {
+            charts.filter(chartHasRenderableData).forEach((rawChart, idx) => {
+              const chart = normalizeChartForRender(rawChart);
               const chartId = `chart_${turn.turnId}_${idx}`;
-              const typeIcon = chart.chart_type === "bar" ? "bar_chart" : "show_chart";
+              const isDonut = chart.chart_type === "donut";
+              const typeIcon = chart.chart_type === "bar" ? "bar_chart" : isDonut ? "donut_large" : "show_chart";
               const html = `
                 <div class="claude-card anim-scale-in" style="animation-delay:${idx * 60}ms">
                   <div class="claude-header">
@@ -5314,16 +5373,20 @@
                 // Ensure container has explicit height for Chart.js responsive mode
                 const wrap = canvasEl.closest('.chart-container-native');
                 if (wrap && !wrap.style.minHeight) wrap.style.minHeight = '260px';
-                const isLine = (chart.chart_type || "line") !== "bar";
+                const isLine = chart.chart_type === "line";
                 const isMulti = (chart.series || []).length > 1;
                 const datasets = (chart.series || []).map((s, si) => {
-                  const vals = s.data ? s.data.map(d => d.value) : (s.values || []);
+                  const vals = (s.values || []).map((v) => Number(v));
                   const col  = s.color || _CHART_DEFAULTS.palette[si % _CHART_DEFAULTS.palette.length];
                   return {
                     label: s.name || "",
                     data: vals,
                     borderColor: col,
-                    backgroundColor: isLine ? _makeGradient(canvasEl, col) : col + "cc",
+                    backgroundColor: isDonut
+                      ? _CHART_DEFAULTS.palette
+                      : isLine
+                        ? _makeGradient(canvasEl, col)
+                        : col + "cc",
                     fill: isLine && !isMulti,
                     tension: 0.4,
                     borderWidth: isLine ? 2.5 : undefined,
@@ -5333,9 +5396,43 @@
                     borderSkipped: false,
                   };
                 });
+                if (isDonut) {
+                  new Chart(canvasEl, {
+                    type: "doughnut",
+                    data: {
+                      labels: chart.labels,
+                      datasets: [{
+                        label: chart.series?.[0]?.name || chart.title || "Allocation",
+                        data: datasets[0]?.data || [],
+                        backgroundColor: _CHART_DEFAULTS.palette,
+                        borderWidth: 0,
+                        hoverOffset: 6,
+                      }],
+                    },
+                    options: {
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      cutout: "62%",
+                      plugins: {
+                        legend: {
+                          display: true,
+                          position: "right",
+                          labels: { color: _CHART_DEFAULTS.legendColor, font: { family: _CHART_DEFAULTS.fontFamily, size: 11 }, boxWidth: 12, padding: 12 },
+                        },
+                        tooltip: {
+                          backgroundColor: _CHART_DEFAULTS.tooltipBg,
+                          titleColor: "#e2e8f0", bodyColor: "#cbd5e1",
+                          borderColor: _CHART_DEFAULTS.tooltipBorder, borderWidth: 1,
+                          padding: 12, cornerRadius: 8,
+                        },
+                      },
+                    },
+                  });
+                  return;
+                }
                 new Chart(canvasEl, {
                   type: isLine ? "line" : "bar",
-                  data: { labels: chart.labels || [], datasets },
+                  data: { labels: chart.labels, datasets },
                   options: {
                     responsive: true,
                     maintainAspectRatio: false,

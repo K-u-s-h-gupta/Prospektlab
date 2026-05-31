@@ -7,6 +7,7 @@ import { RadarChart } from '../charts/RadarChart';
 import { TreemapChart } from '../charts/TreemapChart';
 import { TableBlock } from '../charts/TableBlock';
 import { AlertCircle, CheckCircle, ExternalLink, Newspaper, Scale, BarChart2 } from 'lucide-react';
+import { chartHasRenderableData, normalizeChartForRender } from '../charts/chartNormalize';
 
 interface RichResponseProps {
   data: {
@@ -132,13 +133,13 @@ export const RichResponse: React.FC<RichResponseProps> = ({ data }) => {
           gap: '12px'
         }}>
           {charts.map((chart, i) => {
-            const hasLabels = chart.x_labels && chart.x_labels.length > 0;
-            const hasSeries = chart.series && chart.series.length > 0;
-            if (!hasLabels || !hasSeries) return null;
+            const normalized = normalizeChartForRender(chart);
+            if (!normalized || !chartHasRenderableData(normalized)) return null;
 
-            const labels = chart.x_labels;
-            const primarySeries = chart.series[0];
-            const comparisonSeries = chart.series[1];
+            const labels = normalized.x_labels || [];
+            const primarySeries = normalized.series[0];
+            const comparisonSeries = normalized.series[1];
+            const kind = normalized.kind || 'bar';
 
             return (
               <div key={i} className="glass" style={{
@@ -148,57 +149,50 @@ export const RichResponse: React.FC<RichResponseProps> = ({ data }) => {
                 gap: '10px',
                 background: 'rgba(15, 23, 42, 0.45)'
               }}>
-                {chart.kind === 'area' || chart.kind === 'line' ? (
+                {kind === 'area' || kind === 'line' || kind === 'multi_line' ? (
                   <AreaChart
                     labels={labels}
                     data={primarySeries.values}
-                    title={chart.title}
-                    unit={chart.y_unit || 'Cr'}
+                    title={normalized.title}
+                    unit={normalized.y_unit || 'Cr'}
+                    comparisonData={comparisonSeries?.values}
+                    comparisonTitle={comparisonSeries?.name}
                   />
-                ) : chart.kind === 'bar' || chart.kind === 'multi_bar' ? (
+                ) : kind === 'bar' || kind === 'multi_bar' ? (
                   <BarChart
                     labels={labels}
                     data={primarySeries.values}
-                    title={chart.title}
-                    unit={chart.y_unit || 'Cr'}
+                    title={normalized.title}
+                    unit={normalized.y_unit || 'Cr'}
                     comparisonData={comparisonSeries?.values}
                     comparisonTitle={comparisonSeries?.name}
                   />
-                ) : chart.kind === 'donut' ? (
+                ) : kind === 'donut' ? (
                   <DonutChart
                     labels={labels}
                     data={primarySeries.values}
-                    title={chart.title}
-                    valueKind={chart.valueKind}
+                    title={normalized.title}
+                    valueKind={normalized.valueKind}
                     unit={primarySeries.unit}
                   />
-                ) : chart.kind === 'multi_line' ? (
-                  <AreaChart
-                    labels={labels}
-                    data={primarySeries.values}
-                    title={chart.title}
-                    unit={chart.y_unit || 'Cr'}
-                    comparisonData={comparisonSeries?.values}
-                    comparisonTitle={comparisonSeries?.name}
-                  />
-                ) : chart.kind === 'radar' ? (
+                ) : kind === 'radar' ? (
                   <RadarChart
                     labels={labels}
                     data={primarySeries.values}
-                    title={chart.title}
+                    title={normalized.title}
                     comparisonData={comparisonSeries?.values}
                     comparisonTitle={comparisonSeries?.name}
                   />
-                ) : chart.kind === 'treemap' ? (
+                ) : kind === 'treemap' ? (
                   <TreemapChart
                     labels={labels}
                     data={primarySeries.values}
-                    title={chart.title}
+                    title={normalized.title}
                   />
                 ) : (
                   <div style={{ color: 'var(--text-secondary)', fontSize: '11px', textAlign: 'center', padding: '16px' }}>
                     <BarChart2 size={20} style={{ marginBottom: '6px' }} />
-                    Unsupported chart layout ({chart.kind})
+                    Unsupported chart layout ({kind})
                   </div>
                 )}
               </div>

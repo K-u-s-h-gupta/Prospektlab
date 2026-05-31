@@ -1887,10 +1887,12 @@ async def synthesize_memo(
         if port_hist and bench_hist:
             facts += "\nPortfolio vs Benchmark NAV (indexed to 100):\n"
             # Sample 6 points: today, -1m, -3m, -6m, -9m, -1y
-            n = len(port_hist)
-            idxs = [n - 1, max(0, n - 22), max(0, n - 66), max(0, n - 132), max(0, n - 198), 0]
-            for i in idxs:
-                facts += f"  Day {i+1}: Portfolio {port_hist[i]:.2f} | Benchmark {bench_hist[i]:.2f}\n"
+            n = min(len(port_hist), len(bench_hist))
+            if n > 0:
+                idxs = sorted(set([n - 1, max(0, n - 22), max(0, n - 66), max(0, n - 132), max(0, n - 198), 0]))
+                for i in idxs:
+                    if 0 <= i < n:
+                        facts += f"  Day {i+1}: Portfolio {port_hist[i]:.2f} | Benchmark {bench_hist[i]:.2f}\n"
         positions = portfolio_context.get("positions") or []
         if positions:
             facts += "Holdings:\n"
