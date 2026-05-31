@@ -217,6 +217,45 @@ async def _can_fetch_async(url: str) -> bool:
         return True
 
 
+import ipaddress
+
+
+# SSRF blocklist: private IP ranges, metadata endpoints, and non-http(s) schemes
+_BLOCKED_SCHEMES = {"file", "ftp", "ftps", "gopher", "dict", "ldap", "ldaps", "tftp", "sftp", "ssh", "smtp", "imap", "pop3"}
+_BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]", "169.254.169.254"}
+_BLOCKED_IP_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("0.0.0.0/8"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+    ipaddress.ip_network("::1/128"),
+]
+
+
+def _is_url_safe(url: str) -> tuple[bool, str]:
+    """Return (is_safe, reason) after checking for SSRF vectors."""
+    parsed = urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in {"http", "https"}:
+        return False, f"blocked scheme: {scheme}"
+    hostname = (parsed.hostname or "").lower()
+    if hostname in _BLOCKED_HOSTS:
+        return False, f"blocked host: {hostname}"
+    # Resolve IP if hostname is an IP literal
+    try:
+        addr = ipaddress.ip_address(hostname)
+        for net in _BLOCKED_IP_NETWORKS:
+            if addr in net:
+                return False, f"blocked IP: {hostname}"
+    except ValueError:
+        pass
+    return True, ""
+
+
 async def fetch(
     url: str,
     *,
@@ -230,6 +269,11 @@ async def fetch(
         record_website(url)
     except ImportError:
         pass
+
+    safe, reason = _is_url_safe(url)
+    if not safe:
+        logger.warning("SSRF block triggered for URL %s: %s", url[:80], reason)
+        return FetchResult(url, url, 0, "", blocked_reason=f"ssrf: {reason}")
 
     if respect_robots:
         allowed = await _can_fetch_async(url)

@@ -33,6 +33,28 @@ except Exception:
     pass
 # ---------------------------------------------------------------------------
 
+def _httpx_trust_env() -> bool:
+    raw = os.environ.get("FINAGENT_HTTP_TRUST_ENV", "0").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+if not _httpx_trust_env():
+    for _proxy_key in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
+        os.environ.pop(_proxy_key, None)
+
+_YFINANCE_CACHE_DIR = os.path.join(tempfile.gettempdir(), "finagent_yfinance_cache")
+try:
+    os.makedirs(_YFINANCE_CACHE_DIR, exist_ok=True)
+except Exception:
+    pass
+
 import asyncio
 import logging
 import time
@@ -83,6 +105,11 @@ def _fetch_yfinance_sync(ticker: str) -> YahooQuote | None:
     """Synchronous yfinance fetch — runs in a thread executor."""
     try:
         import yfinance as yf
+        try:
+            if hasattr(yf, "set_tz_cache_location"):
+                yf.set_tz_cache_location(_YFINANCE_CACHE_DIR)
+        except Exception:
+            pass
     except ImportError:
         logger.warning("yfinance not installed — pip install yfinance")
         return None

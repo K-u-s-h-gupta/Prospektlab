@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -104,6 +105,16 @@ class PortfolioExtractionConfirmRequest(StrictBaseModel):
     review_id: str | None = None
     positions: list[PortfolioPositionSchema] = Field(default_factory=list, max_length=1000)
     source_type: str = "review"
+
+    @field_validator("review_id")
+    @classmethod
+    def _review_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        review_id = value.strip().lower()
+        if not re.fullmatch(r"[a-f0-9]{12,64}", review_id):
+            raise ValueError("Invalid review_id format")
+        return review_id
 
 
 def ensure_openai_strict_schema(model: type[BaseModel]) -> dict:

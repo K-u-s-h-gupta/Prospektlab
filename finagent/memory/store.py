@@ -1,21 +1,6 @@
-"""SQLite-backed memory store with FTS5 search.
+"""Supabase PostgreSQL-backed memory store (replaces SQLite).
 
-Design goals (modelled on Hermes' `hermes_state.py`):
-- Single file under the FinAgent home directory (`FINAGENT_HOME` or the
-  runtime default). Cheap, durable, no server.
-- One row per *fact*. A fact is "thing the agent learned that's worth
-  remembering next time". Examples: "NVDA fiscal year ends January",
-  "AAPL has a $90B annual buyback program", "MSTR holds 214,400 BTC".
-- FTS5 virtual table for fuzzy search across the full body.
-- `target_key` is the canonical normalized identifier (ticker symbol or
-  lowercased company name). All recall is keyed by this.
-- `kind` lets us bucket facts (financial, risk, sentiment, news_event,
-  competitive, governance, etc.) for filtered recall.
-- `confidence` is HIGH / MEDIUM / LOW and biases recall ranking.
-- `source_url` is mandatory for high-confidence facts.
-
-Thread safety: each method opens a fresh connection. SQLite handles the
-locking with WAL mode enabled at init.
+Thread safety: each method is async and uses the Supabase PostgREST client.
 """
 
 from __future__ import annotations
@@ -23,20 +8,25 @@ from __future__ import annotations
 import json
 import logging
 import re
-import sqlite3
-import threading
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Iterable
 
-from finagent.paths import finagent_data_path
-from finagent.storage.sqlite import connect_wal
+from finagent.storage.supabase_store import get_memory_store as _get_storage_memory_store
 
 logger = logging.getLogger("finagent.memory")
 
-_DEFAULT_DB = finagent_data_path("memory.sqlite3")
-_init_lock = threading.Lock()
+
+def normalize_target(s: str) -> str:
+    s = (s or "").strip().lower()
+    # Strip common corporate suffixes so "NVIDIA Corporation" and "nvidia"
+    # land in the same memory bucket.
+    s = re.sub(
+        r"\s+(corporation|corp\.?|incorporated|inc\.?|company|co\.?|plc|ltd\.?|limited|holdings)$",
+        "",
+        s,
+    )
+    return s.strip()
 
 
 @dataclass
@@ -65,151 +55,48 @@ class MemoryFact:
         }
 
 
-def normalize_target(s: str) -> str:
-    s = (s or "").strip().lower()
-    # Strip common corporate suffixes so "NVIDIA Corporation" and "nvidia"
-    # land in the same memory bucket.
-    s = re.sub(
-        r"\s+(corporation|corp\.?|incorporated|inc\.?|company|co\.?|plc|ltd\.?|limited|holdings)$",
-        "",
-        s,
-    )
-    return s.strip()
-
-
-_SCHEMA = """
-PRAGMA journal_mode=WAL;
-PRAGMA synchronous=NORMAL;
-
-CREATE TABLE IF NOT EXISTS facts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    target_key TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    body TEXT NOT NULL,
-    confidence TEXT NOT NULL,
-    source_url TEXT,
-    session_id TEXT,
-    user_email TEXT,
-    created_at REAL NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_facts_target ON facts(target_key, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_facts_kind ON facts(target_key, kind);
-CREATE INDEX IF NOT EXISTS idx_facts_user ON facts(user_email, target_key, created_at DESC);
-
-CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(
-    body,
-    content='facts',
-    content_rowid='id',
-    tokenize='porter unicode61'
-);
-
-CREATE TRIGGER IF NOT EXISTS facts_ai AFTER INSERT ON facts BEGIN
-    INSERT INTO facts_fts(rowid, body) VALUES (new.id, new.body);
-END;
-CREATE TRIGGER IF NOT EXISTS facts_ad AFTER DELETE ON facts BEGIN
-    INSERT INTO facts_fts(facts_fts, rowid, body) VALUES('delete', old.id, old.body);
-END;
-CREATE TRIGGER IF NOT EXISTS facts_au AFTER UPDATE ON facts BEGIN
-    INSERT INTO facts_fts(facts_fts, rowid, body) VALUES('delete', old.id, old.body);
-    INSERT INTO facts_fts(rowid, body) VALUES (new.id, new.body);
-END;
-
-CREATE TABLE IF NOT EXISTS session_summaries (
-    session_id TEXT PRIMARY KEY,
-    target_key TEXT NOT NULL,
-    target_display TEXT,
-    summary TEXT NOT NULL,
-    metrics_json TEXT,
-    citation_count INTEGER,
-    quality_score REAL,
-    user_email TEXT,
-    created_at REAL NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_summaries_target ON session_summaries(target_key, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_summaries_user ON session_summaries(user_email, target_key, created_at DESC);
-"""
-
-
 class MemoryStore:
-    def __init__(self, db_path: Path | None = None) -> None:
-        self.db_path = Path(db_path) if db_path else _DEFAULT_DB
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with _init_lock:
-            # On a legacy DB the tables exist but may lack user_email,
-            # so the CREATE INDEX in _SCHEMA referencing that column will
-            # fail.  We try init first (works for fresh DBs); if it blows
-            # up we migrate and retry.
-            try:
-                self._init_schema()
-            except sqlite3.OperationalError as exc:
-                if "no such column" in str(exc).lower():
-                    self._migrate_schema()
-                    self._init_schema()
-                else:
-                    raise
-            # One more migration pass for any future column additions.
-            self._migrate_schema()
+    def __init__(self) -> None:
+        self._store = _get_storage_memory_store()
 
-    def _conn(self) -> sqlite3.Connection:
-        c = connect_wal(self.db_path, timeout=10.0)
-        c.row_factory = sqlite3.Row
-        return c
-
-    def _init_schema(self) -> None:
-        with self._conn() as c:
-            c.executescript(_SCHEMA)
-
-    def _migrate_schema(self) -> None:
-        """Add user_email columns to legacy databases that lack them."""
-        with self._conn() as c:
-            # facts table
-            try:
-                facts_cols = {r[1] for r in c.execute("PRAGMA table_info(facts)")}
-            except sqlite3.OperationalError:
-                facts_cols = set()
-            if "user_email" not in facts_cols:
-                try:
-                    c.execute("ALTER TABLE facts ADD COLUMN user_email TEXT")
-                    c.execute("CREATE INDEX IF NOT EXISTS idx_facts_user ON facts(user_email, target_key, created_at DESC)")
-                    logger.info("[MEMORY-MIGRATE] Added user_email column to facts table")
-                except sqlite3.OperationalError:
-                    pass  # Table doesn't exist yet (fresh DB) or already migrated
-            # session_summaries table
-            try:
-                sum_cols = {r[1] for r in c.execute("PRAGMA table_info(session_summaries)")}
-            except sqlite3.OperationalError:
-                sum_cols = set()
-            if "user_email" not in sum_cols:
-                try:
-                    c.execute("ALTER TABLE session_summaries ADD COLUMN user_email TEXT")
-                    c.execute("CREATE INDEX IF NOT EXISTS idx_summaries_user ON session_summaries(user_email, target_key, created_at DESC)")
-                    logger.info("[MEMORY-MIGRATE] Added user_email column to session_summaries table")
-                except sqlite3.OperationalError:
-                    pass  # Table doesn't exist yet (fresh DB) or already migrated
-
-    # ── Writers ────────────────────────────────────────────────────────────
-    def remember(self, fact: MemoryFact) -> int:
+    async def remember(self, fact: MemoryFact) -> int:
         if not fact.body or not fact.body.strip():
             return 0
+        if not fact.user_email:
+            raise ValueError("user_email is required to persist memory facts")
         if not fact.created_at:
             fact.created_at = time.time()
         target = normalize_target(fact.target_key)
-        with self._conn() as c:
-            cur = c.execute(
-                "INSERT INTO facts(target_key, kind, body, confidence, source_url, session_id, user_email, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (target, fact.kind, fact.body.strip(), fact.confidence, fact.source_url, fact.session_id, fact.user_email, fact.created_at),
+        try:
+            await self._store.remember(
+                target_key=target,
+                kind=fact.kind,
+                body=fact.body.strip(),
+                confidence=fact.confidence,
+                source_url=fact.source_url,
+                session_id=fact.session_id,
+                user_email=fact.user_email,
+                created_at=fact.created_at,
             )
-            return int(cur.lastrowid or 0)
+            return 1
+        except Exception as exc:
+            logger.warning("Supabase remember failed: %s", exc)
+            return 0
 
-    def remember_many(self, facts: Iterable[MemoryFact]) -> int:
+    async def remember_many(self, facts: Iterable[MemoryFact]) -> int:
         count = 0
         for f in facts:
-            if self.remember(f):
-                count += 1
+            if not f.user_email:
+                raise ValueError("user_email is required for every memory fact")
+            try:
+                ok = await self.remember(f)
+                if ok:
+                    count += 1
+            except Exception as exc:
+                logger.warning("remember_many single fact failed: %s", exc)
         return count
 
-    def save_session_summary(
+    async def save_session_summary(
         self,
         *,
         session_id: str,
@@ -221,178 +108,180 @@ class MemoryStore:
         quality_score: float = 0.0,
         user_email: str | None = None,
     ) -> None:
-        target = normalize_target(target_key)
-        with self._conn() as c:
-            c.execute(
-                "INSERT OR REPLACE INTO session_summaries(session_id, target_key, target_display, "
-                "summary, metrics_json, citation_count, quality_score, user_email, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    session_id,
-                    target,
-                    target_display,
-                    summary,
-                    json.dumps(metrics or {}),
-                    citation_count,
-                    quality_score,
-                    user_email,
-                    time.time(),
-                ),
+        if not user_email:
+            raise ValueError("user_email is required to save session summaries")
+        try:
+            await self._store.save_session_summary(
+                session_id=session_id,
+                target_key=normalize_target(target_key),
+                target_display=target_display,
+                summary=summary,
+                metrics=metrics,
+                citation_count=citation_count,
+                quality_score=quality_score,
+                user_email=user_email,
+                created_at=time.time(),
             )
+        except Exception as exc:
+            logger.warning("Supabase save_session_summary failed: %s", exc)
 
-    # ── Readers ────────────────────────────────────────────────────────────
-    def recall(
+    async def recall(
         self,
         target_key: str,
         *,
         kind: str | None = None,
         limit: int = 20,
-        query: str | None = None,
         user_email: str | None = None,
     ) -> list[MemoryFact]:
-        """Return the most relevant prior facts for `target_key`.
-
-        Recall ranking: HIGH confidence first, then newest. If `query`
-        is provided, falls back to FTS5 BM25 ranking restricted to the
-        target.
-        """
+        if not user_email:
+            raise ValueError("user_email is required to recall memory facts")
         target = normalize_target(target_key)
-        with self._conn() as c:
-            user_clause = " AND f.user_email = ?" if user_email else ""
-            params_base = [target]
-            if user_email:
-                params_base.append(user_email)
-
-            if query:
-                params = [query] + params_base + [limit]
-                rows = c.execute(
-                    f"""
-                    SELECT f.*, bm25(facts_fts) AS bm
-                    FROM facts_fts
-                    JOIN facts f ON f.id = facts_fts.rowid
-                    WHERE facts_fts MATCH ? AND f.target_key = ?{user_clause}
-                    ORDER BY bm ASC
-                    LIMIT ?
-                    """,
-                    params,
-                ).fetchall()
-            elif kind:
-                params = params_base + [kind, limit]
-                rows = c.execute(
-                    f"SELECT *, 0 AS bm FROM facts WHERE target_key = ?{user_clause} AND kind = ? "
-                    "ORDER BY (confidence = 'HIGH') DESC, created_at DESC LIMIT ?",
-                    params,
-                ).fetchall()
-            else:
-                params = params_base + [limit]
-                rows = c.execute(
-                    f"SELECT *, 0 AS bm FROM facts WHERE target_key = ?{user_clause} "
-                    "ORDER BY (confidence = 'HIGH') DESC, created_at DESC LIMIT ?",
-                    params,
-                ).fetchall()
-        return [
-            MemoryFact(
-                target_key=r["target_key"],
-                kind=r["kind"],
-                body=r["body"],
-                confidence=r["confidence"],
-                source_url=r["source_url"],
-                session_id=r["session_id"],
-                user_email=r.get("user_email") if "user_email" in r.keys() else None,
-                created_at=r["created_at"],
-                score=float(r["bm"]),
+        try:
+            rows = await self._store.recall(
+                target_key=target,
+                kind=kind,
+                limit=limit,
+                user_email=user_email,
             )
-            for r in rows
-        ]
+            return [
+                MemoryFact(
+                    target_key=r.get("target_key", ""),
+                    kind=r.get("kind", ""),
+                    body=r.get("body", ""),
+                    confidence=r.get("confidence", ""),
+                    source_url=r.get("source_url"),
+                    session_id=r.get("session_id"),
+                    user_email=r.get("user_email"),
+                    created_at=r.get("created_at", 0.0),
+                    score=0.0,
+                )
+                for r in rows
+            ]
+        except Exception as exc:
+            logger.warning("Supabase recall failed: %s", exc)
+            return []
 
-    def last_summary(self, target_key: str, *, user_email: str | None = None) -> dict | None:
+    async def get_facts(
+        self,
+        target_key: str | None = None,
+        *,
+        user_email: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        if not user_email:
+            raise ValueError("user_email is required to retrieve facts")
+        try:
+            if target_key:
+                target_key = normalize_target(target_key)
+            return await self._store.get_facts(
+                target_key=target_key,
+                user_email=user_email,
+                limit=limit,
+            )
+        except Exception as exc:
+            logger.warning("Supabase get_facts failed: %s", exc)
+            return []
+
+    async def last_summary(self, target_key: str, *, user_email: str | None = None) -> dict | None:
+        if not user_email:
+            raise ValueError("user_email is required to retrieve session summaries")
         target = normalize_target(target_key)
-        with self._conn() as c:
-            user_clause = " AND user_email = ?" if user_email else ""
-            params = [target]
-            if user_email:
-                params.append(user_email)
-            row = c.execute(
-                f"SELECT * FROM session_summaries WHERE target_key = ?{user_clause} ORDER BY created_at DESC LIMIT 1",
-                params,
-            ).fetchone()
-        if not row:
-            return None
-        return {
-            "session_id": row["session_id"],
-            "target_key": row["target_key"],
-            "target_display": row["target_display"],
-            "summary": row["summary"],
-            "metrics": json.loads(row["metrics_json"] or "{}"),
-            "citation_count": row["citation_count"],
-            "quality_score": row["quality_score"],
-            "user_email": row["user_email"] if "user_email" in row.keys() else None,
-            "created_at": row["created_at"],
-        }
-
-    def count(self, target_key: str | None = None, *, user_email: str | None = None) -> int:
-        with self._conn() as c:
-            if target_key and user_email:
-                row = c.execute(
-                    "SELECT COUNT(*) AS n FROM facts WHERE target_key = ? AND user_email = ?",
-                    (normalize_target(target_key), user_email),
-                ).fetchone()
-            elif target_key:
-                row = c.execute(
-                    "SELECT COUNT(*) AS n FROM facts WHERE target_key = ?",
-                    (normalize_target(target_key),),
-                ).fetchone()
-            elif user_email:
-                row = c.execute(
-                    "SELECT COUNT(*) AS n FROM facts WHERE user_email = ?",
-                    (user_email,),
-                ).fetchone()
-            else:
-                row = c.execute("SELECT COUNT(*) AS n FROM facts").fetchone()
-        return int(row["n"] if row else 0)
-
-    def clear_target(self, target_key: str, *, user_email: str | None = None) -> int:
-        target = normalize_target(target_key)
-        with self._conn() as c:
-            if user_email:
-                cur = c.execute(
-                    "DELETE FROM facts WHERE target_key = ? AND user_email = ?",
-                    (target, user_email),
-                )
-            else:
-                cur = c.execute("DELETE FROM facts WHERE target_key = ?", (target,))
-            return int(cur.rowcount or 0)
-
-    def delete_session(self, session_id: str, *, user_email: str | None = None) -> dict[str, int]:
-        with self._conn() as c:
-            if user_email:
-                fact_cur = c.execute(
-                    "DELETE FROM facts WHERE session_id = ? AND user_email = ?",
-                    (session_id, user_email),
-                )
-                summary_cur = c.execute(
-                    "DELETE FROM session_summaries WHERE session_id = ? AND user_email = ?",
-                    (session_id, user_email),
-                )
-            else:
-                fact_cur = c.execute("DELETE FROM facts WHERE session_id = ?", (session_id,))
-                summary_cur = c.execute("DELETE FROM session_summaries WHERE session_id = ?", (session_id,))
+        try:
+            row = await self._store.last_summary(target_key=target, user_email=user_email)
+            if not row:
+                return None
             return {
-                "facts": int(fact_cur.rowcount or 0),
-                "summaries": int(summary_cur.rowcount or 0),
+                "session_id": row.get("session_id"),
+                "target_key": row.get("target_key"),
+                "target_display": row.get("target_display"),
+                "summary": row.get("summary", ""),
+                "metrics": json.loads(row.get("metrics_json") or "{}"),
+                "citation_count": row.get("citation_count"),
+                "quality_score": row.get("quality_score"),
+                "user_email": row.get("user_email"),
+                "created_at": row.get("created_at"),
             }
+        except Exception as exc:
+            logger.warning("Supabase last_summary failed: %s", exc)
+            return None
+
+    async def count(self, target_key: str | None = None, *, user_email: str | None = None) -> int:
+        if not user_email:
+            raise ValueError("user_email is required to count memory facts")
+        try:
+            normalized = normalize_target(target_key) if target_key else None
+            return await self._store.count(target_key=normalized, user_email=user_email)
+        except Exception as exc:
+            logger.warning("Supabase count failed: %s", exc)
+            return 0
+
+    async def clear_target(self, target_key: str, *, user_email: str | None = None) -> int:
+        if not user_email:
+            raise ValueError("user_email is required to clear memory facts")
+        try:
+            return await self._store.clear_target(normalize_target(target_key), user_email=user_email)
+        except Exception as exc:
+            logger.warning("Supabase clear_target failed: %s", exc)
+            return 0
+
+    async def get_targets(self, *, user_email: str | None = None, limit: int = 20) -> list[dict]:
+        if not user_email:
+            raise ValueError("user_email is required to list targets")
+        try:
+            return await self._store.get_targets(user_email=user_email, limit=limit)
+        except Exception as exc:
+            logger.warning("Supabase get_targets failed: %s", exc)
+            return []
+
+    async def get_session_count(self, *, user_email: str | None = None) -> int:
+        if not user_email:
+            raise ValueError("user_email is required to count sessions")
+        try:
+            return await self._store.get_session_count(user_email=user_email)
+        except Exception as exc:
+            logger.warning("Supabase get_session_count failed: %s", exc)
+            return 0
+
+    async def list_sessions(
+        self,
+        *,
+        user_email: str | None = None,
+        target_key: str | None = None,
+        limit: int = 20,
+    ) -> list[dict]:
+        if not user_email:
+            raise ValueError("user_email is required to list sessions")
+        try:
+            normalized = normalize_target(target_key) if target_key else None
+            return await self._store.list_sessions(
+                user_email=user_email,
+                target_key=normalized,
+                limit=limit,
+            )
+        except Exception as exc:
+            logger.warning("Supabase list_sessions failed: %s", exc)
+            return []
+
+    async def delete_session(self, session_id: str, *, user_email: str | None = None) -> dict[str, int]:
+        if not user_email:
+            raise ValueError("user_email is required to delete session memory")
+        try:
+            return await self._store.delete_session(session_id, user_email=user_email)
+        except Exception as exc:
+            logger.warning("Supabase delete_session failed: %s", exc)
+            return {"facts": 0, "summaries": 0}
 
 
 _singleton: MemoryStore | None = None
 
 
-def get_memory_store(db_path: Path | None = None) -> MemoryStore:
+def get_memory_store() -> MemoryStore:
     """Return the per-process memory store singleton.
 
     Pass `db_path` to override for tests; subsequent calls without
     a path reuse the same store.
     """
     global _singleton
-    if _singleton is None or db_path is not None:
-        _singleton = MemoryStore(db_path)
+    if _singleton is None:
+        _singleton = MemoryStore()
     return _singleton

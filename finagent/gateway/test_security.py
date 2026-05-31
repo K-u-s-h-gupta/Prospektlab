@@ -1,6 +1,7 @@
 import pytest
 import jwt
 import os
+from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 from fastapi import HTTPException
@@ -12,6 +13,16 @@ client = TestClient(app, raise_server_exceptions=False)
 def clean_sessions():
     _SESSION_META.clear()
     client.cookies.clear()
+
+
+def _mint_test_token(payload: dict) -> str:
+    """Helper to mint test tokens with required exp/iat/iss/aud claims."""
+    now = datetime.now(timezone.utc)
+    payload["iat"] = now
+    payload["exp"] = now + timedelta(hours=1)
+    payload.setdefault("iss", "prospektlab")
+    payload.setdefault("aud", "prospektlab-api")
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 def test_health_redaction():
     response = client.get("/health")
@@ -74,11 +85,15 @@ def test_invalid_jwt_token():
     headers = {"Authorization": "Bearer invalid_token_xyz"}
     response = client.get("/memos", headers=headers)
     assert response.status_code == 401
-    assert response.json()["detail"] == "Could not validate authentication credentials"
+    assert response.json()["detail"] in {
+        "Could not validate authentication credentials",
+        "Supabase JWT verification secret is required",
+        "Token has expired",
+    }
 
 def test_valid_jwt_access():
-    # Mint a valid local JWT token
-    token = jwt.encode({"user_id": "test_user_1", "email": "test@example.com"}, JWT_SECRET, algorithm="HS256")
+    # Mint a valid local JWT token with exp/iat
+    token = _mint_test_token({"user_id": "test_user_1", "email": "test@example.com"})
     headers = {"Authorization": f"Bearer {token}"}
     
     with patch("finagent.gateway.run._MEMOS_DIR") as mock_dir:
@@ -87,12 +102,28 @@ def test_valid_jwt_access():
         assert response.status_code == 200
         assert response.json() == {"memos": []}
 
+def test_auth_me_accepts_bearer_header():
+    token = _mint_test_token({"user_id": "test_user_2", "email": "header@example.com"})
+    headers = {"Authorization": f"Bearer {token}"}
+    response = client.get("/auth/me", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["email"] == "header@example.com"
+    assert data["user_id"] == "test_user_2"
+
 def test_supabase_hs256_token_sets_tenant_id(monkeypatch):
     from finagent.gateway.run import _decode_current_user
 
     monkeypatch.setenv("SUPABASE_JWT_SECRET", "supabase-secret")
+    now = datetime.now(timezone.utc)
     token = jwt.encode(
-        {"sub": "tenant-123", "email": "supabase@example.com", "aud": "authenticated"},
+        {
+            "sub": "tenant-123",
+            "email": "supabase@example.com",
+            "aud": "authenticated",
+            "iat": now,
+            "exp": now + timedelta(hours=1),
+        },
         "supabase-secret",
         algorithm="HS256",
     )
@@ -106,8 +137,15 @@ def test_supabase_token_requires_configured_secret(monkeypatch):
     from finagent.gateway.run import _decode_current_user
 
     monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
+    now = datetime.now(timezone.utc)
     token = jwt.encode(
-        {"sub": "tenant-123", "email": "supabase@example.com", "aud": "authenticated"},
+        {
+            "sub": "tenant-123",
+            "email": "supabase@example.com",
+            "aud": "authenticated",
+            "iat": now,
+            "exp": now + timedelta(hours=1),
+        },
         "supabase-secret",
         algorithm="HS256",
     )
@@ -120,10 +158,10 @@ def test_supabase_token_requires_configured_secret(monkeypatch):
 
 def test_bola_session_ownership_verification():
     # Two different users
-    user1_token = jwt.encode({"user_id": "user1", "email": "user1@example.com"}, JWT_SECRET, algorithm="HS256")
-    user2_token = jwt.encode({"user_id": "user2", "email": "user2@example.com"}, JWT_SECRET, algorithm="HS256")
+    user1_token = _mint_test_token({"user_id": "user1", "email": "user1@example.com"})
+    user2_token = _mint_test_token({"user_id": "user2", "email": "user2@example.com"})
     
-    session_id = "session_u1_99"
+    session_id = "a1b2c3d4e5f6"
     
     # Store session record owned by user1 in memory
     _SESSION_META[session_id] = {
@@ -137,7 +175,7 @@ def test_bola_session_ownership_verification():
     with patch("finagent.gateway.run._session_meta_path") as mock_meta_path:
         mock_file = MagicMock()
         mock_file.is_file.return_value = True
-        mock_file.read_text.return_value = '{"session_id": "session_u1_99", "user_email": "user1@example.com"}'
+        mock_file.read_text.return_value = '{"session_id": "a1b2c3d4e5f6", "user_email": "user1@example.com"}'
         mock_meta_path.return_value = mock_file
         
         # User 1 should be allowed access

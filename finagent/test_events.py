@@ -39,7 +39,9 @@ def test_open_reset_starts_fresh_run_without_replaying_old_memo():
     bus._session_dir = lambda session_id: None
     bus._events_path = lambda session_id: event_log
     bus._closed_path = lambda session_id: closed_marker
-    bus._append_event_file = lambda session_id, event: None
+    async def _noop_append_event_file(session_id, event):
+        pass
+    bus._append_event_file = _noop_append_event_file
 
     bus.open("same-session")
     bus.emit("same-session", "memo", preview="old comprehensive memo")

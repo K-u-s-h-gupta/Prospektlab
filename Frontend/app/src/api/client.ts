@@ -1,3 +1,5 @@
+import { buildTelemetryHeaders, getTelemetryRequestId, getTelemetrySessionId, isTelemetryEnabled, trackDependency, trackEvent, trackException } from '../telemetry';
+
 export interface ChatRequest {
   message: string;
   response_depth?: 'standard' | 'deep';
@@ -63,6 +65,16 @@ export interface PositionInput {
   active?: boolean;
 }
 
+export interface AuthUser {
+  email: string;
+  name: string;
+  mobile?: string;
+  require_mobile?: boolean;
+}
+
+const AUTH_TOKEN_KEY = 'prospektlab_auth_token';
+const AUTH_TOKEN_SESSION_KEY = 'prospektlab_auth_token_session';
+
 // ── Runtime Backend URL Support (for Amplify + separate ECS backend) ─────
 function getApiBase(): string {
   if (typeof window !== 'undefined') {
@@ -83,18 +95,104 @@ function apiUrl(path: string): string {
   return `${base}${p}`;
 }
 
+function isCrossOriginApi(): boolean {
+  if (typeof window === 'undefined') return false;
+  const base = getApiBase();
+  if (!base) return false;
+  try {
+    return new URL(base, window.location.origin).origin !== window.location.origin;
+  } catch (_) {
+    return false;
+  }
+}
+
+function requestCredentials(): RequestCredentials {
+  return isCrossOriginApi() ? 'omit' : 'include';
+}
+
 const AUTH_REQUEST_TIMEOUT_MS = 15000;
 const MIRROR_STATUS_TIMEOUT_MS = 8000;
+const CHAT_START_TIMEOUT_MS = 60000;
+
+function summarizeTelemetryPath(url: string): string {
+  try {
+    const resolved = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+    return resolved.pathname;
+  } catch (_) {
+    return url;
+  }
+}
+
+function telemetryMethod(options?: RequestInit): string {
+  return (options?.method || 'GET').toUpperCase();
+}
+
+function recordDependency(
+  url: string,
+  options: RequestInit | undefined,
+  startMs: number,
+  res?: Response,
+  requestId?: string,
+  error?: unknown
+) {
+  if (!isTelemetryEnabled()) return;
+
+  const elapsed = typeof performance !== 'undefined' ? performance.now() - startMs : 0;
+  const method = telemetryMethod(options);
+  const path = summarizeTelemetryPath(url);
+  const statusCode = res?.status;
+  const success = res ? res.ok : false;
+
+  trackDependency({
+    name: `${method} ${path}`,
+    url,
+    method,
+    durationMs: elapsed,
+    success,
+    statusCode,
+    requestId,
+    properties: {
+      source: 'frontend',
+      path,
+      session_id: getTelemetrySessionId(),
+      error_type: error instanceof Error ? error.name : undefined,
+    },
+  });
+
+  if (error) {
+    const exception = error instanceof Error ? error : new Error(String(error));
+    if (exception.name !== 'AbortError') {
+      trackException(exception, {
+        source: 'frontend',
+        path,
+        method,
+        request_id: requestId || '',
+      });
+    }
+  }
+}
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number, timeoutMessage: string): Promise<Response> {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  const headers = buildTelemetryHeaders(options.headers);
+  const requestId = getTelemetryRequestId(headers) || undefined;
+  const startMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
   try {
     return await fetch(url, {
       ...options,
+      headers: withAuthHeaders(headers),
+      credentials: requestCredentials(),
       signal: controller.signal,
+    }).then((res) => {
+      recordDependency(url, options, startMs, res, requestId);
+      if (res.status === 401) {
+        handleAuthFailure();
+      }
+      return res;
     });
   } catch (err: any) {
+    recordDependency(url, options, startMs, undefined, requestId, err);
     if (err?.name === 'AbortError') {
       throw new Error(timeoutMessage);
     }
@@ -104,84 +202,108 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-// Token and User Helpers
-export function getAuthToken(): string | null {
-  return localStorage.getItem('prospektlab_token') || sessionStorage.getItem('prospektlab_token');
+// ── Auth state (in-memory only; httpOnly cookie is the source of truth) ──
+let _cachedUser: AuthUser | null = null;
+let _cachedUserPromise: Promise<AuthUser | null> | null = null;
+let _authToken: string | null = null;
+
+function getStoredAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return (
+    localStorage.getItem(AUTH_TOKEN_KEY) ||
+    sessionStorage.getItem(AUTH_TOKEN_SESSION_KEY) ||
+    null
+  );
 }
 
-function getAuthStorage(remember: boolean): Storage {
-  return remember ? localStorage : sessionStorage;
+function getAuthToken(): string | null {
+  if (_authToken) return _authToken;
+  _authToken = getStoredAuthToken();
+  return _authToken;
 }
 
-function removeAuthSessionKeys(storage: Storage) {
-  storage.removeItem('prospektlab_token');
-  storage.removeItem('prospektlab_user');
+function setAuthToken(token: string | null, remember: boolean = true): void {
+  _authToken = token;
+  if (typeof window === 'undefined') return;
+  if (!token) {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    sessionStorage.removeItem(AUTH_TOKEN_SESSION_KEY);
+    return;
+  }
+  if (remember) {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+    sessionStorage.removeItem(AUTH_TOKEN_SESSION_KEY);
+  } else {
+    sessionStorage.setItem(AUTH_TOKEN_SESSION_KEY, token);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
 }
 
-export function getStoredAuthUser(): string | null {
-  return localStorage.getItem('prospektlab_user') || sessionStorage.getItem('prospektlab_user');
-}
-
-export function getAuthHeaders(): HeadersInit {
+function withAuthHeaders(headers?: HeadersInit): HeadersInit {
   const token = getAuthToken();
-  const headers: Record<string, string> = {};
+  const merged = new Headers(headers || {});
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    merged.set('Authorization', `Bearer ${token}`);
   }
-  const bypass = typeof window !== 'undefined' && localStorage.getItem('prospektlab_bypass_token_limit') === 'true';
-  if (bypass) {
-    headers['X-Bypass-Token-Limit'] = 'true';
-  }
-  return headers as any;
+  return merged;
 }
 
-function handleSessionSwitch(email: string) {
-  const lastEmail = localStorage.getItem('prospektlab_last_email') || sessionStorage.getItem('prospektlab_last_email');
-  if (lastEmail && lastEmail.toLowerCase().trim() !== email.toLowerCase().trim()) {
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('prospektlab_')) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(key => localStorage.removeItem(key));
-    const sessionKeysToRemove: string[] = [];
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const key = sessionStorage.key(i);
-      if (key && key.startsWith('prospektlab_')) {
-        sessionKeysToRemove.push(key);
-      }
-    }
-    sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
+export function getCachedUser(): AuthUser | null {
+  return _cachedUser;
+}
+
+export function setCachedUser(user: AuthUser | null) {
+  _cachedUser = user;
+}
+
+export async function getAuthMe(): Promise<AuthUser | null> {
+  if (_cachedUserPromise) {
+    return _cachedUserPromise;
   }
-  localStorage.setItem('prospektlab_last_email', email);
+  _cachedUserPromise = (async () => {
+    try {
+      const res = await fetchApi(apiUrl('/auth/me'), {
+        credentials: requestCredentials(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const user: AuthUser = {
+          email: data.email,
+          name: data.name || 'Researcher',
+          mobile: data.mobile,
+          require_mobile: data.require_mobile,
+        };
+        _cachedUser = user;
+        return user;
+      }
+      return null;
+    } catch (err) {
+      return null;
+    } finally {
+      _cachedUserPromise = null;
+    }
+  })();
+  return _cachedUserPromise;
 }
 
 function handleAuthFailure() {
-  const keysToRemove: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith('prospektlab_')) {
-      keysToRemove.push(key);
-    }
-  }
-  keysToRemove.forEach(key => localStorage.removeItem(key));
-  const sessionKeysToRemove: string[] = [];
-  for (let i = 0; i < sessionStorage.length; i++) {
-    const key = sessionStorage.key(i);
-    if (key && key.startsWith('prospektlab_')) {
-      sessionKeysToRemove.push(key);
-    }
-  }
-  sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
+  _cachedUser = null;
+  setAuthToken(null);
   if (typeof window !== 'undefined') {
     window.location.hash = '#/login';
   }
 }
 
 async function fetchApi(url: string, options?: RequestInit): Promise<Response> {
-  const res = await fetch(url, options);
+  const headers = buildTelemetryHeaders(options?.headers);
+  const requestId = getTelemetryRequestId(headers) || undefined;
+  const startMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const res = await fetch(url, {
+    ...(options || {}),
+    headers: withAuthHeaders(headers),
+    credentials: requestCredentials(),
+  });
+  recordDependency(url, options, startMs, res, requestId);
   if (res.status === 401) {
     handleAuthFailure();
   }
@@ -198,7 +320,7 @@ export async function apiLogin(email: string, password: string, remember: boolea
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, remember }),
     },
     AUTH_REQUEST_TIMEOUT_MS,
     'Login is taking too long. Please try again in a moment.'
@@ -211,17 +333,13 @@ export async function apiLogin(email: string, password: string, remember: boolea
 
   const data = await res.json();
   if (data.token) {
-    const emailToSet = data.user?.email || email;
-    handleSessionSwitch(emailToSet);
-    const storage = getAuthStorage(remember);
-    const otherStorage = remember ? sessionStorage : localStorage;
-    removeAuthSessionKeys(otherStorage);
-    storage.setItem('prospektlab_token', data.token);
-    storage.setItem('prospektlab_user', JSON.stringify({
-      email: emailToSet,
+    setAuthToken(data.token, remember);
+  }
+  if (data.user) {
+    _cachedUser = {
+      email: data.user?.email || email,
       name: data.user?.name || 'Researcher',
-    }));
-    storage.setItem('prospektlab_last_email', emailToSet);
+    };
   }
   return data;
 }
@@ -253,25 +371,30 @@ export async function apiSignup(name: string, email: string, password: string, m
 
   const data = await res.json();
   if (data.token) {
-    const emailToSet = data.user?.email || email;
-    handleSessionSwitch(emailToSet);
-    localStorage.setItem('prospektlab_token', data.token);
-    localStorage.setItem('prospektlab_user', JSON.stringify({
-      email: emailToSet,
+    setAuthToken(data.token, true);
+  }
+  if (data.user) {
+    _cachedUser = {
+      email: data.user?.email || email,
       name: data.user?.name || name,
-    }));
+    };
   }
   return data;
 }
 
 export async function apiSendVerification(email: string): Promise<any> {
-  const res = await fetch(apiUrl('/auth/send-verification'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  const res = await fetchWithTimeout(
+    apiUrl('/auth/send-verification'),
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
     },
-    body: JSON.stringify({ email }),
-  });
+    AUTH_REQUEST_TIMEOUT_MS,
+    'Verification email is taking too long. Please try again in a moment.'
+  );
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -282,13 +405,18 @@ export async function apiSendVerification(email: string): Promise<any> {
 }
 
 export async function apiForgotPassword(email: string): Promise<any> {
-  const res = await fetch(apiUrl('/auth/forgot-password'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  const res = await fetchWithTimeout(
+    apiUrl('/auth/forgot-password'),
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
     },
-    body: JSON.stringify({ email }),
-  });
+    AUTH_REQUEST_TIMEOUT_MS,
+    'Password reset email is taking too long. Please try again in a moment.'
+  );
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -299,13 +427,18 @@ export async function apiForgotPassword(email: string): Promise<any> {
 }
 
 export async function apiResetPassword(email: string, code: string, newPassword: string): Promise<any> {
-  const res = await fetch(apiUrl('/auth/reset-password'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  const res = await fetchWithTimeout(
+    apiUrl('/auth/reset-password'),
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, code, new_password: newPassword }),
     },
-    body: JSON.stringify({ email, code, new_password: newPassword }),
-  });
+    AUTH_REQUEST_TIMEOUT_MS,
+    'Password reset is taking too long. Please try again in a moment.'
+  );
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -336,17 +469,15 @@ export async function apiGoogleAuth(credential: string): Promise<any> {
 
   const data = await res.json();
   if (data.token) {
-    const emailToSet = data.email;
-    if (emailToSet) {
-      handleSessionSwitch(emailToSet);
-    }
-    localStorage.setItem('prospektlab_token', data.token);
-    localStorage.setItem('prospektlab_user', JSON.stringify({
+    setAuthToken(data.token, true);
+  }
+  if (data.email) {
+    _cachedUser = {
       email: data.email,
       name: data.name || data.full_name || 'Researcher',
       mobile: data.mobile,
       require_mobile: data.require_mobile,
-    }));
+    };
   }
   return data;
 }
@@ -356,8 +487,8 @@ export async function apiUpdateMobile(mobile: string): Promise<any> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...getAuthHeaders(),
     },
+    credentials: 'include',
     body: JSON.stringify({ mobile }),
   });
 
@@ -366,40 +497,19 @@ export async function apiUpdateMobile(mobile: string): Promise<any> {
     throw new Error(errorData.detail || `Failed to update mobile: ${res.statusText}`);
   }
 
-  // Update mobile in localStorage user if available
-  const userStr = localStorage.getItem('prospektlab_user');
-  if (userStr) {
-    const user = JSON.parse(userStr);
-    user.mobile = mobile;
-    user.require_mobile = false;
-    localStorage.setItem('prospektlab_user', JSON.stringify(user));
+  if (_cachedUser) {
+    _cachedUser = { ..._cachedUser, mobile, require_mobile: false };
   }
 
   return res.json();
 }
 
 export async function apiLogout(): Promise<void> {
-  await fetch(apiUrl('/auth/logout'), {
+  await fetchApi(apiUrl('/auth/logout'), {
     method: 'POST',
-    headers: getAuthHeaders(),
   }).catch(() => {});
-  
-  const keysToRemove: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith('prospektlab_')) {
-      keysToRemove.push(key);
-    }
-  }
-  keysToRemove.forEach(key => localStorage.removeItem(key));
-  const sessionKeysToRemove: string[] = [];
-  for (let i = 0; i < sessionStorage.length; i++) {
-    const key = sessionStorage.key(i);
-    if (key && key.startsWith('prospektlab_')) {
-      sessionKeysToRemove.push(key);
-    }
-  }
-  sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
+  _cachedUser = null;
+  setAuthToken(null);
 }
 
 // ── Portfolio Endpoints ──────────────────────────────────────────────────
@@ -408,7 +518,7 @@ export async function getPortfolioMirror(): Promise<any> {
   const res = await fetchWithTimeout(
     apiUrl('/portfolio/mirror'),
     {
-      headers: getAuthHeaders(),
+      credentials: 'include',
     },
     MIRROR_STATUS_TIMEOUT_MS,
     'Portfolio status check timed out.'
@@ -423,22 +533,43 @@ export async function getPortfolioMirror(): Promise<any> {
 }
 
 export async function replacePortfolioMirror(positions: PositionInput[]): Promise<any> {
+  trackEvent('portfolio_mirror_replace_requested', {
+    source: 'frontend',
+    position_count: positions.length,
+  });
   const res = await fetchApi(apiUrl('/portfolio/mirror'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...getAuthHeaders(),
     },
+    credentials: 'include',
     body: JSON.stringify({ positions }),
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
+    trackEvent('portfolio_mirror_replace_failed', {
+      source: 'frontend',
+      position_count: positions.length,
+      status_code: res.status,
+    });
     throw new Error(errorData.detail?.message || errorData.detail || `Failed to replace portfolio mirror: ${res.statusText}`);
   }
-  return res.json();
+  const result = await res.json();
+  trackEvent('portfolio_mirror_replace_completed', {
+    source: 'frontend',
+    position_count: positions.length,
+  });
+  return result;
 }
 
 export async function uploadPortfolioDocument(file: File, password?: string): Promise<any> {
+  trackEvent('portfolio_upload_requested', {
+    source: 'frontend',
+    upload_type: 'document',
+    file_name: file.name,
+    file_size_bytes: file.size,
+    has_password: Boolean(password),
+  });
   const formData = new FormData();
   formData.append('file', file);
   if (password) {
@@ -447,43 +578,81 @@ export async function uploadPortfolioDocument(file: File, password?: string): Pr
 
   const res = await fetchApi(apiUrl('/api/portfolio/upload-cas'), {
     method: 'POST',
-    headers: getAuthHeaders(),
+    credentials: 'include',
     body: formData,
   });
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
+    trackEvent('portfolio_upload_failed', {
+      source: 'frontend',
+      upload_type: 'document',
+      file_name: file.name,
+      status_code: res.status,
+    });
     throw new Error(errorData.detail?.message || errorData.detail || `Failed to parse document: ${res.statusText}`);
   }
 
-  return res.json();
+  const result = await res.json();
+  trackEvent('portfolio_upload_completed', {
+    source: 'frontend',
+    upload_type: 'document',
+    file_name: file.name,
+    result_code: result?.code || result?.status || 'unknown',
+  });
+  return result;
 }
 
 export async function uploadPortfolioScreenshot(file: File): Promise<any> {
+  trackEvent('portfolio_upload_requested', {
+    source: 'frontend',
+    upload_type: 'screenshot',
+    file_name: file.name,
+    file_size_bytes: file.size,
+  });
   const formData = new FormData();
   formData.append('file', file);
 
   const res = await fetchApi(apiUrl('/api/portfolio/upload-screenshot'), {
     method: 'POST',
-    headers: getAuthHeaders(),
+    credentials: 'include',
     body: formData,
   });
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
+    trackEvent('portfolio_upload_failed', {
+      source: 'frontend',
+      upload_type: 'screenshot',
+      file_name: file.name,
+      status_code: res.status,
+    });
     throw new Error(errorData.detail?.message || errorData.detail || `Failed to parse screenshot: ${res.statusText}`);
   }
 
-  return res.json();
+  const result = await res.json();
+  trackEvent('portfolio_upload_completed', {
+    source: 'frontend',
+    upload_type: 'screenshot',
+    file_name: file.name,
+    result_code: result?.code || result?.status || 'unknown',
+  });
+  return result;
 }
 
 export async function confirmExtraction(reviewId: string, positions?: any[], sourceType?: string): Promise<any> {
+  trackEvent('portfolio_extraction_confirm_requested', {
+    source: 'frontend',
+    review_id: reviewId,
+    source_type: sourceType || 'unknown',
+    position_count: positions?.length || 0,
+  });
   const res = await fetchApi(apiUrl('/api/portfolio/confirm-extraction'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...getAuthHeaders(),
     },
+    credentials: 'include',
     body: JSON.stringify({
       review_id: reviewId,
       positions: positions,
@@ -493,29 +662,51 @@ export async function confirmExtraction(reviewId: string, positions?: any[], sou
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
+    trackEvent('portfolio_extraction_confirm_failed', {
+      source: 'frontend',
+      review_id: reviewId,
+      status_code: res.status,
+    });
     throw new Error(errorData.detail?.message || errorData.detail || `Failed to confirm extraction: ${res.statusText}`);
   }
 
-  return res.json();
+  const result = await res.json();
+  trackEvent('portfolio_extraction_confirm_completed', {
+    source: 'frontend',
+    review_id: reviewId,
+    source_type: sourceType || 'unknown',
+  });
+  return result;
 }
 
 export async function cancelExtraction(): Promise<any> {
+  trackEvent('portfolio_extraction_cancel_requested', {
+    source: 'frontend',
+  });
   const res = await fetchApi(apiUrl('/api/portfolio/cancel-extraction'), {
     method: 'POST',
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
+    trackEvent('portfolio_extraction_cancel_failed', {
+      source: 'frontend',
+      status_code: res.status,
+    });
     throw new Error(errorData.detail || `Failed to cancel extraction: ${res.statusText}`);
   }
 
-  return res.json();
+  const result = await res.json();
+  trackEvent('portfolio_extraction_cancel_completed', {
+    source: 'frontend',
+  });
+  return result;
 }
 
 export async function getPortfolioAnalytics(benchmark: string = 'NIFTY50', period: string = '1y'): Promise<any> {
   const res = await fetchApi(apiUrl(`/portfolio/analytics?benchmark=${encodeURIComponent(benchmark)}&period=${encodeURIComponent(period)}`), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch portfolio analytics: ${res.statusText}`);
@@ -526,7 +717,7 @@ export async function getPortfolioAnalytics(benchmark: string = 'NIFTY50', perio
 export async function deletePortfolioMirror(): Promise<any> {
   const res = await fetchApi(apiUrl('/portfolio/mirror'), {
     method: 'DELETE',
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to clear portfolio: ${res.statusText}`);
@@ -536,7 +727,7 @@ export async function deletePortfolioMirror(): Promise<any> {
 
 export async function getPortfolioNews(limit: number = 12): Promise<any> {
   const res = await fetchApi(apiUrl(`/portfolio/news?limit=${limit}`), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch portfolio news: ${res.statusText}`);
@@ -546,7 +737,7 @@ export async function getPortfolioNews(limit: number = 12): Promise<any> {
 
 export async function getPortfolioSectors(): Promise<any> {
   const res = await fetchApi(apiUrl('/portfolio/sectors'), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch portfolio sectors: ${res.statusText}`);
@@ -556,7 +747,7 @@ export async function getPortfolioSectors(): Promise<any> {
 
 export async function getHoldingDetail(symbol: string): Promise<any> {
   const res = await fetchApi(apiUrl(`/portfolio/holding/${encodeURIComponent(symbol)}`), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch holding detail: ${res.statusText}`);
@@ -566,7 +757,7 @@ export async function getHoldingDetail(symbol: string): Promise<any> {
 
 export async function getCorporateActions(days: number = 30): Promise<any> {
   const res = await fetchApi(apiUrl(`/portfolio/corporate-actions?days=${days}`), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch corporate actions: ${res.statusText}`);
@@ -576,7 +767,7 @@ export async function getCorporateActions(days: number = 30): Promise<any> {
 
 export async function getPortfolioAlerts(): Promise<any> {
   const res = await fetchApi(apiUrl('/portfolio/alerts'), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch portfolio alerts: ${res.statusText}`);
@@ -586,7 +777,7 @@ export async function getPortfolioAlerts(): Promise<any> {
 
 export async function getTaxSummary(): Promise<any> {
   const res = await fetchApi(apiUrl('/portfolio/tax-summary'), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch tax summary: ${res.statusText}`);
@@ -596,7 +787,7 @@ export async function getTaxSummary(): Promise<any> {
 
 export async function getDividends(): Promise<any> {
   const res = await fetchApi(apiUrl('/portfolio/dividends'), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch dividends: ${res.statusText}`);
@@ -609,8 +800,8 @@ export async function postStressTest(scenario: string, customShocks?: any): Prom
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...getAuthHeaders(),
     },
+    credentials: 'include',
     body: JSON.stringify({ scenario, custom_shocks: customShocks }),
   });
   if (!res.ok) {
@@ -621,7 +812,7 @@ export async function postStressTest(scenario: string, customShocks?: any): Prom
 
 export async function getMfAnalytics(): Promise<any> {
   const res = await fetchApi(apiUrl('/portfolio/mf-analytics'), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch MF analytics: ${res.statusText}`);
@@ -631,7 +822,7 @@ export async function getMfAnalytics(): Promise<any> {
 
 export async function getTodayQueue(): Promise<any> {
   const res = await fetchApi(apiUrl('/portfolio/today'), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch action queue: ${res.statusText}`);
@@ -641,7 +832,7 @@ export async function getTodayQueue(): Promise<any> {
 
 export async function getPortfolioBrief(): Promise<any> {
   const res = await fetchApi(apiUrl('/portfolio/brief'), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch portfolio brief: ${res.statusText}`);
@@ -651,68 +842,108 @@ export async function getPortfolioBrief(): Promise<any> {
 
 // ── Research and Chat SSE Endpoints ────────────────────────────────────────
 
-export async function startResearch(message: string, mode: 'standard' | 'deep', sessionId?: string, portfolioContext?: string): Promise<any> {
-  const payload: Record<string, any> = {
-    message: message,
-    mode: mode,
-  };
-  if (sessionId) {
-    payload.session_id = sessionId;
-  }
-  // If portfolioContext is passed, we prepend it to the message or pass as objective
-  // The backend chat_research takes a ChatResearchRequest with:
-  // message: str, mode: str, session_id: str | None
-  // But wait! StartResearchRequest takes:
-  // target: str, objective: str, mode: str, session_id: str | None
-  // Let's use the chat_research endpoint POST /chat/research:
-  // message: req.message, mode: req.mode, session_id: req.session_id
-  // If portfolioContext is provided, we send it in req.message.
+export async function startResearch(message: string, mode: 'standard' | 'deep', portfolioContext?: string): Promise<any> {
   const rewrittenMessage = portfolioContext ? `${portfolioContext} ${message}` : message;
-  payload.message = rewrittenMessage;
-
-  const headers: any = {
-    'Content-Type': 'application/json',
-    ...getAuthHeaders(),
+  const payload: Record<string, any> = {
+    // Keep a clean user query for portfolio-scope routing and target detection.
+    target: message,
+    // Keep enriched context for synthesis quality.
+    message: rewrittenMessage,
+    mode,
   };
-  if (typeof window !== 'undefined' && localStorage.getItem('prospektlab_bypass_token_limit') === 'true') {
-    headers['X-Bypass-Token-Limit'] = 'true';
-  }
-
-  const res = await fetchApi(apiUrl('/chat/research'), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
+  trackEvent('research_start_requested', {
+    source: 'frontend',
+    mode,
+    has_portfolio_context: Boolean(portfolioContext),
+    message_length: message.length,
   });
 
+  const res = await fetchWithTimeout(
+    apiUrl('/chat/research'),
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    },
+    CHAT_START_TIMEOUT_MS,
+    'Starting the analysis is taking too long. Please try again.'
+  );
+
   if (!res.ok) {
+    if (res.status === 401) {
+      handleAuthFailure();
+    }
     const errorData = await res.json().catch(() => ({}));
+    trackEvent('research_start_failed', {
+      source: 'frontend',
+      mode,
+      status_code: res.status,
+    });
     const err = new Error(errorData.detail?.message || errorData.detail || `Failed to start research: ${res.statusText}`);
     (err as any).detail = errorData.detail;
     throw err;
   }
 
-  return res.json();
+  const result = await res.json();
+  trackEvent('research_start_accepted', {
+    source: 'frontend',
+    mode,
+    session_id: result?.session_id || '',
+  });
+  return result;
 }
 
 export async function stopSession(sessionId: string): Promise<any> {
+  trackEvent('research_stop_requested', {
+    source: 'frontend',
+    session_id: sessionId,
+  });
   const res = await fetchApi(apiUrl(`/sessions/${encodeURIComponent(sessionId)}/stop`), {
     method: 'POST',
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
+    trackEvent('research_stop_failed', {
+      source: 'frontend',
+      session_id: sessionId,
+      status_code: res.status,
+    });
     throw new Error(`Failed to stop research session: ${res.statusText}`);
   }
-  return res.json();
+  const result = await res.json();
+  trackEvent('research_stop_completed', {
+    source: 'frontend',
+    session_id: sessionId,
+  });
+  return result;
 }
 
 export async function getSessionResult(sessionId: string): Promise<FinalResponse> {
+  trackEvent('research_result_requested', {
+    source: 'frontend',
+    session_id: sessionId,
+  });
   const res = await fetchApi(apiUrl(`/sessions/${encodeURIComponent(sessionId)}/result`), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
+    trackEvent('research_result_failed', {
+      source: 'frontend',
+      session_id: sessionId,
+      status_code: res.status,
+    });
     throw new Error(`Failed to fetch session result: ${res.statusText}`);
   }
-  return res.json();
+  const result = await res.json();
+  trackEvent('research_result_received', {
+    source: 'frontend',
+    session_id: sessionId,
+    status: result?.status || 'unknown',
+  });
+  return result;
 }
 
 export function streamSession(
@@ -721,8 +952,6 @@ export function streamSession(
   onFinal: (final: any) => void,
   onError: (error: any) => void
 ): () => void {
-  const token = getAuthToken();
-  
   let lastEventId: number | null = null;
   let sseAbort = new AbortController();
   let sseReconnectTimer: any = null;
@@ -738,10 +967,23 @@ export function streamSession(
     }
   };
 
+  function scheduleReconnect(delayMs = 1500) {
+    if (!sseActive || onFinalCalled || onErrorCalled) return;
+    clearTimeout(sseReconnectTimer);
+    sseReconnectTimer = setTimeout(connectSSE, delayMs);
+  }
+
   async function finalizeFromResult() {
     if (onFinalCalled || onErrorCalled) return;
     try {
       const result = await getSessionResult(sessionId);
+      const status = String(result.status || '').toLowerCase();
+      const hasDeliverableMemo = Boolean(
+        result.memo ||
+        result.final?.memo ||
+        result.final?.memo_preview ||
+        result.memo_event?.preview
+      );
       const errorPayload = result.error;
       const errorMessage =
         typeof errorPayload === 'string'
@@ -753,6 +995,16 @@ export function streamSession(
           onErrorCalled = true;
           onError(new Error(errorMessage || 'Research failed'));
         }
+        return;
+      }
+
+      if (!hasDeliverableMemo && status !== 'done') {
+        trackEvent('research_stream_waiting_for_result', {
+          source: 'frontend',
+          session_id: sessionId,
+          status: status || 'unknown',
+        });
+        scheduleReconnect();
         return;
       }
 
@@ -773,6 +1025,10 @@ export function streamSession(
       try {
         const parsed = JSON.parse(evData);
         closeStream();
+        trackEvent('research_stream_final', {
+          source: 'frontend',
+          session_id: sessionId,
+        });
         if (!onFinalCalled) {
           onFinalCalled = true;
           onFinal(parsed);
@@ -788,12 +1044,23 @@ export function streamSession(
       try {
         const parsed = JSON.parse(evData);
         closeStream();
+        trackEvent('research_stream_error', {
+          source: 'frontend',
+          session_id: sessionId,
+          phase: 'stream_error_event',
+          message: parsed.message || 'unknown',
+        });
         if (!onErrorCalled) {
           onErrorCalled = true;
           onError(new Error(parsed.message || 'Stream processing error'));
         }
       } catch (err) {
         closeStream();
+        trackEvent('research_stream_error', {
+          source: 'frontend',
+          session_id: sessionId,
+          phase: 'stream_error_event',
+        });
         if (!onErrorCalled) {
           onErrorCalled = true;
           onError(new Error('Stream encountered an error'));
@@ -804,6 +1071,11 @@ export function streamSession(
 
     if (evType === 'done' || evType === 'deep_complete') {
       closeStream();
+      trackEvent('research_stream_completed', {
+        source: 'frontend',
+        session_id: sessionId,
+        phase: evType,
+      });
       void finalizeFromResult();
     }
   }
@@ -826,33 +1098,72 @@ export function streamSession(
       "Accept": "text/event-stream", 
       "Cache-Control": "no-cache" 
     };
+    const telemetryHeaders = buildTelemetryHeaders(headers);
+    const requestId = getTelemetryRequestId(telemetryHeaders) || undefined;
+    const token = getAuthToken();
     if (token) {
-      headers["Authorization"] = "Bearer " + token;
+      (telemetryHeaders as Headers).set?.("Authorization", `Bearer ${token}`);
     }
     if (lastEventId !== null) {
-      headers["Last-Event-ID"] = String(lastEventId);
+      (telemetryHeaders as Headers).set?.("Last-Event-ID", String(lastEventId));
     }
 
     const path = `/sessions/${encodeURIComponent(sessionId)}/stream`;
     let url = apiUrl(path);
-    if (token) {
-      url += (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(token);
-    }
     if (lastEventId !== null) {
       url += (url.includes("?") ? "&" : "?") + "after=" + encodeURIComponent(lastEventId);
     }
+    const startMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
     let resp: Response;
     try {
-      resp = await fetch(url, { headers, signal: sseAbort.signal });
+      resp = await fetch(url, {
+        headers: withAuthHeaders(telemetryHeaders),
+        signal: sseAbort.signal,
+        credentials: requestCredentials(),
+      });
     } catch (err: any) {
       if (!sseActive) return;
       if (err && err.name === "AbortError") return; // proactive reconnect
+      trackDependency({
+        name: `GET ${path}`,
+        url,
+        method: 'GET',
+        durationMs: (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startMs,
+        success: false,
+        requestId,
+        properties: {
+          source: 'frontend',
+          session_id: sessionId,
+          phase: 'stream_connect',
+          error_type: err?.name || 'Error',
+        },
+      });
+      trackEvent('research_stream_error', {
+        source: 'frontend',
+        session_id: sessionId,
+        phase: 'connect',
+      });
       console.warn("SSE fetch error, retrying in 2s:", err);
       clearTimeout(sseReconnectTimer);
       sseReconnectTimer = setTimeout(connectSSE, 2000);
       return;
     }
+
+    trackDependency({
+      name: `GET ${path}`,
+      url,
+      method: 'GET',
+      durationMs: (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startMs,
+      success: resp.ok,
+      statusCode: resp.status,
+      requestId,
+      properties: {
+        source: 'frontend',
+        session_id: sessionId,
+        phase: 'stream_connect',
+      },
+    });
 
     if (!resp.ok) {
       if (!sseActive) return;
@@ -861,11 +1172,23 @@ export function streamSession(
         void finalizeFromResult();
         return;
       }
+      trackEvent('research_stream_error', {
+        source: 'frontend',
+        session_id: sessionId,
+        phase: 'http_error',
+        status_code: resp.status,
+      });
       console.warn("SSE HTTP error status:", resp.status, "— retrying in 3s");
       clearTimeout(sseReconnectTimer);
       sseReconnectTimer = setTimeout(connectSSE, 3000);
       return;
     }
+
+    trackEvent('research_stream_connected', {
+      source: 'frontend',
+      session_id: sessionId,
+      resumed: String(lastEventId !== null),
+    });
 
     const reader = resp.body?.getReader();
     if (!reader) {
@@ -921,7 +1244,7 @@ export function streamSession(
             handleTerminalEvent(evType, evData);
             continue;
           }
-          
+
           try {
             const parsed = JSON.parse(evData);
             onEvent({
@@ -934,6 +1257,9 @@ export function streamSession(
             console.error(`Failed to parse ${evType} event data`, err);
           }
         }
+      }
+      if (sseActive && !onFinalCalled && !onErrorCalled) {
+        scheduleReconnect(1000);
       }
     } catch (err: any) {
       if (!sseActive) return;
@@ -961,7 +1287,7 @@ export function streamSession(
 
 export async function getUserTokenUsage(): Promise<any> {
   const res = await fetchApi(apiUrl('/user/token-usage'), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch user token usage: ${res.statusText}`);
@@ -971,7 +1297,7 @@ export async function getUserTokenUsage(): Promise<any> {
 
 export async function getMarketQuotes(symbols: string[]): Promise<any> {
   const res = await fetchApi(apiUrl(`/market/quotes?symbols=${encodeURIComponent(symbols.join(','))}`), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch market quotes: ${res.statusText}`);
@@ -982,7 +1308,7 @@ export async function getMarketQuotes(symbols: string[]): Promise<any> {
 export async function getMarketNews(query?: string): Promise<any> {
   const qStr = query ? `?query=${encodeURIComponent(query)}` : '';
   const res = await fetchApi(apiUrl(`/market/news${qStr}`), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch market news: ${res.statusText}`);
@@ -992,7 +1318,7 @@ export async function getMarketNews(query?: string): Promise<any> {
 
 export async function getMarketIndices(): Promise<any> {
   const res = await fetchApi(apiUrl('/market/indices'), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new Error(`Failed to fetch market indices: ${res.statusText}`);
@@ -1012,7 +1338,7 @@ export async function getMarketHistory(
   if (assetType) params.set('asset_type', assetType);
 
   const res = await fetchApi(apiUrl(`/market/history?${params.toString()}`), {
-    headers: getAuthHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -1020,4 +1346,3 @@ export async function getMarketHistory(
   }
   return res.json();
 }
-

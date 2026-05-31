@@ -172,8 +172,10 @@ def run_dcf_valuation(
     if result.get("intrinsic_value_per_share") and data["current_price"] > 0:
         iv = result["intrinsic_value_per_share"]
         result["upside_pct"] = round(((iv - data["current_price"]) / data["current_price"]) * 100, 2)
-        result["verdict"] = "UNDERVALUED" if iv > data["current_price"] * 1.1 else (
-            "FAIRLY VALUED" if iv > data["current_price"] * 0.9 else "OVERVALUED"
+        result["valuation_context"] = (
+            "below_model_implied_value" if iv > data["current_price"] * 1.1
+            else "near_model_implied_value" if iv > data["current_price"] * 0.9
+            else "above_model_implied_value"
         )
 
     return result

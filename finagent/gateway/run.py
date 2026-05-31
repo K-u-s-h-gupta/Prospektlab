@@ -71,69 +71,109 @@ from finagent.memory.chat_memory import ChatMemoryManager
 from finagent.ingestion.image_ingestion import PortfolioImageExtractionError, extract_portfolio_from_image
 from finagent.ingestion.portfolio_document import extraction_to_position_dicts, parse_portfolio_document
 from finagent.ingestion.portfolio_schema import PortfolioExtractionConfirmRequest, PortfolioExtractionSchema
-from finagent.portfolio_mirrors import load_active_positions, replace_active_positions, summarize_positions
+from finagent.portfolio_mirrors import load_active_positions, replace_active_positions, summarize_positions, delete_positions
 from finagent.portfolio.analytics import compute_portfolio_analytics
 from finagent.portfolio.news import fetch_portfolio_news
 from finagent.gateway import supabase_client as supabase
 from finagent.gateway.auth_guard import decode_current_user_token
+from finagent.telemetry import TELEMETRY, TelemetryUserContext, telemetry_request_context, telemetry_user_from_authorization_header, telemetry_user_from_request_user
 from finagent.tools.data import fetch_news, fetch_yahoo_quote, fetch_india_snapshot, fetch_nse_snapshot
 import time
 
-class InMemSlidingWindowRateLimiter:
+# ── Rate limiting ─────────────────────────────────────────────────────────
+# Supabase PostgreSQL-backed sliding window (shared across containers, no Redis)
+class SupabaseSlidingWindowRateLimiter:
     def __init__(self, requests_limit: int, window_seconds: int):
         self.requests_limit = requests_limit
         self.window_seconds = window_seconds
-        self.history = {}
 
     async def __call__(self, request: Request):
-        ip = "unknown"
+        from finagent.storage.supabase_store import get_state_store
+        store = get_state_store()
+        key = "unknown"
         auth = request.headers.get("Authorization")
         if auth and auth.startswith("Bearer "):
-            ip = auth.split(" ")[1]
+            key = auth.split(" ")[1]
         elif request.client:
-            ip = request.client.host
-            
-        now = time.time()
-        if ip not in self.history:
-            self.history[ip] = []
-        
-        self.history[ip] = [t for t in self.history[ip] if now - t < self.window_seconds]
-        
-        if len(self.history[ip]) >= self.requests_limit:
+            key = request.client.host
+        try:
+            allowed = await asyncio.wait_for(
+                store.check_rate_limit(key, self.requests_limit, self.window_seconds),
+                timeout=_gateway_float_setting("FINAGENT_RATE_LIMIT_TIMEOUT_S", 3.0),
+            )
+        except Exception as exc:
+            logger.debug("Rate limit check failed open for %s: %s", key, exc)
+            allowed = True
+        if not allowed:
             raise HTTPException(
                 status_code=429,
                 detail="Too many requests. Please try again later."
             )
-        self.history[ip].append(now)
 
-research_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=5, window_seconds=60)
-auth_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=10, window_seconds=60)
-default_rate_limiter = InMemSlidingWindowRateLimiter(requests_limit=100, window_seconds=60)
-_PENDING_EXTRACTIONS: dict[str, dict[str, Any]] = {}
+research_rate_limiter = SupabaseSlidingWindowRateLimiter(requests_limit=5, window_seconds=60)
+auth_rate_limiter = SupabaseSlidingWindowRateLimiter(requests_limit=10, window_seconds=60)
+default_rate_limiter = SupabaseSlidingWindowRateLimiter(requests_limit=100, window_seconds=60)
+
+# ── Upload validation ─────────────────────────────────────────────────────
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+
+VALID_MAGIC_BYTES = {
+    b"%PDF": (".pdf",),
+    b"\x89PNG": (".png",),
+    b"\xff\xd8\xff": (".jpg", ".jpeg"),
+    b"PK\x03\x04": (".xlsx", ".xls"),
+}
+
+PROMPT_INJECTION_PATTERNS = re.compile(
+    r"(ignore\s+(all\s+)?previous\s+(instructions|commands)|"
+    r"disregard\s+(all\s+)?previous|"
+    r"system\s+prompt|"
+    r"you\s+are\s+now\s+|"
+    r"new\s+instructions?\s*:|"
+    r"override\s+(security|restrictions)|"
+    r"bypass\s+(auth|authentication))",
+    re.IGNORECASE,
+)
+
+_FRONTEND_PORTFOLIO_CONTEXT_RE = re.compile(
+    r"^\s*\[(?:USER PORTFOLIO SUMMARY|USER HOLDS SPECIFIC POSITIONS|USER PORTFOLIO VALUE):.*?\]\s*",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _gateway_float_setting(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+async def _contextualize_query_with_budget(
+    query: str,
+    prior_target: str | None,
+    chat_history: list[dict[str, Any]] | None,
+    *,
+    timeout_s: float,
+) -> ContextualizeResult:
+    contextualizer = LLMQueryContextualizer()
+    return await asyncio.wait_for(
+        contextualizer.contextualize(query, prior_target, chat_history),
+        timeout=timeout_s,
+    )
+
+# ── Concurrency limits ──────────────────────────────────────────────────
+_MAX_CONCURRENT_SESSIONS = 20
+_DEEP_RESEARCH_SEMAPHORE = asyncio.Semaphore(2)
 
 # ── Token Usage Tracking ──────────────────────────────────────────────────
 WEEKLY_TOKEN_LIMIT = int(os.getenv("WEEKLY_TOKEN_LIMIT", "1000000"))
 
-
-def _ensure_token_usage_table() -> None:
-    from finagent.storage.sqlite import connect_wal
-    with connect_wal(_ingestion_db_path()) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS token_usage (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_email TEXT NOT NULL,
-                session_id TEXT DEFAULT '',
-                prompt_tokens INTEGER DEFAULT 0,
-                completion_tokens INTEGER DEFAULT 0,
-                total_tokens INTEGER DEFAULT 0,
-                model TEXT DEFAULT '',
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )
-        """)
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_token_usage_email
-            ON token_usage(user_email, created_at)
-        """)
+# ── Token Usage Tracking ──────────────────────────────────────────────────
+WEEKLY_TOKEN_LIMIT = int(os.getenv("WEEKLY_TOKEN_LIMIT", "1000000"))
 
 
 def _week_start_utc() -> datetime:
@@ -146,93 +186,78 @@ def _next_week_start_utc() -> datetime:
     return _week_start_utc() + timedelta(weeks=1)
 
 
-def get_weekly_token_usage(user_email: str) -> int:
-    from finagent.storage.sqlite import connect_wal
-    _ensure_token_usage_table()
-    week_start = _week_start_utc().strftime("%Y-%m-%d %H:%M:%S")
-    with connect_wal(_ingestion_db_path()) as conn:
-        row = conn.execute(
-            "SELECT COALESCE(SUM(total_tokens), 0) FROM token_usage "
-            "WHERE user_email = ? AND created_at >= ?",
-            (user_email, week_start)
-        ).fetchone()
-    return int(row[0]) if row else 0
+async def get_weekly_token_usage(user_email: str) -> int:
+    from finagent.storage.supabase_store import get_token_usage_store
+    store = get_token_usage_store()
+    try:
+        return await asyncio.wait_for(
+            store.get_weekly_usage(user_email),
+            timeout=_gateway_float_setting("FINAGENT_TOKEN_USAGE_TIMEOUT_S", 4.0),
+        )
+    except Exception as exc:
+        logger.debug("weekly token usage check failed for %s: %s", user_email, exc)
+        # Fail-open for availability; token tracking resumes once backend recovers.
+        return 0
 
 
-def record_token_usage(
+async def record_token_usage(
     user_email: str,
     session_id: str,
     prompt_tokens: int,
     completion_tokens: int,
     model: str = "",
 ) -> None:
-    from finagent.storage.sqlite import connect_wal
-    _ensure_token_usage_table()
-    total = prompt_tokens + completion_tokens
-    with connect_wal(_ingestion_db_path()) as conn:
-        conn.execute(
-            "INSERT INTO token_usage "
-            "(user_email, session_id, prompt_tokens, completion_tokens, total_tokens, model) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (user_email, session_id, prompt_tokens, completion_tokens, total, model)
-        )
+    from finagent.storage.supabase_store import get_token_usage_store
+    store = get_token_usage_store()
+    await store.record_usage(user_email, session_id, prompt_tokens, completion_tokens, model)
 
 
+# ── Ingestion state (in-memory + file fallback; no shared SQLite) ─────────
+# We use a simple in-memory dict backed by JSON files per tenant for ingestion state.
+# This avoids SQLite contention and is sufficient for transient ingestion state.
+_INGESTION_STATE: dict[str, dict[str, str]] = {}
 
-def _ingestion_db_path() -> Path:
-    return finagent_data_path("memory.sqlite3")
+
+def _ingestion_state_path(tenant_id: str) -> Path:
+    return finagent_data_path("ingestion_state", f"{tenant_id}.json")
 
 
-def _ensure_ingestion_state_table() -> None:
-    from finagent.storage.sqlite import connect_wal
+def _load_ingestion_state(tenant_id: str) -> dict[str, str]:
+    if tenant_id in _INGESTION_STATE:
+        return dict(_INGESTION_STATE[tenant_id])
+    path = _ingestion_state_path(tenant_id)
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                _INGESTION_STATE[tenant_id] = data
+                return data
+        except Exception:
+            pass
+    return {"status": "IDLE", "message": ""}
 
-    with connect_wal(_ingestion_db_path()) as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS portfolio_ingestion_state (
-                tenant_id TEXT PRIMARY KEY,
-                status TEXT NOT NULL,
-                message TEXT,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
+
+def _save_ingestion_state(tenant_id: str, status: str, message: str = "") -> None:
+    data = {"status": status, "message": message, "updated_at": datetime.now(timezone.utc).isoformat()}
+    _INGESTION_STATE[tenant_id] = data
+    try:
+        path = _ingestion_state_path(tenant_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def _set_ingestion_state(tenant_id: str | None, status: str, message: str = "") -> None:
     if not tenant_id:
         return
-    from finagent.storage.sqlite import connect_wal
-
-    _ensure_ingestion_state_table()
-    with connect_wal(_ingestion_db_path()) as conn:
-        conn.execute(
-            """
-            INSERT INTO portfolio_ingestion_state (tenant_id, status, message, updated_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(tenant_id) DO UPDATE SET
-                status=excluded.status,
-                message=excluded.message,
-                updated_at=excluded.updated_at
-            """,
-            (tenant_id, status, message),
-        )
+    _save_ingestion_state(tenant_id, status, message)
 
 
 def _get_ingestion_state(tenant_id: str | None) -> dict[str, str]:
     if not tenant_id:
         return {"status": "IDLE", "message": ""}
-    from finagent.storage.sqlite import connect_wal
-
-    _ensure_ingestion_state_table()
-    with connect_wal(_ingestion_db_path()) as conn:
-        row = conn.execute(
-            "SELECT status, COALESCE(message, '') FROM portfolio_ingestion_state WHERE tenant_id = ?",
-            (tenant_id,),
-        ).fetchone()
-    if not row:
-        return {"status": "IDLE", "message": ""}
-    return {"status": str(row[0]), "message": str(row[1] or "")}
+    return _load_ingestion_state(tenant_id)
 
 
 def _require_no_active_ingestion(tenant_id: str | None) -> None:
@@ -245,6 +270,63 @@ def _require_no_active_ingestion(tenant_id: str | None) -> None:
                 "message": state["message"] or "Finish portfolio document ingestion before starting chat or research.",
             },
         )
+
+
+async def _read_upload_limited(file: UploadFile, max_bytes: int = MAX_UPLOAD_SIZE) -> bytes:
+    """Read an upload stream with an early hard limit to avoid oversized in-memory blobs."""
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(413, f"Upload exceeds {max_bytes // (1024 * 1024)} MB limit")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _validate_upload(data: bytes, filename: str) -> None:
+    """Enforce upload size, extension, and magic-byte validation."""
+    if len(data) > MAX_UPLOAD_SIZE:
+        raise HTTPException(413, f"Upload exceeds {MAX_UPLOAD_SIZE // (1024 * 1024)} MB limit")
+    ext = Path(filename).suffix.lower()
+    if ext not in {".pdf", ".csv", ".xls", ".xlsx", ".png", ".jpg", ".jpeg"}:
+        raise HTTPException(400, "Unsupported file type")
+    if ext == ".csv":
+        return  # CSV has no reliable magic byte
+    magic = data[:8]
+    valid = False
+    for signature, allowed_exts in VALID_MAGIC_BYTES.items():
+        if magic.startswith(signature):
+            if ext in allowed_exts:
+                valid = True
+            break
+    if not valid:
+        raise HTTPException(400, "File content does not match extension")
+
+
+def _guard_prompt_injection(query: str) -> str:
+    """Block known prompt injection patterns and wrap user input safely."""
+    if PROMPT_INJECTION_PATTERNS.search(query):
+        raise HTTPException(400, "Query contains disallowed directives")
+    # Escape XML-like tags to prevent prompt boundary breakout
+    safe = query.replace("<", "&lt;").replace(">", "&gt;")
+    return f"[USER_QUERY]\n{safe}\n[/USER_QUERY]"
+
+
+def _strip_frontend_portfolio_context(query: str) -> str:
+    text = (query or "").strip()
+    if not text:
+        return ""
+    return _FRONTEND_PORTFOLIO_CONTEXT_RE.sub("", text, count=1).strip()
+
+
+def _profile_mobile(profile: dict[str, Any] | None) -> str:
+    if not isinstance(profile, dict):
+        return ""
+    return str(profile.get("mobile") or profile.get("phone") or "").strip()
 
 _COMPARISON_RE = re.compile(
     r"\b(?:compare|comparison|compares|comparing|vs\.?|versus|against|head[\s-]to[\s-]head)\b",
@@ -261,11 +343,46 @@ def _extract_comparison_targets(query: str) -> list[str]:
     entities = extract_finance_entities(query, limit=2)
     return [e.canonical_name for e in entities if e.canonical_name]
 
+
+_SESSION_ID_RE = re.compile(r"^[a-f0-9]{12,64}$")
+_REVIEW_ID_RE = re.compile(r"^[a-f0-9]{12,64}$")
+
+
+def _validate_session_id(session_id: str) -> str:
+    sid = (session_id or "").strip().lower()
+    if not _SESSION_ID_RE.fullmatch(sid):
+        raise HTTPException(status_code=422, detail="Invalid session_id format")
+    return sid
+
+
+def _validate_review_id(review_id: str) -> str:
+    rid = (review_id or "").strip().lower()
+    if not _REVIEW_ID_RE.fullmatch(rid):
+        raise HTTPException(status_code=422, detail="Invalid review_id format")
+    return rid
+
+
 _MEMORY_MANAGER = ChatMemoryManager()
 AUTH_COOKIE_NAME = "prospektlab_auth"
 AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
 
 logger = logging.getLogger("finagent.gateway")
+
+
+async def _periodic_cleanup() -> None:
+    """Background task: reap zombie tasks and clean old state every 5 minutes."""
+    while True:
+        await asyncio.sleep(300)
+        # Reap done tasks
+        done_sids = [sid for sid, t in _TASKS.items() if t.done()]
+        for sid in done_sids:
+            _TASKS.pop(sid, None)
+        # Clean old event bus sessions
+        BUS.cleanup_old_sessions(max_age=3600)
+        # Clean old SQLite state
+        from finagent.gateway.state_store import cleanup_old_state
+        cleanup_old_state(ttl_seconds=3600)
+        logger.info("Periodic cleanup finished: %d tasks reaped, old sessions purged", len(done_sids))
 
 
 @asynccontextmanager
@@ -274,11 +391,23 @@ async def lifespan(app: FastAPI):
     logger.info(
         "FastAPI gateway startup: Logging configuration successfully applied to finagent and oracle namespaces."
     )
+    if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_KEY"):
+        logger.warning(
+            "SUPABASE_URL or SUPABASE_KEY is not set. The application will use in-memory fallback stores. "
+            "Data will not persist across restarts. Set these environment variables for production use."
+        )
+    cleanup_task = asyncio.create_task(_periodic_cleanup())
     yield
     # Shutdown
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
     for task in list(_TASKS.values()):
         task.cancel()
     await aclose_shared_client()
+    await TELEMETRY.aclose()
 
 
 app = FastAPI(
@@ -305,6 +434,75 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def telemetry_middleware(request: Request, call_next):
+    if request.url.path in {"/docs", "/openapi.json", "/redoc"}:
+        return await call_next(request)
+
+    request_id, session_id = telemetry_request_context(request)
+    telemetry_user = telemetry_user_from_authorization_header(request.headers.get("Authorization"))
+    started_at = time.perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        TELEMETRY.emit_exception(
+            exc,
+            user=telemetry_user,
+            request_id=request_id,
+            properties={
+                "source": "backend",
+                "method": request.method,
+                "path": request.url.path,
+                "query": request.url.query or "",
+                "status": "exception",
+            },
+        )
+        TELEMETRY.emit_request(
+            name=f"{request.method} {request.url.path}",
+            url=request.url.path,
+            method=request.method,
+            duration_ms=elapsed_ms,
+            success=False,
+            status_code=500,
+            user=telemetry_user,
+            request_id=request_id,
+            session_id=session_id,
+            properties={
+                "source": "backend",
+                "method": request.method,
+                "path": request.url.path,
+                "query": request.url.query or "",
+                "status": "500",
+            },
+        )
+        raise
+
+    elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+    TELEMETRY.emit_request(
+        name=f"{request.method} {request.url.path}",
+        url=request.url.path,
+        method=request.method,
+        duration_ms=elapsed_ms,
+        success=response.status_code < 400,
+        status_code=response.status_code,
+        user=telemetry_user,
+        request_id=request_id,
+        session_id=session_id,
+        properties={
+            "source": "backend",
+            "method": request.method,
+            "path": request.url.path,
+            "query": request.url.query or "",
+            "status": str(response.status_code),
+        },
+    )
+    response.headers["X-Prospektlab-Request-Id"] = request_id
+    if session_id:
+        response.headers["X-Prospektlab-Session-Id"] = session_id
+    return response
+
 # ── Global Security Headers Middleware ────────────────────────────────────
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
@@ -313,10 +511,13 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    # Hardened CSP: unsafe-inline and unsafe-eval removed from script-src.
+    # Google Identity Services is loaded via a separate script file or
+    # CSP nonce (recommended). For now, specific external domains are allowed.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://unpkg.com; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdn.tailwindcss.com; "
+        "script-src 'self' https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; "
+        "style-src 'self' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
         "font-src 'self' data: https://fonts.gstatic.com; "
         "img-src 'self' data: https://*.googleusercontent.com; "
         "frame-src 'self' https://accounts.google.com; "
@@ -325,14 +526,18 @@ async def add_security_headers(request: Request, call_next):
     return response
 
 # ── Unified get_current_user Dependency for JWT and BOLA checks ──────────
-def _set_auth_cookie(response: Response, token: str, request: Request) -> None:
-    secure = request.url.scheme == "https" or os.getenv("PROSPEKTLAB_ENV") == "production"
+def _set_auth_cookie(response: Response, token: str, request: Request | None = None) -> None:
+    # Always secure in production; default to secure=True to prevent accidental
+    # plaintext transmission behind reverse proxies.
+    secure = True
+    if os.getenv("PROSPEKTLAB_ENV") != "production" and request is not None:
+        secure = request.url.scheme == "https"
     response.set_cookie(
         AUTH_COOKIE_NAME,
         token,
         max_age=AUTH_COOKIE_MAX_AGE,
         httponly=True,
-        samesite="lax",
+        samesite="strict",
         secure=secure,
         path="/",
     )
@@ -349,13 +554,10 @@ def _decode_current_user(actual_token: str) -> dict:
 async def get_current_user(
     request: Request,
     authorization: str = Header(None),
-    token: str | None = None,
 ) -> dict:
     actual_token = None
     if authorization and authorization.startswith("Bearer "):
         actual_token = authorization.split(" ")[1]
-    elif token:
-        actual_token = token
     else:
         actual_token = request.cookies.get(AUTH_COOKIE_NAME)
     return _decode_current_user(actual_token)
@@ -363,13 +565,13 @@ async def get_current_user(
 
 async def enforce_token_limit(
     current_user: dict = Depends(get_current_user),
-    x_bypass_token_limit: str | None = Header(None, alias="X-Bypass-Token-Limit")
 ) -> dict:
-    """FastAPI dependency — raises 429 when weekly token limit is exceeded."""
-    if x_bypass_token_limit == "true":
-        return current_user
+    """FastAPI dependency — raises 429 when weekly token limit is exceeded.
 
-    usage = get_weekly_token_usage(current_user["email"])
+    SECURITY: Client-side bypass headers have been removed. Only server-side
+    token accounting determines limits.
+    """
+    usage = await get_weekly_token_usage(current_user["email"])
     if usage >= WEEKLY_TOKEN_LIMIT:
         # Calculate reset time in IST (UTC+5:30)
         restore_ist = _next_week_start_utc() + timedelta(hours=5, minutes=30)
@@ -386,12 +588,23 @@ async def enforce_token_limit(
     return current_user
 
 def verify_session_ownership(session_id: str, current_user: dict) -> None:
-    meta = _load_session_meta(session_id)
-    owner_tenant = meta.get("tenant_id")
-    if owner_tenant and owner_tenant != current_user.get("tenant_id"):
+    sid = _validate_session_id(session_id)
+    meta = _load_session_meta(sid)
+    if not isinstance(meta, dict) or not meta:
+        raise HTTPException(status_code=404, detail="Unknown session")
+
+    owner_tenant = (meta.get("tenant_id") or "").strip()
+    owner_email = (meta.get("user_email") or "").strip().lower()
+    current_tenant = (current_user.get("tenant_id") or "").strip()
+    current_email = (current_user.get("email") or "").strip().lower()
+
+    # Fail closed: ownership metadata is mandatory for access.
+    if not owner_tenant and not owner_email:
+        raise HTTPException(status_code=403, detail="Access denied: Session ownership metadata missing.")
+
+    if owner_tenant and current_tenant and owner_tenant != current_tenant:
         raise HTTPException(status_code=403, detail="Access denied: You do not own this research session.")
-    owner_email = meta.get("user_email")
-    if owner_email and owner_email.lower().strip() != current_user["email"].lower().strip():
+    if owner_email and owner_email != current_email:
         raise HTTPException(status_code=403, detail="Access denied: You do not own this research session.")
 
 def add_cors_headers(request: Request, response: Response) -> Response:
@@ -449,6 +662,21 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    request_id, session_id = telemetry_request_context(request)
+    telemetry_user = telemetry_user_from_authorization_header(request.headers.get("Authorization"))
+    TELEMETRY.emit_exception(
+        exc,
+        user=telemetry_user,
+        request_id=request_id,
+        properties={
+            "source": "backend",
+            "method": request.method,
+            "path": request.url.path,
+            "query": request.url.query or "",
+            "status": "exception",
+            "handler": "global_exception_handler",
+        },
+    )
     logger.exception("Unhandled gateway error on %s %s", request.method, request.url.path)
     response = JSONResponse(
         status_code=500,
@@ -457,17 +685,37 @@ async def global_exception_handler(request: Request, exc: Exception):
             "error_type": exc.__class__.__name__
         }
     )
+    response.headers["X-Prospektlab-Request-Id"] = request_id
+    if session_id:
+        response.headers["X-Prospektlab-Session-Id"] = session_id
     return add_cors_headers(request, response)
 
-JWT_SECRET = os.getenv("JWT_SECRET", "super_secret_ipo_key_123")
-if JWT_SECRET == "super_secret_ipo_key_123" and os.getenv("PROSPEKTLAB_ENV") == "production":
-    raise RuntimeError("Insecure default JWT_SECRET fallback is prohibited in production!")
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET environment variable is required. Set a strong random secret before starting the server.")
+
+
+def _mint_token(user_id: str, email: str, name: str | None = None, days: int = 30) -> str:
+    """Issue a local JWT with jti, exp, iat, iss, and aud claims."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "user_id": user_id,
+        "email": email,
+        "name": name or email,
+        "jti": str(uuid.uuid4()),
+        "iat": now,
+        "exp": now + timedelta(days=days),
+        "iss": "prospektlab",
+        "aud": "prospektlab-api",
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
 
 class GoogleAuthRequest(BaseModel):
     credential: str
 
 async def _verify_google_token(credential: str) -> dict:
-    """Verify a Google ID token, falling back to local JWT decode if tokeninfo is unavailable."""
+    """Verify a Google ID token against Google's tokeninfo endpoints."""
     # Try v3 tokeninfo endpoint first (recommended by Google)
     tokeninfo_urls = [
         f"https://www.googleapis.com/oauth2/v3/tokeninfo?id_token={urllib.parse.quote(credential)}",
@@ -485,21 +733,7 @@ async def _verify_google_token(credential: str) -> dict:
                 logger.warning(f"Google tokeninfo request failed for {url}: {e}")
                 last_error = e
 
-    # Fallback: decode the JWT locally to extract user info
-    try:
-        payload = jwt.decode(credential, options={"verify_signature": False})
-        email = payload.get("email")
-        email_verified = payload.get("email_verified")
-        if not email or not email_verified:
-            raise HTTPException(status_code=401, detail="Google account email not verified")
-        logger.info(f"Google token verified via local JWT decode for {email}")
-        return payload
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Local JWT decode also failed: {e}")
-
-    raise HTTPException(status_code=401, detail="Invalid Google token")
+    raise HTTPException(status_code=503, detail="Identity service temporarily unavailable. Please try again.")
 
 @app.post("/auth/google", dependencies=[Depends(auth_rate_limiter)])
 async def google_auth(req: GoogleAuthRequest, request: Request):
@@ -537,14 +771,10 @@ async def google_auth(req: GoogleAuthRequest, request: Request):
 
     # Refresh profile details to check if mobile number exists
     profile = await supabase.get_user_by_email(email)
-    mobile = profile.get("mobile") if profile else ""
+    mobile = _profile_mobile(profile)
     require_mobile = not bool(mobile)
 
-    try:
-        token = jwt.encode({"user_id": user_id, "email": email}, JWT_SECRET, algorithm="HS256")
-    except Exception:
-        # Fallback if PyJWT is not installed, though it should be
-        token = f"mock_token_{user_id}"
+    token = _mint_token(user_id, email, full_name)
 
     response = JSONResponse({
         "token": token,
@@ -556,6 +786,14 @@ async def google_auth(req: GoogleAuthRequest, request: Request):
         "mobile": mobile
     })
     _set_auth_cookie(response, token, request)
+    TELEMETRY.emit_event(
+        "auth_google_success",
+        user=TelemetryUserContext(email=email, name=full_name, user_id=user_id, auth_provider="google"),
+        properties={
+            "source": "backend",
+            "require_mobile": require_mobile,
+        },
+    )
     return response
 
 class UpdateMobileRequest(BaseModel):
@@ -585,28 +823,42 @@ async def update_google_mobile(req: UpdateMobileRequest, current_user: dict = De
 
     # Update in public.profiles table
     await supabase.upsert_profile(user_id, email, name, "google", mobile=req.mobile, avatar_url=avatar)
+    TELEMETRY.emit_event(
+        "auth_mobile_updated",
+        user=telemetry_user_from_request_user(current_user),
+        properties={
+            "source": "backend",
+            "provider": "google",
+        },
+    )
 
     return {"message": "Mobile number updated successfully."}
 
 
 
-_GATEWAY_DIR = Path(__file__).resolve().parent
-_WIDGET_PATH = _GATEWAY_DIR / "widget.html"
-_PAGE_PATHS = {
-    "landing": _GATEWAY_DIR / "landing.html",
-    "login": _GATEWAY_DIR / "login.html",
-    "signup": _GATEWAY_DIR / "signup.html",
-    "profile": _GATEWAY_DIR / "profile.html",
-    "settings": _GATEWAY_DIR / "settings.html",
-}
 _MEMOS_DIR = finagent_data_path("memos")
+
+
+def _frontend_base_url() -> str:
+    raw = (os.getenv("FINAGENT_FRONTEND_URL") or os.getenv("FRONTEND_URL") or "").strip()
+    if raw:
+        return raw.rstrip("/")
+    if _allow_origins and _allow_origins[0] != "*":
+        return _allow_origins[0].rstrip("/")
+    return "http://localhost:5173"
+
+
+def _frontend_hash_url(route: str = "") -> str:
+    cleaned = (route or "").lstrip("/")
+    base = _frontend_base_url()
+    return f"{base}/#/{cleaned}" if cleaned else f"{base}/#/"
 
 
 class StartResearchRequest(BaseModel):
     target: str = Field(..., min_length=1)
     objective: str = Field("")
     # Optional — when absent the agent auto-picks depth from the objective.
-    max_steps: int | None = Field(default=None, ge=4, le=10000)
+    max_steps: int | None = Field(default=None, ge=4, le=50)
     max_wall_seconds: float | None = Field(default=None, ge=10, le=24 * 60 * 60)
     heartbeat_interval_s: float = Field(default=20.0, ge=5, le=300)
     mode: str = Field(default="chat", description="chat, standard, or deep")
@@ -622,15 +874,36 @@ class StartResearchRequest(BaseModel):
             return "deep"
         return mode if mode in {"chat", "standard", "deep"} else "chat"
 
+    @field_validator("session_id")
+    @classmethod
+    def _session_id(cls, v: str | None) -> str | None:
+        if not v:
+            return None
+        try:
+            return _validate_session_id(v)
+        except HTTPException as exc:
+            raise ValueError("Invalid session_id format") from exc
+
 
 class DeepResearchRequest(BaseModel):
     target: str = Field(..., min_length=1)
+    objective: str = Field(default="")
     passes: int = Field(default=8, ge=2, le=20, description="Legacy input accepted; runtime uses fixed 8-phase Deep Research")
     pass_depth: int = Field(default=40, ge=10, le=120, description="Max steps per phase")
     max_wall_seconds: float | None = Field(default=None, ge=30, le=30 * 60)
     heartbeat_interval_s: float = Field(default=20.0, ge=5, le=60)
     user_email: str | None = None
     session_id: str | None = None
+
+    @field_validator("session_id")
+    @classmethod
+    def _session_id(cls, v: str | None) -> str | None:
+        if not v:
+            return None
+        try:
+            return _validate_session_id(v)
+        except HTTPException as exc:
+            raise ValueError("Invalid session_id format") from exc
 
 
 class ChatResearchRequest(BaseModel):
@@ -646,6 +919,16 @@ class ChatResearchRequest(BaseModel):
     def _mode(cls, v: str) -> str:
         mode = (v or "standard").strip().lower()
         return "deep" if mode == "marathon" else (mode if mode in {"standard", "deep"} else "standard")
+
+    @field_validator("session_id")
+    @classmethod
+    def _session_id(cls, v: str | None) -> str | None:
+        if not v:
+            return None
+        try:
+            return _validate_session_id(v)
+        except HTTPException as exc:
+            raise ValueError("Invalid session_id format") from exc
 
 
 class PositionMirrorInput(BaseModel):
@@ -692,6 +975,19 @@ class SignupRequest(BaseModel):
     def _email(cls, v: str) -> str:
         return _validate_email(v)
 
+    @field_validator("password")
+    @classmethod
+    def _password(cls, v: str) -> str:
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter.")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter.")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit.")
+        if not any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in v):
+            raise ValueError("Password must contain at least one special character.")
+        return v
+
 
 class LoginRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=160)
@@ -735,6 +1031,20 @@ class ResetPasswordRequest(BaseModel):
 
 _TASKS: dict[str, asyncio.Task[Any]] = {}
 _SESSION_META: dict[str, dict[str, Any]] = {}
+_SESSIONS_DIR = finagent_data_path("sessions")
+
+
+def _session_dir(session_id: str, *, create: bool = False) -> Path:
+    sid = _validate_session_id(session_id)
+    base = _SESSIONS_DIR.resolve()
+    path = (base / sid).resolve()
+    try:
+        path.relative_to(base)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid session_id format") from exc
+    if create:
+        path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def _session_record(
@@ -746,6 +1056,7 @@ def _session_record(
     user_email: str | None = None,
     tenant_id: str | None = None,
 ) -> None:
+    session_id = _validate_session_id(session_id)
     record = {
         "session_id": session_id,
         "mode": mode,
@@ -757,47 +1068,48 @@ def _session_record(
         "status": "running",
     }
     _SESSION_META[session_id] = record
-    _session_meta_path(session_id).write_text(json.dumps(record, indent=2), encoding="utf-8")
+    _session_meta_path(session_id, create_parent=True).write_text(json.dumps(record, indent=2), encoding="utf-8")
 
 
-def _session_meta_path(session_id: str) -> Path:
-    path = finagent_data_path("sessions", session_id, "meta.json")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
+def _session_meta_path(session_id: str, *, create_parent: bool = False) -> Path:
+    return _session_dir(session_id, create=create_parent) / "meta.json"
 
 
 def _load_session_meta(session_id: str) -> dict[str, Any]:
-    if session_id in _SESSION_META:
-        return dict(_SESSION_META[session_id])
-    path = _session_meta_path(session_id)
+    sid = _validate_session_id(session_id)
+    if sid in _SESSION_META:
+        return dict(_SESSION_META[sid])
+    path = _session_meta_path(sid)
     if not path.is_file():
-        return {"session_id": session_id}
+        return {"session_id": sid}
     try:
         meta = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(meta, dict):
-            _SESSION_META[session_id] = meta
+            _SESSION_META[sid] = meta
             return dict(meta)
     except Exception:
         pass
-    return {"session_id": session_id}
+    return {"session_id": sid}
 
 
 def _save_session_meta(session_id: str, meta: dict[str, Any]) -> None:
-    _SESSION_META[session_id] = dict(meta)
+    sid = _validate_session_id(session_id)
+    _SESSION_META[sid] = dict(meta)
     try:
-        _session_meta_path(session_id).write_text(json.dumps(meta, indent=2, default=str), encoding="utf-8")
+        _session_meta_path(sid, create_parent=True).write_text(json.dumps(meta, indent=2, default=str), encoding="utf-8")
     except OSError:
         pass
 
 
 def _clear_session_memo(session_id: str) -> None:
     """Remove stale rendered output before a fresh run reuses a session id."""
-    memo_path = _MEMOS_DIR / f"{session_id}.md"
+    sid = _validate_session_id(session_id)
+    memo_path = _MEMOS_DIR / f"{sid}.md"
     if memo_path.is_file():
         try:
             memo_path.unlink(missing_ok=True)
         except OSError:
-            logger.warning("Could not clear stale memo for session %s", session_id)
+            logger.warning("Could not clear stale memo for session %s", sid)
 
 
 def _event_payload(idx: int, event) -> dict[str, Any]:
@@ -860,6 +1172,21 @@ def health():
         "openai": "enabled" if os.getenv("OPENAI_API_KEY") else "fallback",
         "finagent_home": "<redacted>",
         "version": app.version,
+    }
+
+
+@app.get("/auth/me")
+async def auth_me(current_user: dict = Depends(get_current_user)):
+    """Return the current authenticated user.
+
+    Accepts either cookie auth or Authorization bearer token auth so
+    cross-origin frontends can rehydrate session state reliably.
+    """
+    return {
+        "user_id": current_user.get("user_id"),
+        "email": current_user.get("email"),
+        "tenant_id": current_user.get("tenant_id"),
+        "auth_provider": current_user.get("auth_provider"),
     }
 
 
@@ -931,8 +1258,8 @@ def config():
 # ── Market Data & Token Usage Endpoints ─────────────────────────────────────
 
 @app.get("/user/token-usage")
-def get_user_token_usage(current_user: dict = Depends(get_current_user)):
-    usage = get_weekly_token_usage(current_user["email"])
+async def get_user_token_usage(current_user: dict = Depends(get_current_user)):
+    usage = await get_weekly_token_usage(current_user["email"])
     restore_ist = _next_week_start_utc() + timedelta(hours=5, minutes=30)
     restore_display = restore_ist.strftime("%A, %d %B %Y at %I:%M %p IST")
     remaining = max(0, WEEKLY_TOKEN_LIMIT - usage)
@@ -1143,9 +1470,12 @@ async def get_market_quotes(symbols: str, current_user: dict = Depends(get_curre
     results = {}
     
     async def fetch_one(sym: str):
+        # Use NSE/BSE-first live quote data for dashboard prices and movers.
+        quote_timeout = _gateway_float_setting("FINAGENT_MARKET_QUOTE_TIMEOUT_S", 5.0)
+        yahoo_timeout = _gateway_float_setting("FINAGENT_MARKET_QUOTE_YAHOO_TIMEOUT_S", 16.0)
+
         try:
-            # Use NSE/BSE-first live quote data for dashboard prices and movers.
-            snap = await fetch_nse_snapshot(sym)
+            snap = await asyncio.wait_for(fetch_nse_snapshot(sym), timeout=quote_timeout)
             if snap and snap.current_price is not None:
                 return sym, {
                     "symbol": snap.symbol,
@@ -1159,7 +1489,13 @@ async def get_market_quotes(symbols: str, current_user: dict = Depends(get_curre
                     "source": snap.source or "NSE/BSE",
                     "source_url": snap.source_url,
                 }
-            snap = await fetch_india_snapshot(sym)
+        except (asyncio.TimeoutError, httpx.HTTPError) as exc:
+            logger.debug("NSE/BSE quote unavailable for %s: %s", sym, type(exc).__name__)
+        except Exception as exc:
+            logger.debug("NSE/BSE quote fetch failed for %s: %s", sym, exc)
+
+        try:
+            snap = await asyncio.wait_for(fetch_india_snapshot(sym), timeout=quote_timeout)
             if snap and snap.current_price is not None:
                 return sym, {
                     "symbol": snap.symbol,
@@ -1173,8 +1509,37 @@ async def get_market_quotes(symbols: str, current_user: dict = Depends(get_curre
                     "source": snap.source or "market data",
                     "source_url": snap.source_url,
                 }
-        except Exception as e:
-            logger.error(f"Error fetching quote for {sym}: {e}")
+        except (asyncio.TimeoutError, httpx.HTTPError) as exc:
+            logger.debug("India quote fallback unavailable for %s: %s", sym, type(exc).__name__)
+        except Exception as exc:
+            logger.debug("India quote fallback failed for %s: %s", sym, exc)
+
+        try:
+            # Fallback to Yahoo if India providers miss or time out.
+            yahoo_candidates = (
+                (f"{sym}.NS", f"{sym}.BO", sym)
+                if "." not in sym and not sym.startswith("^")
+                else (sym,)
+            )
+            for candidate in yahoo_candidates:
+                quote = await fetch_yahoo_quote(candidate, timeout_s=yahoo_timeout)
+                if quote and quote.price is not None:
+                    quote_name = getattr(quote, "name", None)
+                    quote_symbol = getattr(quote, "symbol", None)
+                    return sym, {
+                        "symbol": sym,
+                        "company_name": quote_name or quote_symbol or sym,
+                        "price": quote.price,
+                        "change_pct": quote.change_pct if quote.change_pct is not None else 0.0,
+                        "sector": "General",
+                        "pe_ratio": None,
+                        "market_cap": None,
+                        "isin": None,
+                        "source": "Yahoo Finance",
+                        "source_url": None,
+                    }
+        except Exception as exc:
+            logger.debug("Yahoo quote fallback failed for %s: %s", sym, exc)
         return sym, None
 
     tasks = [fetch_one(sym) for sym in symbol_list]
@@ -1335,17 +1700,28 @@ async def get_market_indices(current_user: dict = Depends(get_current_user)):
 # ── Memory viewer endpoints ─────────────────────────────────────────────
 
 @app.get("/portfolio/mirror")
-def get_portfolio_mirror(current_user: dict = Depends(get_current_user)):
+async def get_portfolio_mirror(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
+    try:
+        positions = await load_active_positions(tenant_id)
+    except Exception as exc:
+        logger.warning("Portfolio mirror load failed for tenant %s: %s", tenant_id, exc)
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "ok": False,
+                "code": "PORTFOLIO_STORE_UNAVAILABLE",
+                "message": "Your portfolio mirror is temporarily unavailable. Please retry in a moment.",
+            },
+        ) from exc
     return summarize_positions(positions)
 
 
 @app.post("/portfolio/mirror")
-def replace_portfolio_mirror(req: PositionMirrorReplaceRequest, current_user: dict = Depends(get_current_user)):
+async def replace_portfolio_mirror(req: PositionMirrorReplaceRequest, current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
     _require_no_active_ingestion(tenant_id)
-    positions = replace_active_positions(
+    positions = await replace_active_positions(
         tenant_id,
         [item.model_dump() for item in req.positions if item.active],
     )
@@ -1353,13 +1729,45 @@ def replace_portfolio_mirror(req: PositionMirrorReplaceRequest, current_user: di
     return summarize_positions(positions)
 
 
-def _require_synchronized_portfolio(tenant_id: str | None) -> None:
+async def _require_synchronized_portfolio(tenant_id: str | None, *, allow_empty: bool = False) -> bool:
     if not tenant_id:
         raise HTTPException(
             status_code=403,
             detail={"status": "TENANT_REQUIRED", "message": "Portfolio audit requires a verified tenant session."},
         )
-    if not load_active_positions(tenant_id):
+    try:
+        positions = await asyncio.wait_for(
+            load_active_positions(tenant_id),
+            timeout=_gateway_float_setting("FINAGENT_PORTFOLIO_PREFLIGHT_TIMEOUT_S", 6.0),
+        )
+    except asyncio.TimeoutError as exc:
+        logger.warning("Portfolio preflight timed out for tenant %s: %s", tenant_id, exc)
+        if allow_empty:
+            logger.info("Portfolio preflight timeout for tenant %s; allowing contextual fallback research", tenant_id)
+            return False
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "PORTFOLIO_STORE_TIMEOUT",
+                "message": "Your portfolio sync is temporarily taking too long. Please retry in a moment.",
+            },
+        ) from exc
+    except Exception as exc:
+        logger.warning("Portfolio preflight failed for tenant %s: %s", tenant_id, exc)
+        if allow_empty:
+            logger.info("Portfolio preflight unavailable for tenant %s; allowing contextual fallback research", tenant_id)
+            return False
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "PORTFOLIO_STORE_UNAVAILABLE",
+                "message": "Your portfolio sync is temporarily unavailable. Please retry in a moment.",
+            },
+        ) from exc
+    if not positions:
+        if allow_empty:
+            logger.info("Portfolio mirror empty for tenant %s; allowing fallback research", tenant_id)
+            return False
         raise HTTPException(
             status_code=409,
             detail={
@@ -1367,6 +1775,7 @@ def _require_synchronized_portfolio(tenant_id: str | None) -> None:
                 "message": "Upload and synchronize your eCAS, CSV, Excel, or screenshot holdings before running portfolio research.",
             },
         )
+    return True
 
 
 @app.post("/api/portfolio/upload-cas")
@@ -1378,15 +1787,35 @@ async def upload_portfolio_document(
     current_user: dict = Depends(get_current_user),
 ):
     filename = file.filename or "portfolio-upload"
-    if not filename.lower().endswith((".pdf", ".csv", ".xls", ".xlsx")):
-        raise HTTPException(status_code=400, detail="Upload a PDF, CSV, XLS, or XLSX portfolio document.")
     tenant_id = current_user.get("tenant_id")
+    telemetry_user = telemetry_user_from_request_user(current_user)
     _set_ingestion_state(tenant_id, "INGESTING", "Transforming uploaded portfolio document.")
+    TELEMETRY.emit_event(
+        "portfolio_upload_started",
+        user=telemetry_user,
+        properties={
+            "source": "backend",
+            "upload_type": "document",
+            "file_name": filename,
+            "has_password": bool(password),
+        },
+    )
     try:
-        payload_bytes = await file.read()
+        payload_bytes = await _read_upload_limited(file)
+        _validate_upload(payload_bytes, filename)
         extraction = await parse_portfolio_document(payload_bytes, filename, password)
     except Exception as exc:
         _set_ingestion_state(tenant_id, "FAILED", str(exc))
+        TELEMETRY.emit_event(
+            "portfolio_upload_failed",
+            user=telemetry_user,
+            properties={
+                "source": "backend",
+                "upload_type": "document",
+                "file_name": filename,
+                "error_type": exc.__class__.__name__,
+            },
+        )
         raise
 
     if extraction.status == "INGESTION_FAILED":
@@ -1429,12 +1858,24 @@ async def upload_portfolio_document(
 
     if extraction.status == "REVIEW_REQUIRED":
         review_id = uuid.uuid4().hex[:16]
-        _PENDING_EXTRACTIONS[review_id] = {
-            "tenant_id": tenant_id,
-            "source_type": extraction.source_type,
-            "extraction": extraction.model_dump(),
-        }
+        await supabase.store_pending_extraction(
+            review_id,
+            tenant_id,
+            {
+                "source_type": extraction.source_type,
+                "extraction": extraction.model_dump(),
+            },
+        )
         _set_ingestion_state(tenant_id, "REVIEW_REQUIRED", "Review extracted holdings before syncing.")
+        TELEMETRY.emit_event(
+            "portfolio_upload_review_required",
+            user=telemetry_user,
+            properties={
+                "source": "backend",
+                "upload_type": "document",
+                "file_name": filename,
+            },
+        )
         return {
             "ok": True,
             "code": "REVIEW_REQUIRED",
@@ -1445,7 +1886,17 @@ async def upload_portfolio_document(
             **extraction.model_dump(),
         }
 
-    positions = replace_active_positions(tenant_id, extraction_to_position_dicts(extraction))
+    positions = await replace_active_positions(tenant_id, extraction_to_position_dicts(extraction))
+    if not positions:
+        _set_ingestion_state(tenant_id, "FAILED", "Portfolio holdings could not be saved.")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "ok": False,
+                "code": "MIRROR_SYNC_FAILED",
+                "message": "Your holdings were extracted, but saving them to your account failed. Please retry in a moment.",
+            },
+        )
     summary = summarize_positions(positions)
     _set_ingestion_state(tenant_id, "MIRROR_SYNCHRONIZED", f"{summary['count']} holdings synchronized.")
     summary["ok"] = True
@@ -1457,6 +1908,17 @@ async def upload_portfolio_document(
     summary["cas_meta"] = {"source_type": extraction.source_type, "transformer": extraction.diagnostics.get("transformer")}
     summary["investor"] = extraction.investor
     summary["diagnostics"] = extraction.diagnostics
+    TELEMETRY.emit_event(
+        "portfolio_upload_completed",
+        user=telemetry_user,
+        properties={
+            "source": "backend",
+            "upload_type": "document",
+            "file_name": filename,
+            "status": summary["status"],
+            "count": summary.get("count", 0),
+        },
+    )
     return summary
 
 
@@ -1469,11 +1931,33 @@ async def upload_portfolio_screenshot(
     if not filename.lower().endswith((".jpg", ".jpeg", ".png")):
         raise HTTPException(status_code=400, detail="Upload a JPG, JPEG, or PNG broker holdings screenshot.")
     tenant_id = current_user.get("tenant_id")
+    telemetry_user = telemetry_user_from_request_user(current_user)
     _set_ingestion_state(tenant_id, "INGESTING", "Extracting holdings from screenshot.")
+    TELEMETRY.emit_event(
+        "portfolio_upload_started",
+        user=telemetry_user,
+        properties={
+            "source": "backend",
+            "upload_type": "screenshot",
+            "file_name": filename,
+        },
+    )
     try:
-        extraction = await extract_portfolio_from_image(await file.read(), filename)
+        image_bytes = await _read_upload_limited(file)
+        _validate_upload(image_bytes, filename)
+        extraction = await extract_portfolio_from_image(image_bytes, filename)
     except PortfolioImageExtractionError as exc:
         _set_ingestion_state(tenant_id, "FAILED", str(exc))
+        TELEMETRY.emit_event(
+            "portfolio_upload_failed",
+            user=telemetry_user,
+            properties={
+                "source": "backend",
+                "upload_type": "screenshot",
+                "file_name": filename,
+                "error_type": exc.__class__.__name__,
+            },
+        )
         raise HTTPException(
             status_code=422,
             detail={
@@ -1485,12 +1969,24 @@ async def upload_portfolio_screenshot(
         ) from exc
 
     review_id = uuid.uuid4().hex[:16]
-    _PENDING_EXTRACTIONS[review_id] = {
-        "tenant_id": tenant_id,
-        "source_type": "image",
-        "extraction": extraction.model_dump(),
-    }
+    await supabase.store_pending_extraction(
+        review_id,
+        tenant_id,
+        {
+            "source_type": "image",
+            "extraction": extraction.model_dump(),
+        },
+    )
     _set_ingestion_state(tenant_id, "REVIEW_REQUIRED", "Review screenshot-extracted holdings before syncing.")
+    TELEMETRY.emit_event(
+        "portfolio_upload_review_required",
+        user=telemetry_user,
+        properties={
+            "source": "backend",
+            "upload_type": "screenshot",
+            "file_name": filename,
+        },
+    )
     return {
         "ok": True,
         "code": "REVIEW_REQUIRED",
@@ -1508,8 +2004,12 @@ async def confirm_portfolio_extraction(
     current_user: dict = Depends(get_current_user),
 ):
     tenant_id = current_user.get("tenant_id")
-    pending = _PENDING_EXTRACTIONS.get(req.review_id or "") if req.review_id else None
-    if req.review_id and not pending:
+    telemetry_user = telemetry_user_from_request_user(current_user)
+    review_id = _validate_review_id(req.review_id) if req.review_id else None
+    pending = None
+    if review_id:
+        pending = await supabase.get_pending_extraction(review_id)
+    if review_id and not pending:
         raise HTTPException(status_code=404, detail="Review payload expired or not found.")
     if pending and pending.get("tenant_id") != tenant_id:
         raise HTTPException(status_code=403, detail="Review payload belongs to a different tenant.")
@@ -1517,40 +2017,79 @@ async def confirm_portfolio_extraction(
     positions = req.positions
     source_type = req.source_type
     if not positions and pending:
-        extraction = PortfolioExtractionSchema.model_validate(pending["extraction"])
+        extraction = PortfolioExtractionSchema.model_validate(pending["extraction"]["extraction"])
         positions = extraction.positions
-        source_type = pending.get("source_type", source_type)
+        source_type = pending["extraction"].get("source_type", source_type)
     if not positions:
         raise HTTPException(status_code=422, detail="No reviewed holdings were supplied.")
 
     _set_ingestion_state(tenant_id, "INGESTING", "Synchronizing reviewed holdings.")
+    TELEMETRY.emit_event(
+        "portfolio_extraction_confirm_requested",
+        user=telemetry_user,
+        properties={
+            "source": "backend",
+            "review_id": review_id or "",
+            "source_type": source_type or "unknown",
+            "position_count": len(positions),
+        },
+    )
     extraction = PortfolioExtractionSchema(
         status="MIRROR_SYNCHRONIZED",
         source_type=source_type if source_type in {"pdf", "csv", "xlsx", "image"} else "unknown",
         positions=positions,
         confidence=sum(p.confidence for p in positions) / len(positions),
     )
-    mirrored = replace_active_positions(tenant_id, extraction_to_position_dicts(extraction))
+    mirrored = await replace_active_positions(tenant_id, extraction_to_position_dicts(extraction))
+    if not mirrored:
+        _set_ingestion_state(tenant_id, "FAILED", "Reviewed portfolio holdings could not be saved.")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "ok": False,
+                "code": "MIRROR_SYNC_FAILED",
+                "message": "Your reviewed holdings could not be saved to your account. Please retry in a moment.",
+            },
+        )
     summary = summarize_positions(mirrored)
     _set_ingestion_state(tenant_id, "MIRROR_SYNCHRONIZED", f"{summary['count']} holdings synchronized.")
-    if req.review_id:
-        _PENDING_EXTRACTIONS.pop(req.review_id, None)
+    if review_id:
+        await supabase.delete_pending_extraction(review_id)
     summary.update({"ok": True, "code": "MIRROR_SYNCHRONIZED", "source": source_type})
+    TELEMETRY.emit_event(
+        "portfolio_extraction_confirm_completed",
+        user=telemetry_user,
+        properties={
+            "source": "backend",
+            "review_id": review_id or "",
+            "source_type": source_type or "unknown",
+            "count": summary.get("count", 0),
+        },
+    )
     return summary
 
 
 @app.post("/api/portfolio/cancel-extraction")
 async def cancel_portfolio_extraction(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
-    for review_id, payload in list(_PENDING_EXTRACTIONS.items()):
-        if payload.get("tenant_id") == tenant_id:
-            _PENDING_EXTRACTIONS.pop(review_id, None)
+    telemetry_user = telemetry_user_from_request_user(current_user)
+    pending_list = await supabase.get_pending_extractions_by_tenant(tenant_id)
+    for item in pending_list:
+        await supabase.delete_pending_extraction(item["review_id"])
     _set_ingestion_state(tenant_id, "IDLE", "")
+    TELEMETRY.emit_event(
+        "portfolio_extraction_cancelled",
+        user=telemetry_user,
+        properties={
+            "source": "backend",
+            "pending_count": len(pending_list),
+        },
+    )
     return {"ok": True, "status": "IDLE"}
 
 
 @app.get("/portfolio/analytics")
-def get_portfolio_analytics(
+async def get_portfolio_analytics(
     current_user: dict = Depends(get_current_user),
     benchmark: str = "NIFTY50",
     period: str = "1y",
@@ -1562,33 +2101,48 @@ def get_portfolio_analytics(
         period: Period string (1M, 3M, 1Y, YTD, default 1y)
     """
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
-    return compute_portfolio_analytics(positions, benchmark=benchmark, period=period)
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/analytics")
+    result = compute_portfolio_analytics(positions, benchmark=benchmark, period=period)
+    if isinstance(result, dict):
+        result["store_unavailable"] = store_unavailable
+    return result
 
 
 @app.delete("/portfolio/mirror")
-def delete_portfolio_mirror(current_user: dict = Depends(get_current_user)):
+async def delete_portfolio_mirror(current_user: dict = Depends(get_current_user)):
     """Clear all holdings for the authenticated tenant."""
     tenant_id = current_user.get("tenant_id")
     if not tenant_id:
         raise HTTPException(status_code=403, detail="Tenant required")
-    from finagent.storage.sqlite import connect_wal
-    from finagent.paths import finagent_data_path
-    db_path = finagent_data_path("memory.sqlite3")
-    with connect_wal(db_path) as conn:
-        cur = conn.execute("DELETE FROM position_mirrors WHERE tenant_id = ?", (tenant_id,))
+    deleted = await delete_positions(tenant_id)
     _set_ingestion_state(tenant_id, "IDLE", "")
-    return {"ok": True, "deleted": cur.rowcount}
+    return {"ok": True, "deleted": deleted}
+
+
+async def _load_optional_portfolio_positions(tenant_id: str | None, endpoint: str) -> tuple[list, bool]:
+    """Best-effort portfolio load for dashboard widgets.
+
+    Non-critical widgets such as news, action queue, taxes, and alerts should
+    not raise 500s just because Supabase had a transient read timeout.
+    """
+    if not tenant_id:
+        return [], True
+    try:
+        return await load_active_positions(tenant_id), False
+    except Exception as exc:
+        logger.warning("%s portfolio load failed for tenant %s: %s", endpoint, tenant_id, exc)
+        return [], True
 
 
 @app.get("/portfolio/news")
-def get_portfolio_news(limit: int = 12, current_user: dict = Depends(get_current_user)):
+async def get_portfolio_news(limit: int = 12, current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/news")
     items = fetch_portfolio_news(positions, limit=limit)
     return {
         "items": items,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "store_unavailable": store_unavailable,
         "filters": {
             "min_score": 0.5,
             "max_age_days": 7,
@@ -1598,17 +2152,17 @@ def get_portfolio_news(limit: int = 12, current_user: dict = Depends(get_current
 
 
 @app.get("/portfolio/sectors")
-def get_portfolio_sectors(current_user: dict = Depends(get_current_user)):
+async def get_portfolio_sectors(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/sectors")
     from finagent.portfolio_mirrors import sector_breakdown
     return sector_breakdown(positions)
 
 
 @app.get("/portfolio/holding/{symbol}")
-def get_holding_detail(symbol: str, current_user: dict = Depends(get_current_user)):
+async def get_holding_detail(symbol: str, current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
+    positions = await load_active_positions(tenant_id)
     pos = next((p for p in positions if p.exchange_symbol == symbol or p.normalized_symbol == symbol), None)
     if not pos:
         raise HTTPException(status_code=404, detail="Holding not found")
@@ -1617,38 +2171,42 @@ def get_holding_detail(symbol: str, current_user: dict = Depends(get_current_use
 
 
 @app.get("/portfolio/corporate-actions")
-def get_corporate_actions(days: int = 30, current_user: dict = Depends(get_current_user)):
+async def get_corporate_actions(days: int = 30, current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/corporate-actions")
     from finagent.portfolio.corporate_actions import fetch_corporate_actions
-    return {"events": fetch_corporate_actions(positions, days=days)}
+    return {"events": fetch_corporate_actions(positions, days=days), "store_unavailable": store_unavailable}
 
 
 @app.get("/portfolio/alerts")
-def get_portfolio_alerts(current_user: dict = Depends(get_current_user)):
+async def get_portfolio_alerts(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/alerts")
     from finagent.portfolio.alerts import compute_alerts
     analytics = compute_portfolio_analytics(positions)
-    return {"alerts": compute_alerts(positions, analytics)}
+    return {"alerts": compute_alerts(positions, analytics), "store_unavailable": store_unavailable}
 
 
 @app.get("/portfolio/tax-summary")
-def get_tax_summary(current_user: dict = Depends(get_current_user)):
+async def get_tax_summary(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/tax-summary")
     from finagent.portfolio.tax import compute_tax_summary
-    return compute_tax_summary(positions)
+    result = compute_tax_summary(positions)
+    if isinstance(result, dict):
+        result["store_unavailable"] = store_unavailable
+    return result
 
 
 @app.get("/portfolio/dividends")
-def get_dividends(current_user: dict = Depends(get_current_user)):
+async def get_dividends(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/dividends")
     from finagent.portfolio.dividends import compute_dividend_summary, get_next_ex_dates
     return {
         **compute_dividend_summary(positions),
         "next_ex_dates": get_next_ex_dates(positions),
+        "store_unavailable": store_unavailable,
     }
 
 
@@ -1657,43 +2215,50 @@ class StressTestRequest(BaseModel):
     custom_shocks: dict[str, float] | None = None
 
 @app.post("/portfolio/stress-test")
-def post_stress_test(
+async def post_stress_test(
     body: StressTestRequest,
     current_user: dict = Depends(get_current_user),
 ):
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/stress-test")
     from finagent.portfolio.stress_test import run_stress_test
-    return run_stress_test(positions, scenario=body.scenario, custom_shocks=body.custom_shocks)
+    result = run_stress_test(positions, scenario=body.scenario, custom_shocks=body.custom_shocks)
+    if isinstance(result, dict):
+        result["store_unavailable"] = store_unavailable
+    return result
 
 
 @app.get("/portfolio/mf-analytics")
-def get_mf_analytics(current_user: dict = Depends(get_current_user)):
+async def get_mf_analytics(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/mf-analytics")
     from finagent.portfolio.mf_analytics import compute_mf_analytics
     result = compute_mf_analytics(positions)
     if result is None:
-        return {"status": "NO_MF_POSITIONS"}
+        return {"status": "NO_MF_POSITIONS", "store_unavailable": store_unavailable}
+    if isinstance(result, dict):
+        result["store_unavailable"] = store_unavailable
     return result
 
 
 @app.get("/portfolio/today")
-def get_today_queue(current_user: dict = Depends(get_current_user)):
+async def get_today_queue(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/today")
     from finagent.portfolio.action_queue import build_action_queue
     analytics = compute_portfolio_analytics(positions)
-    return {"items": build_action_queue(positions, analytics)}
+    return {"items": build_action_queue(positions, analytics), "store_unavailable": store_unavailable}
 
 
 @app.get("/portfolio/brief")
-def get_portfolio_brief(current_user: dict = Depends(get_current_user)):
+async def get_portfolio_brief(current_user: dict = Depends(get_current_user)):
     """Return a brief text summary of the portfolio."""
     tenant_id = current_user.get("tenant_id")
-    positions = load_active_positions(tenant_id)
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/brief")
+    if store_unavailable:
+        return {"brief": "Portfolio data is temporarily unavailable.", "store_unavailable": True}
     if not positions:
-        return {"brief": "No portfolio data available."}
+        return {"brief": "No portfolio data available.", "store_unavailable": False}
     
     analytics = compute_portfolio_analytics(positions)
     
@@ -1729,72 +2294,44 @@ from finagent.memory.store import normalize_target
 
 
 @app.get("/memory/stats")
-def memory_stats(current_user: dict = Depends(get_current_user)):
+async def memory_stats(current_user: dict = Depends(get_current_user)):
     """Overall memory statistics scoped to the authenticated user."""
     store = get_memory_store()
     user_email = current_user.get("email")
-    import sqlite3 as _sq
-    c = _sq.connect(str(store.db_path))
-    c.row_factory = _sq.Row
-    if user_email:
-        total = c.execute("SELECT COUNT(*) AS n FROM facts WHERE user_email = ?", (user_email,)).fetchone()["n"]
-        targets = c.execute(
-            "SELECT target_key, COUNT(*) AS n FROM facts WHERE user_email = ? GROUP BY target_key ORDER BY n DESC LIMIT 20",
-            (user_email,),
-        ).fetchall()
-        sessions = c.execute("SELECT COUNT(*) AS n FROM session_summaries WHERE user_email = ?", (user_email,)).fetchone()["n"]
-    else:
-        total = c.execute("SELECT COUNT(*) AS n FROM facts").fetchone()["n"]
-        targets = c.execute(
-            "SELECT target_key, COUNT(*) AS n FROM facts GROUP BY target_key ORDER BY n DESC LIMIT 20"
-        ).fetchall()
-        sessions = c.execute("SELECT COUNT(*) AS n FROM session_summaries").fetchone()["n"]
-    c.close()
+    total = await store.count(user_email=user_email)
+    targets = await store.get_targets(user_email=user_email, limit=20)
+    sessions = await store.get_session_count(user_email=user_email)
     return {
         "total_facts": total,
         "total_sessions": sessions,
         "db_path": "<redacted>",
-        "targets": [{"target": r["target_key"], "facts": r["n"]} for r in targets],
+        "targets": [{"target": t["target"], "facts": t["facts"]} for t in targets],
     }
 
 
 @app.get("/memory/facts")
-def memory_facts(target: str = "", limit: int = 50, current_user: dict = Depends(get_current_user)):
+async def memory_facts(target: str = "", limit: int = 50, current_user: dict = Depends(get_current_user)):
     """Browse facts — optionally filtered by target company, scoped to the authenticated user."""
     store = get_memory_store()
     user_email = current_user.get("email")
-    import sqlite3 as _sq
-    c = _sq.connect(str(store.db_path))
-    c.row_factory = _sq.Row
-    if target and user_email:
-        rows = c.execute(
-            "SELECT * FROM facts WHERE target_key = ? AND user_email = ? ORDER BY created_at DESC LIMIT ?",
-            (normalize_target(target), user_email, limit),
-        ).fetchall()
-    elif target:
-        rows = c.execute(
-            "SELECT * FROM facts WHERE target_key = ? ORDER BY created_at DESC LIMIT ?",
-            (normalize_target(target), limit),
-        ).fetchall()
-    elif user_email:
-        rows = c.execute(
-            "SELECT * FROM facts WHERE user_email = ? ORDER BY created_at DESC LIMIT ?",
-            (user_email, limit),
-        ).fetchall()
-    else:
-        rows = c.execute(
-            "SELECT * FROM facts ORDER BY created_at DESC LIMIT ?", (limit,)
-        ).fetchall()
-    c.close()
+    rows = await store.get_facts(
+        target_key=normalize_target(target) if target else None,
+        user_email=user_email,
+        limit=limit,
+    )
     return {
         "count": len(rows),
         "facts": [
             {
-                "id": r["id"], "target_key": r["target_key"], "kind": r["kind"],
-                "body": r["body"], "confidence": r["confidence"],
-                "source_url": r["source_url"], "session_id": r["session_id"],
-                "user_email": r["user_email"] if "user_email" in r.keys() else None,
-                "created_at": r["created_at"],
+                "id": r.get("id"),
+                "target_key": r.get("target_key"),
+                "kind": r.get("kind"),
+                "body": r.get("body"),
+                "confidence": r.get("confidence"),
+                "source_url": r.get("source_url"),
+                "session_id": r.get("session_id"),
+                "user_email": r.get("user_email"),
+                "created_at": r.get("created_at"),
             }
             for r in rows
         ],
@@ -1802,40 +2339,27 @@ def memory_facts(target: str = "", limit: int = 50, current_user: dict = Depends
 
 
 @app.get("/memory/sessions")
-def memory_sessions(target: str = "", current_user: dict = Depends(get_current_user)):
+async def memory_sessions(target: str = "", current_user: dict = Depends(get_current_user)):
     """List session summaries from memory, scoped to the authenticated user."""
     store = get_memory_store()
     user_email = current_user.get("email")
-    import sqlite3 as _sq
-    c = _sq.connect(str(store.db_path))
-    c.row_factory = _sq.Row
-    if target and user_email:
-        rows = c.execute(
-            "SELECT * FROM session_summaries WHERE target_key = ? AND user_email = ? ORDER BY created_at DESC LIMIT 20",
-            (normalize_target(target), user_email),
-        ).fetchall()
-    elif target:
-        rows = c.execute(
-            "SELECT * FROM session_summaries WHERE target_key = ? ORDER BY created_at DESC LIMIT 20",
-            (normalize_target(target),),
-        ).fetchall()
-    elif user_email:
-        rows = c.execute(
-            "SELECT * FROM session_summaries WHERE user_email = ? ORDER BY created_at DESC LIMIT 20",
-            (user_email,),
-        ).fetchall()
-    else:
-        rows = c.execute("SELECT * FROM session_summaries ORDER BY created_at DESC LIMIT 20").fetchall()
-    c.close()
+    rows = await store.list_sessions(
+        user_email=user_email,
+        target_key=normalize_target(target) if target else None,
+        limit=20,
+    )
     return {
         "count": len(rows),
         "sessions": [
             {
-                "session_id": r["session_id"], "target_key": r["target_key"],
-                "target_display": r["target_display"],
-                "summary": r["summary"][:300], "quality_score": r["quality_score"],
-                "citation_count": r["citation_count"], "created_at": r["created_at"],
-                "user_email": r["user_email"] if "user_email" in r.keys() else None,
+                "session_id": r.get("session_id"),
+                "target_key": r.get("target_key"),
+                "target_display": r.get("target_display"),
+                "summary": (r.get("summary") or "")[:300],
+                "quality_score": r.get("quality_score"),
+                "citation_count": r.get("citation_count"),
+                "created_at": r.get("created_at"),
+                "user_email": r.get("user_email"),
             }
             for r in rows
         ],
@@ -1843,57 +2367,50 @@ def memory_sessions(target: str = "", current_user: dict = Depends(get_current_u
 
 
 @app.delete("/memory/clear/{target}")
-def memory_clear(target: str, current_user: dict = Depends(get_current_user)):
+async def memory_clear(target: str, current_user: dict = Depends(get_current_user)):
     """Delete all stored facts for a specific target scoped to the authenticated user."""
     store = get_memory_store()
     user_email = current_user.get("email")
-    deleted = store.clear_target(target, user_email=user_email)
+    deleted = await store.clear_target(target, user_email=user_email)
     return {"target": target, "deleted": deleted, "user_email": user_email}
 
 
 # ── Static page handlers ────────────────────────────────────────────────
 
 
-def _serve_page(name: str) -> HTMLResponse:
-    p = _PAGE_PATHS.get(name)
-    if not p or not p.is_file():
-        return HTMLResponse(f"<h1>{name}.html missing</h1>", status_code=500)
-    return HTMLResponse(p.read_text(encoding="utf-8"))
-
-
 @app.get("/")
 def root() -> RedirectResponse:
-    return RedirectResponse(url="/landing", status_code=302)
+    return RedirectResponse(url=_frontend_hash_url(""), status_code=302)
 
 
 @app.get("/landing")
-def landing() -> HTMLResponse:
-    return _serve_page("landing")
+def landing() -> RedirectResponse:
+    return RedirectResponse(url=_frontend_hash_url(""), status_code=302)
 
 
 @app.get("/login")
-def login_page() -> HTMLResponse:
-    return _serve_page("login")
+def login_page() -> RedirectResponse:
+    return RedirectResponse(url=_frontend_hash_url("login"), status_code=302)
 
 
 @app.get("/signup")
-def signup_page() -> HTMLResponse:
-    return _serve_page("signup")
+def signup_page() -> RedirectResponse:
+    return RedirectResponse(url=_frontend_hash_url("signup"), status_code=302)
 
 
 @app.get("/profile")
-def profile_page() -> HTMLResponse:
-    return _serve_page("profile")
+def profile_page() -> RedirectResponse:
+    return RedirectResponse(url=_frontend_hash_url("dashboard"), status_code=302)
 
 
 @app.get("/settings")
-def settings_page() -> HTMLResponse:
-    return _serve_page("settings")
+def settings_page() -> RedirectResponse:
+    return RedirectResponse(url=_frontend_hash_url("dashboard"), status_code=302)
 
 
 @app.get("/app")
-def widget(request: Request, token: str | None = None):
-    actual_token = token or request.cookies.get(AUTH_COOKIE_NAME)
+def widget(request: Request) -> RedirectResponse:
+    actual_token = request.cookies.get(AUTH_COOKIE_NAME)
     if not actual_token:
         return RedirectResponse(url="/login", status_code=302)
     try:
@@ -1902,16 +2419,7 @@ def widget(request: Request, token: str | None = None):
         response = RedirectResponse(url="/login", status_code=302)
         _clear_auth_cookie(response)
         return response
-    if token:
-        response = RedirectResponse(url="/app", status_code=302)
-        _set_auth_cookie(response, actual_token, request)
-        return response
-    if not _WIDGET_PATH.is_file():
-        return HTMLResponse("<h1>FinAgent</h1><p>widget.html missing</p>", status_code=500)
-    return HTMLResponse(
-        _WIDGET_PATH.read_text(encoding="utf-8"),
-        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"}
-    )
+    return RedirectResponse(url=_frontend_hash_url("dashboard"), status_code=302)
 
 
 @app.post("/auth/logout")
@@ -1924,8 +2432,8 @@ def auth_logout() -> JSONResponse:
 # ── Auth endpoints ──────────────────────────────────────────────────────
 
 
-_VERIFICATION_CODES: dict[str, tuple[str, float]] = {}
-_RESET_CODES: dict[str, tuple[str, float]] = {}
+# Verification codes and reset codes are stored in Supabase (or local SQLite fallback)
+# via finagent.gateway.state_store / supabase_client.
 
 def _send_email_code(email: str, code: str, is_reset: bool = False) -> bool:
     subject = "Reset Your ProspektLab Password" if is_reset else "Verify Your ProspektLab Email"
@@ -1988,12 +2496,29 @@ async def auth_send_verification(req: SendVerificationRequest):
         raise HTTPException(status_code=409, detail="An account with that email already exists.")
         
     code = f"{secrets.randbelow(900000) + 100000}"
-    _VERIFICATION_CODES[email_clean] = (code, time.time())
+    await supabase.store_verification_code(email_clean, code, type_="signup")
     
     sent = _send_email_code(email_clean, code, is_reset=False)
     if sent:
+        TELEMETRY.emit_event(
+            "auth_verification_sent",
+            user=TelemetryUserContext(email=email_clean, name=email_clean),
+            properties={
+                "source": "backend",
+                "flow": "signup",
+            },
+        )
         return {"message": "Verification email sent successfully."}
     else:
+        TELEMETRY.emit_event(
+            "auth_verification_sent",
+            user=TelemetryUserContext(email=email_clean, name=email_clean),
+            properties={
+                "source": "backend",
+                "flow": "signup",
+                "delivery": "simulated",
+            },
+        )
         return {
             "message": "Verification code generated.",
             "detail": f"Verification code simulated. Code {code} has been logged to the server terminal console."
@@ -2010,12 +2535,28 @@ async def auth_forgot_password(req: ForgotPasswordRequest):
         raise HTTPException(status_code=404, detail="No account with that email exists.")
         
     code = f"{secrets.randbelow(900000) + 100000}"
-    _RESET_CODES[email_clean] = (code, time.time())
+    await supabase.store_verification_code(email_clean, code, type_="reset")
     
     sent = _send_email_code(email_clean, code, is_reset=True)
     if sent:
+        TELEMETRY.emit_event(
+            "auth_password_reset_requested",
+            user=TelemetryUserContext(email=email_clean, name=email_clean),
+            properties={
+                "source": "backend",
+                "delivery": "email",
+            },
+        )
         return {"message": "Reset code sent to your email."}
     else:
+        TELEMETRY.emit_event(
+            "auth_password_reset_requested",
+            user=TelemetryUserContext(email=email_clean, name=email_clean),
+            properties={
+                "source": "backend",
+                "delivery": "simulated",
+            },
+        )
         return {
             "message": "Reset code generated.",
             "detail": f"Reset code simulated. Code {code} has been logged to the server terminal console."
@@ -2026,15 +2567,9 @@ async def auth_forgot_password(req: ForgotPasswordRequest):
 async def auth_reset_password(req: ResetPasswordRequest):
     email_clean = req.email.lower().strip()
     
-    if email_clean not in _RESET_CODES:
-        raise HTTPException(status_code=400, detail="Please request a password reset first.")
-        
-    code, timestamp = _RESET_CODES[email_clean]
-    if time.time() - timestamp > 600:
-        raise HTTPException(status_code=400, detail="Reset code has expired. Please request a new one.")
-        
-    if code != req.code.strip():
-        raise HTTPException(status_code=400, detail="Invalid reset code.")
+    valid = await supabase.verify_and_consume_code(email_clean, req.code, type_="reset", ttl_seconds=600)
+    if not valid:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset code. Please request a new one.")
         
     # Validate via Supabase
     existing = await supabase.get_user_by_email(email_clean)
@@ -2043,10 +2578,13 @@ async def auth_reset_password(req: ResetPasswordRequest):
         
     user_id = existing["id"]
     await supabase.update_admin_user_password(user_id, req.new_password)
-    
-    # Clean up code
-    if email_clean in _RESET_CODES:
-        del _RESET_CODES[email_clean]
+    TELEMETRY.emit_event(
+        "auth_password_reset_completed",
+        user=TelemetryUserContext(email=email_clean, name=email_clean, user_id=user_id),
+        properties={
+            "source": "backend",
+        },
+    )
     
     return {"message": "Password reset successfully."}
 
@@ -2055,16 +2593,10 @@ async def auth_reset_password(req: ResetPasswordRequest):
 async def auth_signup(req: SignupRequest, request: Request):
     email_clean = req.email.lower().strip()
     
-    # Check verification code
-    if email_clean not in _VERIFICATION_CODES:
-        raise HTTPException(status_code=400, detail="Please send a verification code first.")
-        
-    code, timestamp = _VERIFICATION_CODES[email_clean]
-    if time.time() - timestamp > 600:
-        raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
-        
-    if code != req.verification_code.strip():
-        raise HTTPException(status_code=400, detail="Invalid verification code.")
+    # Verify and consume code (one-shot, atomically deleted on success)
+    valid = await supabase.verify_and_consume_code(email_clean, req.verification_code, type_="signup", ttl_seconds=600)
+    if not valid:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification code.")
         
     name_clean = req.name.strip()
     mobile_clean = req.mobile.strip()
@@ -2072,20 +2604,30 @@ async def auth_signup(req: SignupRequest, request: Request):
     # Create via Supabase
     res = await supabase.create_admin_user(email_clean, req.password, name_clean, mobile=mobile_clean, auth_provider="email")
     user_id = res.get("id")
-    await supabase.upsert_profile(user_id, email_clean, name_clean, "email", mobile=mobile_clean)
-    
-    # Clean up verification code
-    if email_clean in _VERIFICATION_CODES:
-        del _VERIFICATION_CODES[email_clean]
+    saved_profile = await supabase.upsert_profile(user_id, email_clean, name_clean, "email", mobile=mobile_clean)
+    saved_mobile = _profile_mobile(saved_profile) or mobile_clean
         
     # Generate a JWT for immediate login after signup
-    try:
-        token = jwt.encode({"user_id": user_id, "email": email_clean}, JWT_SECRET, algorithm="HS256")
-    except Exception:
-        token = f"mock_token_{user_id}"
+    token = _mint_token(user_id, email_clean, name_clean)
         
-    response = JSONResponse({"token": token, "user": {"name": name_clean, "email": email_clean, "plan": "free"}})
+    response = JSONResponse({
+        "token": token,
+        "user": {
+            "name": name_clean,
+            "email": email_clean,
+            "plan": "free",
+            "mobile": saved_mobile,
+            "require_mobile": not bool(saved_mobile),
+        },
+    })
     _set_auth_cookie(response, token, request)
+    TELEMETRY.emit_event(
+        "auth_signup_success",
+        user=TelemetryUserContext(email=email_clean, name=name_clean, user_id=user_id, auth_provider="email"),
+        properties={
+            "source": "backend",
+        },
+    )
     return response
 
 
@@ -2102,25 +2644,41 @@ async def auth_login(req: LoginRequest, request: Request):
     user_id = user.get("id") or user_metadata.get("sub") or email_clean
     
     full_name = user_metadata.get("full_name") or user_metadata.get("name") or "Researcher"
+    profile = None
+    try:
+        profile = await supabase.get_user_by_email(email_clean)
+    except Exception as exc:
+        logger.warning("Profile lookup failed during login for %s: %s", email_clean, exc)
+    mobile = (
+        _profile_mobile(profile)
+        or str(user_metadata.get("mobile") or "").strip()
+        or str(user_metadata.get("phone") or "").strip()
+    )
     
     # Issue a local JWT (same format as Google auth + signup) so that
     # get_current_user can verify it with JWT_SECRET in production.
     # Using the raw Supabase access token here would cause 401s because
     # the backend would need SUPABASE_JWT_SECRET to verify it.
-    try:
-        token = jwt.encode({"user_id": user_id, "email": email_clean}, JWT_SECRET, algorithm="HS256")
-    except Exception:
-        token = f"mock_token_{user_id}"
+    token = _mint_token(user_id, email_clean, full_name)
     
     response = JSONResponse({
         "token": token,
         "user": {
             "name": full_name,
             "email": email_clean,
-            "plan": "free"
+            "plan": "free",
+            "mobile": mobile,
+            "require_mobile": not bool(mobile),
         }
     })
     _set_auth_cookie(response, token, request)
+    TELEMETRY.emit_event(
+        "auth_login_success",
+        user=TelemetryUserContext(email=email_clean, name=full_name, user_id=user_id, auth_provider="email"),
+        properties={
+            "source": "backend",
+        },
+    )
     return response
 
 
@@ -2130,16 +2688,24 @@ async def auth_login(req: LoginRequest, request: Request):
 @app.post("/research/start", dependencies=[Depends(research_rate_limiter)])
 async def start_research(req: StartResearchRequest, current_user: dict = Depends(enforce_token_limit)):
     session_id = req.session_id or uuid.uuid4().hex[:12]
+    telemetry_user = telemetry_user_from_request_user(current_user)
     
     if req.session_id:
         verify_session_ownership(session_id, current_user)
         
     raw_query = req.target.strip()
+    raw_query = _strip_frontend_portfolio_context(raw_query) or raw_query
+    _guard_prompt_injection(raw_query)
     user_email = current_user["email"]
     tenant_id = current_user["tenant_id"]
     _require_no_active_ingestion(tenant_id)
     if is_portfolio_scope_query(raw_query):
-        _require_synchronized_portfolio(tenant_id)
+        await _require_synchronized_portfolio(tenant_id, allow_empty=True)
+
+    # Cap concurrent sessions to prevent resource exhaustion
+    active_sessions = sum(1 for t in _TASKS.values() if not t.done())
+    if active_sessions >= _MAX_CONCURRENT_SESSIONS:
+        raise HTTPException(503, "Server is at capacity. Please try again in a moment.")
 
     requested_mode = (req.mode or "chat").strip().lower()
     if requested_mode == "marathon":
@@ -2148,6 +2714,7 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
         return await start_deep_research(
             DeepResearchRequest(
                 target=raw_query,
+                objective=req.objective,
                 passes=8,
                 pass_depth=min(max(req.max_steps or 40, 10), 120),
                 max_wall_seconds=req.max_wall_seconds,
@@ -2171,8 +2738,15 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
     if req.session_id and prior_target:
         chat_history = _MEMORY_MANAGER.get_history(user_email, session_id)
         try:
-            contextualizer = LLMQueryContextualizer()
-            result = await contextualizer.contextualize(raw_query, prior_target, chat_history)
+            result = await _contextualize_query_with_budget(
+                raw_query,
+                prior_target,
+                chat_history,
+                timeout_s=_gateway_float_setting(
+                    "FINAGENT_CHAT_CONTEXTUALIZER_TIMEOUT_S",
+                    3.5 if requested_mode == "chat" else 6.0,
+                ),
+            )
             is_followup = result.is_followup
 
             if is_followup:
@@ -2192,7 +2766,7 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
                     session_id = uuid.uuid4().hex[:12]
                     BUS.open(session_id, reset=True)
                     logger.info("Target changed from %r to %r — new session %s", prior_target, target, session_id)
-        except (ContextualizerError, Exception) as exc:
+        except (asyncio.TimeoutError, ContextualizerError, Exception) as exc:
             logger.warning("Contextualizer failed for session %s, falling back to raw query: %s", session_id, exc)
             is_followup = True
             target = prior_target
@@ -2202,8 +2776,9 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
         target = primary_target_from_query(raw_query)
 
     # Re-check portfolio scope on contextualized objective (follow-ups may become portfolio queries)
-    if is_portfolio_scope_query(objective):
-        _require_synchronized_portfolio(tenant_id)
+    objective_scope_query = _strip_frontend_portfolio_context(objective) or raw_query
+    if is_portfolio_scope_query(objective_scope_query):
+        await _require_synchronized_portfolio(tenant_id, allow_empty=True)
 
     # Always start a fresh event history for this research execution (prevents
     # replay of previous run's "memo"/"final" events into the new turn's UI).
@@ -2223,6 +2798,18 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
         forced_output_mode = "company_comparison"
     
     _session_record(session_id, mode=mode, target=target, objective=objective, user_email=user_email, tenant_id=tenant_id)
+    TELEMETRY.emit_event(
+        "research_started",
+        user=telemetry_user,
+        properties={
+            "source": "backend",
+            "session_id": session_id,
+            "mode": mode,
+            "request_mode": requested_mode,
+            "target_length": len(raw_query),
+            "comparison": is_comparison_query,
+        },
+    )
 
     async def _runner() -> None:
         try:
@@ -2230,11 +2817,14 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
             # Chat stays lightweight; standard keeps enrichment, reflection,
             # multi-agent checks, and visual synthesis.
             if req.max_steps is not None:
-                base_steps = req.max_steps
+                base_steps = min(req.max_steps, 50)
             elif mode == "standard":
                 base_steps = 18
             else:
                 base_steps = 28
+            # Production hard cap: never exceed 50 steps regardless of mode or client input
+            base_steps = min(base_steps, 50)
+            logger.info("[GATEWAY] Research session %s base_steps capped at %d", session_id, base_steps)
             
             chat_history = _MEMORY_MANAGER.get_history(user_email, session_id)
 
@@ -2314,9 +2904,8 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
 
 # ── Deep Research: multi-pass long-chain reasoning ──────────────────────
 
-# Each entry maps to one parallel enrichment pass. Passes 0-N-2 run in parallel;
-# pass N-1 is the serial synthesis. For Marathon (12 passes) the first 11 entries
-# are used; for Deep (5 passes) only the first 4 + synthesis are used.
+# Each entry maps to a deep-research evidence pass. The runtime uses a fixed
+# 8-pass layout: seven evidence passes plus one serial synthesis pass.
 _DEEP_PASS_OBJECTIVES = [
     # Pass 0 — Financials foundation
     (
@@ -2341,7 +2930,8 @@ _DEEP_PASS_OBJECTIVES = [
     (
         "Valuation deep-dive: trailing and forward P/E vs sector median, EV/EBITDA vs global peers, "
         "PEG ratio, DCF implied price at WACC 10-12%, Graham number, price-to-free-cash-flow, "
-        "dividend yield and payout sustainability, analyst consensus target price and upside/downside."
+        "dividend yield and payout sustainability, and source-attributed valuation scenario ranges. "
+        "Do not produce buy/sell/hold labels, target prices, or trading calls."
     ),
     # Pass 4 — Risk and red flags
     (
@@ -2400,8 +2990,8 @@ _DEEP_PASS_OBJECTIVES = [
         "research report. Resolve any data contradictions. Produce: (1) executive summary with "
         "clear bull/bear/base case, (2) key financial metrics dashboard, (3) top 5 risk factors "
         "with probability/impact matrix, (4) competitive positioning verdict, (5) valuation "
-        "summary with price targets under each scenario, (6) recommended action with conviction "
-        "level (High/Medium/Low) and key monitorables."
+        "summary as scenario-implied ranges only, and (6) key monitorables. Keep it SEBI-safe: "
+        "no buy, sell, hold, accumulate, exit, entry, position-size, target-price, or rebalancing instruction."
     ),
 ]
 
@@ -2409,29 +2999,35 @@ _DEEP_PASS_OBJECTIVES = [
 @app.post("/research/deep", dependencies=[Depends(research_rate_limiter)])
 async def start_deep_research(req: DeepResearchRequest, current_user: dict = Depends(enforce_token_limit)):
     master_session = req.session_id or uuid.uuid4().hex[:12]
+    telemetry_user = telemetry_user_from_request_user(current_user)
     
     if req.session_id:
         verify_session_ownership(master_session, current_user)
         
     raw_query = req.target.strip()
+    raw_query = _strip_frontend_portfolio_context(raw_query) or raw_query
     user_email = current_user["email"]
     tenant_id = current_user["tenant_id"]
     _require_no_active_ingestion(tenant_id)
     if is_portfolio_scope_query(raw_query):
-        _require_synchronized_portfolio(tenant_id)
+        await _require_synchronized_portfolio(tenant_id, allow_empty=True)
 
     # ── Pure-LLM follow-up detection for deep research runs ───────────────
     meta = _load_session_meta(master_session)
     prior_target = meta.get("target_display") or meta.get("target")
     is_followup_deep = False
     target = None
-    objective_for_deep = (getattr(req, "objective", None) or raw_query).strip()
+    objective_for_deep = (req.objective or raw_query).strip()
 
     if req.session_id and prior_target:
         chat_history = _MEMORY_MANAGER.get_history(user_email, master_session)
         try:
-            contextualizer = LLMQueryContextualizer()
-            result = await contextualizer.contextualize(raw_query, prior_target, chat_history)
+            result = await _contextualize_query_with_budget(
+                raw_query,
+                prior_target,
+                chat_history,
+                timeout_s=_gateway_float_setting("FINAGENT_DEEP_CONTEXTUALIZER_TIMEOUT_S", 8.0),
+            )
             is_followup_deep = result.is_followup
 
             if is_followup_deep:
@@ -2447,7 +3043,7 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                     master_session = uuid.uuid4().hex[:12]
                     BUS.open(master_session, reset=True)
                     logger.info("Target changed from %r to %r — new deep session %s", prior_target, target, master_session)
-        except (ContextualizerError, Exception) as exc:
+        except (asyncio.TimeoutError, ContextualizerError, Exception) as exc:
             logger.warning("Deep contextualizer failed for session %s, falling back to raw query: %s", master_session, exc)
             is_followup_deep = True
             target = prior_target
@@ -2455,16 +3051,30 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
     else:
         target = primary_target_from_query(raw_query)
 
-    BUS.open(master_session, reset=True)
-    _clear_session_memo(master_session)
-    
-    _session_record(master_session, mode="deep", target=target, objective=raw_query, user_email=user_email, tenant_id=tenant_id)
+    objective_scope_query = _strip_frontend_portfolio_context(objective_for_deep) or raw_query
+    if is_portfolio_scope_query(objective_scope_query):
+        await _require_synchronized_portfolio(tenant_id, allow_empty=True)
 
-    # ── Comparison detection for deep research ─────────────────────────
     from finagent.output.query_guards import is_portfolio_comparison_query
     is_comparison_query = _is_comparison(raw_query) and not is_portfolio_comparison_query(raw_query)
     comparison_targets = _extract_comparison_targets(raw_query) if is_comparison_query else []
     peer_targets_list = comparison_targets[1:] if len(comparison_targets) >= 2 else []
+
+    BUS.open(master_session, reset=True)
+    _clear_session_memo(master_session)
+    
+    _session_record(master_session, mode="deep", target=target, objective=objective_for_deep, user_email=user_email, tenant_id=tenant_id)
+    TELEMETRY.emit_event(
+        "research_deep_started",
+        user=telemetry_user,
+        properties={
+            "source": "backend",
+            "session_id": master_session,
+            "passes": req.passes,
+            "target_length": len(raw_query),
+            "comparison": is_comparison_query,
+        },
+    )
 
     async def _deep_runner() -> None:
         total_passes = 8
@@ -2474,68 +3084,72 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
         
         try:
             async def _run_pass(i: int) -> bool:
-                if req.max_wall_seconds is not None:
-                    remaining = req.max_wall_seconds - (asyncio.get_running_loop().time() - started_at)
-                    if remaining <= 0:
-                        return False
-                
-                is_last = (i == total_passes - 1)
-                if is_last:
-                    objective = _DEEP_PASS_OBJECTIVES[-1]  # always "Final synthesis" (index 11)
-                else:
-                    objective = _DEEP_PASS_OBJECTIVES[i % (len(_DEEP_PASS_OBJECTIVES) - 1)]
-                pass_label = f"Synthesis Pass {i+1}/{total_passes}" if is_last else f"Pass {i+1}/{total_passes}"
-                
-                BUS.emit(master_session, "phase", phase="deep_research", note=f"{pass_label}: {objective[:60]}…")
-                BUS.emit(master_session, "deep_pass", pass_number=i+1, total_passes=total_passes, objective=objective, deep_pass_label=pass_label, status="running")
-                
-                pass_objective = f"{raw_query}\n\n{pass_label} - {objective}"
-                # For comparison queries, force comparison output mode on synthesis pass
-                effective_output_mode = "company_comparison" if (is_comparison_query and is_last) else ("deep_research_report" if is_last else None)
+                async with _DEEP_RESEARCH_SEMAPHORE:
+                    if req.max_wall_seconds is not None:
+                        remaining = req.max_wall_seconds - (asyncio.get_running_loop().time() - started_at)
+                        if remaining <= 0:
+                            return False
+                    
+                    is_last = (i == total_passes - 1)
+                    if is_last:
+                        objective = _DEEP_PASS_OBJECTIVES[-1]  # always "Final synthesis" (index 11)
+                    else:
+                        objective = _DEEP_PASS_OBJECTIVES[i % (len(_DEEP_PASS_OBJECTIVES) - 1)]
+                    pass_label = f"Synthesis Pass {i+1}/{total_passes}" if is_last else f"Pass {i+1}/{total_passes}"
+                    
+                    BUS.emit(master_session, "phase", phase="deep_research", note=f"{pass_label}: {objective[:60]}…")
+                    BUS.emit(master_session, "deep_pass", pass_number=i+1, total_passes=total_passes, objective=objective, deep_pass_label=pass_label, status="running")
+                    
+                    pass_objective = f"{objective_for_deep}\n\n{pass_label} - {objective}"
+                    # For comparison queries, force comparison output mode on synthesis pass
+                    effective_output_mode = "company_comparison" if (is_comparison_query and is_last) else ("deep_research_report" if is_last else None)
 
-                await run_research_session(
-                    target,
-                    pass_objective,
-                    is_followup=is_followup_deep,
-                    loop_config=AgentLoopConfig(
-                        max_steps=(req.pass_depth if is_last else min(req.pass_depth, 12)),
-                        session_id=master_session,
-                        auto_depth=False,
-                        enable_memory=True,
-                        reflection_max_rounds=(2 if is_last else 0),
-                        quality_threshold=(72.0 if is_last else 65.0),
-                        reflection_per_query_limit=(4 if is_last else 0),
-                        reflection_max_new_docs=(32 if is_last else 0),
-                        reflection_max_queries_per_round=(4 if is_last else 0),
-                        reflection_wall_clock_seconds=(45.0 if is_last else 0.0),
-                        reflection_early_accept_margin=(2.0 if is_last else 0.0),
-                        reflection_min_score_gain=(0.75 if is_last else 0.0),
-                        synth_model=os.getenv("FINAGENT_SYNTH_MODEL") or ("gpt-4o" if is_last else "gpt-4o-mini"),
-                        response_depth=("deep" if is_last else "standard"),
-                        output_mode=effective_output_mode,
-                        emit_memo=is_last,
-                        close_bus_on_finish=False,
-                        chat_history=chat_history if (i == 0 or is_last) else None,
-                        breadth_search_timeout=(75.0 if is_last else 20.0),
-                        followup_search_timeout=(35.0 if is_last else 8.0),
-                        reflection_per_query_timeout=(18.0 if is_last else 0.0),
-                        blindspot_per_query_timeout=(25.0 if is_last else 0.0),
-                        news_timeout=(18.0 if is_last else 5.0),
-                        enable_blindspot=is_last,
-                        fast_mode=not is_last,
-                        # ── Peer targets ensure synthesis fetches BOTH companies' enrichment
-                        peer_targets=peer_targets_list,
-                        user_email=user_email,
-                        tenant_id=tenant_id,
-                    ),
-                )
-                
-                BUS.emit(master_session, "deep_pass", pass_number=i+1, total_passes=total_passes, objective=objective, deep_pass_label=pass_label, status="done")
-                return True
+                    await run_research_session(
+                        target,
+                        pass_objective,
+                        is_followup=is_followup_deep,
+                        loop_config=AgentLoopConfig(
+                            max_steps=(req.pass_depth if is_last else min(req.pass_depth, 12)),
+                            session_id=master_session,
+                            auto_depth=False,
+                            enable_memory=True,
+                            reflection_max_rounds=(2 if is_last else 0),
+                            quality_threshold=(72.0 if is_last else 65.0),
+                            reflection_per_query_limit=(4 if is_last else 0),
+                            reflection_max_new_docs=(32 if is_last else 0),
+                            reflection_max_queries_per_round=(4 if is_last else 0),
+                            reflection_wall_clock_seconds=(45.0 if is_last else 0.0),
+                            reflection_early_accept_margin=(2.0 if is_last else 0.0),
+                            reflection_min_score_gain=(0.75 if is_last else 0.0),
+                            synth_model=os.getenv("FINAGENT_SYNTH_MODEL") or ("gpt-4o" if is_last else "gpt-4o-mini"),
+                            response_depth=("deep" if is_last else "standard"),
+                            output_mode=effective_output_mode,
+                            emit_memo=is_last,
+                            close_bus_on_finish=False,
+                            chat_history=chat_history if (i == 0 or is_last) else None,
+                            breadth_search_timeout=(75.0 if is_last else 20.0),
+                            followup_search_timeout=(35.0 if is_last else 8.0),
+                            reflection_per_query_timeout=(18.0 if is_last else 0.0),
+                            blindspot_per_query_timeout=(25.0 if is_last else 0.0),
+                            news_timeout=(18.0 if is_last else 5.0),
+                            enable_blindspot=is_last,
+                            fast_mode=not is_last,
+                            # ── Peer targets ensure synthesis fetches BOTH companies' enrichment
+                            peer_targets=peer_targets_list,
+                            user_email=user_email,
+                            tenant_id=tenant_id,
+                        ),
+                    )
+                    
+                    BUS.emit(master_session, "deep_pass", pass_number=i+1, total_passes=total_passes, objective=objective, deep_pass_label=pass_label, status="done")
+                    return True
 
-            # All enrichment passes parallel + final synthesis
+            # All enrichment passes parallel + final synthesis (bounded by semaphore)
             BUS.emit(master_session, "phase", phase="deep_research", note=f"Executing passes 1 to {total_passes-1} in parallel")
-            parallel_tasks = [_run_pass(i) for i in range(total_passes - 1)]
+            parallel_tasks = [
+                asyncio.create_task(_run_pass(i))
+                for i in range(total_passes - 1)
+            ]
             results = await asyncio.gather(*parallel_tasks, return_exceptions=True)
             for res in results:
                 if res is True:
@@ -2582,16 +3196,32 @@ async def stop_session(session_id: str, current_user: dict = Depends(get_current
     task = _TASKS.get(session_id)
     if task is None or task.done():
         raise HTTPException(status_code=404, detail="No active task for this session.")
+    TELEMETRY.emit_event(
+        "research_stop_requested",
+        user=telemetry_user_from_request_user(current_user),
+        properties={
+            "source": "backend",
+            "session_id": session_id,
+        },
+    )
     task.cancel()
     BUS.emit(session_id, "phase", phase="stopped", reason="user_cancelled", note="Research stopped by user.")
     BUS.emit(session_id, "error", message="Research cancelled by user.")
     BUS.close(session_id)
     logger.info("Session %s cancelled by user", session_id)
+    TELEMETRY.emit_event(
+        "research_stop_completed",
+        user=telemetry_user_from_request_user(current_user),
+        properties={
+            "source": "backend",
+            "session_id": session_id,
+        },
+    )
     return {"session_id": session_id, "status": "cancelled"}
 
 
 @app.delete("/sessions/{session_id}")
-def delete_session(session_id: str, current_user: dict = Depends(get_current_user)) -> JSONResponse:
+async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)) -> JSONResponse:
     """Delete a completed session and its persisted artifacts."""
     verify_session_ownership(session_id, current_user)
     task = _TASKS.get(session_id)
@@ -2604,7 +3234,7 @@ def delete_session(session_id: str, current_user: dict = Depends(get_current_use
         memo_path.unlink(missing_ok=True)
         removed_memo = True
 
-    session_dir = finagent_data_path("sessions", session_id)
+    session_dir = _session_dir(session_id)
     removed_session_dir = False
     if session_dir.exists():
         shutil.rmtree(session_dir, ignore_errors=True)
@@ -2613,7 +3243,7 @@ def delete_session(session_id: str, current_user: dict = Depends(get_current_use
     _SESSION_META.pop(session_id, None)
     BUS.forget_memory(session_id)
     deleted_history = _MEMORY_MANAGER.delete_session(current_user["email"], session_id)
-    memory_cleanup = get_memory_store().delete_session(session_id, user_email=current_user["email"])
+    memory_cleanup = await get_memory_store().delete_session(session_id, user_email=current_user["email"])
 
     return JSONResponse({
         "session_id": session_id,
@@ -2640,15 +3270,24 @@ async def chat_research(req: ChatResearchRequest, current_user: dict = Depends(e
         
     target = (req.target or req.message).strip()
     mode = (req.mode or "standard").strip().lower()
+    TELEMETRY.emit_event(
+        "chat_research_requested",
+        user=telemetry_user_from_request_user(current_user),
+        properties={
+            "source": "backend",
+            "mode": mode,
+            "target_length": len(target),
+            "has_session_id": bool(req.session_id),
+        },
+    )
     _require_no_active_ingestion(current_user.get("tenant_id"))
-    if is_portfolio_scope_query(target):
-        _require_synchronized_portfolio(current_user.get("tenant_id"))
     if mode == "marathon":
         mode = "deep"
     if mode == "deep":
         return await start_deep_research(
             DeepResearchRequest(
                 target=target,
+                objective=req.message,
                 passes=8,
                 pass_depth=40,
                 max_wall_seconds=req.max_wall_seconds,
@@ -2676,13 +3315,21 @@ def list_memos(current_user: dict = Depends(get_current_user)) -> JSONResponse:
         return JSONResponse({"memos": []})
     entries: list[dict[str, Any]] = []
     for p in sorted(_MEMOS_DIR.glob("*.md"), key=lambda x: x.stat().st_mtime, reverse=True)[:50]:
-        session_id = p.stem
-        meta = _load_session_meta(session_id)
-        owner_tenant = meta.get("tenant_id")
-        if owner_tenant and owner_tenant != current_user.get("tenant_id"):
+        try:
+            session_id = _validate_session_id(p.stem)
+        except HTTPException:
             continue
-        owner_email = meta.get("user_email")
-        if owner_email and owner_email.lower().strip() != current_user["email"].lower().strip():
+        meta = _load_session_meta(session_id)
+        owner_tenant = (meta.get("tenant_id") or "").strip()
+        owner_email = (meta.get("user_email") or "").strip().lower()
+        current_tenant = (current_user.get("tenant_id") or "").strip()
+        current_email = (current_user.get("email") or "").strip().lower()
+        # Fail closed: hide sessions that do not have ownership metadata.
+        if not owner_tenant and not owner_email:
+            continue
+        if owner_tenant and current_tenant and owner_tenant != current_tenant:
+            continue
+        if owner_email and owner_email != current_email:
             continue
             
         try:
@@ -2773,6 +3420,7 @@ async def stream_session(
     current_user: dict = Depends(get_current_user)
 ):
     verify_session_ownership(session_id, current_user)
+    telemetry_user = telemetry_user_from_request_user(current_user)
     
     if not BUS.known(session_id):
         raise HTTPException(status_code=404, detail="Unknown session")
@@ -2793,6 +3441,15 @@ async def stream_session(
         q = BUS.open(session_id)
 
     async def gen():
+        TELEMETRY.emit_event(
+            "research_stream_opened",
+            user=telemetry_user,
+            properties={
+                "source": "backend",
+                "session_id": session_id,
+                "resumed": bool(after_seq > 0 or last_event_id),
+            },
+        )
         yield f"event: open\ndata: {json.dumps({'session_id': session_id})}\n\n"
         
         # 1. Replay missed events from history
@@ -2815,6 +3472,14 @@ async def stream_session(
                         continue
 
                     if event is None:
+                        TELEMETRY.emit_event(
+                            "research_stream_completed",
+                            user=telemetry_user,
+                            properties={
+                                "source": "backend",
+                                "session_id": session_id,
+                            },
+                        )
                         yield "event: done\ndata: {}\n\n"
                         return
 
@@ -2826,6 +3491,15 @@ async def stream_session(
             finally:
                 BUS.remove(session_id, q)
         else:
+            TELEMETRY.emit_event(
+                "research_stream_completed",
+                user=telemetry_user,
+                properties={
+                    "source": "backend",
+                    "session_id": session_id,
+                    "mode": "no_queue",
+                },
+            )
             yield "event: done\ndata: {}\n\n"
 
     return StreamingResponse(

@@ -87,7 +87,7 @@ class NewsAgent(BaseSubAgent):
 
         # Additional targeted searches to harden coverage
         queries = [
-            f"{ctx.canonical_label} latest analyst rating target price",
+            f"{ctx.canonical_label} latest analyst coverage consensus estimate",
             f"{ctx.canonical_label} earnings beat miss last quarter",
         ]
         new_docs, used = await search_and_dedupe(ctx, queries)

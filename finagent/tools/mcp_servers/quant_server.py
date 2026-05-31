@@ -534,8 +534,10 @@ def run_dcf_valuation(
     if result.get("intrinsic_value_per_share") and data["current_price"] > 0:
         iv = result["intrinsic_value_per_share"]
         result["upside_pct"] = round(((iv - data["current_price"]) / data["current_price"]) * 100, 2)
-        result["verdict"] = "UNDERVALUED" if iv > data["current_price"] * 1.1 else (
-            "FAIRLY VALUED" if iv > data["current_price"] * 0.9 else "OVERVALUED"
+        result["valuation_context"] = (
+            "below_model_implied_value" if iv > data["current_price"] * 1.1
+            else "near_model_implied_value" if iv > data["current_price"] * 0.9
+            else "above_model_implied_value"
         )
     return result
 
@@ -657,7 +659,7 @@ def run_dupont_analysis(symbol: str) -> dict:
 
 @mcp.tool()
 def run_ratio_scorecard(symbol: str) -> dict:
-    """Score a stock on 8 fundamental metrics (0-16 points) with valuation verdict."""
+    """Score a stock on 8 fundamental metrics (0-16 points) with research context."""
     data = get_stock_data(symbol)
     cl = data["current_liabilities"] or 1
     return analyze_ratios(

@@ -216,6 +216,12 @@ Resources:
             # Secrets below must be updated after stack creation or via deployment workflow (do not commit real keys)
             - Name: OPENAI_API_KEY
               Value: "REPLACE_WITH_YOUR_OPENAI_KEY"
+            - Name: APPINSIGHTS_ENABLED
+              Value: "true"
+            - Name: APPINSIGHTS_CONNECTION_STRING
+              Value: "InstrumentationKey=b4797745-6b7f-4d72-894f-768bdc808d3d;IngestionEndpoint=https://centralindia-0.in.applicationinsights.azure.com/;LiveEndpoint=https://centralindia.livediagnostics.monitor.azure.com/;ApplicationId=980e7ddb-6ef5-46e2-b7ae-bb833f3fc8c8"
+            - Name: APPINSIGHTS_ROLE_NAME
+              Value: "prospektlab-backend"
             - Name: TAVILY_API_KEY
               Value: ""
             - Name: SUPABASE_URL
@@ -360,4 +366,3 @@ Outputs:
   CodeBuildProjectName:
     Description: CodeBuild Project Name
     Value: !Ref CodeBuildProject
-

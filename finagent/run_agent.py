@@ -84,6 +84,9 @@ from finagent.tools.web.scraper import ScrapedDoc, search_layered, search_web
 
 logger = logging.getLogger("finagent.run_agent")
 
+# Global semaphore to cap concurrent outbound enrichment calls (prevents FD exhaustion)
+_ENRICHMENT_SEMAPHORE = asyncio.Semaphore(4)
+
 
 def _finite_float(value) -> float | None:
     try:
@@ -821,41 +824,43 @@ async def _run_enrichment(
     canonical_name = entity.canonical_name
 
     # ── Parallel fan-out: ALL enrichment ────────────────────
-    if fast_mode:
-        (
-            india_snap_result,
-            shareholding_result,
-            yahoo_quote,
-            news_items,
-        ) = await asyncio.gather(
-            _india_snap(),
-            _shareholding_fetch(),
-            _yahoo(ticker),
-            _news(),
-            return_exceptions=True,
-        )
-        sebi_filing_result = None
-        wiki = None
-        fx = None
-    else:
-        (
-            india_snap_result,
-            sebi_filing_result,
-            shareholding_result,
-            yahoo_quote,
-            wiki,
-            fx,
-            news_items,
-        ) = await asyncio.gather(
-            _india_snap(),
-            _sebi_filing_fetch(),
-            _shareholding_fetch(),
-            _yahoo(ticker),
-            _wiki(canonical_name),
-            _fx(),
-            _news(),
-            return_exceptions=True,
-        )
+    # Semaphore prevents unbounded outbound connection burst.
+    async with _ENRICHMENT_SEMAPHORE:
+        if fast_mode:
+            (
+                india_snap_result,
+                shareholding_result,
+                yahoo_quote,
+                news_items,
+            ) = await asyncio.gather(
+                _india_snap(),
+                _shareholding_fetch(),
+                _yahoo(ticker),
+                _news(),
+                return_exceptions=True,
+            )
+            sebi_filing_result = None
+            wiki = None
+            fx = None
+        else:
+            (
+                india_snap_result,
+                sebi_filing_result,
+                shareholding_result,
+                yahoo_quote,
+                wiki,
+                fx,
+                news_items,
+            ) = await asyncio.gather(
+                _india_snap(),
+                _sebi_filing_fetch(),
+                _shareholding_fetch(),
+                _yahoo(ticker),
+                _wiki(canonical_name),
+                _fx(),
+                _news(),
+                return_exceptions=True,
+            )
 
     sec_snap = None
     sec_filing = None
@@ -1191,9 +1196,9 @@ def _build_followup_queries(
             candidate.append((f"{canonical} SEBI risk factors regulatory concerns India", "risk discussion"))
         if "analyst" not in text_blob and "price target" not in text_blob:
             if display_ticker:
-                candidate.append((f"{display_ticker} NSE analyst target price broking report", "analyst coverage"))
+                candidate.append((f"{display_ticker} NSE analyst coverage broking report consensus estimate", "analyst coverage"))
             else:
-                candidate.append((f"{canonical} analyst recommendation target price NSE India", "analyst coverage"))
+                candidate.append((f"{canonical} analyst coverage consensus estimate NSE India", "analyst coverage"))
         if "guidance" not in text_blob and "forecast" not in text_blob:
             candidate.append((f"{canonical} management guidance revenue outlook FY2026", "forward guidance"))
 
@@ -1314,7 +1319,7 @@ async def _process_doc(
     harness.maybe_persist_checkpoint(step, cp)
 
 
-def _persist_session_memory(
+async def _persist_session_memory(
     memory_store,
     *,
     session_id: str,
@@ -1448,7 +1453,7 @@ def _persist_session_memory(
                 user_email=user_email,
             )
         )
-    memory_store.remember_many(new_facts)
+    await memory_store.remember_many(new_facts)
 
     # Save a one-paragraph summary for "what was this run about?"
     n_docs = len(docs)
@@ -1467,7 +1472,7 @@ def _persist_session_memory(
         "conflicts": len(conflicts or []),
         "news": len(bundle.news or []),
     }
-    memory_store.save_session_summary(
+    await memory_store.save_session_summary(
         session_id=session_id,
         target_key=target,
         target_display=canonical_label,
@@ -1659,8 +1664,8 @@ async def run_research_session(
     if memory_store is not None:
         BUS.emit(session_id, "phase", phase="memory", note="Recalling prior facts and last session summary")
         try:
-            recalled_facts = memory_store.recall(target, limit=cfg.memory_recall_limit, user_email=cfg.user_email)
-            last_summary = memory_store.last_summary(target, user_email=cfg.user_email)
+            recalled_facts = await memory_store.recall(target, limit=cfg.memory_recall_limit, user_email=cfg.user_email)
+            last_summary = await memory_store.last_summary(target, user_email=cfg.user_email)
         except Exception as exc:
             logger.warning("memory recall failed: %s", exc)
             recalled_facts = []
@@ -2042,6 +2047,21 @@ async def run_research_session(
                     blindspots=blindspot_payload["blindspots"],
                 )
                 if spots:
+                    if routing.intent_key == "PORTFOLIO_AUDIT":
+                        # Portfolio deep runs already carry holdings/risk context; blindspot web fanout
+                        # is high-latency and often low-signal here. Skip it to guarantee forward progress.
+                        logger.info("Phase 4.7 (Multi-Agent): Skipping blindspot auto-dispatch for portfolio audit scope")
+                        blindspot_payload["new_docs"] = 0
+                        _emit_event(
+                            "blindspot_dispatched",
+                            new_docs=0,
+                            queries=0,
+                            skipped=True,
+                            reason="portfolio_scope",
+                        )
+                        spots = []
+                    if not spots:
+                        pass
                     BUS.emit(
                         session_id,
                         "phase",
@@ -2084,7 +2104,45 @@ async def run_research_session(
                             logger.warning("blindspot query %r failed: %s", q, exc)
                             return []
 
-                    batches = await asyncio.gather(*(_bs_one(q) for q in fanout))
+                    # Hard global wall clock for the blindspot fanout so we never block synthesis.
+                    dispatch_budget_s = max(8.0, min(45.0, cfg.blindspot_per_query_timeout + 6.0))
+                    task_to_query = {
+                        asyncio.create_task(_bs_one(q)): q
+                        for q in fanout
+                    }
+                    if task_to_query:
+                        done, pending = await asyncio.wait(
+                            task_to_query.keys(),
+                            timeout=dispatch_budget_s,
+                        )
+                    else:
+                        done, pending = set(), set()
+                    if pending:
+                        logger.warning(
+                            "Phase 4.7 (Multi-Agent): Blindspot auto-dispatch exceeded %.1fs budget; continuing with %d/%d completed",
+                            dispatch_budget_s,
+                            len(done),
+                            len(task_to_query),
+                        )
+                        _emit_event(
+                            "warning",
+                            message=f"Blindspot dispatch timed out; continuing with {len(done)}/{len(task_to_query)} completed queries.",
+                        )
+                        for task in pending:
+                            q = task_to_query.get(task, "")
+                            if q:
+                                _emit_event("query", query=q, status="timeout", count=0)
+                            task.cancel()
+
+                    batches = []
+                    for task in done:
+                        q = task_to_query.get(task, "")
+                        try:
+                            batches.append(task.result())
+                        except Exception as exc:
+                            if q:
+                                _emit_event("query", query=q, status="error", count=0)
+                            logger.warning("blindspot query task %r failed: %s", q, exc)
                     existing_keys = {(d.final_url or d.url or "").split("#", 1)[0] for d in docs}
                     _bs_docs = []
                     for batch in batches:
@@ -2176,7 +2234,7 @@ async def run_research_session(
                 from finagent.portfolio_mirrors import load_active_positions
                 tenant_id = getattr(cfg, "tenant_id", None)
                 if tenant_id:
-                    positions = load_active_positions(tenant_id)
+                    positions = await load_active_positions(tenant_id)
                     if positions:
                         portfolio_analytics = compute_portfolio_analytics(positions, period="1y", benchmark="NIFTY50")
                         logger.info("[PORTFOLIO-INJECT] Injecting live portfolio analytics | holdings=%d | value=%.0f",
@@ -2234,7 +2292,7 @@ async def run_research_session(
     # ── Persist learnings to long-term memory ─────────────────────────────
     if memory_store is not None:
         try:
-            _persist_session_memory(
+            await _persist_session_memory(
                 memory_store,
                 session_id=session_id,
                 target=target,

@@ -125,9 +125,11 @@ def _table_to_markdown_from_pandas(path: str, source_type: str) -> str:
 
     try:
         if source_type == "csv":
-            frames = [pd.read_csv(path)]
+            frames = [pd.read_csv(path, nrows=10000)]
         else:
-            sheets = pd.read_excel(path, sheet_name=None)
+            # Limit Excel to first 10 rows per sheet for header detection, then
+            # read full data up to 10,000 rows per sheet to prevent memory exhaustion.
+            sheets = pd.read_excel(path, sheet_name=None, nrows=10000)
             frames = [frame for frame in sheets.values()]
     except Exception as exc:
         raise DocumentTransformError(
@@ -166,13 +168,38 @@ def _fitz_layout_to_markdown(pdf_path_or_bytes: str | bytes) -> str:
     """Fallback high-accuracy layout extraction using PyMuPDF (fitz) with table detection.
     
     Ensures that text columns and table grids do not get mixed up.
+    
+    Hardening:
+    - Max 200 pages to prevent memory exhaustion.
+    - Max 50MB input to prevent OOM.
     """
     import fitz
     
+    MAX_PAGES = 200
+    MAX_FILE_SIZE = 50 * 1024 * 1024
+    
     if isinstance(pdf_path_or_bytes, bytes):
+        if len(pdf_path_or_bytes) > MAX_FILE_SIZE:
+            raise DocumentTransformError(
+                "DOCUMENT_TOO_LARGE",
+                f"PDF exceeds {MAX_FILE_SIZE // (1024 * 1024)} MB limit.",
+            )
         doc = fitz.open(stream=pdf_path_or_bytes, filetype="pdf")
     else:
+        size = os.path.getsize(pdf_path_or_bytes)
+        if size > MAX_FILE_SIZE:
+            raise DocumentTransformError(
+                "DOCUMENT_TOO_LARGE",
+                f"PDF exceeds {MAX_FILE_SIZE // (1024 * 1024)} MB limit.",
+            )
         doc = fitz.open(pdf_path_or_bytes)
+    
+    if doc.page_count > MAX_PAGES:
+        doc.close()
+        raise DocumentTransformError(
+            "DOCUMENT_TOO_LARGE",
+            f"PDF exceeds {MAX_PAGES} pages.",
+        )
         
     markdown_parts = []
     

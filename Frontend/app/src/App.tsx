@@ -1,5 +1,5 @@
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import Pricing from './pages/Pricing';
 import Testimonials from './pages/Testimonials';
@@ -9,6 +9,7 @@ import ContactUs from './pages/ContactUs';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { trackPageView } from './telemetry';
 
 // Protected Route for authenticated users
 const ProtectedRoute: React.FC<{ children: React.ReactElement; requireOnboarded?: boolean }> = ({ 
@@ -59,9 +60,23 @@ const PublicRoute: React.FC<{ children: React.ReactElement }> = ({ children }) =
   return children;
 };
 
+const TelemetryRouteTracker: React.FC = () => {
+  const location = useLocation();
+
+  React.useEffect(() => {
+    trackPageView(location.pathname, {
+      route: location.pathname,
+      search: location.search || '',
+    });
+  }, [location.pathname, location.search]);
+
+  return null;
+};
+
 export const AppContent: React.FC = () => {
   return (
     <HashRouter>
+      <TelemetryRouteTracker />
       <Routes>
         {/* Marketing Pages */}
         <Route path="/" element={<LandingPage />} />

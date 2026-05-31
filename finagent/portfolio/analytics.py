@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import logging
 import math
+import os
+import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,6 +17,37 @@ import numpy as np
 from finagent.portfolio_mirrors import PositionMirror
 
 logger = logging.getLogger("finagent.portfolio.analytics")
+
+
+def _httpx_trust_env() -> bool:
+    raw = os.environ.get("FINAGENT_HTTP_TRUST_ENV", "0").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+if not _httpx_trust_env():
+    for _proxy_key in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
+        os.environ.pop(_proxy_key, None)
+
+_YFINANCE_CACHE_DIR = os.path.join(tempfile.gettempdir(), "finagent_yfinance_cache")
+try:
+    os.makedirs(_YFINANCE_CACHE_DIR, exist_ok=True)
+except Exception:
+    pass
+
+
+def _configure_yfinance(yf: Any) -> None:
+    try:
+        if hasattr(yf, "set_tz_cache_location"):
+            yf.set_tz_cache_location(_YFINANCE_CACHE_DIR)
+    except Exception:
+        pass
 
 # Silence noisy yfinance output (it prints to stderr for 404s even when we catch exceptions)
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
@@ -111,6 +144,7 @@ def _fetch_history(ticker: str, period: str = "1y") -> dict[str, Any]:
         return {}
     try:
         import yfinance as yf
+        _configure_yfinance(yf)
         t = yf.Ticker(ticker)
         norm_period = _normalize_period(period)
         hist = t.history(period=norm_period, auto_adjust=True)
@@ -142,6 +176,7 @@ def _fetch_quote(ticker: str) -> dict[str, Any]:
         return {}
     try:
         import yfinance as yf
+        _configure_yfinance(yf)
         t = yf.Ticker(ticker)
         hist = t.history(period="5d", auto_adjust=True)
         if hist.empty:

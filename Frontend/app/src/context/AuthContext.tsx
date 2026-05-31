@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getAuthToken, getStoredAuthUser, apiLogin, apiSignup, apiLogout, apiGoogleAuth, getPortfolioMirror } from '../api/client';
+import { getAuthMe, getCachedUser, setCachedUser, apiLogin, apiSignup, apiLogout, apiGoogleAuth, getPortfolioMirror } from '../api/client';
+import { clearTelemetryUser, setTelemetryUser, trackEvent } from '../telemetry';
 
 export interface User {
   email: string;
@@ -16,7 +17,6 @@ export interface Toast {
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   onboarded: boolean;
@@ -27,59 +27,100 @@ interface AuthContextType {
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   updateUserMobile: (mobile: string) => void;
   setOnboarded: (next: boolean) => void;
-  refreshOnboardingStatus: () => Promise<boolean>;
+  refreshOnboardingStatus: (emailOverride?: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [onboarded, setOnboardedState] = useState<boolean>(() => localStorage.getItem('prospektlab_onboarded') === 'true');
+  const [onboarded, setOnboardedState] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const setOnboarded = useCallback((next: boolean) => {
-    setOnboardedState(next);
-    if (next) {
-      localStorage.setItem('prospektlab_onboarded', 'true');
-    } else {
-      localStorage.removeItem('prospektlab_onboarded');
-    }
+  const onboardedKeyFor = useCallback((email?: string | null) => {
+    const normalized = (email || '').trim().toLowerCase();
+    return normalized ? `prospektlab_onboarded:${normalized}` : 'prospektlab_onboarded';
   }, []);
 
-  const refreshOnboardingStatus = useCallback(async () => {
+  const persistOnboarded = useCallback((next: boolean, email?: string | null) => {
+    setOnboardedState(next);
+    if (typeof window !== 'undefined') {
+      const key = onboardedKeyFor(email || user?.email);
+      if (next) {
+        localStorage.setItem(key, 'true');
+      } else {
+        localStorage.removeItem(key);
+      }
+    }
+  }, [onboardedKeyFor, user?.email]);
+
+  const readPersistedOnboarded = useCallback((email?: string | null) => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(onboardedKeyFor(email || user?.email)) === 'true';
+  }, [onboardedKeyFor, user?.email]);
+
+  const setOnboarded = useCallback((next: boolean) => {
+    persistOnboarded(next);
+  }, [persistOnboarded]);
+
+  const refreshOnboardingStatus = useCallback(async (emailOverride?: string) => {
     try {
       const data = await getPortfolioMirror();
-      const next = !!(data && (data.count > 0 || data.status === 'MIRROR_SYNCHRONIZED'));
-      setOnboarded(next);
+      const next = !!(data && Number(data.count) > 0);
+      persistOnboarded(next, emailOverride);
       return next;
     } catch (err) {
       console.error('Failed to resolve portfolio mirror state:', err);
-      return localStorage.getItem('prospektlab_onboarded') === 'true';
+      const fallback = readPersistedOnboarded(emailOverride || user?.email);
+      setOnboardedState(fallback);
+      return fallback;
     }
-  }, [setOnboarded]);
+  }, [persistOnboarded, readPersistedOnboarded, user?.email]);
 
   useEffect(() => {
-    const localToken = getAuthToken();
-    const localUser = getStoredAuthUser();
-
-    if (localToken && localUser) {
-      try {
-        setToken(localToken);
-        setUser(JSON.parse(localUser));
-        void refreshOnboardingStatus();
-      } catch (e) {
-        console.error('Failed to parse cached user', e);
-        localStorage.removeItem('prospektlab_token');
-        localStorage.removeItem('prospektlab_user');
-        sessionStorage.removeItem('prospektlab_token');
-        sessionStorage.removeItem('prospektlab_user');
-        setOnboarded(false);
+    // On mount, check auth status via httpOnly cookie
+    let cancelled = false;
+    (async () => {
+      const cached = getCachedUser();
+      if (cached) {
+        setUser(cached);
+        await refreshOnboardingStatus(cached.email);
+        if (!cancelled) setIsLoading(false);
+        return;
       }
+      try {
+        const me = await getAuthMe();
+        if (!cancelled) {
+          if (me) {
+            setUser(me);
+            await refreshOnboardingStatus(me.email);
+          } else {
+            setUser(null);
+            setOnboardedState(false);
+          }
+          setIsLoading(false);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setUser(null);
+          setIsLoading(false);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [refreshOnboardingStatus]);
+
+  useEffect(() => {
+    if (user) {
+      setTelemetryUser({
+        email: user.email,
+        name: user.name,
+      });
+    } else {
+      clearTelemetryUser();
     }
-    setIsLoading(false);
-  }, [refreshOnboardingStatus, setOnboarded]);
+  }, [user]);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
@@ -94,104 +135,129 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = useCallback(async (email: string, password: string, remember: boolean = true) => {
     try {
       const data = await apiLogin(email, password, remember);
-
-      setToken(data.token);
-      setUser({
+      const signedInUser = {
         email: data.user?.email || email,
         name: data.user?.name || 'Researcher',
+      };
+      const nextOnboarded = await refreshOnboardingStatus(signedInUser.email);
+
+      setUser(signedInUser);
+      trackEvent('auth_login_success', {
+        email: signedInUser.email,
+        name: signedInUser.name,
+        remember: String(remember),
+        onboarded: String(nextOnboarded),
       });
-      void refreshOnboardingStatus();
 
       showToast('Successfully signed in.', 'success');
-      return data;
+      return { ...data, onboarded: nextOnboarded };
     } catch (err: any) {
+      trackEvent('auth_login_failed', {
+        email,
+        remember: String(remember),
+        error_type: err?.name || 'Error',
+      });
       showToast(err.message || 'Login failed.', 'error');
       throw err;
     }
-  }, [refreshOnboardingStatus, showToast, setToken, setUser]);
+  }, [refreshOnboardingStatus, showToast]);
 
   const signup = useCallback(async (name: string, email: string, password: string, mobile: string, verificationCode: string) => {
     try {
       const data = await apiSignup(name, email, password, mobile, verificationCode);
-      setToken(data.token);
-      setUser({
+      const signedUpUser = {
         email: data.user?.email || email,
         name: data.user?.name || name,
+      };
+      setUser(signedUpUser);
+      trackEvent('auth_signup_success', {
+        email: signedUpUser.email,
+        name: signedUpUser.name,
       });
-      setOnboarded(false);
+      persistOnboarded(false, signedUpUser.email);
       showToast('Account created successfully!', 'success');
-      return data;
+      return { ...data, onboarded: false };
     } catch (err: any) {
+      trackEvent('auth_signup_failed', {
+        email,
+        error_type: err?.name || 'Error',
+      });
       showToast(err.message || 'Signup failed.', 'error');
       throw err;
     }
-  }, [setOnboarded, showToast, setToken, setUser]);
+  }, [persistOnboarded, showToast]);
 
   const googleLogin = useCallback(async (credential: string) => {
     try {
       const data = await apiGoogleAuth(credential);
-
-      setToken(data.token);
-      setUser({
+      const signedInUser = {
         email: data.email,
         name: data.name || data.full_name || 'Researcher',
         mobile: data.mobile,
         require_mobile: data.require_mobile,
+      };
+      const nextOnboarded = data.require_mobile
+        ? false
+        : await refreshOnboardingStatus(signedInUser.email);
+
+      setUser(signedInUser);
+      trackEvent('auth_google_login_success', {
+        email: signedInUser.email,
+        name: signedInUser.name,
+        require_mobile: String(!!signedInUser.require_mobile),
+        onboarded: String(nextOnboarded),
       });
-      void refreshOnboardingStatus();
 
       showToast('Successfully signed in with Google.', 'success');
-      return data;
+      return { ...data, onboarded: nextOnboarded };
     } catch (err: any) {
+      trackEvent('auth_google_login_failed', {
+        error_type: err?.name || 'Error',
+      });
       showToast(err.message || 'Google Auth failed.', 'error');
       throw err;
     }
-  }, [refreshOnboardingStatus, showToast, setToken, setUser]);
+  }, [refreshOnboardingStatus, showToast]);
 
   const logout = useCallback(async () => {
     try {
-      void apiLogout();
-      setToken(null);
+      const activeUser = user;
+      await apiLogout();
       setUser(null);
       setOnboarded(false);
+      trackEvent('auth_logout', {
+        email: activeUser?.email || '',
+        name: activeUser?.name || '',
+      });
       showToast('Logged out successfully.', 'info');
     } catch (err) {
       console.error('Logout error', err);
-      // Fallback clean local states
-      localStorage.removeItem('prospektlab_token');
-      localStorage.removeItem('prospektlab_user');
-      localStorage.removeItem('prospektlab_onboarded');
-      sessionStorage.removeItem('prospektlab_token');
-      sessionStorage.removeItem('prospektlab_user');
-      sessionStorage.removeItem('prospektlab_onboarded');
-      setToken(null);
       setUser(null);
       setOnboarded(false);
     }
-  }, [setOnboarded, showToast, setToken, setUser]);
+  }, [setOnboarded, showToast]);
 
   const updateUserMobile = useCallback((mobile: string) => {
     setUser((currentUser) => {
       if (currentUser) {
         const updatedUser = { ...currentUser, mobile, require_mobile: false };
-        localStorage.setItem('prospektlab_user', JSON.stringify(updatedUser));
+        setCachedUser(updatedUser);
         return updatedUser;
       }
       return currentUser;
     });
-  }, [setUser]);
+  }, []);
 
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const isAuthenticated = !!token;
+  const isAuthenticated = !!user;
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        token,
         isAuthenticated,
         isLoading,
         onboarded,

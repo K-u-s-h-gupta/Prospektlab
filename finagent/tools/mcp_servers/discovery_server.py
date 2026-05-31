@@ -881,7 +881,7 @@ def research_company(symbol: str, company_name: str | None = None) -> dict:
         queries = {
             "recent_news": f"{name} {symbol} latest news India stock market",
             "quarterly_results": f"{name} {symbol} quarterly results earnings 2026",
-            "analyst_views": f"{name} {symbol} analyst target price buy sell recommendation",
+            "analyst_views": f"{name} {symbol} analyst coverage consensus estimate institutional research",
             "management": f"{name} {symbol} management commentary guidance outlook",
             "sector_outlook": f"{name} sector industry outlook India 2026",
         }

@@ -14,6 +14,7 @@ logger = logging.getLogger("finagent.portfolio.sectors")
 
 _BUNDLED_PATH = Path(__file__).resolve().parent.parent / "data" / "nifty500_sectors.json"
 _BUNDLED: dict[str, dict[str, str]] | None = None
+_BUNDLED_BY_SYMBOL: dict[str, dict[str, str]] | None = None
 
 _CACHE_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "sector_cache.sqlite3"
 _CACHE_TTL_DAYS = 30
@@ -33,6 +34,32 @@ def _load_bundled() -> dict[str, dict[str, str]]:
             logger.warning("Failed to load bundled sector lookup: %s", exc)
     _BUNDLED = {}
     return _BUNDLED
+
+
+def _normalize_symbol_key(symbol: str) -> str:
+    value = str(symbol or "").strip().upper()
+    value = value.removesuffix(".NS").removesuffix(".BO")
+    value = value.removesuffix(".NSE").removesuffix(".BSE")
+    return value.split(".")[0]
+
+
+def _load_bundled_by_symbol() -> dict[str, dict[str, str]]:
+    """Build a symbol keyed view of the bundled NSE/Nifty sector map."""
+    global _BUNDLED_BY_SYMBOL
+    if _BUNDLED_BY_SYMBOL is not None:
+        return _BUNDLED_BY_SYMBOL
+
+    by_symbol: dict[str, dict[str, str]] = {}
+    for isin, row in _load_bundled().items():
+        symbol = _normalize_symbol_key(row.get("symbol", ""))
+        if not symbol:
+            continue
+        enriched = dict(row)
+        enriched.setdefault("isin", isin)
+        enriched.setdefault("exchange", "NSE")
+        by_symbol[symbol] = enriched
+    _BUNDLED_BY_SYMBOL = by_symbol
+    return by_symbol
 
 
 def _ensure_cache_db() -> None:
@@ -98,6 +125,10 @@ def _yahoo_lookup(symbol: str) -> dict[str, str] | None:
     return None
 
 
+def _is_generic_sector(value: Any) -> bool:
+    return str(value or "").strip().lower() in {"", "general", "other", "unknown", "n/a", "na"}
+
+
 def lookup_by_isin(isin: str) -> dict[str, str] | None:
     """Resolve ISIN to {symbol, exchange, name, sector, industry}.
     
@@ -143,15 +174,21 @@ def lookup_by_isin(isin: str) -> dict[str, str] | None:
 
 def lookup_by_symbol(symbol: str, exchange: str = "NSE") -> dict[str, str] | None:
     """Resolve symbol to {name, sector, industry}."""
-    symbol = symbol.strip().upper()
+    symbol = _normalize_symbol_key(symbol)
     if not symbol:
         return None
     cache_key = f"sym:{symbol}.{exchange.upper()}"
-    # 1) cache
+    # 1) Bundled lookup. This avoids slow/stale Yahoo calls for normal NSE symbols
+    # and keeps sector allocation deterministic for uploaded holdings.
+    bundled = _load_bundled_by_symbol().get(symbol)
+    if bundled:
+        return bundled
+
+    # 2) cache
     cached = _cache_get(cache_key)
     if cached:
         return cached
-    # 2) Yahoo fallback
+    # 3) Yahoo fallback
     suffix = ".NS" if exchange.upper() != "BSE" else ".BO"
     yahoo_data = _yahoo_lookup(f"{symbol}{suffix}")
     if yahoo_data:
@@ -173,23 +210,29 @@ def enrich_position(position: dict[str, Any]) -> dict[str, Any]:
         if data:
             if data.get("name"):
                 pos["name"] = data["name"]
-            pos.setdefault("sector", data.get("sector", ""))
-            pos.setdefault("industry", data.get("industry", ""))
+            if data.get("sector") and _is_generic_sector(pos.get("sector")):
+                pos["sector"] = data["sector"]
+            if data.get("industry") and not pos.get("industry"):
+                pos["industry"] = data["industry"]
             clean_sym = symbol.split(".")[0]
             # Only overwrite symbol if it looks like an ISIN or is missing
             is_isin_like = len(clean_sym) >= 10 and clean_sym[:2] == "IN" and clean_sym[2:].isalnum()
             if not symbol or clean_sym == isin or is_isin_like or len(clean_sym) >= 12:
                 pos["symbol"] = data.get("symbol", symbol)
+                symbol = str(pos.get("symbol") or "").strip().upper()
             if not exchange or exchange == "NSE":
                 pos["exchange"] = data.get("exchange", exchange)
+                exchange = pos.get("exchange", exchange)
 
     # Then try symbol (for sector or industry if either is still missing)
-    if exchange.upper() != "AMFI" and symbol and (not pos.get("sector") or not pos.get("industry")):
+    if exchange.upper() != "AMFI" and symbol and (_is_generic_sector(pos.get("sector")) or not pos.get("industry")):
         data = lookup_by_symbol(symbol, exchange)
         if data:
             if data.get("name") and (not pos.get("name") or len(pos.get("name", "")) < 3):
                 pos["name"] = data["name"]
-            pos.setdefault("sector", data.get("sector", ""))
-            pos.setdefault("industry", data.get("industry", ""))
+            if data.get("sector") and _is_generic_sector(pos.get("sector")):
+                pos["sector"] = data["sector"]
+            if data.get("industry") and not pos.get("industry"):
+                pos["industry"] = data["industry"]
 
     return pos

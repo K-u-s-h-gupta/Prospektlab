@@ -154,7 +154,7 @@ Option 4: AWS CodeBuild
 🔐 ENVIRONMENT VARIABLES REQUIRED
 ═══════════════════════════════════════════════════════════════════════════════
 
-ECS Task Definition (7 variables):
+ECS Task Definition (10 variables):
 ├─ CORS_ORIGINS = https://your-amplify-domain.amplifyapp.com
 ├─ MCP_NSE_INDIA_URL = http://mcp-nse-service:8001/mcp
 ├─ MCP_FUNDAMENTALS_URL = http://mcp-fundamentals-service:8002/mcp
@@ -162,6 +162,9 @@ ECS Task Definition (7 variables):
 ├─ MCP_DOCS_URL = http://mcp-docs-service:8004/mcp
 ├─ MCP_VALUATION_URL = http://mcp-valuation-service:8005/mcp
 └─ OPENAI_API_KEY = sk-your-key-here
+├─ APPINSIGHTS_ENABLED = false
+├─ APPINSIGHTS_CONNECTION_STRING = <your-app-insights-connection-string>
+└─ APPINSIGHTS_ROLE_NAME = prospektlab-backend
 
 Amplify (1 variable):
 └─ BACKEND_API_URL = https://api.prospektlab.com
@@ -171,6 +174,8 @@ GitHub Secrets (for CI/CD):
 ├─ BACKEND_URL = https://api.prospektlab.com
 ├─ AMPLIFY_DOMAIN = https://app.prospektlab.com
 ├─ OPENAI_API_KEY = sk-...
+├─ APPINSIGHTS_ENABLED = false
+├─ APPINSIGHTS_CONNECTION_STRING = <your-app-insights-connection-string>
 ├─ MCP_NSE_URL through MCP_VALUATION_URL (5 URLs)
 ├─ AMPLIFY_APP_ID = your-app-id (optional)
 └─ SLACK_WEBHOOK_URL = your-webhook (optional)

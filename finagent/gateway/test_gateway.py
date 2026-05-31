@@ -13,6 +13,16 @@ def reset_rate_limiters():
     research_rate_limiter.history = {}
     default_rate_limiter.history = {}
     client.cookies.clear()
+    # Also clear in-memory rate limits used by the new backend
+    try:
+        import finagent.storage.supabase_store as _ss
+        _ss._is_supabase_configured = lambda: False
+        _ss._portfolio_store = None
+        _ss._memory_store = None
+        _ss._state_store = None
+        _ss._token_usage_store = None
+    except Exception:
+        pass
 
 def test_health_endpoint():
     response = client.get("/health")
@@ -76,7 +86,7 @@ def test_auth_login_success(mock_auth):
     # The token should be a JWT token, decode it to verify
     import jwt
     from finagent.gateway.run import JWT_SECRET
-    decoded = jwt.decode(data["token"], JWT_SECRET, algorithms=["HS256"])
+    decoded = jwt.decode(data["token"], JWT_SECRET, algorithms=["HS256"], audience="prospektlab-api")
     assert decoded["email"] == "john.doe@example.com"
     assert decoded["user_id"] == "john-doe-id"
     assert data["user"]["name"] == "John Doe"
@@ -85,7 +95,7 @@ def test_auth_login_success(mock_auth):
 
 
 @patch("finagent.gateway.supabase_client.authenticate_user", new_callable=AsyncMock)
-def test_app_accepts_token_bootstrap_and_sets_cookie(mock_auth):
+def test_app_ignores_token_query_without_cookie(mock_auth):
     mock_auth.return_value = {
         "access_token": "mock-jwt-token",
         "user": {
@@ -101,10 +111,11 @@ def test_app_accepts_token_bootstrap_and_sets_cookie(mock_auth):
         "password": "validpassword123"
     })
     token = login_response.json()["token"]
+    client.cookies.clear()
     bootstrap_response = client.get(f"/app?token={token}", follow_redirects=False)
     assert bootstrap_response.status_code == 302
-    assert bootstrap_response.headers["location"] == "/app"
-    assert "prospektlab_auth=" in bootstrap_response.headers.get("set-cookie", "")
+    assert bootstrap_response.headers["location"] == "/login"
+    assert "prospektlab_auth=" not in bootstrap_response.headers.get("set-cookie", "")
 
 @patch("finagent.gateway.supabase_client.authenticate_user", new_callable=AsyncMock)
 def test_auth_login_invalid_credentials(mock_auth):

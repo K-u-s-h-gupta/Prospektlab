@@ -23,6 +23,41 @@ from finagent.runtime_provider import resolve_openai_config
 
 logger = logging.getLogger("finagent.router.intent_router")
 
+
+def _float_env(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def _rewrite_followup_pronouns(query: str, prior_target: str) -> str:
+    rewritten = query
+    replacements = (
+        (r"\bits\b", f"{prior_target}'s"),
+        (r"\btheir\b", f"{prior_target}'s"),
+        (r"\bit\b", prior_target),
+        (r"\bthey\b", prior_target),
+        (r"\bthis company\b", prior_target),
+        (r"\bthat company\b", prior_target),
+        (r"\bsame company\b", prior_target),
+    )
+    for pattern, replacement in replacements:
+        rewritten = re.sub(pattern, replacement, rewritten, flags=re.IGNORECASE)
+    return rewritten
+
+
+def _is_same_target(candidate: str | None, prior_target: str | None) -> bool:
+    if not candidate or not prior_target:
+        return False
+    left = re.sub(r"[^a-z0-9]+", "", candidate.lower())
+    right = re.sub(r"[^a-z0-9]+", "", prior_target.lower())
+    return bool(left and right and (left == right or left in right or right in left))
+
 # ── Simple query patterns — skip heavy phases ─────────────────────────────────
 _SIMPLE_PATTERNS = (
     "pe ratio", "p/e", "pb ratio", "p/b", "current price", "share price",
@@ -229,7 +264,7 @@ class ContextualizeResult:
 
 class LLMQueryContextualizer:
     def __init__(self) -> None:
-        pass
+        self.timeout_s = _float_env("FINAGENT_CONTEXTUALIZER_PROVIDER_TIMEOUT_S", 3.5)
 
     async def contextualize(
         self,
@@ -251,6 +286,42 @@ class LLMQueryContextualizer:
                 is_followup=False,
                 contextualized_query=query,
                 target=None,
+            )
+
+        focus, heuristic_followup = detect_operational_intent(query, has_prior_entity=True)
+        lower_query = (query or "").lower()
+        explicit_followup_reference = any(
+            phrase in lower_query for phrase in _FOLLOWUP_PRONOUNS
+        )
+        if explicit_followup_reference:
+            return ContextualizeResult(
+                is_followup=True,
+                contextualized_query=_rewrite_followup_pronouns(query, prior_target),
+                target=prior_target,
+            )
+
+        mentioned_entities = [
+            entity for entity in resolve_entities(query, limit=1) if entity.confidence != "low"
+        ]
+        if mentioned_entities:
+            mentioned = mentioned_entities[0]
+            if not _is_same_target(mentioned.canonical_name, prior_target):
+                return ContextualizeResult(
+                    is_followup=False,
+                    contextualized_query=query,
+                    target=mentioned.canonical_name,
+                )
+            if focus != "snapshot":
+                return ContextualizeResult(
+                    is_followup=True,
+                    contextualized_query=query,
+                    target=prior_target,
+                )
+        if heuristic_followup:
+            return ContextualizeResult(
+                is_followup=True,
+                contextualized_query=query,
+                target=prior_target,
             )
 
         # Build a concise chat-history block for the prompt (last 6 turns max)
@@ -304,6 +375,7 @@ class LLMQueryContextualizer:
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.0,
+                max_tokens=240,
             )
             content = resp.choices[0].message.content or ""
             data = json.loads(content.strip())
@@ -318,7 +390,11 @@ class LLMQueryContextualizer:
         if primary_cfg:
             try:
                 from openai import AsyncOpenAI
-                client = AsyncOpenAI(api_key=primary_cfg.api_key, base_url=primary_cfg.base_url)
+                client = AsyncOpenAI(
+                    api_key=primary_cfg.api_key,
+                    base_url=primary_cfg.base_url,
+                    timeout=self.timeout_s,
+                )
                 logger.info(
                     "[ROUTER-LLM] primary_attempt | model=%s | prior_target=%s | query=%s",
                     primary_cfg.model, prior_target, query[:120],
@@ -339,7 +415,11 @@ class LLMQueryContextualizer:
         if xai_key:
             try:
                 from openai import AsyncOpenAI
-                grok_client = AsyncOpenAI(api_key=xai_key, base_url="https://api.x.ai/v1")
+                grok_client = AsyncOpenAI(
+                    api_key=xai_key,
+                    base_url="https://api.x.ai/v1",
+                    timeout=self.timeout_s,
+                )
                 grok_model = os.getenv("FINAGENT_XAI_MODEL", "grok-3-mini")
                 logger.info(
                     "[ROUTER-LLM] grok_small_fallback | model=%s | prior_target=%s | query=%s",

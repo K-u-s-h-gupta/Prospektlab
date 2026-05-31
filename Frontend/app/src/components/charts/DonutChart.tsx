@@ -15,22 +15,27 @@ interface DonutChartProps {
 
 export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, valueKind = 'currency', unit }) => {
   const PREDEFINED_COLORS = [
-    '#38BDF8', // Cyan
-    '#818CF8', // Indigo
-    '#34D399', // Emerald
-    '#F59E0B', // Amber
-    '#FB7185', // Soft Rose
-    '#A78BFA', // Violet
-    '#F472B6', // Pink
-    '#F87171', // Red
-    '#FB923C', // Orange
-    '#4ADE80', // Light Green
-    '#2DD4BF', // Teal
+    '#38BDF8',
+    '#818CF8',
+    '#34D399',
+    '#F59E0B',
+    '#FB7185',
+    '#A78BFA',
+    '#F472B6',
+    '#F87171',
+    '#FB923C',
+    '#4ADE80',
+    '#2DD4BF'
   ];
 
-  const totalVal = data.reduce((a, b) => a + b, 0);
+  const normalizedData = data.map((value) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : 0;
+  });
 
-  if (!labels.length || !data.length || totalVal <= 0) {
+  const totalVal = normalizedData.reduce((a, b) => a + b, 0);
+
+  if (!labels.length || !normalizedData.length || totalVal <= 0) {
     return (
       <div style={{ height: '220px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: ChartColors.textMuted, fontSize: 12 }}>
         No allocation data available
@@ -38,9 +43,8 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
     );
   }
 
-  // Format labels to include percentage in the legend: e.g. "IT (28%)"
   const formattedLabels = labels.map((label, idx) => {
-    const val = data[idx];
+    const val = normalizedData[idx];
     const pct = totalVal > 0 ? (val / totalVal) * 100 : 0;
     return `${label} (${pct.toFixed(0)}%)`;
   });
@@ -51,13 +55,13 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
     labels: formattedLabels,
     datasets: [
       {
-        data: data,
+        data: normalizedData,
         backgroundColor: colors,
         borderWidth: 1,
         borderColor: 'rgba(3, 7, 18, 0.8)',
         hoverOffset: 6
-      },
-    ],
+      }
+    ]
   };
 
   const options = {
@@ -69,13 +73,11 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
         align: 'center' as const,
         labels: {
           color: ChartColors.textPrimary,
-          font: {
-            size: 10
-          },
+          font: { size: 10 },
           padding: 8,
           boxWidth: 8,
           boxHeight: 8,
-          usePointStyle: true,
+          usePointStyle: true
         }
       },
       title: {
@@ -91,13 +93,13 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
       tooltip: {
         callbacks: {
           label: (context: any) => {
-            const val = context.raw;
+            const val = Number(context.raw);
             const pct = totalVal > 0 ? (val / totalVal) * 100 : 0;
             const isPercent = valueKind === 'percent' || unit === '%';
             if (isPercent) {
               return ` ${val.toFixed(1)}%`;
             }
-            const formattedVal = '₹' + val.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+            const formattedVal = '\u20B9' + val.toLocaleString('en-IN', { maximumFractionDigits: 0 });
             return ` ${formattedVal} · ${pct.toFixed(1)}% of portfolio`;
           }
         }
@@ -106,34 +108,38 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
     cutout: '65%'
   };
 
-  // Plugin to draw total value in the center of the donut chart
   const centerTextPlugin = {
     id: 'centerText',
     beforeDraw: (chart: any) => {
       const { ctx, width, height } = chart;
       ctx.save();
-      
+
+      const chartValues = ((chart?.data?.datasets?.[0]?.data || []) as Array<number | string>)
+        .map((value) => {
+          const numeric = Number(value);
+          return Number.isFinite(numeric) ? numeric : 0;
+        });
+      const liveTotalVal = chartValues.reduce((acc, value) => acc + value, 0);
+
       const isPercent = valueKind === 'percent' || unit === '%';
-      const centerLabel = isPercent ? '100%' : '₹' + Math.round(totalVal).toLocaleString('en-IN');
+      const centerLabel = isPercent ? '100%' : '\u20B9' + Math.round(liveTotalVal).toLocaleString('en-IN');
       const subLabel = isPercent ? 'Allocation' : 'Total Value';
-      
+
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      
+
       const arcMeta = chart.getDatasetMeta(0)?.data?.[0];
       const textX = arcMeta?.x ?? width / 2;
       const textY = arcMeta?.y ?? height / 2;
-      
-      // Draw sub label
+
       ctx.font = 'normal 10px sans-serif';
       ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
       ctx.fillText(subLabel, textX, textY - 9);
-      
-      // Draw the main center value (never fake currency for percent donuts)
+
       ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = '#FFFFFF';
       ctx.fillText(centerLabel, textX, textY + 7);
-      
+
       ctx.restore();
     }
   };

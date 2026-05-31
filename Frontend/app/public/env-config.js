@@ -6,6 +6,12 @@
   window.__BACKEND_URL = backend;
   window.__CONFIG__ = {
     apiBase: backend,
-    environment: isLocal ? "local" : "production"
+    environment: isLocal ? "local" : "production",
+    telemetry: {
+      enabled: true,
+      connectionString: "InstrumentationKey=b4797745-6b7f-4d72-894f-768bdc808d3d;IngestionEndpoint=https://centralindia-0.in.applicationinsights.azure.com/;LiveEndpoint=https://centralindia.livediagnostics.monitor.azure.com/;ApplicationId=980e7ddb-6ef5-46e2-b7ae-bb833f3fc8c8",
+      roleName: "prospektlab-frontend",
+      cloudRoleInstance: isLocal ? "local-browser" : "browser"
+    }
   };
 })();

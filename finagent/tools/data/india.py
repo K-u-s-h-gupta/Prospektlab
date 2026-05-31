@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -36,7 +38,51 @@ _HEADERS_MC = {
     "Accept": "application/json, text/plain, */*",
 }
 
-_TIMEOUT = httpx.Timeout(15.0)
+def _float_env(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+_TIMEOUT = httpx.Timeout(
+    _float_env("FINAGENT_MARKET_DATA_TIMEOUT_S", 4.0),
+    connect=_float_env("FINAGENT_MARKET_DATA_CONNECT_TIMEOUT_S", 1.5),
+)
+
+
+def _httpx_trust_env() -> bool:
+    raw = os.getenv("FINAGENT_HTTP_TRUST_ENV", "0").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+_HTTPX_TRUST_ENV = _httpx_trust_env()
+_PROVIDER_BACKOFF_SECONDS = _float_env("FINAGENT_MARKET_DATA_BACKOFF_S", 60.0)
+_PROVIDER_BACKOFF: dict[str, float] = {}
+_TRANSIENT_NETWORK_ERRORS = (
+    httpx.TimeoutException,
+    httpx.NetworkError,
+    httpx.TransportError,
+)
+
+
+def _provider_available(provider: str) -> bool:
+    return time.monotonic() >= _PROVIDER_BACKOFF.get(provider, 0.0)
+
+
+def _mark_provider_miss(provider: str, symbol: str, exc: Exception) -> None:
+    _PROVIDER_BACKOFF[provider] = time.monotonic() + _PROVIDER_BACKOFF_SECONDS
+    logger.debug(
+        "%s temporarily unavailable for %s; suppressing retries for %.0fs: %s",
+        provider,
+        symbol,
+        _PROVIDER_BACKOFF_SECONDS,
+        type(exc).__name__,
+    )
 
 
 # ── Data models ───────────────────────────────────────────────────────────────
@@ -150,14 +196,20 @@ class SEBIFiling:
 
 async def _fetch_screener(symbol: str) -> IndiaCompanySnapshot | None:
     """Fetch company data from Screener.in — best source for 10-year financials."""
+    provider = "screener"
+    if not _provider_available(provider):
+        return None
     url = f"https://www.screener.in/company/{symbol.upper()}/"
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS_MC) as session:
+        async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS_MC, trust_env=_HTTPX_TRUST_ENV) as session:
             resp = await session.get(url)
             if resp.status_code != 200:
                 return None
             html = resp.text
         return _parse_screener_html(html, symbol)
+    except _TRANSIENT_NETWORK_ERRORS as exc:
+        _mark_provider_miss(provider, symbol, exc)
+        return None
     except Exception as exc:
         logger.debug("screener fetch failed for %s: %s", symbol, exc)
         return None
@@ -233,15 +285,21 @@ _MC_SYMBOL_MAP: dict[str, str] = {
 
 async def _fetch_moneycontrol(symbol: str) -> IndiaCompanySnapshot | None:
     """Fetch from Moneycontrol API (JSON endpoints used by their site)."""
+    provider = "moneycontrol"
+    if not _provider_available(provider):
+        return None
     mc_sym = _MC_SYMBOL_MAP.get(symbol.upper(), symbol.upper())
     url = f"https://priceapi.moneycontrol.com/techCharts/indianMarket/stock/history?symbol={mc_sym}&resolution=1D&countback=5&currencyCode=INR"
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS_MC) as session:
+        async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS_MC, trust_env=_HTTPX_TRUST_ENV) as session:
             resp = await session.get(url)
             if resp.status_code != 200:
                 return None
             data = resp.json()
         return _parse_moneycontrol_json(data, symbol)
+    except _TRANSIENT_NETWORK_ERRORS as exc:
+        _mark_provider_miss(provider, symbol, exc)
+        return None
     except Exception as exc:
         logger.debug("moneycontrol fetch failed for %s: %s", symbol, exc)
         return None
@@ -270,9 +328,12 @@ def _parse_moneycontrol_json(data: dict, symbol: str) -> IndiaCompanySnapshot | 
 
 async def _fetch_nse(symbol: str) -> IndiaCompanySnapshot | None:
     """Fetch from NSE India's JSON API (needs Referer cookie dance)."""
+    provider = "nse"
+    if not _provider_available(provider):
+        return None
     quote_url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol.upper()}"
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as session:
+        async with httpx.AsyncClient(timeout=_TIMEOUT, trust_env=_HTTPX_TRUST_ENV) as session:
             # Seed cookies with a homepage visit
             await session.get("https://www.nseindia.com", headers=_HEADERS_NSE)
             resp = await session.get(quote_url, headers=_HEADERS_NSE)
@@ -280,6 +341,9 @@ async def _fetch_nse(symbol: str) -> IndiaCompanySnapshot | None:
                 return None
             data = resp.json()
         return _parse_nse_json(data, symbol)
+    except _TRANSIENT_NETWORK_ERRORS as exc:
+        _mark_provider_miss(provider, symbol, exc)
+        return None
     except Exception as exc:
         logger.debug("NSE fetch failed for %s: %s", symbol, exc)
         return None
@@ -327,18 +391,24 @@ _BSE_SCRIP_MAP: dict[str, str] = {
 
 async def _fetch_bse(symbol: str) -> IndiaCompanySnapshot | None:
     """Fetch from BSE India API as fallback."""
+    provider = "bse"
+    if not _provider_available(provider):
+        return None
     scrip = _BSE_SCRIP_MAP.get(symbol.upper())
     if not scrip:
         logger.debug("no BSE scrip code for %s", symbol)
         return None
     url = f"https://api.bseindia.com/BseIndiaAPI/api/getScripHeaderData/w?Debtflag=&scripcode={scrip}&seriesid="
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS_MC) as session:
+        async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS_MC, trust_env=_HTTPX_TRUST_ENV) as session:
             resp = await session.get(url)
             if resp.status_code != 200:
                 return None
             data = resp.json()
         return _parse_bse_json(data, symbol, scrip)
+    except _TRANSIENT_NETWORK_ERRORS as exc:
+        _mark_provider_miss(provider, symbol, exc)
+        return None
     except Exception as exc:
         logger.debug("BSE fetch failed for %s: %s", symbol, exc)
         return None
@@ -388,7 +458,7 @@ async def fetch_shareholding_pattern(symbol: str) -> dict | None:
     # Try NSE shareholding API
     url = f"https://www.nseindia.com/api/corporate-share-holdings-master?index=shareHolding&symbol={symbol.upper()}&csvVal=1"
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as session:
+        async with httpx.AsyncClient(timeout=_TIMEOUT, trust_env=_HTTPX_TRUST_ENV) as session:
             await session.get("https://www.nseindia.com", headers=_HEADERS_NSE)
             resp = await session.get(url, headers=_HEADERS_NSE)
             if resp.status_code == 200:
@@ -440,7 +510,7 @@ async def fetch_sebi_filing(symbol: str, filing_type: str = "annual") -> SEBIFil
 
     url = f"https://trendlyne.com/equity/{symbol.upper()}/analysis/"
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0), headers=_HEADERS_MC) as session:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0), headers=_HEADERS_MC, trust_env=_HTTPX_TRUST_ENV) as session:
             resp = await session.get(url)
             if resp.status_code != 200:
                 return None
@@ -520,11 +590,11 @@ async def fetch_india_snapshot(symbol: str) -> IndiaCompanySnapshot | None:
         # Merge: start from Screener (richest), backfill from Moneycontrol
         snap = screener_snap or mc_snap
         if snap is None:
-            logger.info("Screener/MC miss for %s — trying NSE", sym)
+            logger.debug("Screener/MC miss for %s; trying NSE", sym)
             snap = await _fetch_nse(sym)
 
         if snap is None:
-            logger.info("NSE miss for %s — trying BSE", sym)
+            logger.debug("NSE miss for %s; trying BSE", sym)
             snap = await _fetch_bse(sym)
 
         if snap is None:

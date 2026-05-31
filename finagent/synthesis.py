@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 
 from finagent.analysis.conflicts import ConflictReport
 from finagent.output.artifact_builder import build_answer_artifact
+from finagent.output.compliance import enforce_sebi_compliance
 from finagent.output.contracts import AnswerArtifact, OutputMode, ResponseDepth
 from finagent.output.intent_classifier import classify_output_mode, extract_finance_entities, normalize_depth
 from finagent.output.memo_formatter import MemoSection, format_memo
@@ -685,12 +686,12 @@ async def _openai_memo(
     
     model_to_use = synth_model or cfg.model
 
-    def _record_usage(usage_obj):
+    async def _record_usage(usage_obj):
         if not user_email or not usage_obj:
             return
         try:
             from finagent.gateway.run import record_token_usage
-            record_token_usage(
+            await record_token_usage(
                 user_email=user_email,
                 session_id=session_id or "",
                 prompt_tokens=getattr(usage_obj, "prompt_tokens", 0),
@@ -717,7 +718,7 @@ async def _openai_memo(
             "This is a COMPARISON query. You MUST:\n"
             "1. Analyze BOTH companies equally with parallel depth.\n"
             "2. Structure the report with side-by-side analysis:\n"
-            "   - ## Executive Summary (declare an overall winner with reasoning)\n"
+            "   - ## Executive Summary (summarize the evidence-based relative setup)\n"
             "   - ## Company Profiles (one subsection per company)\n"
             "   - ## Financial Comparison (use a markdown table: | Metric | Company A | Company B | Advantage |)\n"
             "   - ## Revenue & Growth Comparison\n"
@@ -725,9 +726,9 @@ async def _openai_memo(
             "   - ## Valuation Comparison (P/E, P/B, EV/EBITDA)\n"
             "   - ## Strengths & Weaknesses (parallel bullet points for each)\n"
             "   - ## Risk Comparison\n"
-            "   - ## Investment Verdict (which is the better pick and why)\n"
+            "   - ## Evidence-Based View (relative strengths, weaknesses, and uncertainty)\n"
             "3. Include a head-to-head metrics table with at least 8 metrics.\n"
-            "4. For each metric, state which company wins and by how much.\n"
+            "4. For each metric, state which company is stronger on that metric and by how much.\n"
             "5. Use specific numbers from the facts — never generalize.\n\n"
         )
     else:
@@ -794,6 +795,12 @@ async def _openai_memo(
         "- Emit chart blocks ONLY when time-series numeric data (multiple data points across years/quarters) is present in VERIFIED FACTS.\n"
         "- For conversational questions or opinion queries: use prose only, no kpi/chart blocks.\n"
         "- For portfolio queries and comparison queries: ALWAYS include at least 1 chart + 1-3 kpi blocks whenever source data permits.\n\n"
+        "SEBI-safe answer rules:\n"
+        "- Do NOT provide buy, sell, hold, accumulate, exit, entry, target-price, or allocation instructions.\n"
+        "- Do NOT call anything a recommendation, tip, call, or advisory view.\n"
+        "- Present valuation as scenario-implied value ranges under stated assumptions, not as action guidance.\n"
+        "- Use neutral labels: Evidence-Based View, Key Takeaways, Scenario Read, Watchpoints, Risk Factors, Data Limitations.\n"
+        "- If the user asks what to buy/sell/hold, respond with objective evidence, suitability factors, and risks only.\n\n"
         f"=== VERIFIED FACTS ===\n{facts}\n\n"
         f"=== SOURCE DOCUMENTS ===\n{digest}\n\n"
         f"{_conflict_block(conflicts)}"
@@ -849,7 +856,7 @@ async def _openai_memo(
             ],
         )
         if getattr(resp, "usage", None):
-            _record_usage(resp.usage)
+            await _record_usage(resp.usage)
         final = resp.choices[0].message.content or ""
         if isinstance(final, list):
             final = "".join(
@@ -859,8 +866,9 @@ async def _openai_memo(
         final = str(final).strip()
         if final:
             logger.info("[LLM-RESPONSE] Synthesis completed via FORCED NON-STREAM (retry) | model=%s | output_len=%d chars", model_to_use, len(final))
+            final = enforce_sebi_compliance(final)
             await _emit_token(on_token, final)
-        return final
+        return enforce_sebi_compliance(final)
 
     # Normal path: try streaming first (with internal empty-response fallback to non-stream)
     logger.info("[LLM-CALL] Starting OpenAI streaming call | model=%s | session_id=%s", model_to_use, "n/a-in-this-scope")
@@ -890,12 +898,13 @@ async def _openai_memo(
             if not text:
                 continue
             chunks.append(text)
-            await _emit_token(on_token, text)
         full = "".join(chunks).strip()
         if full:
+            full = enforce_sebi_compliance(full)
             logger.info("[LLM-RESPONSE] Synthesis completed via streaming | model=%s | output_len=%d chars", model_to_use, len(full))
             if usage_data:
-                _record_usage(usage_data)
+                await _record_usage(usage_data)
+            await _emit_token(on_token, full)
             return full
         logger.warning("[LLM-FALLBACK] Streaming returned empty — falling back to non-streaming call | model=%s", model_to_use)
         logger.info("[LLM-CONTEXT] FALLBACK non-stream call | model=%s | user_prompt_len=%d", model_to_use, len(user_prompt))
@@ -910,7 +919,7 @@ async def _openai_memo(
             ],
         )
         if getattr(resp, "usage", None):
-            _record_usage(resp.usage)
+            await _record_usage(resp.usage)
         final = resp.choices[0].message.content or ""
         if isinstance(final, list):
             final = "".join(
@@ -920,8 +929,9 @@ async def _openai_memo(
         final = str(final).strip()
         if final:
             logger.info("[LLM-RESPONSE] Synthesis completed via NON-STREAM fallback | model=%s | output_len=%d chars", model_to_use, len(final))
+            final = enforce_sebi_compliance(final)
             await _emit_token(on_token, final)
-        return final
+        return enforce_sebi_compliance(final)
     finally:
         close = getattr(stream, "close", None)
         if close is not None:

@@ -7,7 +7,7 @@ import { apiSendVerification, apiForgotPassword, apiResetPassword, apiUpdateMobi
 
 export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTab = 'login' }) => {
   const navigate = useNavigate();
-  const { user, login, signup, googleLogin, updateUserMobile, logout, showToast, isAuthenticated, onboarded, setOnboarded } = useAuth();
+  const { user, login, signup, googleLogin, updateUserMobile, logout, showToast, isAuthenticated, onboarded, setOnboarded, refreshOnboardingStatus } = useAuth();
 
   // Tab State
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>(initialTab);
@@ -87,7 +87,7 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
               if (res.require_mobile) {
                 setRequireMobileMode(true);
               } else {
-                navigate(onboarded ? '/dashboard' : '/onboarding');
+                navigate(res.onboarded ? '/dashboard' : '/onboarding');
               }
             } catch (err: any) {
               showToast(err.message || 'Google Auth failed', 'error');
@@ -222,8 +222,8 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
     if (!email || !password) return;
     setIsSubmitting(true);
     try {
-      await login(email, password, remember);
-      navigate(onboarded ? '/dashboard' : '/onboarding');
+      const res = await login(email, password, remember);
+      navigate(res.onboarded ? '/dashboard' : '/onboarding');
     } catch (err) {
       // handled in context
     } finally {
@@ -289,9 +289,10 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
     try {
       await apiUpdateMobile(formattedMobile);
       updateUserMobile(formattedMobile);
+      const nextOnboarded = await refreshOnboardingStatus(user?.email);
       showToast('Profile completed successfully!', 'success');
       setRequireMobileMode(false);
-      navigate(onboarded ? '/dashboard' : '/onboarding');
+      navigate(nextOnboarded ? '/dashboard' : '/onboarding');
     } catch (err: any) {
       showToast(err.message || 'Failed to update mobile number.', 'error');
     } finally {

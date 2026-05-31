@@ -1,9 +1,16 @@
-"""In-process event bus that connects the agent loop to the gateway SSE stream."""
+"""In-process event bus that connects the agent loop to the gateway SSE stream.
+
+Hardening changes:
+- All file I/O is offloaded to asyncio.to_thread() to prevent event-loop blocking.
+- JSONL files are capped at _max_file_size to prevent unbounded disk growth.
+- In-memory history is capped at _max_history.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import json
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,7 +45,13 @@ class AgentEvent:
 
 
 class SessionBus:
-    """One asyncio.Queue per live SSE session, plus replayable event history."""
+    """One asyncio.Queue per live SSE session, plus replayable event history.
+
+    Hardening:
+    - All disk I/O is offloaded to asyncio.to_thread() to avoid blocking the event loop.
+    - JSONL files are capped at _max_file_size (10MB) to prevent unbounded growth.
+    - In-memory history is capped at _max_history.
+    """
 
     def __init__(self) -> None:
         self._queues: dict[str, asyncio.Queue[AgentEvent | None]] = {}
@@ -46,6 +59,7 @@ class SessionBus:
         self._closed: set[str] = set()
         self._ignore_closed_file: set[str] = set()
         self._max_history = 5000
+        self._max_file_size = 10 * 1024 * 1024  # 10 MB cap per session JSONL
 
     def forget_memory(self, session_id: str) -> None:
         """Drop live/in-memory state while preserving durable files."""
@@ -65,11 +79,26 @@ class SessionBus:
     def _closed_path(self, session_id: str) -> Path:
         return self._session_dir(session_id) / "closed"
 
-    def _append_event_file(self, session_id: str, event: AgentEvent) -> None:
+    async def _append_event_file(self, session_id: str, event: AgentEvent) -> None:
+        def _write():
+            path = self._events_path(session_id)
+            try:
+                # Cap file size: if > 10MB, truncate to last 5000 lines
+                if path.exists() and path.stat().st_size > self._max_file_size:
+                    try:
+                        lines = path.read_text(encoding="utf-8").splitlines()
+                        lines = lines[-5000:]
+                        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                    except Exception:
+                        pass
+                with path.open("a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(event.to_record(), default=str, ensure_ascii=False) + "\n")
+            except OSError:
+                pass
+
         try:
-            with self._events_path(session_id).open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(event.to_record(), default=str, ensure_ascii=False) + "\n")
-        except OSError:
+            await asyncio.to_thread(_write)
+        except Exception:
             pass
 
     def _load_history_file(self, session_id: str) -> list[AgentEvent]:
@@ -123,7 +152,13 @@ class SessionBus:
         hist = self._history.setdefault(session_id, [])
         event = AgentEvent(type=event_type, payload=payload, seq=len(hist))
         hist.append(event)
-        self._append_event_file(session_id, event)
+        # Offload disk write to thread pool
+        try:
+            asyncio.get_running_loop().create_task(self._append_event_file(session_id, event))
+        except RuntimeError:
+            # No running loop; fall back to sync write (should not happen in production)
+            import threading
+            threading.Thread(target=lambda: asyncio.run(self._append_event_file(session_id, event)), daemon=True).start()
         if len(hist) > self._max_history:
             del hist[: len(hist) - self._max_history]
         q = self._queues.get(session_id)
@@ -132,14 +167,30 @@ class SessionBus:
         try:
             q.put_nowait(event)
         except asyncio.QueueFull:
-            pass
+            # Emit backpressure warning so frontend knows events are being dropped
+            try:
+                warn = AgentEvent(
+                    type="warning",
+                    payload={"message": "Event buffer saturated; telemetry truncated"},
+                    seq=len(hist),
+                )
+                q.put_nowait(warn)
+            except asyncio.QueueFull:
+                pass
 
     def close(self, session_id: str) -> None:
         self._closed.add(session_id)
         self._ignore_closed_file.discard(session_id)
+
+        def _write_closed():
+            try:
+                self._closed_path(session_id).write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+            except OSError:
+                pass
+
         try:
-            self._closed_path(session_id).write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
-        except OSError:
+            asyncio.get_running_loop().create_task(asyncio.to_thread(_write_closed))
+        except RuntimeError:
             pass
         q = self._queues.get(session_id)
         if q is not None:
@@ -185,6 +236,19 @@ class SessionBus:
 
     def known(self, session_id: str) -> bool:
         return session_id in self._history or session_id in self._queues or self._events_path(session_id).is_file()
+
+    def cleanup_old_sessions(self, max_age: float = 3600) -> int:
+        """Remove closed sessions older than max_age seconds from memory to prevent leaks."""
+        now = datetime.now(timezone.utc).timestamp()
+        removed = 0
+        for session_id in list(self._closed):
+            path = self._events_path(session_id)
+            if path.exists():
+                mtime = path.stat().st_mtime
+                if now - mtime > max_age:
+                    self.forget_memory(session_id)
+                    removed += 1
+        return removed
 
 
 BUS = SessionBus()

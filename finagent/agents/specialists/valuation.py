@@ -221,22 +221,13 @@ class ValuationAgent(BaseSubAgent):
             if current_price and current_price > 0:
                 upside = ((intrinsic - current_price) / current_price) * 100
 
-            verdict = ""
-            if upside is not None:
-                if upside > 15:
-                    verdict = " — potentially UNDERVALUED"
-                elif upside < -15:
-                    verdict = " — potentially OVERVALUED"
-                else:
-                    verdict = " — FAIRLY VALUED"
-
             detail_parts = [
                 f"DCF intrinsic value per share: {currency} {intrinsic:,.2f}",
             ]
             if current_price:
                 detail_parts.append(f"Current price: {currency} {current_price:,.2f}")
             if upside is not None:
-                detail_parts.append(f"Upside: {upside:+.1f}%{verdict}")
+                detail_parts.append(f"Model-implied gap versus current price: {upside:+.1f}%")
             detail_parts.append(
                 f"Using statistical growth of {high_growth * 100:.1f}% (high) / "
                 f"{stable_growth * 100:.1f}% (stable)."
@@ -246,7 +237,7 @@ class ValuationAgent(BaseSubAgent):
                 Finding(
                     agent=self.name,
                     kind="financial",
-                    headline=f"DCF intrinsic value: {currency} {intrinsic:,.2f}{verdict}",
+                    headline=f"DCF scenario-implied value: {currency} {intrinsic:,.2f}",
                     detail=" ".join(detail_parts),
                     confidence="MEDIUM",
                     evidence=[yahoo.source_url] if yahoo else [],

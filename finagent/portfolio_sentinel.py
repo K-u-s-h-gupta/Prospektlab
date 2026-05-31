@@ -34,7 +34,7 @@ class PortfolioSentinelResult:
 
 async def run_portfolio_sentinel(tenant_id: str) -> PortfolioSentinelResult:
     result = PortfolioSentinelResult(tenant_id=tenant_id)
-    positions = load_active_positions(tenant_id)
+    positions = await load_active_positions(tenant_id)
     result.positions_found = len(positions)
     result.symbols = [pos.exchange_symbol for pos in positions if pos.exchange_symbol]
     result.weights = portfolio_weights(positions)

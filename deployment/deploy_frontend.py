@@ -9,7 +9,7 @@ import sys
 # Constants
 APP_NAME = "finagent-frontend"
 BRANCH_NAME = "production"
-GATEWAY_DIR = os.path.join("finagent", "gateway")
+FRONTEND_DIST_DIR = os.path.join("Frontend", "app", "dist")
 ZIP_PATH = "frontend.zip"
 API_GATEWAY_URL = "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com"
 
@@ -62,37 +62,32 @@ CUSTOM_RULES = [
     },
     {
         "source": "/login",
-        "target": "/login.html",
+        "target": "/index.html",
         "status": "200"
     },
     {
         "source": "/signup",
-        "target": "/signup.html",
+        "target": "/index.html",
         "status": "200"
     },
     {
         "source": "/profile",
-        "target": "/profile.html",
+        "target": "/index.html",
         "status": "200"
     },
     {
         "source": "/settings",
-        "target": "/settings.html",
+        "target": "/index.html",
         "status": "200"
     },
-    # {
-    #     "source": "/widget",
-    #     "target": "/widget.html",
-    #     "status": "200"
-    # },
     {
         "source": "/app",
-        "target": "/widget.html",
+        "target": "/index.html",
         "status": "200"
     },
     {
         "source": "/landing",
-        "target": "/landing.html",
+        "target": "/index.html",
         "status": "200"
     },
     {
@@ -111,30 +106,19 @@ def run_cmd(cmd):
 
 def create_frontend_zip():
     print("1. Creating frontend.zip deployment package...")
-    html_files = [
-        "landing.html",
-        "login.html",
-        "signup.html",
-        "profile.html",
-        "settings.html",
-        "widget.html"
-    ]
-    
+    if not os.path.isdir(FRONTEND_DIST_DIR):
+        raise Exception(
+            f"Frontend build output not found at {FRONTEND_DIST_DIR}. "
+            "Run `npm run build` inside Frontend/app first."
+        )
+
     with zipfile.ZipFile(ZIP_PATH, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for file in html_files:
-            file_path = os.path.join(GATEWAY_DIR, file)
-            if not os.path.exists(file_path):
-                print(f"Warning: {file_path} not found!")
-                continue
-            
-            # Add to zip
-            zipf.write(file_path, file)
-            print(f"  Added {file_path} as {file}")
-            
-            # Copy landing.html to index.html as well for root path mapping
-            if file == "landing.html":
-                zipf.write(file_path, "index.html")
-                print(f"  Added {file_path} as index.html (root page)")
+        for root, _, files in os.walk(FRONTEND_DIST_DIR):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, FRONTEND_DIST_DIR)
+                zipf.write(file_path, arcname)
+                print(f"  Added {file_path} as {arcname}")
 
     print(f"Frontend package created successfully: {ZIP_PATH}")
 

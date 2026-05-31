@@ -29,6 +29,9 @@ MCP_VALUATION_URL="${MCP_VALUATION_URL:-http://mcp-valuation-service:8005/mcp}"
 
 # OpenAI API Key (from environment)
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
+APPINSIGHTS_ENABLED="${APPINSIGHTS_ENABLED:-true}"
+APPINSIGHTS_CONNECTION_STRING="${APPINSIGHTS_CONNECTION_STRING:-InstrumentationKey=b4797745-6b7f-4d72-894f-768bdc808d3d;IngestionEndpoint=https://centralindia-0.in.applicationinsights.azure.com/;LiveEndpoint=https://centralindia.livediagnostics.monitor.azure.com/;ApplicationId=980e7ddb-6ef5-46e2-b7ae-bb833f3fc8c8}"
+APPINSIGHTS_ROLE_NAME="${APPINSIGHTS_ROLE_NAME:-prospektlab-backend}"
 
 # ============================================================================
 # VALIDATION
@@ -55,6 +58,7 @@ echo "   ECS Cluster: $ECS_CLUSTER"
 echo "   ECS Service: $ECS_SERVICE"
 echo "   Backend URL: $BACKEND_URL"
 echo "   Amplify Domain: $AMPLIFY_DOMAIN"
+echo "   App Insights Enabled: $APPINSIGHTS_ENABLED"
 echo ""
 
 # ============================================================================
@@ -118,6 +122,9 @@ NEW_TASK_DEF=$(echo $TASK_DEF | jq \
 	--arg MCP_DOCS "$MCP_DOCS_URL" \
 	--arg MCP_VALUATION "$MCP_VALUATION_URL" \
 	--arg OPENAI_KEY "$OPENAI_API_KEY" \
+	--arg APPINSIGHTS_ENABLED "$APPINSIGHTS_ENABLED" \
+	--arg APPINSIGHTS_CONNECTION_STRING "$APPINSIGHTS_CONNECTION_STRING" \
+	--arg APPINSIGHTS_ROLE_NAME "$APPINSIGHTS_ROLE_NAME" \
 	'.containerDefinitions[0].image = $IMAGE |
 	 .containerDefinitions[0].environment = (
 	   .containerDefinitions[0].environment // [] |
@@ -127,7 +134,10 @@ NEW_TASK_DEF=$(echo $TASK_DEF | jq \
 				  .name != "MCP_RESEARCH_URL" and 
 				  .name != "MCP_DOCS_URL" and 
 				  .name != "MCP_VALUATION_URL" and 
-				  .name != "OPENAI_API_KEY")) +
+				  .name != "OPENAI_API_KEY" and
+				  .name != "APPINSIGHTS_ENABLED" and
+				  .name != "APPINSIGHTS_CONNECTION_STRING" and
+				  .name != "APPINSIGHTS_ROLE_NAME")) +
 	   [
 		 {name: "CORS_ORIGINS", value: $CORS_ORIGINS},
 		 {name: "MCP_NSE_INDIA_URL", value: $MCP_NSE},
@@ -135,7 +145,10 @@ NEW_TASK_DEF=$(echo $TASK_DEF | jq \
 		 {name: "MCP_RESEARCH_URL", value: $MCP_RESEARCH},
 		 {name: "MCP_DOCS_URL", value: $MCP_DOCS},
 		 {name: "MCP_VALUATION_URL", value: $MCP_VALUATION},
-		 {name: "OPENAI_API_KEY", value: $OPENAI_KEY}
+		 {name: "OPENAI_API_KEY", value: $OPENAI_KEY},
+		 {name: "APPINSIGHTS_ENABLED", value: $APPINSIGHTS_ENABLED},
+		 {name: "APPINSIGHTS_CONNECTION_STRING", value: $APPINSIGHTS_CONNECTION_STRING},
+		 {name: "APPINSIGHTS_ROLE_NAME", value: $APPINSIGHTS_ROLE_NAME}
 	   ]
 	 ) |
 	 del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)'

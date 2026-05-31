@@ -11,6 +11,11 @@ APP_NAME = "finagent-frontend"
 ZIP_PATH = "react_frontend.zip"
 API_GATEWAY_URL = "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com"
 DIST_DIR = os.path.join("Frontend", "app", "dist")
+APPINSIGHTS_CONNECTION_STRING = os.getenv(
+    "APPINSIGHTS_CONNECTION_STRING",
+    "InstrumentationKey=b4797745-6b7f-4d72-894f-768bdc808d3d;IngestionEndpoint=https://centralindia-0.in.applicationinsights.azure.com/;LiveEndpoint=https://centralindia.livediagnostics.monitor.azure.com/;ApplicationId=980e7ddb-6ef5-46e2-b7ae-bb833f3fc8c8",
+)
+APPINSIGHTS_ENABLED = os.getenv("APPINSIGHTS_ENABLED", "true")
 
 CUSTOM_RULES = [
     {
@@ -97,8 +102,15 @@ def create_zip():
     
     # Inject API URL into env-config.js in the build output directory
     env_config_path = os.path.join(DIST_DIR, "env-config.js")
+    telemetry_enabled = APPINSIGHTS_ENABLED.strip().lower() in {"1", "true", "yes", "on"}
     with open(env_config_path, "w") as f:
-        f.write(f'window.__BACKEND_URL = "{API_GATEWAY_URL}"; window.__CONFIG__ = {{ apiBase: "{API_GATEWAY_URL}", environment: "production" }};\n')
+        f.write(
+            'window.__BACKEND_URL = {backend}; window.__CONFIG__ = {{ apiBase: {backend}, environment: "production", telemetry: {{ enabled: {enabled}, connectionString: {connection}, roleName: "prospektlab-frontend", cloudRoleInstance: "amplify" }} }};\n'.format(
+                backend=json.dumps(API_GATEWAY_URL),
+                enabled="true" if telemetry_enabled else "false",
+                connection=json.dumps(APPINSIGHTS_CONNECTION_STRING),
+            )
+        )
     print("  Injected backend URL into env-config.js")
 
     if os.path.exists(ZIP_PATH):

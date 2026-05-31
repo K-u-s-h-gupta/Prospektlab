@@ -45,6 +45,12 @@ from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 from urllib.parse import quote_plus, urlparse
 
+# ── Global Chromium concurrency limit (prevents OOM under load) ──────────
+# Each Crawl4AI batch can spawn multiple headless Chromium processes.
+# Cap the total concurrent browser instances to 2 to prevent ECS OOM.
+_MAX_CONCURRENT_CHROMIUM = 2
+_CHROMIUM_SEMAPHORE = asyncio.Semaphore(_MAX_CONCURRENT_CHROMIUM)
+
 from finagent.geo.entity_resolver import ResolvedEntity
 from finagent.retrieval.reranker import rerank_docs
 from finagent.retrieval.sparse_index import sanitize_search_query
@@ -833,22 +839,24 @@ async def _crawl4ai_fetch_batch(
     title_by_url: dict[str, str] | None = None,
     timeout_s: float = 45.0,
 ) -> list[ScrapedDoc]:
-    if sys.platform == "win32":
-        # On Windows, run the batch crawl in a separate thread with ProactorEventLoop
-        # to avoid NotImplementedError/subprocess failures caused by SelectorEventLoop
-        # under Uvicorn reload mode. We serialize batch crawls using a process-wide lock.
-        def run_with_lock():
-            with _CRAWLER_THREAD_LOCK:
-                return _run_in_proactor_thread(urls, query, title_by_url, timeout_s)
-        return await asyncio.to_thread(run_with_lock)
-    else:
-        # On non-Windows platforms, run directly in the current event loop.
-        return await _crawl4ai_fetch_batch_inner(
-            urls,
-            query=query,
-            title_by_url=title_by_url,
-            timeout_s=timeout_s,
-        )
+    """Crawl4AI batch crawl with a global semaphore to prevent OOM."""
+    async with _CHROMIUM_SEMAPHORE:
+        if sys.platform == "win32":
+            # On Windows, run the batch crawl in a separate thread with ProactorEventLoop
+            # to avoid NotImplementedError/subprocess failures caused by SelectorEventLoop
+            # under Uvicorn reload mode. We serialize batch crawls using a process-wide lock.
+            def run_with_lock():
+                with _CRAWLER_THREAD_LOCK:
+                    return _run_in_proactor_thread(urls, query, title_by_url, timeout_s)
+            return await asyncio.to_thread(run_with_lock)
+        else:
+            # On non-Windows platforms, run directly in the current event loop.
+            return await _crawl4ai_fetch_batch_inner(
+                urls,
+                query=query,
+                title_by_url=title_by_url,
+                timeout_s=timeout_s,
+            )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

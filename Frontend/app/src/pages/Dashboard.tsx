@@ -11,6 +11,7 @@ import { InteractiveChart } from '../components/charts/InteractiveChart';
 import { ChatInput } from '../components/chat/ChatInput';
 import { MessageBubble } from '../components/chat/MessageBubble';
 import { AgentThinking } from '../components/chat/AgentThinking';
+import { useAuth } from '../context/AuthContext';
 import { 
   startResearch, 
   streamSession, 
@@ -20,10 +21,13 @@ import {
   getTodayQueue,
   getPortfolioAnalytics,
   getPortfolioMirror,
+  replacePortfolioMirror,
   AgentEventData,
   getMarketIndices,
   getMarketQuotes,
   getMarketNews,
+  getPortfolioNews,
+  getPortfolioBrief,
   getUserTokenUsage
 } from '../api/client';
 import { Search, Edit3, Sparkles, MessageSquare, ChevronRight } from 'lucide-react';
@@ -49,6 +53,57 @@ interface PortfolioItem {
   dayChangePct?: number;
 }
 
+const TAPE_NEWS_CACHE_KEY = 'prospektlab_tape_news_cache_v1';
+
+const FAST_TAPE_NEWS_FALLBACKS = [
+  {
+    id: 'fallback-market-1',
+    source: 'Market tape',
+    time: 'Live fallback',
+    headline: 'Nifty, Bank Nifty, IT and large-cap portfolio names are being checked against the latest available feed.',
+    sentiment: 'neutral' as const,
+    tickers: [] as string[],
+  },
+  {
+    id: 'fallback-market-2',
+    source: 'Market tape',
+    time: 'Live fallback',
+    headline: 'Corporate announcements and index breadth can materially change portfolio risk even when headline indices are flat.',
+    sentiment: 'neutral' as const,
+    tickers: [] as string[],
+  },
+  {
+    id: 'fallback-market-3',
+    source: 'Market tape',
+    time: 'Live fallback',
+    headline: 'Sector concentration, single-stock weight and liquidity are the first checks before interpreting intraday moves.',
+    sentiment: 'neutral' as const,
+    tickers: [] as string[],
+  },
+];
+
+const readCachedTapeNews = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(TAPE_NEWS_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+};
+
+const readStoredPortfolioSnapshot = (): PortfolioItem[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem('prospektlab_portfolio');
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+};
+
 const BENCHMARKS = [
   { id: 'NIFTY50', name: 'Nifty 50' },
   { id: 'SENSEX', name: 'SENSEX' },
@@ -58,6 +113,25 @@ const BENCHMARKS = [
   { id: 'SMALLCAP250', name: 'Nifty Smallcap 250' },
   { id: 'NEXT50', name: 'Nifty Next 50' }
 ];
+
+// Canonical aliases for common ISIN-led symbols seen in eCAS / broker exports.
+const SYMBOL_ALIASES: Record<string, string> = {
+  INE002A01018: 'RELIANCE',
+  INE467B01029: 'TCS',
+  INE009A01021: 'INFY',
+  INE040A01034: 'HDFCBANK',
+  INE154A01025: 'ITC',
+  INE021A01026: 'ASIANPAINT',
+  INE155A01022: 'TATAMOTORS',
+  INE758T01015: 'ZOMATO',
+  INE0LP301011: 'PWL',
+  INF247L01DA9: 'MOMF'
+};
+
+const toCanonicalSymbol = (rawSymbol: string) => {
+  const clean = String(rawSymbol || '').split('.')[0].toUpperCase().trim();
+  return SYMBOL_ALIASES[clean] || clean;
+};
 
 const CalendarSheet: React.FC<{ dateStr: string; dateLabel: string }> = ({ dateStr, dateLabel }) => {
   let month = "TBA";
@@ -121,118 +195,15 @@ const CalendarSheet: React.FC<{ dateStr: string; dateLabel: string }> = ({ dateS
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
+  const { setOnboarded } = useAuth();
+  const [portfolio, setPortfolio] = useState<PortfolioItem[]>(() => readStoredPortfolioSnapshot());
   const [quotesData, setQuotesData] = useState<Record<string, any>>({});
-
-  // Helper db for mutual fund diagnostics
-  const MUTUAL_FUND_DIAGNOSTICS_DB: Record<string, {
-    expenseRatio: number;
-    exitLoad: string;
-    topHoldings: Array<{ name: string; weight: number }>;
-  }> = useMemo(() => ({
-    'PPFLEXICAP': {
-      expenseRatio: 0.58,
-      exitLoad: '2.00% within 365 days, 1.00% within 730 days',
-      topHoldings: [
-        { name: 'HDFC Bank Ltd', weight: 7.8 },
-        { name: 'Reliance Industries Ltd', weight: 6.5 },
-        { name: 'Tata Consultancy Services', weight: 5.2 },
-        { name: 'Microsoft Corp (US)', weight: 4.8 },
-        { name: 'ITC Limited', weight: 4.2 }
-      ]
-    },
-    'INF247L01DA9': {
-      expenseRatio: 1.12,
-      exitLoad: '1.00% if redeemed on or before 90 days',
-      topHoldings: [
-        { name: 'Tata Motors Ltd', weight: 6.8 },
-        { name: 'Reliance Industries Ltd', weight: 5.5 },
-        { name: 'Larsen & Toubro Ltd', weight: 4.8 },
-        { name: 'Bharat Electronics Ltd', weight: 4.2 },
-        { name: 'Maruti Suzuki India Ltd', weight: 3.9 }
-      ]
-    },
-    'SBIBLUECHIP': {
-      expenseRatio: 0.85,
-      exitLoad: '1.00% within 365 days',
-      topHoldings: [
-        { name: 'HDFC Bank Ltd', weight: 8.2 },
-        { name: 'ICICI Bank Ltd', weight: 7.5 },
-        { name: 'Reliance Industries Ltd', weight: 6.1 },
-        { name: 'Infosys Ltd', weight: 5.4 },
-        { name: 'ITC Limited', weight: 4.8 }
-      ]
-    },
-    'HDFCMIDCAP': {
-      expenseRatio: 0.74,
-      exitLoad: '1.00% within 365 days',
-      topHoldings: [
-        { name: 'Cholamandalam Investment', weight: 4.5 },
-        { name: 'HDFC Bank Ltd', weight: 4.1 },
-        { name: 'Tata Power Company Ltd', weight: 3.8 },
-        { name: 'Hindustan Aeronautics Ltd', weight: 3.5 },
-        { name: 'Federal Bank Ltd', weight: 3.2 }
-      ]
-    },
-    'NIPPONSMALLCAP': {
-      expenseRatio: 0.68,
-      exitLoad: '1.00% within 30 days',
-      topHoldings: [
-        { name: 'Tube Investments of India', weight: 3.9 },
-        { name: 'HDFC Bank Ltd', weight: 3.1 },
-        { name: 'Kirloskar Brothers Ltd', weight: 2.8 },
-        { name: 'Larsen & Toubro Ltd', weight: 2.5 },
-        { name: 'KPIT Technologies Ltd', weight: 2.2 }
-      ]
-    }
-  }), []);
-
-  const getMfDiagnostics = (symbol: string) => {
-    const clean = symbol.split('.')[0].toUpperCase().trim();
-    if (MUTUAL_FUND_DIAGNOSTICS_DB[clean]) {
-      return MUTUAL_FUND_DIAGNOSTICS_DB[clean];
-    }
-    
-    // Hash-based fallback to generate deterministic realistic details
-    let hash = 0;
-    for (let i = 0; i < clean.length; i++) {
-      hash = clean.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const expenseRatio = parseFloat((0.4 + Math.abs(hash % 100) / 100).toFixed(2));
-    const exitLoad = `${Math.abs(hash % 2) === 0 ? '1.00%' : '0.50%'} if redeemed within ${Math.abs(hash % 3) === 0 ? '30' : '365'} days`;
-    
-    return {
-      expenseRatio,
-      exitLoad,
-      topHoldings: [
-        { name: 'HDFC Bank Ltd', weight: 6.2 },
-        { name: 'Reliance Industries Ltd', weight: 5.5 },
-        { name: 'ICICI Bank Ltd', weight: 4.8 },
-        { name: 'Infosys Ltd', weight: 4.0 },
-        { name: 'Tata Consultancy Services', weight: 3.5 }
-      ]
-    };
-  };
 
   // Enriched portfolio resolving ISINs, symbols, sectors and asset classes
   const enrichedPortfolio = useMemo(() => {
     return portfolio.map(item => {
       const cleanSym = item.symbol.split('.')[0].toUpperCase().trim();
-      
-      const ISIN_TO_SYMBOL: Record<string, string> = {
-        'INE002A01018': 'RELIANCE',
-        'INE467B01029': 'TCS',
-        'INE009A01021': 'INFY',
-        'INE040A01034': 'HDFCBANK',
-        'INE154A01025': 'ITC',
-        'INE021A01026': 'ASIANPAINT',
-        'INE155A01022': 'TATAMOTORS',
-        'INE758T01015': 'ZOMATO',
-        'INE0LP301011': 'Physicswallah',
-        'INF247L01DA9': 'MOMF'
-      };
-
-      const targetSym = ISIN_TO_SYMBOL[cleanSym] || cleanSym;
+      const targetSym = toCanonicalSymbol(cleanSym);
       let displaySymbol = targetSym;
       if (item.symbol.includes('.') && !targetSym.includes('.')) {
         displaySymbol = targetSym + '.' + item.symbol.split('.')[1];
@@ -276,21 +247,16 @@ export const Dashboard: React.FC = () => {
           }
         }
       } else {
-        if (targetSym === 'Physicswallah') {
-          resolvedName = 'Physicswallah Limited';
-          resolvedSector = 'Education Services';
-        } else {
-          const stock = INDIAN_STOCKS.find(
-            s => s.symbol.toUpperCase() === targetSym || 
-                 s.name.toLowerCase() === nameLower
-          );
+        const stock = INDIAN_STOCKS.find(
+          s => s.symbol.toUpperCase() === targetSym || 
+               s.name.toLowerCase() === nameLower
+        );
 
-          if (stock) {
-            resolvedName = stock.name;
-            resolvedSector = stock.sector === 'Other' || !stock.sector ? 'General' : stock.sector;
-          } else {
-            resolvedName = item.name !== item.symbol ? item.name : targetSym;
-          }
+        if (stock) {
+          resolvedName = stock.name;
+          resolvedSector = stock.sector === 'Other' || !stock.sector ? 'General' : stock.sector;
+        } else {
+          resolvedName = item.name !== item.symbol ? item.name : targetSym;
         }
         
         if (item.sector && item.sector !== 'General' && item.sector !== 'Other') {
@@ -308,12 +274,12 @@ export const Dashboard: React.FC = () => {
 
       let currentPrice = item.current || 0;
       if (currentPrice === 0) {
-        currentPrice = item.avgCost || 100.00;
+        currentPrice = item.avgCost || 0;
       }
 
       let avgCost = item.avgCost || 0;
-      if (avgCost === 0) {
-        avgCost = parseFloat((currentPrice * 0.85).toFixed(4));
+      if (avgCost === 0 && currentPrice > 0) {
+        avgCost = currentPrice;
       }
 
       return {
@@ -384,11 +350,13 @@ export const Dashboard: React.FC = () => {
   const [indicesError, setIndicesError] = useState<string | null>(null);
 
   const [tokenUsage, setTokenUsage] = useState<any>(null);
-  const [newsFeed, setNewsFeed] = useState<any[]>([]);
-  const [newsLoading, setNewsLoading] = useState(true);
+  const [newsFeed, setNewsFeed] = useState<any[]>(() => readCachedTapeNews());
+  const [newsLoading, setNewsLoading] = useState(() => readCachedTapeNews().length === 0);
   const [newsError, setNewsError] = useState<string | null>(null);
   const [portfolioAnalytics, setPortfolioAnalytics] = useState<any>(null);
   const [portfolioAnalyticsError, setPortfolioAnalyticsError] = useState<string | null>(null);
+  const [mfAnalytics, setMfAnalytics] = useState<any>(null);
+  const [portfolioMirrorVersion, setPortfolioMirrorVersion] = useState(0);
 
   // Fetch token usage helper
   const fetchTokenUsage = async () => {
@@ -407,14 +375,22 @@ export const Dashboard: React.FC = () => {
     const data: Record<string, { name: string; price: string; change: string; changePct: number; sector: string }> = {};
     Object.keys(quotesData).forEach(sym => {
       const q = quotesData[sym];
-      const changeVal = q.price !== null ? q.price * (q.change_pct / 100) : 0;
-      data[sym] = {
+      const price = Number(q.price);
+      const changePct = Number(q.change_pct);
+      const hasPrice = Number.isFinite(price) && price > 0;
+      const normalized = String(sym || '').split('.')[0].toUpperCase().trim();
+      const changeVal = hasPrice ? price * ((Number.isFinite(changePct) ? changePct : 0) / 100) : 0;
+      const row = {
         name: q.company_name || `${sym} Limited`,
-        price: q.price !== null ? q.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—',
-        change: q.price !== null ? `${changeVal >= 0 ? '+' : ''}${changeVal.toFixed(2)}` : '—',
-        changePct: q.change_pct || 0,
+        price: hasPrice ? price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—',
+        change: hasPrice ? `${changeVal >= 0 ? '+' : ''}${changeVal.toFixed(2)}` : '—',
+        changePct: Number.isFinite(changePct) ? changePct : 0,
         sector: q.sector || 'General'
       };
+      data[sym] = row;
+      if (normalized) {
+        data[normalized] = row;
+      }
     });
     return data;
   }, [quotesData]);
@@ -424,6 +400,54 @@ export const Dashboard: React.FC = () => {
     const watchlistSymbols = watchlist.map(w => w.toUpperCase());
     return Array.from(new Set([...portfolioSymbols, ...watchlistSymbols]));
   }, [enrichedPortfolio, watchlist]);
+
+  const mapTapeNewsItems = (items: any[], sourcePrefix = 'n') => {
+    return (items || []).map((item: any, idx: number) => {
+      const title = item.title || item.headline || '';
+      const description = item.description || item.snippet || '';
+      const txt = `${title} ${description}`.toLowerCase();
+      let sentiment: 'bullish' | 'bearish' | 'neutral' = 'neutral';
+      if (txt.includes('surge') || txt.includes('gain') || txt.includes('rise') || txt.includes('bull') || txt.includes('growth') || txt.includes('higher') || txt.includes('up')) {
+        sentiment = 'bullish';
+      } else if (txt.includes('fall') || txt.includes('drop') || txt.includes('slip') || txt.includes('decline') || txt.includes('bear') || txt.includes('lower') || txt.includes('down')) {
+        sentiment = 'bearish';
+      }
+
+      const tickers = new Set<string>();
+      userUniverseSymbols.forEach(sym => {
+        if (txt.includes(sym.toLowerCase())) {
+          tickers.add(sym);
+        }
+      });
+      const holdingSymbol = item.related_holding?.symbol;
+      if (holdingSymbol) tickers.add(normalizeMarketSymbol(holdingSymbol));
+
+      return {
+        id: item.id || `${sourcePrefix}-${idx}-${title.slice(0, 16)}`,
+        source: item.source || item.source_host || 'News',
+        time: item.age_label || item.published || item.published_at || 'Just now',
+        headline: title,
+        sentiment,
+        tickers: Array.from(tickers),
+      };
+    }).filter((item: any) => item.headline);
+  };
+
+  useEffect(() => {
+    const mapped: WatchlistStock[] = watchlist.map((rawSymbol) => {
+      const symbol = normalizeMarketSymbol(rawSymbol);
+      const info = allStockData[symbol] || allStockData[rawSymbol];
+      const stock = INDIAN_STOCKS.find((s) => s.symbol.toUpperCase() === symbol);
+      return {
+        symbol,
+        name: info?.name || stock?.name || `${symbol} Limited`,
+        price: info?.price ?? '—',
+        change: info?.change ?? '—',
+        changePct: Number.isFinite(Number(info?.changePct)) ? Number(info?.changePct) : 0,
+      };
+    });
+    setWatchlistStocks(mapped);
+  }, [watchlist, allStockData]);
 
   // Fetch quotes whenever user universe changes or periodically
   useEffect(() => {
@@ -439,7 +463,7 @@ export const Dashboard: React.FC = () => {
       }
     };
     fetchQuotes();
-    const interval = setInterval(fetchQuotes, 60000);
+    const interval = setInterval(fetchQuotes, 20000);
     return () => clearInterval(interval);
   }, [userUniverseSymbols]);
 
@@ -458,7 +482,8 @@ export const Dashboard: React.FC = () => {
             const stock = INDIAN_STOCKS.find(s => s.symbol.toUpperCase() === cleanSym);
             const mf = POPULAR_MUTUAL_FUNDS.find(f => f.symbol.toUpperCase() === cleanSym);
             const quantity = Number(p.quantity) || 0;
-            const livePrice = Number.isFinite(Number(p.last_price)) ? Number(p.last_price) : 0;
+            const marketValue = positiveNumber(p.market_value);
+            const livePrice = positiveNumber(p.last_price, quantity > 0 ? marketValue / quantity : 0);
             const costBasis = Number(p.cost_basis) || 0;
             const avgCost = Number(p.avg_cost) || (quantity > 0 ? costBasis / quantity : 0);
             const assetClass = p.kind === 'mf' || mf ? 'Mutual Fund' : 'Equity';
@@ -489,7 +514,7 @@ export const Dashboard: React.FC = () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [selectedBenchmark]);
+  }, [selectedBenchmark, portfolioMirrorVersion]);
 
   // Fetch indices on mount and periodically
   useEffect(() => {
@@ -522,43 +547,52 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const fetchNews = async () => {
+      const cached = readCachedTapeNews();
+      if (cached.length > 0 && !cancelled) {
+        setNewsFeed(cached);
+        setNewsLoading(false);
+      } else if (!cancelled) {
+        setNewsFeed(FAST_TAPE_NEWS_FALLBACKS);
+        setNewsLoading(false);
+      }
+
       try {
         setNewsError(null);
-        const data = await getMarketNews("India market");
-        if (data && !cancelled) {
-          const mapped = data.map((item: any, idx: number) => {
-            const txt = (item.title + " " + (item.description || "")).toLowerCase();
-            let sentiment: 'bullish' | 'bearish' | 'neutral' = 'neutral';
-            if (txt.includes('surge') || txt.includes('gain') || txt.includes('rise') || txt.includes('bull') || txt.includes('growth') || txt.includes('higher') || txt.includes('up')) {
-              sentiment = 'bullish';
-            } else if (txt.includes('fall') || txt.includes('drop') || txt.includes('slip') || txt.includes('decline') || txt.includes('bear') || txt.includes('lower') || txt.includes('down')) {
-              sentiment = 'bearish';
-            }
-            
-            const tickers: string[] = [];
-            userUniverseSymbols.forEach(sym => {
-              if (txt.includes(sym.toLowerCase())) {
-                tickers.push(sym);
-              }
-            });
+        const marketPromise = getMarketNews("India market");
+        const portfolioPromise = getPortfolioNews(8).catch((err) => {
+          console.warn('Portfolio news refresh failed', err);
+          return null;
+        });
+        const marketData = await marketPromise;
+        if (cancelled) return;
 
-            return {
-              id: `n-${idx}`,
-              source: item.source || 'News',
-              time: item.published || 'Just now',
-              headline: item.title,
-              sentiment,
-              tickers
-            };
-          });
-          setNewsFeed(mapped);
-          setNewsLoading(false);
+        const marketItems = mapTapeNewsItems(marketData, 'm');
+        if (marketItems.length > 0) {
+          setNewsFeed(marketItems);
+          localStorage.setItem(TAPE_NEWS_CACHE_KEY, JSON.stringify(marketItems));
+        }
+
+        const portfolioData = await portfolioPromise;
+        if (cancelled) return;
+
+        const portfolioItems = mapTapeNewsItems(portfolioData?.items || [], 'p');
+        const deduped = [...portfolioItems, ...marketItems].filter((item, idx, arr) =>
+          idx === arr.findIndex((candidate) => candidate.headline === item.headline)
+        ).slice(0, 10);
+
+        if (deduped.length > 0) {
+          setNewsFeed(deduped);
+          localStorage.setItem(TAPE_NEWS_CACHE_KEY, JSON.stringify(deduped));
+          setNewsError(null);
+        } else if (!cached.length) {
+          setNewsFeed(FAST_TAPE_NEWS_FALLBACKS);
         }
       } catch (e: any) {
         if (!cancelled) {
           console.error('Failed to fetch market news', e);
-          setNewsError(e.message || 'Failed to load market news');
-          setNewsLoading(false);
+          if (newsFeed.length === 0) {
+            setNewsError(e.message || 'Failed to load market news');
+          }
         }
       }
     };
@@ -580,18 +614,7 @@ export const Dashboard: React.FC = () => {
     userUniverseSymbols.forEach((sym, idx) => {
       const upperSym = sym.toUpperCase();
       const clean = upperSym.split('.')[0];
-      const ISIN_TO_SYMBOL: Record<string, string> = {
-        'INE0LP301011': 'LTIM',
-        'INE002A01018': 'RELIANCE',
-        'INE467B01029': 'TCS',
-        'INE009A01021': 'INFY',
-        'INE040A01034': 'HDFCBANK',
-        'INE154A01025': 'ITC',
-        'INE021A01026': 'ASIANPAINT',
-        'INE155A01022': 'TATAMOTORS',
-        'INE758T01015': 'ZOMATO'
-      };
-      const targetSym = ISIN_TO_SYMBOL[clean] || clean;
+      const targetSym = toCanonicalSymbol(clean);
       const pItem = enrichedPortfolio.find(p => p.symbol.toUpperCase() === upperSym);
       const stockItem = INDIAN_STOCKS.find(s => s.symbol.toUpperCase() === targetSym);
       const resolvedName = pItem ? pItem.name : (stockItem ? stockItem.name : allStockData[upperSym]?.name || `${targetSym} Limited`);
@@ -686,16 +709,12 @@ export const Dashboard: React.FC = () => {
 
   // Load state and portfolio details
   useEffect(() => {
-    // Load portfolio
-    const savedPortfolioRaw = localStorage.getItem('prospektlab_portfolio');
-    const parsedPortfolio: PortfolioItem[] = savedPortfolioRaw ? JSON.parse(savedPortfolioRaw) : [];
-    setPortfolio(parsedPortfolio);
-
     const syncPortfolio = async () => {
       try {
         const res = await getPortfolioMirror();
-        if (res && res.positions) {
-          const mapped = res.positions.map((p: any) => {
+        const mirrorPositions = Array.isArray(res?.positions) ? res.positions : [];
+        if (mirrorPositions.length > 0) {
+          const mapped = mirrorPositions.map((p: any) => {
             const qty = p.quantity || 0;
             const marketVal = p.market_value || 0;
             let currentPrice = p.last_price || 0;
@@ -703,37 +722,22 @@ export const Dashboard: React.FC = () => {
               currentPrice = marketVal / qty;
             }
             if (currentPrice === 0) {
-              currentPrice = p.avg_cost || p.cost_basis || 100.00;
+              currentPrice = p.avg_cost || (qty > 0 ? (p.cost_basis || 0) / qty : 0);
             }
             
             let avgCost = p.avg_cost || 0;
-            if (avgCost === 0) {
-              avgCost = parseFloat((currentPrice * 0.85).toFixed(4));
+            if (avgCost === 0 && currentPrice > 0) {
+              avgCost = currentPrice;
             }
             
             const cleanSym = p.symbol.split('.')[0].toUpperCase().trim();
-            const ISIN_TO_SYMBOL: Record<string, string> = {
-              'INE002A01018': 'RELIANCE',
-              'INE467B01029': 'TCS',
-              'INE009A01021': 'INFY',
-              'INE040A01034': 'HDFCBANK',
-              'INE154A01025': 'ITC',
-              'INE021A01026': 'ASIANPAINT',
-              'INE155A01022': 'TATAMOTORS',
-              'INE758T01015': 'ZOMATO',
-              'INE0LP301011': 'Physicswallah',
-              'INF247L01DA9': 'MOMF'
-            };
-            const targetSym = ISIN_TO_SYMBOL[cleanSym] || cleanSym;
+            const targetSym = toCanonicalSymbol(cleanSym);
             let resolvedName = p.name;
             let resolvedSector = p.sector;
             
             if (targetSym === 'MOMF') {
               resolvedName = 'Motilal Oswal Manufacturing Fund - Direct Growth';
               resolvedSector = 'Thematic - Manufacturing';
-            } else if (targetSym === 'Physicswallah') {
-              resolvedName = 'Physicswallah Limited';
-              resolvedSector = 'Education Services';
             } else {
               const mf = POPULAR_MUTUAL_FUNDS.find(f => f.symbol.toUpperCase() === targetSym);
               if (mf) {
@@ -759,34 +763,41 @@ export const Dashboard: React.FC = () => {
           });
           setPortfolio(mapped);
           localStorage.setItem('prospektlab_portfolio', JSON.stringify(mapped));
+          setPortfolioMirrorVersion((version) => version + 1);
+          return;
         }
+
+        localStorage.removeItem('prospektlab_portfolio');
+        setPortfolio([]);
+        setOnboarded(false);
+        navigate('/onboarding', { replace: true });
       } catch (e) {
         console.error('Failed to sync portfolio from mirror', e);
+        const savedPortfolioRaw = localStorage.getItem('prospektlab_portfolio');
+        try {
+          const savedPortfolio = savedPortfolioRaw ? JSON.parse(savedPortfolioRaw) : [];
+          if (Array.isArray(savedPortfolio) && savedPortfolio.length > 0) {
+            setPortfolio(savedPortfolio);
+            setPortfolioMirrorVersion((version) => version + 1);
+            return;
+          }
+        } catch (storageErr) {
+          console.error('Failed to recover local portfolio snapshot', storageErr);
+        }
+        setOnboarded(false);
+        navigate('/onboarding', { replace: true });
       }
     };
     syncPortfolio();
 
-    if (parsedPortfolio.length === 0) {
-      setActiveTab('watchlist');
-    }
-
     // Load watchlist symbols
     const savedWatchlistRaw = localStorage.getItem('prospektlab_watchlist');
     const savedWatchlist: string[] = savedWatchlistRaw ? JSON.parse(savedWatchlistRaw) : ['RELIANCE', 'TCS', 'INFY'];
-    setWatchlist(savedWatchlist);
-
-    // Build watchlist stocks
-    const stocksList: WatchlistStock[] = savedWatchlist.map(sym => {
-      const info = allStockData[sym] || { name: `${sym} Company`, price: '100.00', change: '+0.00', changePct: 0 };
-      return {
-        symbol: sym,
-        name: info.name,
-        price: info.price,
-        change: info.change,
-        changePct: info.changePct
-      };
-    });
-    setWatchlistStocks(stocksList);
+    const normalizedWatchlist = savedWatchlist
+      .map((s) => String(s || '').split('.')[0].toUpperCase().trim())
+      .filter((s) => s.length > 0);
+    const dedupedWatchlist = Array.from(new Set(normalizedWatchlist));
+    setWatchlist(dedupedWatchlist);
 
     // Load past conversations
     let savedConversations = [];
@@ -835,11 +846,12 @@ export const Dashboard: React.FC = () => {
 
     // Fetch extra analytics
     fetchBackendAnalytics();
-  }, []);
+  }, [navigate, setOnboarded]);
 
   const fetchBackendAnalytics = async () => {
     try {
-      await getMfAnalytics();
+      const mf = await getMfAnalytics();
+      setMfAnalytics(mf);
       const queue = await getTodayQueue();
       setActionQueue(queue.items || []);
     } catch (e) {
@@ -879,8 +891,14 @@ export const Dashboard: React.FC = () => {
   // Live index simulation removed - data is now loaded live from the backend API
 
   const finiteNumber = (value: any, fallback = 0) => {
+    if (value === null || value === undefined || value === '') return fallback;
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
+  };
+
+  const positiveNumber = (value: any, fallback = 0) => {
+    const n = finiteNumber(value, Number.NaN);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
   };
 
   const normalizeMarketSymbol = (symbol: string) =>
@@ -899,6 +917,29 @@ export const Dashboard: React.FC = () => {
 
   const analyticsPositions = Array.isArray(portfolioAnalytics?.positions) ? portfolioAnalytics.positions : [];
 
+  const isGenericSector = (sector: any) => {
+    const normalized = String(sector || '').trim().toLowerCase();
+    return !normalized || ['general', 'other', 'unknown', 'n/a', 'na'].includes(normalized);
+  };
+
+  const resolvePortfolioSector = (symbol: string, name?: string, currentSector?: string, kind?: string) => {
+    if (!isGenericSector(currentSector)) return String(currentSector).trim();
+    const cleanSym = normalizeMarketSymbol(symbol);
+    const nameLower = String(name || '').toLowerCase();
+    const localHolding = enrichedPortfolio.find((p) => normalizeMarketSymbol(p.symbol) === cleanSym);
+    if (localHolding && !isGenericSector(localHolding.sector)) return localHolding.sector;
+    const stock = INDIAN_STOCKS.find(
+      (s) => s.symbol.toUpperCase() === cleanSym || s.name.toLowerCase() === nameLower
+    );
+    if (stock && !isGenericSector(stock.sector)) return stock.sector;
+    const mf = POPULAR_MUTUAL_FUNDS.find(
+      (f) => f.symbol.toUpperCase() === cleanSym || f.name.toLowerCase() === nameLower
+    );
+    if (mf) return mf.category || 'Mutual Fund';
+    if (String(kind || '').toLowerCase() === 'mf') return 'Mutual Fund';
+    return 'General';
+  };
+
   // Calculations for total portfolio NAV summary from backend live analytics first,
   // with quote-normalized local holdings as fallback while analytics loads.
   const computedPortfolioDetails: Array<PortfolioItem & { currentValue: number; pnl: number; pnlPct: number; dayChangePct?: number }> = (analyticsPositions.length > 0
@@ -906,8 +947,10 @@ export const Dashboard: React.FC = () => {
         const symbol = normalizeMarketSymbol(p.symbol || '');
         const liveQuote = lookupLiveQuote(symbol);
         const qty = finiteNumber(p.quantity);
-        const current = finiteNumber(liveQuote?.price, finiteNumber(p.last_price));
-        const currentValue = qty > 0 && current > 0 ? qty * current : finiteNumber(p.market_value);
+        const backendMarketValue = positiveNumber(p.market_value);
+        const backendUnitPrice = positiveNumber(p.last_price, qty > 0 ? backendMarketValue / qty : 0);
+        const current = positiveNumber(liveQuote?.price, backendUnitPrice);
+        const currentValue = qty > 0 && current > 0 ? qty * current : backendMarketValue;
         const costBasis = finiteNumber(p.cost_basis);
         const pnl = costBasis > 0 ? currentValue - costBasis : finiteNumber(p.unrealized_pnl, currentValue - costBasis);
         const pnlPct = finiteNumber(p.unrealized_pnl_pct) * 100;
@@ -917,7 +960,7 @@ export const Dashboard: React.FC = () => {
           qty,
           avgCost: finiteNumber(p.avg_cost, qty > 0 ? costBasis / qty : 0),
           current,
-          sector: p.sector || 'General',
+          sector: resolvePortfolioSector(symbol, p.name, p.sector, p.kind),
           assetClass: p.kind === 'mf' ? 'Mutual Fund' : 'Equity',
           currentValue,
           pnl,
@@ -927,7 +970,7 @@ export const Dashboard: React.FC = () => {
       })
     : enrichedPortfolio.map(item => {
         const liveQuote = lookupLiveQuote(item.symbol);
-        const livePrice = finiteNumber(liveQuote?.price, item.current);
+        const livePrice = positiveNumber(liveQuote?.price, positiveNumber(item.current, item.avgCost));
         const costBasis = item.qty * item.avgCost;
         const currentValue = item.qty * livePrice;
         const pnl = currentValue - costBasis;
@@ -940,15 +983,14 @@ export const Dashboard: React.FC = () => {
   const liveComputedTotalCost = computedPortfolioDetails.reduce((acc: number, curr: any) => acc + curr.qty * curr.avgCost, 0);
   const liveComputedTotalPnL = computedPortfolioDetails.reduce((acc: number, curr: any) => acc + curr.pnl, 0);
 
-  const hasLiveQuoteOverlay = computedPortfolioDetails.some((item) => !!lookupLiveQuote(item.symbol));
-
   const portfolioSummary = {
-    totalCost: finiteNumber(portfolioAnalytics?.total_cost_basis,
-      liveComputedTotalCost
-    ),
-    totalValue: hasLiveQuoteOverlay ? liveComputedTotalValue : finiteNumber(portfolioAnalytics?.total_market_value, liveComputedTotalValue),
-    totalPnL: hasLiveQuoteOverlay ? liveComputedTotalPnL : finiteNumber(portfolioAnalytics?.unrealized_pnl, liveComputedTotalPnL),
+    totalCost: liveComputedTotalCost > 0 ? liveComputedTotalCost : finiteNumber(portfolioAnalytics?.total_cost_basis),
+    totalValue: liveComputedTotalValue > 0 ? liveComputedTotalValue : finiteNumber(portfolioAnalytics?.total_market_value),
+    totalPnL: liveComputedTotalCost > 0 && liveComputedTotalValue > 0
+      ? liveComputedTotalPnL
+      : finiteNumber(portfolioAnalytics?.unrealized_pnl, liveComputedTotalPnL),
   };
+  const hasPortfolioHoldings = computedPortfolioDetails.length > 0;
 
   const portfolioTotalReturnPct = portfolioSummary.totalCost > 0 
     ? (portfolioSummary.totalPnL / portfolioSummary.totalCost) * 100 
@@ -957,8 +999,14 @@ export const Dashboard: React.FC = () => {
   // Donut chart calculations for sector allocation
   const sectorBreakdownFromBackend = portfolioAnalytics?.sector_breakdown || {};
   const hasBackendSectorBreakdown = Object.keys(sectorBreakdownFromBackend).length > 0;
-  const sectorUsesPercent = hasBackendSectorBreakdown && portfolioSummary.totalValue <= 0;
-  const sectorAllocations: Record<string, number> = hasBackendSectorBreakdown
+  const sectorUsesPercent = !hasPortfolioHoldings && hasBackendSectorBreakdown && portfolioSummary.totalValue <= 0;
+  const localSectorAllocations = computedPortfolioDetails.reduce((acc: Record<string, number>, curr: any) => {
+    const sector = resolvePortfolioSector(curr.symbol, curr.name, curr.sector, curr.assetClass === 'Mutual Fund' ? 'mf' : curr.kind);
+    acc[sector] = (acc[sector] || 0) + curr.currentValue;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const backendSectorAllocations: Record<string, number> = Object.keys(portfolioAnalytics?.sector_breakdown || {}).length > 0
     ? Object.fromEntries(
         Object.entries(sectorBreakdownFromBackend)
           .map(([sec, weight]) => {
@@ -968,22 +1016,39 @@ export const Dashboard: React.FC = () => {
           })
           .filter(([, value]) => value > 0)
       ) as Record<string, number>
-    : computedPortfolioDetails.reduce((acc: Record<string, number>, curr: any) => {
-        const sec = curr.sector || 'General';
-        acc[sec] = (acc[sec] || 0) + curr.currentValue;
-        return acc;
-      }, {} as Record<string, number>);
+    : {};
+
+  const backendSectorsAreGeneric =
+    Object.keys(backendSectorAllocations).length > 0 &&
+    Object.keys(backendSectorAllocations).every((sector) => isGenericSector(sector));
+
+  const sectorAllocations: Record<string, number> =
+    Object.keys(localSectorAllocations).length > 0 || backendSectorsAreGeneric
+      ? localSectorAllocations
+      : Object.keys(backendSectorAllocations).length > 0
+      ? backendSectorAllocations
+      : {};
+
+  const sectorEntries = Object.entries(sectorAllocations)
+    .map(([label, value]) => [label, finiteNumber(value)] as [string, number])
+    .filter(([, value]) => value > 0);
 
   const sectorChartData = {
-    labels: Object.keys(sectorAllocations),
-    data: Object.values(sectorAllocations) as number[]
+    labels: sectorEntries.map(([label]) => label),
+    data: sectorEntries.map(([, value]) => value)
   };
 
   // Donut chart calculations for Asset Allocation (Equity vs MF vs Cash/Bonds)
   const kindBreakdownFromBackend = portfolioAnalytics?.kind_breakdown || {};
   const hasBackendKindBreakdown = Object.keys(kindBreakdownFromBackend).length > 0;
-  const assetUsesPercent = hasBackendKindBreakdown && portfolioSummary.totalValue <= 0;
-  const assetAllocations: Record<string, number> = hasBackendKindBreakdown
+  const assetUsesPercent = !hasPortfolioHoldings && hasBackendKindBreakdown && portfolioSummary.totalValue <= 0;
+  const localAssetAllocations = computedPortfolioDetails.reduce((acc: Record<string, number>, curr: any) => {
+    const value = curr.currentValue;
+    const assetClass = curr.assetClass || 'Equity';
+    acc[assetClass] = (acc[assetClass] || 0) + value;
+    return acc;
+  }, {} as Record<string, number>);
+  const backendAssetAllocations: Record<string, number> = hasBackendKindBreakdown
     ? Object.fromEntries(
         Object.entries(kindBreakdownFromBackend)
           .map(([kind, weight]) => {
@@ -993,17 +1058,36 @@ export const Dashboard: React.FC = () => {
           })
           .filter(([, value]) => value > 0)
       ) as Record<string, number>
-    : computedPortfolioDetails.reduce((acc: Record<string, number>, curr: any) => {
-        const value = curr.currentValue;
-        const assetClass = curr.assetClass || 'Equity';
-        acc[assetClass] = (acc[assetClass] || 0) + value;
-        return acc;
-      }, {} as Record<string, number>);
+    : {};
+  const assetAllocations: Record<string, number> =
+    Object.keys(localAssetAllocations).length > 0 ? localAssetAllocations : backendAssetAllocations;
+
+  const assetEntries = Object.entries(assetAllocations)
+    .map(([label, value]) => [label, finiteNumber(value)] as [string, number])
+    .filter(([, value]) => value > 0);
 
   const assetChartData = {
-    labels: Object.keys(assetAllocations).length > 0 ? Object.keys(assetAllocations) : ['Equity'],
-    data: Object.values(assetAllocations).length > 0 ? (Object.values(assetAllocations) as number[]) : [1]
+    labels: assetEntries.length > 0 ? assetEntries.map(([label]) => label) : ['Equity'],
+    data: assetEntries.length > 0 ? assetEntries.map(([, value]) => value) : [1]
   };
+  const allocationTotalValue = assetEntries
+    .reduce((acc, [, value]) => acc + finiteNumber(value), 0);
+  const sectorAllocationTotalValue = sectorEntries
+    .reduce((acc, [, value]) => acc + finiteNumber(value), 0);
+  const sidebarTotalValue =
+    allocationTotalValue > 0
+      ? allocationTotalValue
+      : sectorAllocationTotalValue > 0
+      ? sectorAllocationTotalValue
+      : portfolioSummary.totalValue;
+  const sidebarTotalPnL =
+    hasPortfolioHoldings && liveComputedTotalCost > 0
+      ? sidebarTotalValue - liveComputedTotalCost
+      : portfolioSummary.totalPnL;
+  const sidebarTotalReturnPct =
+    liveComputedTotalCost > 0
+      ? (sidebarTotalPnL / liveComputedTotalCost) * 100
+      : portfolioTotalReturnPct;
 
   // --- Portfolio vs Benchmark Comparative Data from backend live analytics ---
   const compareChartData = useMemo(() => {
@@ -1087,6 +1171,23 @@ export const Dashboard: React.FC = () => {
           benchValues: normalizeTo100(benchOnlyValues),
         };
       }
+    }
+
+    const portPrices = Array.isArray(portHist.prices) ? portHist.prices.map((v: any) => finiteNumber(v)).filter((v: number) => v > 0) : [];
+    const benchPrices = Array.isArray(benchHist.prices) ? benchHist.prices.map((v: any) => finiteNumber(v)).filter((v: number) => v > 0) : [];
+    const minLen = Math.min(portPrices.length, benchPrices.length);
+    if (minLen > 1) {
+      const alignedPort = portPrices.slice(portPrices.length - minLen);
+      const alignedBench = benchPrices.slice(benchPrices.length - minLen);
+      const candidateLabels = (portDates.length >= minLen ? portDates : benchDates).slice(-minLen);
+      const labels = candidateLabels.length === minLen
+        ? candidateLabels
+        : alignedPort.map((_value: number, idx: number) => `T-${minLen - idx - 1}`);
+      return {
+        labels,
+        portValues: alignedPort,
+        benchValues: alignedBench,
+      };
     }
 
     return {
@@ -1201,6 +1302,7 @@ export const Dashboard: React.FC = () => {
       'ZOMATO': { date: '2026-07-28', dateLabel: 'July 28, 2026', period: 'Q1 FY27', catalyst: 'Blinkit profitability path', impact: 'high', when: 'After Market Hours' },
       'ITC': { date: '2026-07-30', dateLabel: 'July 30, 2026', period: 'Q1 FY27', catalyst: 'FMCG margin expansion', impact: 'medium', when: 'After Market Hours' },
       'LTIM': { date: '2026-07-15', dateLabel: 'July 15, 2026', period: 'Q1 FY27', catalyst: 'Mid-tier IT demand signal', impact: 'medium', when: 'After Market Hours' },
+      'PWL': { date: '', dateLabel: 'Awaiting Date', period: 'Q1 FY27', catalyst: 'First full-year audited results post-IPO', impact: 'high', when: '' },
       'PHYSICSWALLAH': { date: '', dateLabel: 'Awaiting Date', period: 'Q1 FY27', catalyst: 'First full-year audited results post-IPO', impact: 'high', when: '' }
     };
  
@@ -1224,20 +1326,7 @@ export const Dashboard: React.FC = () => {
     equityUniverseSymbols.forEach((sym) => {
       const upperSym = sym.toUpperCase();
       const clean = upperSym.split('.')[0];
-      
-      const ISIN_TO_SYMBOL: Record<string, string> = {
-        'INE0LP301011': 'PHYSICSWALLAH',
-        'INE002A01018': 'RELIANCE',
-        'INE467B01029': 'TCS',
-        'INE009A01021': 'INFY',
-        'INE040A01034': 'HDFCBANK',
-        'INE154A01025': 'ITC',
-        'INE021A01026': 'ASIANPAINT',
-        'INE155A01022': 'TATAMOTORS',
-        'INE758T01015': 'ZOMATO'
-      };
-      
-      const targetSym = ISIN_TO_SYMBOL[clean] || clean;
+      const targetSym = toCanonicalSymbol(clean);
       const verified = VERIFIED_BSE_NSE_EARNINGS[targetSym] || VERIFIED_BSE_NSE_EARNINGS[clean];
  
       if (verified) {
@@ -1300,6 +1389,32 @@ export const Dashboard: React.FC = () => {
     return 'general';
   };
 
+  const buildMirrorBackfillPayload = (items: PortfolioItem[]) => {
+    const nowIso = new Date().toISOString();
+    return items
+      .filter((p) => Number(p.qty) > 0 && (p.symbol || '').trim().length > 0)
+      .map((p) => {
+        const symbol = String(p.symbol || '').split('.')[0].toUpperCase().trim();
+        const quantity = Number(p.qty) || 0;
+        const lastPrice = Number(p.current) || 0;
+        const avgCost = Number(p.avgCost) || 0;
+        return {
+          symbol,
+          exchange: 'NSE',
+          quantity,
+          market_value: quantity * lastPrice,
+          cost_basis: quantity * avgCost,
+          name: p.name || symbol,
+          kind: 'equity',
+          sector: p.sector || 'General',
+          avg_cost: avgCost,
+          last_price: lastPrice,
+          as_of: nowIso,
+          active: true,
+        };
+      });
+  };
+
   const enrichQueryWithPortfolio = (query: string): string => {
     if (enrichedPortfolio.length === 0) return '';
 
@@ -1339,6 +1454,55 @@ export const Dashboard: React.FC = () => {
     return `[USER PORTFOLIO VALUE: ₹${portfolioSummary.totalValue.toLocaleString('en-IN')} across ${enrichedPortfolio.length} positions]`;
   };
 
+  const buildPortfolioFallbackAnswer = (_query: string, reason?: string) => {
+    if (computedPortfolioDetails.length === 0) {
+      return [
+        'I could not find synchronized portfolio holdings for this account yet.',
+        '',
+        'For SEBI-safe analysis, upload or sync your holdings first. I will then respond as an objective risk-audit tool and will avoid buy, sell, hold, target-price, or suitability recommendations.',
+      ].join('\n');
+    }
+
+    const totalValue = portfolioSummary.totalValue || computedPortfolioDetails.reduce((sum, item) => sum + item.currentValue, 0);
+    const formatMoney = (value: number) => `Rs. ${Math.round(value || 0).toLocaleString('en-IN')}`;
+    const topHoldings = [...computedPortfolioDetails]
+      .sort((a, b) => b.currentValue - a.currentValue)
+      .slice(0, 5)
+      .map((item) => {
+        const weight = totalValue > 0 ? (item.currentValue / totalValue) * 100 : 0;
+        return `${item.symbol}: ${weight.toFixed(1)}% (${item.sector || 'General'})`;
+      })
+      .join(', ');
+    const sectorRows = Object.entries(sectorAllocations)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([sector, value]) => {
+        const weight = totalValue > 0 ? (finiteNumber(value) / totalValue) * 100 : 0;
+        return `${sector}: ${weight.toFixed(1)}%`;
+      })
+      .join(', ');
+    const betaText = portfolioStats ? portfolioStats.beta.toFixed(2) : 'N/A';
+    const hhiText = portfolioStats ? portfolioStats.hhi.toFixed(0) : 'N/A';
+    const varText = portfolioStats ? formatMoney(portfolioStats.var95) : 'N/A';
+    const topSectorText = portfolioStats?.topSector
+      ? `${portfolioStats.topSector[0]} at ${portfolioStats.topSectorPct.toFixed(1)}%`
+      : sectorRows || 'not available';
+
+    return [
+      reason ? `Live research did not finish cleanly (${reason}), so I completed this with the synchronized portfolio analytics already available in your dashboard.` : 'Here is the objective portfolio-risk audit from your synchronized dashboard analytics.',
+      '',
+      '**Compliance note:** This is not investment advice, not a buy/sell/hold call, and not a target-price view. It is a risk and exposure audit based on your uploaded holdings and live/available market data.',
+      '',
+      `**Main hidden-risk area:** concentration risk. Your largest sector exposure is ${topSectorText}. If that sector faces a drawdown or earnings disappointment, the portfolio can move more than the headline index suggests.`,
+      '',
+      `**Position concentration:** ${topHoldings || 'not available'}. Check whether any single holding or closely related group is carrying more risk than you intended.`,
+      '',
+      `**Risk snapshot:** portfolio value ${formatMoney(totalValue)}, beta vs Nifty ${betaText}, concentration score ${hhiText}, estimated one-day 95% VaR ${varText}. These are model outputs, not guarantees.`,
+      '',
+      `**What to review next:** compare sector weights with your intended benchmark, check if top holdings share the same macro drivers, and verify whether recent price moves came from earnings, corporate announcements, leverage, or broad index moves.`,
+    ].join('\n');
+  };
+
   // --- Real API Chat Integration ---
   const handleSendMessage = async (message: string, depth: 'standard' | 'deep' = 'standard') => {
     if (!message.trim() || isThinking || !activeConversationId) return;
@@ -1351,7 +1515,6 @@ export const Dashboard: React.FC = () => {
 
     // Update conversation title if needed
     const activeConv = conversations.find(c => c.id === activeConversationId);
-    const backendSessionForRequest = activeConv?.backendSessionId || activeConversationId;
     if (activeConv && (activeConv.title === 'Equity Analysis Session' || activeConv.title.startsWith('Analyze ') || activeConv.title.startsWith('Portfolio '))) {
       const cleanTitle = message.length > 28 ? message.substring(0, 28) + '...' : message;
       const updatedConvs = conversations.map(c => c.id === activeConversationId ? { ...c, title: cleanTitle } : c);
@@ -1370,11 +1533,62 @@ export const Dashboard: React.FC = () => {
 
     const enrichedObjective = enrichQueryWithPortfolio(message);
     const startMs = performance.now();
+    const portfolioScope = detectPortfolioScope(message);
 
     try {
+      if (portfolioScope !== 'general' && enrichedPortfolio.length > 0) {
+        try {
+          const payload = buildMirrorBackfillPayload(enrichedPortfolio);
+          if (payload.length > 0) {
+            await replacePortfolioMirror(payload);
+          }
+        } catch (syncErr) {
+          console.warn('Portfolio mirror preflight sync failed', syncErr);
+        }
+      }
+
       // API call to start background job
-      const startRes = await startResearch(message, depth, backendSessionForRequest, enrichedObjective);
+      const startRes = await startResearch(message, depth, enrichedObjective);
       const backendSessionId = startRes.session_id;
+      let streamedMemoText = '';
+      let runCompleted = false;
+      const completeWithResponse = (aiResponse: Message) => {
+        if (runCompleted) return;
+        runCompleted = true;
+        setMessages((prev) => {
+          const next = [...prev, aiResponse];
+          try {
+            localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(next));
+          } catch (storageErr) {
+            console.warn('[DASHBOARD] localStorage persist failed', storageErr);
+          }
+          return next;
+        });
+        setIsThinking(false);
+        setThinkingEvents([]);
+      };
+      const completeWithPortfolioFallback = async (reason: string) => {
+        if (runCompleted) return;
+        if (abortStreamRef.current) {
+          abortStreamRef.current();
+          abortStreamRef.current = null;
+        }
+        let fallbackText = buildPortfolioFallbackAnswer(message, reason);
+        try {
+          const brief = await getPortfolioBrief();
+          if (brief?.brief) {
+            fallbackText = `${fallbackText}\n\n**Backend portfolio brief:** ${brief.brief}`;
+          }
+        } catch (briefErr) {
+          console.warn('Portfolio brief fallback failed', briefErr);
+        }
+        completeWithResponse({
+          sender: 'ai',
+          text: fallbackText,
+          depth,
+          elapsedMs: Math.round(performance.now() - startMs),
+        });
+      };
       if (backendSessionId && backendSessionId !== activeConv?.backendSessionId) {
         const updatedConvs = conversations.map(c =>
           c.id === activeConversationId ? { ...c, backendSessionId } : c
@@ -1387,10 +1601,14 @@ export const Dashboard: React.FC = () => {
       const unsubscribe = streamSession(
         backendSessionId,
         (event) => {
+          if (event.type === 'memo_token' && typeof event.payload?.chunk === 'string') {
+            streamedMemoText += event.payload.chunk;
+          }
           // Push event to thinking stack
           setThinkingEvents((prev) => [...prev, event]);
         },
         async (parsedEvent: any) => {
+          if (runCompleted) return;
           // Finished research Turn
           const elapsed = Math.round(performance.now() - startMs);
 
@@ -1409,7 +1627,16 @@ export const Dashboard: React.FC = () => {
               finalResult.final?.memo_preview ||
               richPayload?.markdown_body ||
               finalResult.memo_event?.preview ||
+              streamedMemoText.trim() ||
+              parsedEvent?.memo ||
+              parsedEvent?.memo_preview ||
+              parsedEvent?.preview ||
               'Analysis complete.';
+            const usefulMemo = memoText.trim().length > 40 && memoText.trim() !== 'Analysis complete.';
+            if (!usefulMemo && portfolioScope !== 'general' && enrichedPortfolio.length > 0) {
+              await completeWithPortfolioFallback('empty final answer');
+              return;
+            }
             aiResponse = {
               sender: 'ai',
               text: memoText,
@@ -1426,6 +1653,7 @@ export const Dashboard: React.FC = () => {
               parsedEvent?.memo_preview ||
               parsedEvent?.preview ||
               fallbackRich?.markdown_body ||
+              streamedMemoText.trim() ||
               'Analysis complete.';
             aiResponse = {
               sender: 'ai',
@@ -1438,37 +1666,21 @@ export const Dashboard: React.FC = () => {
             showToast('Failed to load full answer. Showing cached preview.', 'error');
           }
 
-          // Update React state first, then persist to localStorage separately
-          setMessages((prev) => {
-            const next = [...prev, aiResponse];
-            try {
-              localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(next));
-            } catch (storageErr) {
-              console.warn('[DASHBOARD] localStorage persist failed (quota may be full)', storageErr);
-            }
-            return next;
-          });
-          setIsThinking(false);
-          setThinkingEvents([]);
+          completeWithResponse(aiResponse);
         },
         (error) => {
-          setIsThinking(false);
-          setThinkingEvents([]);
+          if (runCompleted) return;
           const errMsg = error.message || 'Stream processing failed.';
           showToast(errMsg, 'error');
+          if (portfolioScope !== 'general' && enrichedPortfolio.length > 0) {
+            void completeWithPortfolioFallback(errMsg);
+            return;
+          }
           const errResponse: Message = {
             sender: 'ai',
             text: `**Research failed**: ${errMsg}\n\nPlease try again. If this keeps happening, switch to Standard mode or retry with a shorter query.`,
           };
-          setMessages((prev) => {
-            const next = [...prev, errResponse];
-            try {
-              localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(next));
-            } catch (storageErr) {
-              console.warn('[DASHBOARD] localStorage persist failed', storageErr);
-            }
-            return next;
-          });
+          completeWithResponse(errResponse);
         }
       );
 
@@ -1478,6 +1690,39 @@ export const Dashboard: React.FC = () => {
       setThinkingEvents([]);
       const errMsg = err.message || 'Failed to connect to Quant engine.';
       showToast(errMsg, 'error');
+      const conflictStatus = err?.detail?.status || err?.detail?.code || err?.detail?.error_code;
+      if (
+        err?.message?.includes('409') ||
+        conflictStatus === 'MIRROR_REQUIRED' ||
+        conflictStatus === 'INGESTION_IN_PROGRESS' ||
+        conflictStatus === 'INGESTION_REQUIRED'
+      ) {
+        let fallbackText = buildPortfolioFallbackAnswer(message, conflictStatus || errMsg);
+        try {
+          const brief = await getPortfolioBrief();
+          if (brief?.brief) {
+            fallbackText = `${fallbackText}\n\n**Backend portfolio brief:** ${brief.brief}`;
+          }
+        } catch (briefErr) {
+          console.warn('Portfolio brief fallback failed', briefErr);
+        }
+        const fallbackResponse: Message = {
+          sender: 'ai',
+          text: fallbackText,
+          depth,
+          elapsedMs: Math.round(performance.now() - startMs),
+        };
+        setMessages((prev) => {
+          const next = [...prev, fallbackResponse];
+          try {
+            localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(next));
+          } catch (storageErr) {
+            console.warn('[DASHBOARD] localStorage persist failed', storageErr);
+          }
+          return next;
+        });
+        return;
+      }
       
       if (err.detail?.code === 'WEEKLY_TOKEN_LIMIT_EXCEEDED') {
         const limitResponse: Message = {
@@ -1487,17 +1732,44 @@ export const Dashboard: React.FC = () => {
         };
         setMessages((prev) => [...prev, limitResponse]);
         try {
-          const merged = [...messages, limitResponse];
+          const merged = [...updatedMessages, limitResponse];
           localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(merged));
         } catch (e) { /* ignore storage errors */ }
       } else {
+        if (portfolioScope !== 'general' && enrichedPortfolio.length > 0) {
+          let fallbackText = buildPortfolioFallbackAnswer(message, errMsg);
+          try {
+            const brief = await getPortfolioBrief();
+            if (brief?.brief) {
+              fallbackText = `${fallbackText}\n\n**Backend portfolio brief:** ${brief.brief}`;
+            }
+          } catch (briefErr) {
+            console.warn('Portfolio brief fallback failed', briefErr);
+          }
+          const fallbackResponse: Message = {
+            sender: 'ai',
+            text: fallbackText,
+            depth,
+            elapsedMs: Math.round(performance.now() - startMs),
+          };
+          setMessages((prev) => {
+            const next = [...prev, fallbackResponse];
+            try {
+              localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(next));
+            } catch (storageErr) {
+              console.warn('[DASHBOARD] localStorage persist failed', storageErr);
+            }
+            return next;
+          });
+          return;
+        }
         const errResponse: Message = {
           sender: 'ai',
           text: `**Connection Error**: ${errMsg}`
         };
         setMessages((prev) => [...prev, errResponse]);
         try {
-          const merged = [...messages, errResponse];
+          const merged = [...updatedMessages, errResponse];
           localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(merged));
         } catch (e) { /* ignore storage errors */ }
       }
@@ -1622,27 +1894,18 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleAddStock = (symbol: string) => {
-    if (watchlist.includes(symbol)) return;
-    const updated = [...watchlist, symbol];
+    const normalized = normalizeMarketSymbol(symbol);
+    if (!normalized || watchlist.includes(normalized)) return;
+    const updated = [...watchlist, normalized];
     setWatchlist(updated);
     localStorage.setItem('prospektlab_watchlist', JSON.stringify(updated));
-
-    const info = allStockData[symbol] || { name: `${symbol} Ticker`, price: '150.00', change: '+2.10', changePct: 1.4 };
-    const newStock: WatchlistStock = {
-      symbol,
-      name: info.name,
-      price: info.price,
-      change: info.change,
-      changePct: info.changePct
-    };
-    setWatchlistStocks([...watchlistStocks, newStock]);
   };
 
   const handleRemoveStock = (symbol: string) => {
-    const updated = watchlist.filter(s => s !== symbol);
+    const normalized = normalizeMarketSymbol(symbol);
+    const updated = watchlist.filter(s => normalizeMarketSymbol(s) !== normalized);
     setWatchlist(updated);
     localStorage.setItem('prospektlab_watchlist', JSON.stringify(updated));
-    setWatchlistStocks(watchlistStocks.filter(s => s.symbol !== symbol));
   };
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -1670,32 +1933,19 @@ export const Dashboard: React.FC = () => {
     setNewsLoading(true);
     setNewsError(null);
     try {
-      const data = await getMarketNews('India market');
-      if (data) {
-        const mapped = data.map((item: any, idx: number) => {
-          const txt = (item.title + ' ' + (item.description || '')).toLowerCase();
-          let sentiment: 'bullish' | 'bearish' | 'neutral' = 'neutral';
-          if (txt.includes('surge') || txt.includes('gain') || txt.includes('rise') || txt.includes('bull') || txt.includes('growth') || txt.includes('higher') || txt.includes('up')) {
-            sentiment = 'bullish';
-          } else if (txt.includes('fall') || txt.includes('drop') || txt.includes('slip') || txt.includes('decline') || txt.includes('bear') || txt.includes('lower') || txt.includes('down')) {
-            sentiment = 'bearish';
-          }
-          const tickers: string[] = [];
-          userUniverseSymbols.forEach(sym => {
-            if (txt.includes(sym.toLowerCase())) {
-              tickers.push(sym);
-            }
-          });
-          return {
-            id: `n-${idx}`,
-            source: item.source || 'News',
-            time: item.published || 'Just now',
-            headline: item.title,
-            sentiment,
-            tickers
-          };
-        });
+      const [marketData, portfolioData] = await Promise.allSettled([
+        getMarketNews('India market'),
+        getPortfolioNews(8),
+      ]);
+      const mapped = [
+        ...(portfolioData.status === 'fulfilled' ? mapTapeNewsItems(portfolioData.value?.items || [], 'retry-p') : []),
+        ...(marketData.status === 'fulfilled' ? mapTapeNewsItems(marketData.value, 'retry-m') : []),
+      ].filter((item, idx, arr) => idx === arr.findIndex((candidate) => candidate.headline === item.headline)).slice(0, 10);
+      if (mapped.length > 0) {
         setNewsFeed(mapped);
+        localStorage.setItem(TAPE_NEWS_CACHE_KEY, JSON.stringify(mapped));
+      } else {
+        setNewsFeed(FAST_TAPE_NEWS_FALLBACKS);
       }
     } catch (e: any) {
       console.error('Failed to fetch market news', e);
@@ -1705,7 +1955,7 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const hasEngaged = messages.length > 1;
+  const hasEngaged = messages.some((msg, index) => msg.sender === 'user' || index > 0);
   const briefingTime = new Date().getHours();
   const timeGreeting = briefingTime < 12 ? 'Good morning' : briefingTime < 17 ? 'Good afternoon' : 'Good evening';
   const username = (localStorage.getItem('prospektlab_username') || 'analyst').toLowerCase();
@@ -1755,10 +2005,10 @@ export const Dashboard: React.FC = () => {
   return (
     <AppShell
       title="Dashboard"
-      portfolioSummary={portfolio.length > 0 ? {
-        totalValue: portfolioSummary.totalValue,
-        totalPnL: portfolioSummary.totalPnL,
-        totalReturnPct: portfolioTotalReturnPct
+      portfolioSummary={hasPortfolioHoldings ? {
+        totalValue: sidebarTotalValue,
+        totalPnL: sidebarTotalPnL,
+        totalReturnPct: sidebarTotalReturnPct
       } : undefined}
       conversations={conversations}
       onDeleteConversation={handleDeleteConversation}
@@ -1880,13 +2130,13 @@ export const Dashboard: React.FC = () => {
               data={compareChartData.portValues.length > 1 ? compareChartData.portValues : compareChartData.benchValues}
               title={compareChartData.portValues.length > 1 ? "Your Portfolio (base = 100)" : "Benchmark (base = 100)"}
               unit=""
-              comparisonData={compareChartData.portValues.length > 1 ? compareChartData.benchValues : undefined}
+              comparisonData={compareChartData.portValues.length > 1 && compareChartData.benchValues.length > 1 ? compareChartData.benchValues : undefined}
               comparisonTitle={BENCHMARKS.find(b => b.id === selectedBenchmark)?.name || 'Benchmark'}
               height={300}
             />
 
             <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span>{portfolioAnalyticsError || 'Comparison is indexed to 100 using live backend portfolio analytics'}</span>
+              <span>{portfolioAnalyticsError || (compareChartData.portValues.length > 1 ? 'Comparison is indexed to 100 using live backend portfolio analytics' : 'Portfolio history is not available yet; showing benchmark history until holdings history is ready')}</span>
               <span style={{ marginLeft: 'auto', color: 'var(--accent-cyan)', cursor: 'pointer' }}
                 onClick={() => handleSuggestQuery(`Explain how my portfolio is performing compared to ${selectedBenchmark}.`, 'standard')}
               >
@@ -1971,7 +2221,7 @@ export const Dashboard: React.FC = () => {
           )}
 
           {/* Double Donut Chart Flex Container (Sector & Asset Allocation) */}
-          {enrichedPortfolio.length > 0 && sectorChartData.labels.length > 0 && (
+          {hasPortfolioHoldings && sectorChartData.labels.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '28px' }}>
               <div className="data-panel">
                 <div className="data-panel-head">
@@ -2013,7 +2263,7 @@ export const Dashboard: React.FC = () => {
           )}
 
           {/* ADVANCED PORTFOLIO RISK & ANALYTICS PANELS (Mutual Fund, Risk, Stress Test) */}
-          {enrichedPortfolio.length > 0 && (
+          {hasPortfolioHoldings && (
             <div className="data-panel" style={{ marginBottom: '28px' }}>
                 <div className="data-panel-head" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '10px' }}>
                   <div className="analytics-tabs-row" style={{ gap: 16 }}>
@@ -2082,9 +2332,15 @@ export const Dashboard: React.FC = () => {
                 {analyticsTab === 'mf' && (() => {
                   const mfHoldings = enrichedPortfolio.filter(p => p.assetClass === 'Mutual Fund');
                   const totalMfValue = mfHoldings.reduce((sum, p) => sum + (p.qty * p.current), 0);
-                  const averageMfExpenseRatio = mfHoldings.length > 0 
-                    ? mfHoldings.reduce((sum, p) => sum + getMfDiagnostics(p.symbol).expenseRatio, 0) / mfHoldings.length
-                    : 0;
+                  const backendMfValue = finiteNumber(mfAnalytics?.total_mf_value);
+                  const displayedMfValue = backendMfValue > 0 ? backendMfValue : totalMfValue;
+                  const weightedTer = finiteNumber(mfAnalytics?.aum_weighted_ter_pct);
+                  const hasWeightedTer = weightedTer > 0;
+                  const schemeCount = Number.isFinite(Number(mfAnalytics?.scheme_count))
+                    ? Number(mfAnalytics.scheme_count)
+                    : mfHoldings.length;
+                  const categoryBreakdown = mfAnalytics?.category_breakdown || {};
+                  const amcConcentration = mfAnalytics?.amc_concentration || {};
 
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -2095,32 +2351,32 @@ export const Dashboard: React.FC = () => {
                             <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px' }}>
                               <div style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '11px', marginBottom: '4px' }}>MUTUAL FUND ASSETS</div>
                               <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                                ₹{totalMfValue.toLocaleString('en-IN')}
+                                ₹{displayedMfValue.toLocaleString('en-IN')}
                               </div>
                               <div style={{ color: 'var(--text-muted)', marginTop: '4px', fontSize: '10px' }}>
-                                {mfHoldings.length} Active Scheme{mfHoldings.length > 1 ? 's' : ''}
+                                {schemeCount} Active Scheme{schemeCount > 1 ? 's' : ''}
                               </div>
                             </div>
 
                             <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px' }}>
-                              <div style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '11px', marginBottom: '4px' }}>AVG EXPENSE RATIO</div>
+                              <div style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '11px', marginBottom: '4px' }}>AUM-WEIGHTED TER</div>
                               <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                                {averageMfExpenseRatio.toFixed(2)}%
+                                {hasWeightedTer ? `${weightedTer.toFixed(2)}%` : 'Not synced'}
                               </div>
                               <div style={{ 
-                                color: averageMfExpenseRatio <= 1.15 ? 'var(--profit)' : 'var(--loss)', 
+                                color: hasWeightedTer ? 'var(--text-muted)' : 'var(--text-secondary)', 
                                 marginTop: '4px', 
                                 fontSize: '10px',
                                 fontWeight: 600
                               }}>
-                                {averageMfExpenseRatio <= 1.15 ? '✓ Under Benchmark (1.15%)' : '⚠ Over Benchmark (1.15%)'}
+                                {hasWeightedTer ? 'From backend MF metadata' : 'Needs AMFI TER metadata for schemes'}
                               </div>
                             </div>
 
                             <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px' }}>
                               <div style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '11px', marginBottom: '4px' }}>PORTFOLIO EXPOSURE</div>
                               <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                                {((totalMfValue / (portfolioSummary.totalValue || 1)) * 100).toFixed(1)}%
+                                {((displayedMfValue / (portfolioSummary.totalValue || 1)) * 100).toFixed(1)}%
                               </div>
                               <div style={{ color: 'var(--text-muted)', marginTop: '4px', fontSize: '10px' }}>
                                 Allocation in Mutual Funds
@@ -2128,12 +2384,37 @@ export const Dashboard: React.FC = () => {
                             </div>
                           </div>
 
+                          {(Object.keys(categoryBreakdown).length > 0 || Object.keys(amcConcentration).length > 0) && (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                              {Object.keys(categoryBreakdown).length > 0 && (
+                                <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px' }}>
+                                  <div style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '11px', marginBottom: '8px' }}>CATEGORY BREAKDOWN</div>
+                                  {Object.entries(categoryBreakdown).map(([category, pct]) => (
+                                    <div key={category} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginTop: 6 }}>
+                                      <span style={{ color: 'var(--text-primary)', textTransform: 'capitalize' }}>{category.replace(/_/g, ' ')}</span>
+                                      <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{finiteNumber(pct).toFixed(1)}%</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {Object.keys(amcConcentration).length > 0 && (
+                                <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px' }}>
+                                  <div style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '11px', marginBottom: '8px' }}>AMC CONCENTRATION</div>
+                                  {Object.entries(amcConcentration).slice(0, 5).map(([amc, pct]) => (
+                                    <div key={amc} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginTop: 6 }}>
+                                      <span style={{ color: 'var(--text-primary)' }}>{amc}</span>
+                                      <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{finiteNumber(pct).toFixed(1)}%</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {/* Individual Scheme Detail Cards */}
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '4px' }}>
                             {mfHoldings.map(item => {
-                              const diag = getMfDiagnostics(item.symbol);
                               const weightInPortfolio = ((item.qty * item.current) / (portfolioSummary.totalValue || 1)) * 100;
-                              const isLowExpense = diag.expenseRatio <= 1.15;
                               
                               return (
                                 <div 
@@ -2171,64 +2452,26 @@ export const Dashboard: React.FC = () => {
 
                                   <hr style={{ border: 'none', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', margin: 0 }} />
 
-                                  {/* Expense Ratio Progress Bar */}
-                                  <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '6px' }}>
-                                      <span style={{ color: 'var(--text-secondary)' }}>Expense Ratio</span>
-                                      <span style={{ fontWeight: 600, color: isLowExpense ? 'var(--profit)' : 'var(--loss)' }}>
-                                        {diag.expenseRatio}% <span style={{ fontSize: '9px', fontWeight: 'normal', color: 'var(--text-muted)' }}>(Benchmark: 1.15%)</span>
-                                      </span>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '6px', padding: '8px' }}>
+                                      <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 600 }}>SCHEME TER</div>
+                                      <div style={{ fontSize: '12px', color: 'var(--text-primary)', marginTop: 4 }}>Not synced</div>
                                     </div>
-                                    <div style={{ width: '100%', height: '6px', background: 'rgba(255, 255, 255, 0.06)', borderRadius: '3px', overflow: 'hidden', position: 'relative' }}>
-                                      <div style={{ 
-                                        width: `${Math.min(100, (diag.expenseRatio / 2.0) * 100)}%`, 
-                                        height: '100%', 
-                                        background: isLowExpense ? 'linear-gradient(90deg, var(--accent-cyan), var(--profit))' : 'linear-gradient(90deg, var(--accent-cyan), var(--loss))', 
-                                        borderRadius: '3px' 
-                                      }} />
-                                      {/* Benchmark line at 1.15% */}
-                                      <div style={{ position: 'absolute', left: `${(1.15 / 2.0) * 100}%`, top: 0, bottom: 0, width: '1.5px', background: 'rgba(255, 255, 255, 0.3)' }} title="Benchmark: 1.15%" />
+                                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '6px', padding: '8px' }}>
+                                      <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 600 }}>EXIT LOAD</div>
+                                      <div style={{ fontSize: '12px', color: 'var(--text-primary)', marginTop: 4 }}>Not synced</div>
                                     </div>
                                   </div>
 
-                                  {/* Exit Load Warning */}
                                   <div style={{ 
-                                    display: 'flex', 
-                                    gap: '8px', 
-                                    alignItems: 'center', 
-                                    background: 'rgba(245, 158, 11, 0.05)', 
-                                    border: '1px solid rgba(245, 158, 11, 0.15)', 
+                                    background: 'rgba(56, 189, 248, 0.05)', 
+                                    border: '1px solid rgba(56, 189, 248, 0.14)', 
                                     borderRadius: '6px', 
                                     padding: '8px 10px',
-                                    fontSize: '11px' 
+                                    fontSize: '11px',
+                                    color: 'var(--text-secondary)'
                                   }}>
-                                    <span style={{ color: '#F59E0B', fontWeight: 'bold', fontSize: '13px' }}>⚠</span>
-                                    <div style={{ color: 'rgba(245, 158, 11, 0.9)' }}>
-                                      <span style={{ fontWeight: 600 }}>Exit Load Constraint:</span> {diag.exitLoad}
-                                    </div>
-                                  </div>
-
-                                  {/* Top Underlying Holdings */}
-                                  <div>
-                                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>Top Underlying Asset Exposure</div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                      {diag.topHoldings.map((h, hIdx) => (
-                                        <div key={hIdx}>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10.5px', marginBottom: '2px' }}>
-                                            <span style={{ color: 'var(--text-primary)' }}>{h.name}</span>
-                                            <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{h.weight}%</span>
-                                          </div>
-                                          <div style={{ width: '100%', height: '4px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '2px', overflow: 'hidden' }}>
-                                            <div style={{ 
-                                              width: `${h.weight * 5}%`, 
-                                              height: '100%', 
-                                              background: 'rgba(255, 255, 255, 0.15)', 
-                                              borderRadius: '2px' 
-                                            }} />
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
+                                    Scheme-level TER, exit load, and look-through holdings need verified AMFI/AMC data before display.
                                   </div>
                                 </div>
                               );
@@ -2241,7 +2484,7 @@ export const Dashboard: React.FC = () => {
                             No Mutual Fund schemes found in your portfolio holdings statement.
                           </div>
                           <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                            Equity positions are standard. Mutual Fund Diagnostics will display expense benchmarks and exit loads for schemes present in your portfolio.
+                            Mutual Fund Diagnostics will display only verified synced metrics for schemes present in your portfolio.
                           </div>
                         </div>
                       )}

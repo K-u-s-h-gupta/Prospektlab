@@ -18,9 +18,11 @@ import {
   uploadPortfolioDocument, 
   uploadPortfolioScreenshot, 
   confirmExtraction, 
-  cancelExtraction 
+  cancelExtraction,
+  getPortfolioMirror
 } from '../api/client';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
+import { trackEvent } from '../telemetry';
 
 
 interface PortfolioItem {
@@ -32,18 +34,9 @@ interface PortfolioItem {
   sector: string;
 }
 
-const DEMO_PORTFOLIO: PortfolioItem[] = [
-  { symbol: "TCS", name: "Tata Consultancy", qty: 15, avgCost: 3450, current: 3842, sector: "IT" },
-  { symbol: "RELIANCE", name: "Reliance Industries", qty: 10, avgCost: 2780, current: 2931, sector: "Energy" },
-  { symbol: "HDFCBANK", name: "HDFC Bank", qty: 20, avgCost: 1480, current: 1562, sector: "Banking" },
-  { symbol: "INFY", name: "Infosys", qty: 25, avgCost: 1380, current: 1452, sector: "IT" },
-  { symbol: "ITC", name: "ITC Limited", qty: 50, avgCost: 410, current: 431, sector: "FMCG" },
-  { symbol: "ASIANPAINT", name: "Asian Paints", qty: 8, avgCost: 2650, current: 2810, sector: "Consumer" }
-];
-
 export const Onboarding: React.FC = () => {
   const navigate = useNavigate();
-  const { setOnboarded } = useAuth();
+  const { setOnboarded, refreshOnboardingStatus } = useAuth();
   const [step, setStep] = useState(1);
 
   // Allow the page to scroll while on the onboarding screen.
@@ -86,6 +79,8 @@ export const Onboarding: React.FC = () => {
   const [sourceType, setSourceType] = useState<string>('unknown');
   const [isReviewing, setIsReviewing] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [isMirrorSynced, setIsMirrorSynced] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   // Autocomplete suggestions for watchlist search
   const [suggestions, setSuggestions] = useState<Array<{ symbol: string; name: string; type: 'Stock' | 'Mutual Fund'; detail: string }>>([]);
@@ -179,12 +174,15 @@ export const Onboarding: React.FC = () => {
         currentPrice = marketVal / qty;
       }
       if (currentPrice === 0) {
-        currentPrice = p.avg_cost || p.cost_basis || 100.00;
+        currentPrice = p.avg_cost || (qty > 0 && p.cost_basis ? p.cost_basis / qty : 0);
       }
       
       let avgCost = p.avg_cost || 0;
-      if (avgCost === 0) {
-        avgCost = parseFloat((currentPrice * 0.85).toFixed(4));
+      if (avgCost === 0 && qty > 0 && p.cost_basis) {
+        avgCost = parseFloat((p.cost_basis / qty).toFixed(4));
+      }
+      if (avgCost === 0 && currentPrice > 0) {
+        avgCost = currentPrice;
       }
       
       const cleanSym = (p.symbol || '').split('.')[0].toUpperCase().trim();
@@ -227,8 +225,39 @@ export const Onboarding: React.FC = () => {
     });
   };
 
+  const verifyMirrorSync = async (fallbackPositions: any[] = []): Promise<boolean> => {
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const mirror = await getPortfolioMirror();
+        const mirrorPositions = Array.isArray(mirror?.positions) ? mirror.positions : [];
+        const count = Number(mirror?.count || mirrorPositions.length || 0);
+        if (count > 0) {
+          const mapped = mapPositionsToPortfolioItems(mirrorPositions.length > 0 ? mirrorPositions : fallbackPositions);
+          if (mapped.length > 0) {
+            setPortfolio(mapped);
+            setIsMirrorSynced(true);
+            localStorage.setItem('prospektlab_portfolio', JSON.stringify(mapped));
+            return true;
+          }
+        }
+      } catch (err: any) {
+        lastError = err;
+      }
+      await new Promise(resolve => setTimeout(resolve, 700 * (attempt + 1)));
+    }
+
+    setIsMirrorSynced(false);
+    if (lastError) {
+      console.error('Portfolio mirror verification failed', lastError);
+    }
+    return false;
+  };
+
   const handleFileSelect = (file: File) => {
     setErrorMsg(null);
+    setIsMirrorSynced(false);
+    setPortfolio([]);
     setShowPasswordInput(false);
     setPdfPassword('');
     setPendingFile(null);
@@ -289,15 +318,19 @@ export const Onboarding: React.FC = () => {
         setIsReviewing(true);
         setIsParsing(false);
       } else if (res.code === "MIRROR_SYNCHRONIZED" || res.status === "MIRROR_SYNCHRONIZED" || res.sync_status === "MIRROR_SYNCHRONIZED") {
-        const mapped = mapPositionsToPortfolioItems(res.positions || []);
-        setPortfolio(mapped);
+        const verified = await verifyMirrorSync(res.positions || []);
+        if (!verified) {
+          setErrorMsg('Your holdings were extracted, but I could not verify that they were saved to your account. Please retry the upload.');
+        }
         setIsParsing(false);
       } else if (res.code === "EMPTY_BUT_VALID") {
         setErrorMsg('Document is valid but no active holdings were found.');
         setIsParsing(false);
       } else {
-        const mapped = mapPositionsToPortfolioItems(res.positions || []);
-        setPortfolio(mapped);
+        const verified = await verifyMirrorSync(res.positions || []);
+        if (!verified) {
+          setErrorMsg('Your holdings were extracted, but I could not verify that they were saved to your account. Please retry the upload.');
+        }
         setIsParsing(false);
       }
     } catch (err: any) {
@@ -315,11 +348,14 @@ export const Onboarding: React.FC = () => {
     try {
       const res = await confirmExtraction(reviewId, reviewPositions, sourceType);
       if (res && res.positions) {
-        const mapped = mapPositionsToPortfolioItems(res.positions);
-        setPortfolio(mapped);
-        setIsReviewing(false);
-        setReviewId(null);
-        setReviewPositions([]);
+        const verified = await verifyMirrorSync(res.positions);
+        if (verified) {
+          setIsReviewing(false);
+          setReviewId(null);
+          setReviewPositions([]);
+        } else {
+          throw new Error('Your reviewed holdings were extracted, but I could not verify that they were saved to your account. Please retry the sync.');
+        }
       } else {
         throw new Error('Failed to synchronize reviewed positions.');
       }
@@ -372,38 +408,44 @@ export const Onboarding: React.FC = () => {
     }
   };
 
-  const handleUseDemo = () => {
-    setUploadedFileName('demostatement_2026.csv');
-    setIsParsing(true);
-    setParseStep(0);
-    // Start simulation timer
-    const interval = setInterval(() => {
-      setParseStep((prev) => {
-        if (prev >= 3) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setIsParsing(false);
-            setPortfolio(DEMO_PORTFOLIO);
-          }, 600);
-          return 4;
-        }
-        return prev + 1;
-      });
-    }, 600);
-  };
+  const handleComplete = async () => {
+    setIsCompleting(true);
+    let mirrorVerified = isMirrorSynced;
+    if (portfolio.length === 0 || !isMirrorSynced) {
+      setStep(2);
+      const verified = await verifyMirrorSync();
+      if (!verified) {
+        setErrorMsg('Upload and synchronize your real holdings before opening the dashboard.');
+        setIsCompleting(false);
+        return;
+      }
+      mirrorVerified = true;
+    }
 
+    const verifiedOnboarding = mirrorVerified || await refreshOnboardingStatus();
+    if (!verifiedOnboarding) {
+      setStep(2);
+      setErrorMsg('Your portfolio is not available in your account yet. Please sync the holdings again before opening the dashboard.');
+      setIsCompleting(false);
+      return;
+    }
 
-  const handleComplete = () => {
     // Persist everything including name
     if (name.trim()) {
       localStorage.setItem('prospektlab_username', name.trim());
     }
     localStorage.setItem('prospektlab_style', style);
     localStorage.setItem('prospektlab_watchlist', JSON.stringify(watchlist));
-    
-    const finalPortfolio = portfolio.length > 0 ? portfolio : DEMO_PORTFOLIO;
-    localStorage.setItem('prospektlab_portfolio', JSON.stringify(finalPortfolio));
+    localStorage.setItem('prospektlab_portfolio', JSON.stringify(portfolio));
     setOnboarded(true);
+
+    trackEvent('onboarding_completed', {
+      name: name.trim() || 'anonymous',
+      style,
+      watchlist_count: watchlist.length,
+      portfolio_count: portfolio.length,
+      source: 'uploaded',
+    });
     
     // Clear old onboarding progress
     localStorage.removeItem('prospektlab_onboarding_step');
@@ -414,6 +456,7 @@ export const Onboarding: React.FC = () => {
     ];
     localStorage.setItem('prospektlab_conversations', JSON.stringify(mockConversations));
 
+    setIsCompleting(false);
     navigate('/dashboard');
   };
 
@@ -816,26 +859,8 @@ export const Onboarding: React.FC = () => {
                 </div>
 
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  OR
+                  A real holdings file is required before the dashboard unlocks.
                 </div>
-
-                <button 
-                  type="button" 
-                  onClick={handleUseDemo}
-                  style={{ 
-                    border: '1px dashed var(--accent-indigo)', 
-                    background: 'rgba(129, 140, 248, 0.05)', 
-                    color: 'var(--accent-indigo)',
-                    fontSize: '12px',
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <Sparkles size={12} /> Use Demo Portfolio (6 Stocks)
-                </button>
               </div>
             )}
 
@@ -892,7 +917,7 @@ export const Onboarding: React.FC = () => {
                   fontSize: '13px'
                 }}>
                   <CheckCircle2 size={16} />
-                  <span>Import successful! {portfolio.length} stock positions compiled.</span>
+                  <span>Import successful! {portfolio.length} positions are synced to your account.</span>
                 </div>
 
                 {/* Holdings Preview Table */}
@@ -930,7 +955,7 @@ export const Onboarding: React.FC = () => {
 
                 <button 
                   type="button" 
-                  onClick={() => { setPortfolio([]); setUploadedFileName(''); setErrorMsg(null); }}
+                  onClick={() => { setPortfolio([]); setIsMirrorSynced(false); setUploadedFileName(''); setErrorMsg(null); }}
                   style={{ color: 'var(--loss)', alignSelf: 'flex-start', fontSize: '11px', padding: '0', background: 'none', border: 'none' }}
                 >
                   Reset & Upload Another Statement
@@ -951,11 +976,11 @@ export const Onboarding: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setStep(3)}
-                  disabled={isParsing || portfolio.length === 0}
+                  disabled={isParsing || portfolio.length === 0 || !isMirrorSynced}
                   className="primary"
                   style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                 >
-                  Continue Setup <ChevronRight size={14} />
+                  {isMirrorSynced ? 'Continue Setup' : 'Waiting for Sync'} <ChevronRight size={14} />
                 </button>
               </div>
             )}
@@ -1211,10 +1236,20 @@ export const Onboarding: React.FC = () => {
               <button
                 type="button"
                 onClick={handleComplete}
+                disabled={isCompleting}
                 className="primary shimmer-overlay"
                 style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               >
-                Launch Your Edge <ChevronRight size={14} />
+                {isCompleting ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin-custom" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    Launch Your Edge <ChevronRight size={14} />
+                  </>
+                )}
               </button>
             </div>
           </div>
