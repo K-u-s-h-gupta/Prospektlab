@@ -72,6 +72,51 @@ export interface AuthUser {
   require_mobile?: boolean;
 }
 
+export interface ControlTowerSnapshot {
+  mode: string;
+  live_data: boolean;
+  generated_at: string;
+  health_score?: number;
+  range: {
+    key: string;
+    days: number;
+    label: string;
+  };
+  summary: Record<string, any>;
+  series: Array<Record<string, any>>;
+  journeys?: {
+    marketing?: Record<string, any>;
+    activation?: Record<string, any>;
+  };
+  funnel: Array<Record<string, any>>;
+  biggest_leak?: Record<string, any> | null;
+  dropoffs: Array<Record<string, any>>;
+  source_mix: Array<Record<string, any>>;
+  source_health: Array<Record<string, any>>;
+  combined_users: Array<Record<string, any>>;
+  top_pages: Array<Record<string, any>>;
+  top_events: Array<Record<string, any>>;
+  tracking_groups: Array<Record<string, any>>;
+  tracking_catalog: Array<Record<string, any>>;
+  operations: Record<string, any>;
+  workspace: Record<string, any>;
+  portfolio: Record<string, any>;
+  pipeline: Record<string, any>;
+  geo?: Record<string, any>;
+  outreach: Record<string, any>;
+  supabase: Record<string, any>;
+  verification: {
+    synthetic_metrics_removed: boolean;
+    live_metrics: number;
+    persisted_metrics: number;
+    unavailable_metrics: number;
+    connector_gaps: string[];
+    metric_states: Record<string, { status: string; source: string; note: string }>;
+    has_live_journey: boolean;
+    has_live_ops: boolean;
+  };
+}
+
 const AUTH_TOKEN_KEY = 'prospektlab_auth_token';
 const AUTH_TOKEN_SESSION_KEY = 'prospektlab_auth_token_session';
 
@@ -239,6 +284,10 @@ function setAuthToken(token: string | null, remember: boolean = true): void {
   }
 }
 
+export function hydrateAuthToken(token: string, remember: boolean = true): void {
+  setAuthToken(token, remember);
+}
+
 function withAuthHeaders(headers?: HeadersInit): HeadersInit {
   const token = getAuthToken();
   const merged = new Headers(headers || {});
@@ -284,6 +333,17 @@ export async function getAuthMe(): Promise<AuthUser | null> {
     }
   })();
   return _cachedUserPromise;
+}
+
+export async function getControlTowerSnapshot(range: '7D' | '30D' | '90D' = '30D'): Promise<ControlTowerSnapshot> {
+  const res = await fetchApi(apiUrl(`/api/ops/control-tower?range=${encodeURIComponent(range)}`), {
+    credentials: requestCredentials(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to fetch control tower snapshot: ${res.statusText}`);
+  }
+  return res.json();
 }
 
 function handleAuthFailure() {

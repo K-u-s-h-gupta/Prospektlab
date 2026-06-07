@@ -2613,7 +2613,7 @@ def widget(request: Request) -> RedirectResponse:
 
 @app.get("/ops")
 def ops_index() -> RedirectResponse:
-    return RedirectResponse(url="/ops/control-tower", status_code=302)
+    return RedirectResponse(url=_frontend_hash_url("ops"), status_code=302)
 
 
 @app.get("/ops/control-tower")
@@ -2695,8 +2695,9 @@ def control_tower_page(request: Request):
                 headers={"Cache-Control": "no-store, max-age=0", "X-Robots-Tag": "noindex, nofollow"},
             )
 
-        return HTMLResponse(
-            CONTROL_TOWER_HTML_PATH.read_text(encoding="utf-8"),
+        return RedirectResponse(
+            url=_frontend_hash_url("ops"),
+            status_code=302,
             headers={"Cache-Control": "no-store, max-age=0", "X-Robots-Tag": "noindex, nofollow"},
         )
     except Exception:

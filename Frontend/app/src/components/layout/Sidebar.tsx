@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   MessageSquarePlus, 
@@ -41,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   tokenUsage
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout, setOnboarded } = useAuth();
   
   // Drag-to-resize state
@@ -125,6 +126,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const hasPortfolio = portfolioSummary && portfolioSummary.totalValue > 0;
+  const isDashboardRoute = location.pathname === '/dashboard';
+  const isOpsRoute = location.pathname === '/ops';
 
   return (
     <div 
@@ -286,9 +289,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="Dashboard"
             style={{
               width: '100%',
-              background: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(56, 189, 248, 0.1)',
-              color: 'var(--accent-cyan)',
+              background: isDashboardRoute ? 'rgba(255, 255, 255, 0.03)' : 'transparent',
+              border: isDashboardRoute ? '1px solid rgba(56, 189, 248, 0.1)' : '1px solid rgba(255, 255, 255, 0.06)',
+              color: isDashboardRoute ? 'var(--accent-cyan)' : 'var(--text-secondary)',
               padding: '10px',
               borderRadius: '8px',
               display: 'flex',
@@ -302,6 +305,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <LayoutDashboard size={16} />
             {!isCollapsed && <span className="nav-text">Dashboard</span>}
+          </button>
+
+          <button
+            onClick={() => {
+              dismissSidebarOnMobile();
+              navigate('/ops');
+            }}
+            title="Control Tower"
+            style={{
+              width: '100%',
+              background: isOpsRoute ? 'rgba(255, 255, 255, 0.03)' : 'transparent',
+              border: isOpsRoute ? '1px solid rgba(56, 189, 248, 0.1)' : '1px solid rgba(255, 255, 255, 0.06)',
+              color: isOpsRoute ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+              padding: '10px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: isCollapsed ? 'center' : 'flex-start',
+              gap: '10px',
+              fontSize: '13px',
+              fontWeight: 600,
+              textAlign: 'left'
+            }}
+          >
+            <ShieldCheck size={16} />
+            {!isCollapsed && <span className="nav-text">Control Tower</span>}
           </button>
         </div>
 

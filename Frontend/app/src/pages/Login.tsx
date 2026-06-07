@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Logo } from '../components/layout/Logo';
 import { Mail, Lock, User as UserIcon, Phone, ShieldCheck, Eye, EyeOff, Loader2 } from 'lucide-react';
@@ -7,7 +7,21 @@ import { apiSendVerification, apiForgotPassword, apiResetPassword, apiUpdateMobi
 
 export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTab = 'login' }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, login, signup, googleLogin, updateUserMobile, logout, showToast, isAuthenticated, onboarded, setOnboarded, refreshOnboardingStatus } = useAuth();
+  const nextPath = typeof location.state === 'object' && location.state && 'next' in location.state
+    ? String((location.state as { next?: string }).next || '')
+    : '';
+
+  const resolvePostAuthRoute = React.useCallback((nextOnboarded: boolean) => {
+    if (nextPath && nextPath.startsWith('/')) {
+      if (nextPath === '/onboarding' && nextOnboarded) {
+        return '/dashboard';
+      }
+      return nextPath;
+    }
+    return nextOnboarded ? '/dashboard' : '/onboarding';
+  }, [nextPath]);
 
   // Tab State
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>(initialTab);
@@ -51,9 +65,9 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
   // Redirect if already authenticated and doesn't require completing profile
   useEffect(() => {
     if (isAuthenticated && !user?.require_mobile) {
-      navigate(onboarded ? '/dashboard' : '/onboarding');
+      navigate(resolvePostAuthRoute(Boolean(onboarded)), { replace: true });
     }
-  }, [isAuthenticated, navigate, onboarded, user]);
+  }, [isAuthenticated, navigate, onboarded, resolvePostAuthRoute, user]);
 
   // Handle signup countdown
   useEffect(() => {
@@ -88,7 +102,7 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
               if (res.require_mobile) {
                 setRequireMobileMode(true);
               } else {
-                navigate(res.onboarded ? '/dashboard' : '/onboarding');
+                navigate(resolvePostAuthRoute(Boolean(res.onboarded)), { replace: true });
               }
             } catch (err: any) {
               showToast(err.message || 'Google Auth failed', 'error');
@@ -115,7 +129,7 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
       }, 500);
       return () => clearInterval(checkInterval);
     }
-  }, [navigate, showToast, googleLogin]);
+  }, [googleLogin, navigate, resolvePostAuthRoute, showToast]);
 
   // Google Sign-In Button Ref renderer
   const googleBtnOverlayRef = React.useCallback((node: HTMLDivElement | null) => {
@@ -224,7 +238,7 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
     setIsSubmitting(true);
     try {
       const res = await login(email, password, remember);
-      navigate(res.onboarded ? '/dashboard' : '/onboarding');
+      navigate(resolvePostAuthRoute(Boolean(res.onboarded)), { replace: true });
     } catch (err) {
       // handled in context
     } finally {
@@ -294,7 +308,7 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
       const nextOnboarded = await refreshOnboardingStatus(userEmail);
       showToast('Profile completed successfully!', 'success');
       setRequireMobileMode(false);
-      navigate(nextOnboarded ? '/dashboard' : '/onboarding');
+      navigate(resolvePostAuthRoute(Boolean(nextOnboarded)), { replace: true });
     } catch (err: any) {
       showToast(err.message || 'Failed to update mobile number.', 'error');
     } finally {

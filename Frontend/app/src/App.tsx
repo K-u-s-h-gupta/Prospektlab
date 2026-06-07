@@ -7,16 +7,24 @@ import Features from './pages/Features';
 import Onboarding from './pages/Onboarding';
 import ContactUs from './pages/ContactUs';
 import { Dashboard } from './pages/Dashboard';
+import { ControlTowerPage } from './pages/ControlTower';
 import { Login } from './pages/Login';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { hydrateAuthToken } from './api/client';
 import { trackPageView } from './telemetry';
 
 // Protected Route for authenticated users
-const ProtectedRoute: React.FC<{ children: React.ReactElement; requireOnboarded?: boolean }> = ({ 
-  children, 
-  requireOnboarded = false 
+const ProtectedRoute: React.FC<{
+  children: React.ReactElement;
+  requireOnboarded?: boolean;
+  onboardingOnly?: boolean;
+}> = ({
+  children,
+  requireOnboarded = false,
+  onboardingOnly = false,
 }) => {
   const { isAuthenticated, isLoading, onboarded } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -27,14 +35,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement; requireOnboarded?
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ next: location.pathname }} />;
   }
 
   if (requireOnboarded && !onboarded) {
     return <Navigate to="/onboarding" replace />;
   }
 
-  if (!requireOnboarded && onboarded) {
+  if (onboardingOnly && onboarded) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -73,7 +81,29 @@ const TelemetryRouteTracker: React.FC = () => {
   return null;
 };
 
+function hydrateLocalDevTokenFromUrl() {
+  if (typeof window === 'undefined') return;
+  const isLocalHost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+  if (!isLocalHost) return;
+
+  const rawHash = window.location.hash || '';
+  const hashPath = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
+  const hashQuery = hashPath.includes('?') ? hashPath.slice(hashPath.indexOf('?') + 1) : '';
+  const params = new URLSearchParams(hashQuery);
+  const devToken = params.get('devToken');
+  if (!devToken) return;
+
+  hydrateAuthToken(devToken, true);
+  params.delete('devToken');
+  const nextPath = hashPath.includes('?') ? hashPath.slice(0, hashPath.indexOf('?')) : hashPath;
+  const nextSearch = params.toString();
+  const nextHash = `${nextPath}${nextSearch ? `?${nextSearch}` : ''}`;
+  window.history.replaceState(null, '', `#${nextHash || '/'}`);
+}
+
 export const AppContent: React.FC = () => {
+  hydrateLocalDevTokenFromUrl();
+
   return (
     <HashRouter>
       <TelemetryRouteTracker />
@@ -108,7 +138,7 @@ export const AppContent: React.FC = () => {
         <Route 
           path="/onboarding" 
           element={
-            <ProtectedRoute>
+            <ProtectedRoute onboardingOnly>
               <Onboarding />
             </ProtectedRoute>
           } 
@@ -121,6 +151,15 @@ export const AppContent: React.FC = () => {
               <Dashboard />
             </ProtectedRoute>
           } 
+        />
+
+        <Route
+          path="/ops"
+          element={
+            <ProtectedRoute>
+              <ControlTowerPage />
+            </ProtectedRoute>
+          }
         />
 
         {/* Fallback */}

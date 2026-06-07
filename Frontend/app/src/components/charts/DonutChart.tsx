@@ -25,7 +25,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
     '#F87171',
     '#FB923C',
     '#4ADE80',
-    '#2DD4BF'
+    '#2DD4BF',
   ];
 
   const normalizedData = data.map((value) => {
@@ -38,7 +38,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
   if (!labels.length || !normalizedData.length || totalVal <= 0) {
     return (
       <div style={{ height: '220px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: ChartColors.textMuted, fontSize: 12 }}>
-        No allocation data available
+        No verified allocation data available
       </div>
     );
   }
@@ -59,9 +59,9 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
         backgroundColor: colors,
         borderWidth: 1,
         borderColor: 'rgba(3, 7, 18, 0.8)',
-        hoverOffset: 6
-      }
-    ]
+        hoverOffset: 6,
+      },
+    ],
   };
 
   const options = {
@@ -77,8 +77,8 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
           padding: 8,
           boxWidth: 8,
           boxHeight: 8,
-          usePointStyle: true
-        }
+          usePointStyle: true,
+        },
       },
       title: {
         display: !!title,
@@ -86,9 +86,9 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
         color: ChartColors.textSecondary,
         font: {
           size: 12,
-          weight: 'normal' as const
+          weight: 'normal' as const,
         },
-        padding: { bottom: 8 }
+        padding: { bottom: 8 },
       },
       tooltip: {
         callbacks: {
@@ -99,13 +99,13 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
             if (isPercent) {
               return ` ${val.toFixed(1)}%`;
             }
-            const formattedVal = '\u20B9' + val.toLocaleString('en-IN', { maximumFractionDigits: 0 });
-            return ` ${formattedVal} · ${pct.toFixed(1)}% of portfolio`;
-          }
-        }
-      }
+            const formattedVal = `INR ${val.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+            return ` ${formattedVal} - ${pct.toFixed(1)}% of total`;
+          },
+        },
+      },
     },
-    cutout: '65%'
+    cutout: '65%',
   };
 
   const centerTextPlugin = {
@@ -122,7 +122,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
       const liveTotalVal = chartValues.reduce((acc, value) => acc + value, 0);
 
       const isPercent = valueKind === 'percent' || unit === '%';
-      const centerLabel = isPercent ? '100%' : '\u20B9' + Math.round(liveTotalVal).toLocaleString('en-IN');
+      const centerLabel = isPercent ? '100%' : `INR ${Math.round(liveTotalVal).toLocaleString('en-IN')}`;
       const subLabel = isPercent ? 'Allocation' : 'Total Value';
 
       ctx.textAlign = 'center';
@@ -141,7 +141,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
       ctx.fillText(centerLabel, textX, textY + 7);
 
       ctx.restore();
-    }
+    },
   };
 
   return (
@@ -150,3 +150,5 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
     </div>
   );
 };
+
+export default DonutChart;

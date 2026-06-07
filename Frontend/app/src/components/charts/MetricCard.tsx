@@ -26,26 +26,35 @@ export const MetricCard: React.FC<MetricCardProps> = ({
     <div 
       className="glass" 
       style={{
-        padding: '12px 16px',
+        padding: '14px 16px 15px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '4px',
+        gap: '6px',
         position: 'relative',
         overflow: 'hidden',
         transition: 'all 0.25s ease',
-        background: 'rgba(15, 23, 42, 0.45)',
-        border: '1px solid rgba(255, 255, 255, 0.05)'
+        background: 'linear-gradient(180deg, rgba(11, 18, 32, 0.94), rgba(7, 12, 24, 0.9))',
+        border: '1px solid rgba(96, 165, 250, 0.1)',
+        boxShadow: '0 18px 42px rgba(0, 0, 0, 0.22)',
       }}
       title={tooltip}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.25)';
-        e.currentTarget.style.transform = 'translateY(-1px)';
+        e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.26)';
+        e.currentTarget.style.transform = 'translateY(-2px)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)';
+        e.currentTarget.style.borderColor = 'rgba(96, 165, 250, 0.1)';
         e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
+      <div style={{
+        position: 'absolute',
+        inset: '0 auto auto 0',
+        width: '100%',
+        height: 2,
+        background: 'linear-gradient(90deg, rgba(56, 189, 248, 0.85), rgba(129, 140, 248, 0.55), transparent)',
+        opacity: 0.9,
+      }} />
       <div style={{
         fontSize: '10px',
         color: 'var(--text-secondary)',
@@ -57,12 +66,12 @@ export const MetricCard: React.FC<MetricCardProps> = ({
       </div>
       
       <div style={{
-        fontSize: '20px',
-        fontWeight: 700,
+        fontSize: '22px',
+        fontWeight: 800,
         fontFamily: "var(--font-mono)",
         color: 'var(--text-primary)',
         lineHeight: 1.1,
-        letterSpacing: '-0.3px'
+        letterSpacing: '-0.4px'
       }}>
         {value}
       </div>
@@ -73,7 +82,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
           alignItems: 'center',
           gap: '6px',
           fontSize: '11px',
-          marginTop: '2px'
+          marginTop: '1px'
         }}>
           {change && (
             <span style={{ fontWeight: 600, color: changeColor }}>

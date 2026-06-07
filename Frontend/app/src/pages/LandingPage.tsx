@@ -7,6 +7,7 @@ import {
   Activity, Users, Quote
 } from 'lucide-react';
 import { Logo } from '../components/layout/Logo';
+import { trackEvent } from '../telemetry';
 
 /* ─────────────────────────────────────────────
    DATA
@@ -198,7 +199,14 @@ export const LandingPage: React.FC = () => {
     setMobileMenuOpen(false);
   }, []);
 
-  const handleCTA = () => navigate('/onboarding');
+  const handleCTA = () => {
+    trackEvent('landing_cta_clicked', {
+      section: 'landing',
+      route: '/onboarding',
+      ref_source: ctx.refSource || 'direct',
+    });
+    navigate('/onboarding');
+  };
 
   const toast = ACTIVITY_FEED[toastIdx];
 
