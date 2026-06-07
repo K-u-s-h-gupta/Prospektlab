@@ -1,5 +1,5 @@
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import Pricing from './pages/Pricing';
 import Testimonials from './pages/Testimonials';
@@ -81,31 +81,51 @@ const TelemetryRouteTracker: React.FC = () => {
   return null;
 };
 
+function upgradeLegacyHashLocation() {
+  if (typeof window === 'undefined') return;
+  const rawHash = window.location.hash || '';
+  if (!rawHash.startsWith('#/')) return;
+
+  const hashPath = rawHash.slice(1);
+  const nextPath = hashPath.includes('?') ? hashPath.slice(0, hashPath.indexOf('?')) : hashPath;
+  const hashQuery = hashPath.includes('?') ? hashPath.slice(hashPath.indexOf('?') + 1) : '';
+  const current = new URL(window.location.href);
+  const mergedParams = new URLSearchParams(current.search);
+  const hashParams = new URLSearchParams(hashQuery);
+
+  hashParams.forEach((value, key) => {
+    if (!mergedParams.has(key)) {
+      mergedParams.set(key, value);
+    }
+  });
+
+  const nextSearch = mergedParams.toString();
+  const nextUrl = `${nextPath || '/'}${nextSearch ? `?${nextSearch}` : ''}`;
+  window.history.replaceState(null, '', nextUrl);
+}
+
 function hydrateLocalDevTokenFromUrl() {
   if (typeof window === 'undefined') return;
   const isLocalHost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
   if (!isLocalHost) return;
 
-  const rawHash = window.location.hash || '';
-  const hashPath = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
-  const hashQuery = hashPath.includes('?') ? hashPath.slice(hashPath.indexOf('?') + 1) : '';
-  const params = new URLSearchParams(hashQuery);
+  const current = new URL(window.location.href);
+  const params = new URLSearchParams(current.search);
   const devToken = params.get('devToken');
   if (!devToken) return;
 
   hydrateAuthToken(devToken, true);
   params.delete('devToken');
-  const nextPath = hashPath.includes('?') ? hashPath.slice(0, hashPath.indexOf('?')) : hashPath;
   const nextSearch = params.toString();
-  const nextHash = `${nextPath}${nextSearch ? `?${nextSearch}` : ''}`;
-  window.history.replaceState(null, '', `#${nextHash || '/'}`);
+  window.history.replaceState(null, '', `${current.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
 }
 
 export const AppContent: React.FC = () => {
+  upgradeLegacyHashLocation();
   hydrateLocalDevTokenFromUrl();
 
   return (
-    <HashRouter>
+    <BrowserRouter>
       <TelemetryRouteTracker />
       <Routes>
         {/* Marketing Pages */}
@@ -165,7 +185,7 @@ export const AppContent: React.FC = () => {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </HashRouter>
+    </BrowserRouter>
   );
 };
 

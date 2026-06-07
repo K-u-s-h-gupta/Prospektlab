@@ -352,7 +352,7 @@ function handleAuthFailure() {
   _cachedUser = null;
   setAuthToken(null);
   if (typeof window !== 'undefined') {
-    window.location.hash = '#/login';
+    window.location.assign('/login');
   }
 }
 

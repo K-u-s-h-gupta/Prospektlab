@@ -958,7 +958,7 @@ def _frontend_base_url() -> str:
 def _frontend_hash_url(route: str = "") -> str:
     cleaned = (route or "").lstrip("/")
     base = _frontend_base_url()
-    return f"{base}/#/{cleaned}" if cleaned else f"{base}/#/"
+    return f"{base}/{cleaned}" if cleaned else f"{base}/"
 
 
 class StartResearchRequest(BaseModel):
