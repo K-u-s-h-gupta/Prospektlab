@@ -30,7 +30,7 @@ import {
   getPortfolioBrief,
   getUserTokenUsage
 } from '../api/client';
-import { Search, Edit3, Sparkles, MessageSquare, ChevronRight } from 'lucide-react';
+import { Search, Edit3, Sparkles, MessageSquare, ChevronRight, ChevronDown } from 'lucide-react';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
 
 interface Message {
@@ -195,7 +195,7 @@ const CalendarSheet: React.FC<{ dateStr: string; dateLabel: string }> = ({ dateS
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { setOnboarded } = useAuth();
+  const { setOnboarded, user, showToast } = useAuth();
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>(() => readStoredPortfolioSnapshot());
   const [quotesData, setQuotesData] = useState<Record<string, any>>({});
 
@@ -317,6 +317,8 @@ export const Dashboard: React.FC = () => {
 
   // Chart benchmark states
   const [selectedBenchmark, setSelectedBenchmark] = useState<string>('NIFTY50');
+  const [isBenchmarkMenuOpen, setIsBenchmarkMenuOpen] = useState(false);
+  const benchmarkSelectorRef = useRef<HTMLDivElement>(null);
 
   // Resizable chat rail state
   const [chatWidth, setChatWidth] = useState<number>(() => {
@@ -353,6 +355,16 @@ export const Dashboard: React.FC = () => {
   const [newsFeed, setNewsFeed] = useState<any[]>(() => readCachedTapeNews());
   const [newsLoading, setNewsLoading] = useState(() => readCachedTapeNews().length === 0);
   const [newsError, setNewsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!benchmarkSelectorRef.current?.contains(event.target as Node)) {
+        setIsBenchmarkMenuOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, []);
   const [portfolioAnalytics, setPortfolioAnalytics] = useState<any>(null);
   const [portfolioAnalyticsError, setPortfolioAnalyticsError] = useState<string | null>(null);
   const [mfAnalytics, setMfAnalytics] = useState<any>(null);
@@ -1081,8 +1093,8 @@ export const Dashboard: React.FC = () => {
       ? sectorAllocationTotalValue
       : portfolioSummary.totalValue;
   const sidebarTotalPnL =
-    hasPortfolioHoldings && liveComputedTotalCost > 0
-      ? sidebarTotalValue - liveComputedTotalCost
+    hasPortfolioHoldings && liveComputedTotalCost > 0 && allocationTotalValue > 0
+      ? allocationTotalValue - liveComputedTotalCost
       : portfolioSummary.totalPnL;
   const sidebarTotalReturnPct =
     liveComputedTotalCost > 0
@@ -1210,7 +1222,7 @@ export const Dashboard: React.FC = () => {
     const totalVal = computedPortfolioDetails.reduce((s, p) => s + p.currentValue, 0);
     const sectors = Object.entries(sectorAllocations).sort((a, b) => b[1] - a[1]);
     const topSector = sectors[0];
-    const topSectorPct = topSector ? (topSector[1] / totalVal) * 100 : 0;
+    const topSectorPct = topSector && totalVal > 0 ? (topSector[1] / totalVal) * 100 : 0;
     
     // Herfindahl-Hirschman Index (HHI) for concentration risk
     const backendHhi = finiteNumber(portfolioAnalytics?.risk?.hhi);
@@ -1421,7 +1433,10 @@ export const Dashboard: React.FC = () => {
     const scope = detectPortfolioScope(query);
     if (scope === 'portfolio_scope') {
       const breakdownSectors = Object.entries(sectorAllocations)
-        .map(([sec, val]) => `${sec} ${((finiteNumber(val) / portfolioSummary.totalValue) * 100).toFixed(0)}%`)
+        .map(([sec, val]) => {
+          const pct = portfolioSummary.totalValue > 0 ? ((finiteNumber(val) / portfolioSummary.totalValue) * 100).toFixed(0) : '0';
+          return `${sec} ${pct}%`;
+        })
         .join(', ');
       
       const holdingsStr = enrichedPortfolio
@@ -1730,11 +1745,13 @@ export const Dashboard: React.FC = () => {
           text: `Weekly Token Limit Exceeded`,
           tokenLimitDetail: err.detail
         };
-        setMessages((prev) => [...prev, limitResponse]);
-        try {
-          const merged = [...updatedMessages, limitResponse];
-          localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(merged));
-        } catch (e) { /* ignore storage errors */ }
+        setMessages((prev) => {
+          const next = [...prev, limitResponse];
+          try {
+            localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(next));
+          } catch (e) { /* ignore storage errors */ }
+          return next;
+        });
       } else {
         if (portfolioScope !== 'general' && enrichedPortfolio.length > 0) {
           let fallbackText = buildPortfolioFallbackAnswer(message, errMsg);
@@ -1784,10 +1801,12 @@ export const Dashboard: React.FC = () => {
 
     const activeConv = conversations.find(c => c.id === activeConversationId);
     
-    try {
-      await stopSession(activeConv?.backendSessionId || activeConversationId);
-    } catch (e) {
-      // Already terminated on server
+    if (activeConv?.backendSessionId) {
+      try {
+        await stopSession(activeConv.backendSessionId);
+      } catch (e) {
+        // Already terminated on server
+      }
     }
 
     setIsThinking(false);
@@ -1908,11 +1927,7 @@ export const Dashboard: React.FC = () => {
     localStorage.setItem('prospektlab_watchlist', JSON.stringify(updated));
   };
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    // Falls back to logging if AuthContext toast dispenser is unreachable
-    console.log(`[Toast ${type.toUpperCase()}] ${message}`);
-  };
-
+  // showToast is now provided by AuthContext — visible toast notifications
   const retryIndices = async () => {
     setIndicesLoading(true);
     setIndicesError(null);
@@ -1956,9 +1971,95 @@ export const Dashboard: React.FC = () => {
   };
 
   const hasEngaged = messages.some((msg, index) => msg.sender === 'user' || index > 0);
-  const briefingTime = new Date().getHours();
-  const timeGreeting = briefingTime < 12 ? 'Good morning' : briefingTime < 17 ? 'Good afternoon' : 'Good evening';
-  const username = (localStorage.getItem('prospektlab_username') || 'analyst').toLowerCase();
+
+  /* ─────────────────────────────────────────────
+     ARTHIK PERSONALIZED GREETING
+  ───────────────────────────────────────────── */
+  const getArthikGreeting = (): string => {
+    const hour = new Date().getHours();
+    const name = (user?.name || localStorage.getItem('prospektlab_username') || 'there').split(/\s+/)[0];
+    const portfolioSize = portfolio.length;
+    const marketOpen = hour >= 9 && hour < 16;
+    const isWeekend = [0, 6].includes(new Date().getDay());
+
+    const timeOfDay =
+      hour < 5 ? 'night' :
+      hour < 12 ? 'morning' :
+      hour < 17 ? 'afternoon' :
+      hour < 21 ? 'evening' : 'night';
+
+    const greetings: string[] = [];
+
+    if (timeOfDay === 'night') {
+      greetings.push(
+        `Still up, ${name}? Markets are closed, but the best moves are planned in silence. What's on your mind?`,
+        `Late night research session, ${name}? I like that. What are you digging into?`,
+        `The markets sleep, but the sharp money never does. What's keeping you up, ${name}?`
+      );
+    } else if (timeOfDay === 'morning') {
+      if (marketOpen && !isWeekend) {
+        greetings.push(
+          `Markets are live, ${name}. Nifty opened a few minutes ago. What's the first thing you want to check?`,
+          `Good morning, ${name}. The opening bell just rang. Want a quick scan of your watchlist?`,
+          `Morning, ${name}. Fresh tape, fresh numbers. What should we look at first?`
+        );
+      } else {
+        greetings.push(
+          `Good morning, ${name}. Markets are closed today, but there's always something to read. What's on your mind?`,
+          `Morning, ${name}. No market action today, but we can still prep for tomorrow. What are you thinking about?`,
+          `Hey ${name}. Quiet morning with no market noise — perfect time to dig deep into something. What do you want to explore?`
+        );
+      }
+    } else if (timeOfDay === 'afternoon') {
+      if (marketOpen && !isWeekend) {
+        greetings.push(
+          `Afternoon, ${name}. Mid-session often reveals the real trend. What do you want to analyze?`,
+          `Hey ${name}. The market's been running for a few hours now. Want to check how your positions are holding up?`,
+          `Good afternoon, ${name}. Want me to run a quick risk check on your book while the tape is active?`
+        );
+      } else {
+        greetings.push(
+          `Afternoon, ${name}. No live tape right now, but we can still build conviction. What are you researching?`,
+          `Hey ${name}. Quiet afternoon — perfect for deep research. What company do you want to understand better?`
+        );
+      }
+    } else { // evening
+      if (marketOpen && !isWeekend) {
+        greetings.push(
+          `Evening, ${name}. Markets are closing soon. Want a summary of what moved today?`,
+          `Hey ${name}. The closing bell is coming up. Should we review how your positions performed today?`,
+          `Good evening, ${name}. Last hour of trading — want me to flag anything unusual in your watchlist?`
+        );
+      } else {
+        greetings.push(
+          `Evening, ${name}. Markets are closed. Want me to run a DCF on something you've been watching?`,
+          `Hey ${name}. The market's done for the day. Perfect time to research without the noise. What do you want to explore?`,
+          `Good evening, ${name}. Want me to audit a stock you've been thinking about buying?`
+        );
+      }
+    }
+
+    // Portfolio-aware additions
+    if (portfolioSize > 0) {
+      greetings.push(
+        `Hey ${name}. You've got ${portfolioSize} positions in your book. Want me to check what's changed since yesterday?`,
+        `Hi ${name}. Your portfolio has ${portfolioSize} holdings. Should I run a quick risk scan?`,
+        `Welcome back, ${name}. I see ${portfolioSize} positions in your portfolio. Anything specific you want me to dig into?`
+      );
+    } else {
+      greetings.push(
+        `Hey ${name}. Your portfolio is empty right now — want me to help you build a watchlist?`,
+        `Hi ${name}. No holdings synced yet. Want me to find a few solid names to start tracking?`,
+        `Welcome, ${name}. Let's start building your research dashboard. What sector interests you?`
+      );
+    }
+
+    // Pick one based on a rotating hash of the current hour
+    const index = (hour + new Date().getDate()) % greetings.length;
+    return greetings[index];
+  };
+
+  const arthikGreeting = getArthikGreeting();
 
   const activeIndices = liveIndexData.india;
 
@@ -2027,12 +2128,9 @@ export const Dashboard: React.FC = () => {
         {/* ════════════════════════ LEFT: DATA DASHBOARD ════════════════════════ */}
         <div className="workbench-data">
           {/* Market Header */}
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 10 }}>
+          <div className="market-header" style={{ display: 'flex', alignItems: 'center', marginBottom: 18, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 10, fontSize: 0 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.1px' }}>Indian Market Indices</span>
-            <div style={{ flex: 1 }} />
-            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.08em', marginRight: 8 }}>
               <span className="live-dot" style={{ marginRight: 6 }} /> LIVE • NSE/BSE
-            </div>
           </div>
 
           {/* Index ticker cards */}
@@ -2104,44 +2202,67 @@ export const Dashboard: React.FC = () => {
               <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>Comparative Returns (Indexed)</span>
               
               {/* Benchmark dropdown selector */}
-              <div className="chart-benchmark-selector" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>VS BENCHMARK:</span>
-                <select
-                  value={selectedBenchmark}
-                  onChange={(e) => setSelectedBenchmark(e.target.value)}
-                  style={{
-                    padding: '4px 8px',
-                    fontSize: '11px',
-                    borderRadius: '6px',
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    borderColor: 'rgba(255, 255, 255, 0.08)',
-                    height: '26px'
-                  }}
-                >
-                  {BENCHMARKS.map(bench => (
-                    <option key={bench.id} value={bench.id}>{bench.name}</option>
-                  ))}
-                </select>
+              <div className="chart-benchmark-selector" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }} ref={benchmarkSelectorRef}>
+                <span className="benchmark-selector-label" style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>VS BENCHMARK:</span>
+                <div className="benchmark-select">
+                  <button
+                    type="button"
+                    className="benchmark-select-trigger"
+                    aria-haspopup="listbox"
+                    aria-expanded={isBenchmarkMenuOpen}
+                    onClick={() => setIsBenchmarkMenuOpen(open => !open)}
+                  >
+                    <span>{BENCHMARKS.find(bench => bench.id === selectedBenchmark)?.name || 'Nifty 50'}</span>
+                    <ChevronDown size={13} className={isBenchmarkMenuOpen ? 'benchmark-select-chevron open' : 'benchmark-select-chevron'} />
+                  </button>
+                  {isBenchmarkMenuOpen && (
+                    <div className="benchmark-select-menu" role="listbox" aria-label="Benchmark selector">
+                      {BENCHMARKS.map(bench => (
+                        <button
+                          key={bench.id}
+                          type="button"
+                          role="option"
+                          aria-selected={selectedBenchmark === bench.id}
+                          className={selectedBenchmark === bench.id ? 'benchmark-select-option active' : 'benchmark-select-option'}
+                          onClick={() => {
+                            setSelectedBenchmark(bench.id);
+                            setIsBenchmarkMenuOpen(false);
+                          }}
+                        >
+                          {bench.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            <InteractiveChart
-              labels={compareChartData.labels}
-              data={compareChartData.portValues.length > 1 ? compareChartData.portValues : compareChartData.benchValues}
-              title={compareChartData.portValues.length > 1 ? "Your Portfolio (base = 100)" : "Benchmark (base = 100)"}
-              unit=""
-              comparisonData={compareChartData.portValues.length > 1 && compareChartData.benchValues.length > 1 ? compareChartData.benchValues : undefined}
-              comparisonTitle={BENCHMARKS.find(b => b.id === selectedBenchmark)?.name || 'Benchmark'}
-              height={300}
-            />
+            {compareChartData.labels.length > 0 ? (
+              <InteractiveChart
+                labels={compareChartData.labels}
+                data={compareChartData.portValues.length > 1 ? compareChartData.portValues : compareChartData.benchValues}
+                title={compareChartData.portValues.length > 1 ? "Your Portfolio (base = 100)" : "Benchmark (base = 100)"}
+                unit=""
+                comparisonData={compareChartData.portValues.length > 1 && compareChartData.benchValues.length > 1 ? compareChartData.benchValues : undefined}
+                comparisonTitle={BENCHMARKS.find(b => b.id === selectedBenchmark)?.name || 'Benchmark'}
+                height={300}
+              />
+            ) : (
+              <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                {portfolioAnalyticsError || 'Syncing portfolio history from backend...'}
+              </div>
+            )}
 
             <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span>{portfolioAnalyticsError || (compareChartData.portValues.length > 1 ? 'Comparison is indexed to 100 using live backend portfolio analytics' : 'Portfolio history is not available yet; showing benchmark history until holdings history is ready')}</span>
-              <span style={{ marginLeft: 'auto', color: 'var(--accent-cyan)', cursor: 'pointer' }}
-                onClick={() => handleSuggestQuery(`Explain how my portfolio is performing compared to ${selectedBenchmark}.`, 'standard')}
-              >
-                Analyse return spread →
-              </span>
+              <span>{portfolioAnalyticsError || (compareChartData.portValues.length > 1 ? 'Comparison is indexed to 100 using live backend portfolio analytics' : compareChartData.labels.length > 0 ? 'Benchmark history shown as portfolio history builds' : 'Portfolio history is not available yet')}</span>
+              {compareChartData.labels.length > 0 && (
+                <span style={{ marginLeft: 'auto', color: 'var(--accent-cyan)', cursor: 'pointer' }}
+                  onClick={() => handleSuggestQuery(`Explain how my portfolio is performing compared to ${selectedBenchmark}.`, 'standard')}
+                >
+                  Analyse return spread →
+                </span>
+              )}
             </div>
           </div>
 
@@ -2735,8 +2856,10 @@ export const Dashboard: React.FC = () => {
             {!newsLoading && !newsError && newsFeed.map(n => (
               <div key={n.id} className="news-card" onClick={() => handleSuggestQuery(`Tell me more about: ${n.headline}`, 'standard')}>
                 <div className="news-card-meta">
+                  <div className="news-card-meta-copy">
                   <span className="news-source">{n.source}</span>
                   <span className="news-time">· {n.time}</span>
+                  </div>
                   <span className="news-sentiment" style={{ color: sentimentColor(n.sentiment), borderColor: sentimentColor(n.sentiment) + '40' }}>
                     {sentimentLabel(n.sentiment)}
                   </span>
@@ -2780,7 +2903,7 @@ export const Dashboard: React.FC = () => {
                       {e.period} {e.when ? `· ${e.when}` : ''}
                     </div>
                     {/* Countdown and Date text */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4, fontSize: '11px' }}>
+                    <div className="earnings-meta" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 4, fontSize: '11px' }}>
                       <span style={{ 
                         color: e.date ? 'var(--accent-cyan)' : 'var(--text-muted)', 
                         fontWeight: 600,
@@ -2803,13 +2926,13 @@ export const Dashboard: React.FC = () => {
                   </div>
                   
                   {/* Catalyst and Impact on Right */}
-                  <div className="earnings-catalyst" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, minWidth: '100px' }}>
-                    <span style={{ 
+                  <div className="earnings-catalyst" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                    <span className="earnings-impact-pill" style={{ 
                       fontSize: '9.5px', fontWeight: 700, color: impactColor, 
                       background: impactBg, padding: '3px 8px', borderRadius: '6px',
                       letterSpacing: '0.02em', whiteSpace: 'nowrap'
                     }}>{impactLabel}</span>
-                    <span style={{ fontSize: '10.5px', color: 'var(--text-muted)', maxWidth: '200px', textAlign: 'right', lineHeight: 1.3, overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+                    <span className="earnings-catalyst-text">
                       {e.catalyst}
                     </span>
                   </div>
@@ -2880,7 +3003,7 @@ export const Dashboard: React.FC = () => {
             {!hasEngaged ? (
               <>
                 <div className="chat-rail-greeting">
-                  {timeGreeting}, {username}. I'm Arthik — your market read, unfiltered. What are we hunting today?
+                  {arthikGreeting}
                 </div>
 
                 {suggestions.map((s, i) => (
