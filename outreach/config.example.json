@@ -1,0 +1,74 @@
+{
+  "azure": {
+    "connection_string": "",
+    "domain": "notify.prospektlab.com",
+    "require_custom_domain": true,
+    "allow_managed_domain": false
+  },
+  "campaign": {
+    "signup_url": "https://prospektlab.com/signup",
+    "whatsapp_group_url": "https://chat.whatsapp.com/Bpo5Bt5tVveGYGEVawkcUu",
+    "unsubscribe_url": "https://prospektlab.com/unsubscribe",
+    "physical_address": ""
+  },
+  "suppression_sync": {
+    "supabase_url": "",
+    "supabase_key": ""
+  },
+  "senders": [
+    {
+      "key": "aryan",
+      "name": "Aryan",
+      "email": "aryan@notify.prospektlab.com",
+      "reply_to": "aryan@prospektlab.com"
+    },
+    {
+      "key": "kushargra",
+      "name": "Kushargra",
+      "email": "kushargra@notify.prospektlab.com",
+      "reply_to": "kushargra@prospektlab.com"
+    },
+    {
+      "key": "riya",
+      "name": "Riya",
+      "email": "riya@notify.prospektlab.com",
+      "reply_to": "aryan@prospektlab.com"
+    },
+    {
+      "key": "ananya",
+      "name": "Ananya",
+      "email": "ananya@notify.prospektlab.com",
+      "reply_to": "kushargra@prospektlab.com"
+    },
+    {
+      "key": "rohan",
+      "name": "Rohan",
+      "email": "rohan@notify.prospektlab.com",
+      "reply_to": "aryan@prospektlab.com"
+    },
+    {
+      "key": "aditya",
+      "name": "Aditya",
+      "email": "aditya@notify.prospektlab.com",
+      "reply_to": "kushargra@prospektlab.com"
+    },
+    {
+      "key": "neha",
+      "name": "Neha",
+      "email": "neha@notify.prospektlab.com",
+      "reply_to": "aryan@prospektlab.com"
+    },
+    {
+      "key": "ishaan",
+      "name": "Ishaan",
+      "email": "ishaan@notify.prospektlab.com",
+      "reply_to": "kushargra@prospektlab.com"
+    },
+    {
+      "key": "kavya",
+      "name": "Kavya",
+      "email": "kavya@notify.prospektlab.com",
+      "reply_to": "aryan@prospektlab.com"
+    }
+  ]
+}

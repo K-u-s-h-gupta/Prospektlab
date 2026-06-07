@@ -1,0 +1,19 @@
+{
+  "route_base": "insights",
+  "publish_to_frontend_public": true,
+  "include_image": true,
+  "overwrite": true,
+  "max_concurrency": 3,
+  "topics": [
+    {
+      "topic": "Organic Traffic Platform Strategy for Indian Finance",
+      "search_query": "Indian finance SEO strategy",
+      "audience": "Indian investors and market researchers"
+    },
+    {
+      "topic": "Infosys Q4 Results Analysis",
+      "company_symbol": "INFY",
+      "search_query": "Infosys Q4 results analysis India"
+    }
+  ]
+}

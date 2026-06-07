@@ -6,6 +6,7 @@ import {
   FileText, ChevronDown, Lock, Trophy, X, ChevronRight,
   Activity, Users, Quote
 } from 'lucide-react';
+import { Logo } from '../components/layout/Logo';
 
 /* ─────────────────────────────────────────────
    DATA
@@ -221,12 +222,13 @@ export const LandingPage: React.FC = () => {
         @keyframes barUp { from { transform: translateY(100%); opacity:0; } to { transform: translateY(0); opacity:1; } }
         @keyframes reviewFade { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
         @keyframes pulse2 { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
-        @keyframes glowPulse { 0%,100% { box-shadow: 0 0 20px rgba(56,189,248,0.15); } 50% { box-shadow: 0 0 36px rgba(56,189,248,0.35); } }
-        .cta-shimmer { background: linear-gradient(110deg, #06B6D4 0%, #818CF8 40%, #06B6D4 60%, #818CF8 100%); background-size: 200% auto; animation: shimmer 2.5s linear infinite; }
-        .cta-shimmer:hover { background: linear-gradient(110deg, #06B6D4 0%, #818CF8 40%, #06B6D4 60%, #818CF8 100%); filter: brightness(1.12); transform: translateY(-1px); }
+        @keyframes glowPulse { 0%,100% { box-shadow: 0 16px 44px rgba(37,99,235,0.26), inset 0 1px 0 rgba(255,255,255,0.55); } 50% { box-shadow: 0 22px 60px rgba(37,99,235,0.34), inset 0 1px 0 rgba(255,255,255,0.68); } }
+        .cta-shimmer { background: linear-gradient(135deg, #F8FBFF 0%, #93C5FD 42%, #2563EB 100%); background-size: auto; animation: none; }
+        .cta-shimmer:hover { background: linear-gradient(135deg, #FFFFFF 0%, #BFDBFE 42%, #2563EB 100%); filter: brightness(1.04); transform: translateY(-1px); }
         .cta-shimmer:active { transform: scale(0.98); }
         .card-hover { transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
-        .card-hover:hover { border-color: rgba(56,189,248,0.3) !important; transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.3); }
+        .card-hover:hover { border-color: rgba(147,197,253,0.3) !important; transform: translateY(-2px); box-shadow: var(--edge-glow), var(--blue-aura); }
+        #hero::before { content:''; position:absolute; left:50%; top:44px; width:min(760px,90vw); height:min(760px,90vw); transform:translateX(-50%); border-radius:999px; background:radial-gradient(circle, rgba(37,99,235,0.12), transparent 62%); pointer-events:none; }
         .mobile-menu-btn { display: none; }
         @media (max-width: 768px) {
           .d-none-m { display: none !important; }
@@ -251,9 +253,9 @@ export const LandingPage: React.FC = () => {
 
       {/* ─── AMBIENT ORBS ─── */}
       <div style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:0, overflow:'hidden' }}>
-        <div style={{ position:'absolute', width:700, height:700, borderRadius:'50%', background:'radial-gradient(circle, rgba(56,189,248,0.06) 0%, transparent 70%)', top:'-15%', left:'-10%', animation:'orbFloat 18s ease-in-out infinite' }} />
-        <div style={{ position:'absolute', width:600, height:600, borderRadius:'50%', background:'radial-gradient(circle, rgba(129,140,248,0.05) 0%, transparent 70%)', bottom:'5%', right:'-8%', animation:'orbFloat 22s ease-in-out infinite reverse' }} />
-        <div style={{ position:'absolute', width:400, height:400, borderRadius:'50%', background:'radial-gradient(circle, rgba(167,139,250,0.04) 0%, transparent 70%)', top:'40%', left:'45%', animation:'orbFloat 15s ease-in-out infinite 3s' }} />
+        <div style={{ position:'absolute', width:760, height:760, borderRadius:'50%', background:'radial-gradient(circle, rgba(37,99,235,0.14) 0%, transparent 70%)', top:'-18%', left:'-12%', animation:'orbFloat 22s ease-in-out infinite' }} />
+        <div style={{ position:'absolute', width:640, height:640, borderRadius:'50%', background:'radial-gradient(circle, rgba(96,165,250,0.10) 0%, transparent 72%)', bottom:'4%', right:'-9%', animation:'orbFloat 26s ease-in-out infinite reverse' }} />
+        <div style={{ position:'absolute', width:440, height:440, borderRadius:'50%', background:'radial-gradient(circle, rgba(139,92,246,0.06) 0%, transparent 72%)', top:'38%', left:'46%', animation:'orbFloat 18s ease-in-out infinite 3s' }} />
       </div>
 
       {/* ─── ACTIVITY TOAST ─── */}
@@ -292,8 +294,8 @@ export const LandingPage: React.FC = () => {
       <nav style={{ position:'sticky', top:0, zIndex:50, background:'rgba(3,7,18,0.88)', backdropFilter:'blur(20px)', borderBottom:'1px solid var(--border-subtle)' }}>
         <div style={{ maxWidth:1200, margin:'0 auto', padding:'13px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:16 }}>
           <div onClick={() => scrollTo('hero')} style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', flexShrink:0 }}>
-            <div style={{ background:'var(--gradient-brand)', borderRadius:9, padding:'6px', display:'flex', boxShadow:'0 0 12px rgba(56,189,248,0.2)' }}><Brain size={18} color="#0f172a" /></div>
-            <span style={{ fontWeight:800, fontSize:17, letterSpacing:'-0.5px' }} className="text-gradient">ProspektLab</span>
+            <Logo size={30} />
+            <span style={{ fontWeight:800, fontSize:17, letterSpacing:'0.08em', textTransform:'uppercase' }} className="text-gradient">Prospekt Lab</span>
           </div>
 
           <div className="d-none-m" style={{ display:'flex', gap:6, alignItems:'center' }}>
@@ -812,8 +814,8 @@ export const LandingPage: React.FC = () => {
         <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', flexDirection:'column', gap:20 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-              <div style={{ background:'var(--gradient-brand)', borderRadius:8, padding:6, display:'flex' }}><Brain size={15} color="#0f172a" /></div>
-              <span style={{ fontWeight:800, fontSize:15 }} className="text-gradient">ProspektLab</span>
+              <Logo size={28} />
+              <span style={{ fontWeight:800, fontSize:15, letterSpacing:'0.08em', textTransform:'uppercase' }} className="text-gradient">Prospekt Lab</span>
             </div>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {[['Home', () => scrollTo('hero')],['Pricing', () => navigate('/pricing')],['Features', () => navigate('/features')],['Reviews', () => navigate('/testimonials')]].map(([label, fn]) => (

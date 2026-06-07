@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from finagent.portfolio_mirrors import PositionMirror
-from finagent.portfolio.analytics import _fetch_history, _fetch_quote, _is_valid_ticker
+from finagent.portfolio.analytics import _fetch_history, _fetch_quote_cached, _is_valid_ticker
 from finagent.portfolio.news import fetch_portfolio_news
 
 logger = logging.getLogger("finagent.portfolio.holding_detail")
@@ -59,7 +59,7 @@ def get_holding_detail(pos: PositionMirror) -> dict[str, Any]:
     """Return full detail bundle for a single holding."""
     ticker = pos.exchange_symbol
     info = _fetch_info(ticker) if pos.kind == "equity" else {}
-    quote = _fetch_quote(ticker) if pos.kind == "equity" else {}
+    quote = _fetch_quote_cached(ticker) if pos.kind == "equity" else {}
     price = quote.get("price", pos.last_price or 0)
 
     # 1Y price chart vs Nifty

@@ -64,6 +64,37 @@ logger = logging.getLogger("finagent.yahoo")
 
 _HISTORY_LOOKBACK_S = 365 * 24 * 60 * 60 * 10
 
+# ---------------------------------------------------------------------------
+# Shared in-process cache + rate limiter for yfinance to avoid 429s
+# ---------------------------------------------------------------------------
+_FETCH_CACHE: dict[str, tuple[float, YahooQuote | None]] = {}
+_CACHE_TTL_SECONDS = 900  # 15 minutes
+_LAST_YF_CALL_TIME: float = 0.0
+_MIN_YF_INTERVAL_SECONDS = 2.0  # minimum 2s between yfinance calls
+
+
+def _cached_yahoo_quote(ticker: str) -> YahooQuote | None:
+    """Return cached quote if still fresh; otherwise None."""
+    cached = _FETCH_CACHE.get(ticker)
+    if cached and (time.time() - cached[0]) < _CACHE_TTL_SECONDS:
+        return cached[1]
+    return None
+
+
+def _set_yahoo_quote_cache(ticker: str, result: YahooQuote | None) -> None:
+    """Store result in cache with current timestamp."""
+    _FETCH_CACHE[ticker] = (time.time(), result)
+
+
+def _rate_limited_fetch_yfinance_sync(ticker: str) -> YahooQuote | None:
+    """Enforce min interval between yfinance calls to avoid rate limits."""
+    global _LAST_YF_CALL_TIME
+    elapsed = time.time() - _LAST_YF_CALL_TIME
+    if elapsed < _MIN_YF_INTERVAL_SECONDS:
+        time.sleep(_MIN_YF_INTERVAL_SECONDS - elapsed)
+    _LAST_YF_CALL_TIME = time.time()
+    return _fetch_yfinance_sync(ticker)
+
 
 @dataclass
 class YahooQuote:
@@ -251,9 +282,18 @@ def _fetch_yfinance_sync(ticker: str) -> YahooQuote | None:
 
 
 async def fetch_yahoo_quote(ticker: str, *, timeout_s: float = 30.0) -> YahooQuote | None:
-    """Async wrapper: runs yfinance in a thread executor to avoid blocking."""
+    """Async wrapper: runs yfinance in a thread executor to avoid blocking.
+    
+    Uses in-process caching (15 min TTL) and rate-limiting (2s min interval)
+    to reduce Yahoo Finance 429 rate-limit errors.
+    """
     if not ticker:
         return None
+    # Check cache first
+    cached = _cached_yahoo_quote(ticker)
+    if cached is not None:
+        logger.debug("yfinance cache hit for %s", ticker)
+        return cached
     logger.info("[MCP-USE] fundamentals | tool=profile | args={'symbol': '%s'}", ticker)
     try:
         from finagent.state.session_context import record_mcp
@@ -262,13 +302,16 @@ async def fetch_yahoo_quote(ticker: str, *, timeout_s: float = 30.0) -> YahooQuo
         pass
     try:
         result = await asyncio.wait_for(
-            asyncio.get_event_loop().run_in_executor(None, _fetch_yfinance_sync, ticker),
+            asyncio.get_event_loop().run_in_executor(None, _rate_limited_fetch_yfinance_sync, ticker),
             timeout=timeout_s,
         )
+        _set_yahoo_quote_cache(ticker, result)
         return result
     except asyncio.TimeoutError:
         logger.warning("yfinance timeout for %s (>%ss)", ticker, timeout_s)
+        _set_yahoo_quote_cache(ticker, None)
         return None
     except Exception as exc:
         logger.warning("fetch_yahoo_quote failed for %s: %s", ticker, exc)
+        _set_yahoo_quote_cache(ticker, None)
         return None

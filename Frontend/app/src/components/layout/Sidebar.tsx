@@ -190,13 +190,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Logo size={24} />
               <span className="sidebar-header-title text-gradient text-gradient-animated" style={{
                 fontWeight: 800,
-                fontSize: '16px',
+                fontSize: '14px',
                 color: 'var(--text-primary)',
-                letterSpacing: '-0.3px',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
                 whiteSpace: 'nowrap',
                 flexShrink: 0
               }}>
-                ProspektLab
+                Prospekt Lab
               </span>
               <span className="badge badge-premium nav-text" style={{
                 fontSize: '8px',

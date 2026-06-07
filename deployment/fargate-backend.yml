@@ -228,6 +228,20 @@ Resources:
               Value: ""
             - Name: SUPABASE_KEY
               Value: ""
+            - Name: ACS_EMAIL_CONNECTION_STRING
+              Value: ""
+            - Name: ACS_EMAIL_FROM
+              Value: "auth@notify.prospektlab.com"
+            - Name: ACS_EMAIL_SENDER_USERNAME
+              Value: "auth"
+            - Name: ACS_EMAIL_DOMAIN
+              Value: "notify.prospektlab.com"
+            - Name: ACS_SMS_CONNECTION_STRING
+              Value: ""
+            - Name: ACS_SMS_FROM
+              Value: ""
+            - Name: AUTH_SMS_DEFAULT_COUNTRY_CODE
+              Value: "+91"
           LogConfiguration:
             LogDriver: awslogs
             Options:

@@ -18,7 +18,7 @@ from finagent.portfolio_mirrors import PositionMirror
 from finagent.portfolio.alerts import compute_alerts
 from finagent.portfolio.corporate_actions import fetch_corporate_actions
 from finagent.portfolio.news import fetch_portfolio_news
-from finagent.portfolio.analytics import _fetch_quote
+from finagent.portfolio.analytics import _fetch_quote_cached
 
 logger = logging.getLogger("finagent.portfolio.action_queue")
 
@@ -88,7 +88,7 @@ def build_action_queue(positions: list[PositionMirror], analytics: dict[str, Any
     for pos in positions:
         if pos.kind != "equity":
             continue
-        quote = _fetch_quote(pos.exchange_symbol)
+        quote = _fetch_quote_cached(pos.exchange_symbol)
         day_pct = quote.get("day_change_pct", 0)
         if abs(day_pct) >= 0.03:
             movers.append({

@@ -16,6 +16,41 @@ API_GATEWAY_URL = "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com"
 # Custom rewrite/redirect rules
 CUSTOM_RULES = [
     {
+        "source": "/robots.txt",
+        "target": "/robots.txt",
+        "status": "200"
+    },
+    {
+        "source": "/sitemap.xml",
+        "target": "/sitemap.xml",
+        "status": "200"
+    },
+    {
+        "source": "/unsubscribe",
+        "target": "/unsubscribe/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/unsubscribe/",
+        "target": "/unsubscribe/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/insights/organic-traffic-platform",
+        "target": "/insights/organic-traffic-platform/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/insights/organic-traffic-platform/",
+        "target": "/insights/organic-traffic-platform/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/insights/<*>",
+        "target": "/insights/<*>",
+        "status": "200"
+    },
+    {
         "source": "/auth/<*>",
         "target": f"{API_GATEWAY_URL}/auth/<*>",
         "status": "200"
@@ -61,6 +96,36 @@ CUSTOM_RULES = [
         "status": "200"
     },
     {
+        "source": "/portfolio/<*>",
+        "target": f"{API_GATEWAY_URL}/portfolio/<*>",
+        "status": "200"
+    },
+    {
+        "source": "/api/portfolio/<*>",
+        "target": f"{API_GATEWAY_URL}/api/portfolio/<*>",
+        "status": "200"
+    },
+    {
+        "source": "/api/content/<*>",
+        "target": f"{API_GATEWAY_URL}/api/content/<*>",
+        "status": "200"
+    },
+    {
+        "source": "/api/outreach/<*>",
+        "target": f"{API_GATEWAY_URL}/api/outreach/<*>",
+        "status": "200"
+    },
+    {
+        "source": "/user/<*>",
+        "target": f"{API_GATEWAY_URL}/user/<*>",
+        "status": "200"
+    },
+    {
+        "source": "/market/<*>",
+        "target": f"{API_GATEWAY_URL}/market/<*>",
+        "status": "200"
+    },
+    {
         "source": "/login",
         "target": "/index.html",
         "status": "200"
@@ -91,7 +156,7 @@ CUSTOM_RULES = [
         "status": "200"
     },
     {
-        "source": "/<*>",
+        "source": "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp|xml)$)([^.]+$)/>",
         "target": "/index.html",
         "status": "200"
     }

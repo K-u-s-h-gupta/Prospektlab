@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 interface LogoProps {
   size?: number;
@@ -7,11 +7,17 @@ interface LogoProps {
 }
 
 export const Logo: React.FC<LogoProps> = ({ size = 24, className = '', style }) => {
+  const id = useId().replace(/:/g, '');
+  const haloGradient = `${id}-halo-gradient`;
+  const ringGradient = `${id}-ring-gradient`;
+  const diskGradient = `${id}-disk-gradient`;
+  const glowFilter = `${id}-glow`;
+
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox="0 0 64 64"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
@@ -21,47 +27,44 @@ export const Logo: React.FC<LogoProps> = ({ size = 24, className = '', style }) 
         ...style
       }}
     >
-      {/* Glow effect definitions */}
       <defs>
-        <linearGradient id="flask-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#06B6D4" />
-          <stop offset="100%" stopColor="#818CF8" />
+        <radialGradient id={haloGradient} cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(31.8 31.4) rotate(90) scale(28 28)">
+          <stop offset="0" stopColor="#EFF6FF" />
+          <stop offset="0.28" stopColor="#60A5FA" />
+          <stop offset="0.62" stopColor="#2563EB" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#020617" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={ringGradient} x1="14" y1="17" x2="50" y2="47" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#DBEAFE" />
+          <stop offset="0.35" stopColor="#60A5FA" />
+          <stop offset="0.68" stopColor="#2563EB" />
+          <stop offset="1" stopColor="#93C5FD" />
         </linearGradient>
-        <linearGradient id="chart-grad-1" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#34D399" />
-          <stop offset="100%" stopColor="#059669" />
+        <linearGradient id={diskGradient} x1="3" y1="43" x2="61" y2="19" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#1D4ED8" stopOpacity="0" />
+          <stop offset="0.18" stopColor="#2563EB" />
+          <stop offset="0.42" stopColor="#BFDBFE" />
+          <stop offset="0.6" stopColor="#60A5FA" />
+          <stop offset="0.82" stopColor="#1D4ED8" />
+          <stop offset="1" stopColor="#1D4ED8" stopOpacity="0" />
         </linearGradient>
-        <linearGradient id="chart-grad-2" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#38BDF8" />
-          <stop offset="100%" stopColor="#1d4ed8" />
-        </linearGradient>
-        <filter id="glow-logo" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="1.5" result="blur" />
+        <filter id={glowFilter} x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="2.3" result="blur" />
           <feComposite in="SourceGraphic" in2="blur" operator="over" />
         </filter>
       </defs>
 
-      {/* The Beaker / Erlenmeyer Flask Outline */}
-      <path
-        d="M9 3H15M10 3V7.5L5.2 17.5C4.3 19.3 5.6 21 7.6 21H16.4C18.4 21 19.7 19.3 18.8 17.5L14 7.5V3"
-        stroke="url(#flask-grad)"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ filter: 'url(#glow-logo)' }}
-      />
-
-      {/* Candlestick 1 (Left) */}
-      <line x1="8" y1="14.5" x2="8" y2="18.5" stroke="url(#chart-grad-1)" strokeWidth="1" strokeLinecap="round" />
-      <rect x="7" y="15.5" width="2" height="2" rx="0.5" fill="url(#chart-grad-1)" />
-
-      {/* Candlestick 2 (Middle) */}
-      <line x1="12" y1="10" x2="12" y2="17.5" stroke="url(#chart-grad-1)" strokeWidth="1" strokeLinecap="round" />
-      <rect x="11" y="11.5" width="2" height="4.5" rx="0.5" fill="url(#chart-grad-1)" />
-
-      {/* Candlestick 3 (Right) */}
-      <line x1="16" y1="7" x2="16" y2="13.5" stroke="url(#chart-grad-2)" strokeWidth="1" strokeLinecap="round" />
-      <rect x="15" y="8" width="2" height="4" rx="0.5" fill="url(#chart-grad-2)" />
+      <rect x="4" y="4" width="56" height="56" rx="16" fill="#050B18" />
+      <rect x="4.75" y="4.75" width="54.5" height="54.5" rx="15.25" stroke="#93C5FD" strokeOpacity="0.25" strokeWidth="1.5" />
+      <circle cx="32" cy="32" r="25" fill={`url(#${haloGradient})`} opacity="0.32" />
+      <circle cx="32" cy="32" r="14.4" stroke={`url(#${ringGradient})`} strokeWidth="5.6" opacity="0.98" filter={`url(#${glowFilter})`} />
+      <circle cx="32" cy="32" r="10.6" fill="#020617" stroke="#DBEAFE" strokeOpacity="0.35" strokeWidth="1" />
+      <path d="M7.5 43.2C18.2 36.2 29.3 31 43.2 26.4C49.5 24.3 54.6 22.3 59 19.8" stroke={`url(#${diskGradient})`} strokeWidth="5.1" strokeLinecap="round" opacity="0.98" filter={`url(#${glowFilter})`} />
+      <path d="M6.5 44.4C18.7 39.9 31.2 35.2 58.2 18.8" stroke="#BFDBFE" strokeWidth="1.15" strokeLinecap="round" opacity="0.82" />
+      <path d="M8.5 42.7C20.9 37.9 34 31.1 56.5 22.2" stroke="#1D4ED8" strokeWidth="1.8" strokeLinecap="round" opacity="0.75" />
+      <circle cx="22" cy="19" r="0.75" fill="#DBEAFE" opacity="0.6" />
+      <circle cx="45" cy="16" r="0.55" fill="#60A5FA" opacity="0.55" />
+      <circle cx="16" cy="29" r="0.45" fill="#93C5FD" opacity="0.52" />
     </svg>
   );
 };

@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY outreach/requirements.azure.txt /app/outreach/requirements.azure.txt
+
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r /app/outreach/requirements.azure.txt
+
+COPY outreach/scripts /app/outreach/scripts
+COPY outreach/templates /app/outreach/templates
+COPY outreach/leads.sample.csv /app/outreach/leads.sample.csv
+COPY outreach/suppression.sample.csv /app/outreach/suppression.sample.csv
+COPY outreach/README.md /app/outreach/README.md
+
+CMD ["python", "/app/outreach/scripts/run_azure_job.py"]

@@ -1,0 +1,364 @@
+<!doctype html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profile · ProspektLab</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
+  <script>
+    tailwind.config = { darkMode: "class", theme: { extend: { colors: { bg: "#0a0f1e", card: "#131b2e", elev: "#1a2238", text: "#e6ebf7", muted: "#9aa3bb", outline: "#3a4258", primary: "#7da8ff", success: "#5ce0a4", warn: "#f7c54a", error: "#ff8a80" }, fontFamily: { inter: ["Inter", "sans-serif"], mono: ["JetBrains Mono", "monospace"] } } } };
+  </script>
+  <style>
+    html, body { background: #0a0f1e; }
+    body { font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif; color: #e6ebf7; }
+    .label-mono { font-family: "JetBrains Mono", monospace; letter-spacing: 0.05em; }
+    .glass { background: linear-gradient(135deg, rgba(26,34,56,0.6) 0%, rgba(19,27,46,0.3) 100%); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.07); }
+    .gradient-text { background: linear-gradient(90deg, #7da8ff 0%, #5ce0a4 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .scroll-thin::-webkit-scrollbar { width: 8px; }
+    .scroll-thin::-webkit-scrollbar-thumb { background: rgba(125,168,255,0.18); border-radius: 999px; }
+    input { transition: border-color 0.15s, box-shadow 0.15s; }
+    input:focus { box-shadow: 0 0 0 3px rgba(125,168,255,0.18); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+
+<div class="flex min-h-screen">
+  <!-- Sidebar -->
+  <aside class="hidden md:flex flex-col py-8 w-[250px] bg-bg/80 border-r border-white/5">
+    <div class="px-6 mb-10 flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-elev flex items-center justify-center border border-white/10">
+        <span class="text-primary text-lg font-bold">P</span>
+      </div>
+      <div>
+        <div class="text-[14px] font-semibold tracking-tight">ProspektLab</div>
+        <div class="label-mono text-[10px] text-muted tracking-[0.2em]">INTELLIGENCE</div>
+      </div>
+    </div>
+    <nav class="px-3 space-y-1.5">
+      <a href="/app" class="flex items-center gap-3 px-4 py-3 rounded-xl text-muted hover:text-text hover:bg-elev/40 transition">
+        <span class="material-symbols-outlined text-[20px]">terminal</span>
+        <span class="label-mono text-[11px] uppercase tracking-wider">Command</span>
+      </a>
+      <a href="/profile" class="flex items-center gap-3 px-4 py-3 rounded-xl text-primary bg-primary/5 border border-primary/15 font-medium">
+        <span class="material-symbols-outlined text-[20px]">account_circle</span>
+        <span class="label-mono text-[11px] uppercase tracking-wider">Profile</span>
+      </a>
+      <a href="/settings" class="flex items-center gap-3 px-4 py-3 rounded-xl text-muted hover:text-text hover:bg-elev/40 transition">
+        <span class="material-symbols-outlined text-[20px]">tune</span>
+        <span class="label-mono text-[11px] uppercase tracking-wider">Settings</span>
+      </a>
+      <a href="/landing" class="flex items-center gap-3 px-4 py-3 rounded-xl text-muted hover:text-text hover:bg-elev/40 transition">
+        <span class="material-symbols-outlined text-[20px]">home</span>
+        <span class="label-mono text-[11px] uppercase tracking-wider">Home</span>
+      </a>
+    </nav>
+    <div class="mt-auto px-3">
+      <button id="signOutBtn" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted hover:text-error hover:bg-error/5 transition">
+        <span class="material-symbols-outlined text-[20px]">logout</span>
+        <span class="label-mono text-[11px] uppercase tracking-wider">Sign out</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 px-6 md:px-12 py-12 overflow-y-auto scroll-thin">
+    <div class="max-w-5xl mx-auto space-y-8">
+
+      <!-- Header card -->
+      <section class="glass rounded-3xl p-8">
+        <div class="flex flex-col md:flex-row md:items-center gap-6">
+          <div class="relative">
+            <div id="avatarBubble" class="w-24 h-24 rounded-2xl bg-elev border border-white/10 flex items-center justify-center text-4xl font-bold gradient-text">P</div>
+            <div class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-success border-2 border-bg flex items-center justify-center">
+              <span class="material-symbols-outlined text-[14px] text-bg">verified</span>
+            </div>
+          </div>
+          <div class="flex-1">
+            <h1 id="userName" class="text-3xl font-bold tracking-tight">Researcher</h1>
+            <div id="userEmail" class="text-muted text-sm mt-1">guest@prospektlab.app</div>
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <span class="label-mono text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md bg-primary/10 text-primary border border-primary/20">Free tier</span>
+              <span class="label-mono text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md bg-elev text-muted border border-white/10">Joined May 2026</span>
+            </div>
+          </div>
+          <a href="/settings" class="inline-flex items-center gap-2 bg-elev border border-white/10 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-elev/80">
+            <span class="material-symbols-outlined text-[18px]">edit</span> Edit profile
+          </a>
+        </div>
+      </section>
+
+      <!-- Stats -->
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="glass rounded-2xl p-5">
+          <div class="label-mono text-[10px] text-muted tracking-wider uppercase mb-1.5">Memos run</div>
+          <div id="statMemos" class="text-3xl font-bold">0</div>
+          <div class="text-[11px] text-muted mt-1">All time</div>
+        </div>
+        <div class="glass rounded-2xl p-5">
+          <div class="label-mono text-[10px] text-muted tracking-wider uppercase mb-1.5">This week</div>
+          <div id="statWeek" class="text-3xl font-bold">0</div>
+          <div class="text-[11px] text-success mt-1">Pace: keep going</div>
+        </div>
+        <div class="glass rounded-2xl p-5">
+          <div class="label-mono text-[10px] text-muted tracking-wider uppercase mb-1.5">Watchlist</div>
+          <div id="statWatch" class="text-3xl font-bold">0</div>
+          <div class="text-[11px] text-muted mt-1">Tickers tracked</div>
+        </div>
+        <div class="glass rounded-2xl p-5">
+          <div class="label-mono text-[10px] text-muted tracking-wider uppercase mb-1.5">Plan</div>
+          <div class="text-2xl font-bold">Free</div>
+          <a href="/landing#pricing" class="text-[11px] text-primary hover:underline mt-1 inline-block">Upgrade to Pro →</a>
+        </div>
+      </section>
+
+      <!-- Recent memos -->
+      <section class="glass rounded-3xl p-7">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-lg font-semibold tracking-tight flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-primary text-[20px]">history</span>
+            Recent memos
+          </h2>
+          <a href="/app" class="text-sm text-primary hover:underline">Run new memo →</a>
+        </div>
+        <div id="memoList" class="space-y-2.5">
+          <div class="text-muted text-sm italic">Loading…</div>
+        </div>
+      </section>
+
+      <!-- Watchlist -->
+      <section class="glass rounded-3xl p-7">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-lg font-semibold tracking-tight flex items-center gap-2.5">
+            <span class="material-symbols-outlined text-success text-[20px]">bookmark</span>
+            Watchlist
+          </h2>
+          <button id="addWatchBtn" class="text-sm text-primary hover:underline">+ Add ticker</button>
+        </div>
+        <div id="watchlist" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="text-muted text-sm italic">No tickers yet. Add one to start tracking.</div>
+        </div>
+      </section>
+
+      <!-- Account info -->
+      <section class="glass rounded-3xl p-7">
+        <h2 class="text-lg font-semibold tracking-tight mb-5 flex items-center gap-2.5">
+          <span class="material-symbols-outlined text-warn text-[20px]">badge</span>
+          Account
+        </h2>
+        <div class="grid md:grid-cols-2 gap-5">
+          <div>
+            <div class="label-mono text-[10px] text-muted tracking-wider uppercase mb-1.5">Display name</div>
+            <input id="editName" type="text" placeholder="Your name" class="w-full bg-card border border-white/10 rounded-lg px-4 py-2.5 text-sm focus:border-primary outline-none" />
+          </div>
+          <div>
+            <div class="label-mono text-[10px] text-muted tracking-wider uppercase mb-1.5">Email</div>
+            <input id="editEmail" type="email" disabled class="w-full bg-card/50 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-muted cursor-not-allowed" />
+          </div>
+          <div>
+            <div class="label-mono text-[10px] text-muted tracking-wider uppercase mb-1.5">Default currency display</div>
+            <select id="editCurrency" class="w-full bg-card border border-white/10 rounded-lg px-4 py-2.5 text-sm focus:border-primary outline-none">
+              <option value="dual">USD &amp; INR (recommended)</option>
+              <option value="inr">INR only</option>
+              <option value="usd">USD only</option>
+            </select>
+          </div>
+          <div>
+            <div class="label-mono text-[10px] text-muted tracking-wider uppercase mb-1.5">Risk tolerance</div>
+            <select id="editRisk" class="w-full bg-card border border-white/10 rounded-lg px-4 py-2.5 text-sm focus:border-primary outline-none">
+              <option value="conservative">Conservative</option>
+              <option value="balanced" selected>Balanced</option>
+              <option value="aggressive">Aggressive</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+          <button id="saveProfile" class="bg-primary text-bg font-semibold text-sm px-5 py-2.5 rounded-lg hover:opacity-90 transition">Save changes</button>
+        </div>
+        <div id="saveMsg" class="hidden text-success text-xs text-right mt-2">Saved.</div>
+      </section>
+
+      <div class="text-center pb-12">
+        <a href="/app" class="inline-flex items-center gap-2 text-muted hover:text-text text-sm">
+          <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+          Back to the command center
+        </a>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  // ── API base URL ────────────────────────────────────────────────────
+  // When running on Amplify, proxy rewrites strip the Authorization
+  // header. Detect production by hostname and route API calls directly
+  // to the API Gateway HTTPS endpoint.
+  const _API_GATEWAY_URL = "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com";
+  const API_BASE = (function() {
+    const host = window.location.hostname || "";
+    if (host.includes("amplifyapp.com") || host.includes("prospektlab")) {
+      return _API_GATEWAY_URL;
+    }
+    return "";  // local dev: use relative paths
+  })();
+
+  function getAuthToken() {
+    try {
+      const raw = localStorage.getItem("prospektlab_user") || sessionStorage.getItem("prospektlab_user");
+      if (raw) {
+        const u = JSON.parse(raw);
+        return u.token || null;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function getAuthHeaders(extra = {}) {
+    const token = getAuthToken();
+    const headers = { ...extra };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+  }
+  const ESC = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+
+  function loadUser() {
+    let user = { name: "Researcher", email: "guest@prospektlab.app" };
+    try {
+      const raw = localStorage.getItem("prospektlab_user") || sessionStorage.getItem("prospektlab_user");
+      if (raw) user = { ...user, ...JSON.parse(raw) };
+    } catch (_) {}
+    $("userName").textContent = user.name || "Researcher";
+    $("userEmail").textContent = user.email || "guest@prospektlab.app";
+    $("editName").value = user.name || "";
+    $("editEmail").value = user.email || "";
+    const initial = (user.name || user.email || "P").trim()[0]?.toUpperCase() || "P";
+    $("avatarBubble").textContent = initial;
+    try {
+      const prefs = JSON.parse(localStorage.getItem("prospektlab_prefs") || "{}");
+      if (prefs.currency) $("editCurrency").value = prefs.currency;
+      if (prefs.risk) $("editRisk").value = prefs.risk;
+    } catch (_) {}
+  }
+
+  async function loadMemos() {
+    try {
+      const r = await fetch(API_BASE + "/memos", { headers: getAuthHeaders() });
+      if (!r.ok) return;
+      const { memos } = await r.json();
+      $("statMemos").textContent = String(memos.length);
+      const weekCutoff = Date.now() - 7 * 24 * 3600 * 1000;
+      const thisWeek = memos.filter((m) => new Date(m.modified).getTime() > weekCutoff).length;
+      $("statWeek").textContent = String(thisWeek);
+      const list = $("memoList");
+      list.innerHTML = "";
+      if (!memos.length) {
+        list.innerHTML = '<div class="text-muted text-sm italic">No memos yet. <a href="/app" class="text-primary hover:underline">Run your first one →</a></div>';
+        return;
+      }
+      for (const m of memos.slice(0, 8)) {
+        const a = document.createElement("a");
+        const token = getAuthToken();
+        a.href = (API_BASE ? API_BASE : "") + `/sessions/${m.session_id}/memo` + (token ? `?token=${encodeURIComponent(token)}` : "");
+        a.target = "_blank";
+        a.className = "flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-card/50 border border-white/5 hover:border-primary/40 transition group";
+        const when = new Date(m.modified).toLocaleString();
+        a.innerHTML = `
+          <div class="min-w-0">
+            <div class="text-[14px] font-medium group-hover:text-primary truncate">${ESC(m.title || "Memo")}</div>
+            <div class="label-mono text-[10px] text-muted truncate mt-0.5">${when} · ${Math.round(m.bytes / 1024)} KB</div>
+          </div>
+          <span class="material-symbols-outlined text-muted group-hover:text-primary text-[18px]">open_in_new</span>
+        `;
+        list.appendChild(a);
+      }
+    } catch (_) {}
+  }
+
+  function loadWatchlist() {
+    let wl = [];
+    try { wl = JSON.parse(localStorage.getItem("prospektlab_watchlist") || "[]"); } catch (_) {}
+    $("statWatch").textContent = String(wl.length);
+    const host = $("watchlist");
+    host.innerHTML = "";
+    if (!wl.length) {
+      host.innerHTML = '<div class="text-muted text-sm italic col-span-full">No tickers yet. Click "+ Add ticker" to track one.</div>';
+      return;
+    }
+    for (const t of wl) {
+      const card = document.createElement("a");
+      card.href = `/app?target=${encodeURIComponent(t)}`;
+      card.className = "p-3 rounded-xl bg-card/50 border border-white/5 hover:border-primary/40 transition group";
+      card.innerHTML = `
+        <div class="label-mono text-[11px] text-primary group-hover:text-text">${ESC(t)}</div>
+        <div class="text-[11px] text-muted mt-1">Tap to research</div>
+      `;
+      host.appendChild(card);
+    }
+  }
+
+  $("addWatchBtn").addEventListener("click", () => {
+    const t = (prompt("Add a ticker or company (e.g. AAPL, NVDA, Reliance)") || "").trim();
+    if (!t) return;
+    let wl = [];
+    try { wl = JSON.parse(localStorage.getItem("prospektlab_watchlist") || "[]"); } catch (_) {}
+    if (!wl.includes(t)) wl.unshift(t);
+    wl = wl.slice(0, 16);
+    localStorage.setItem("prospektlab_watchlist", JSON.stringify(wl));
+    loadWatchlist();
+  });
+
+  $("saveProfile").addEventListener("click", () => {
+    const user = { name: $("editName").value.trim() || "Researcher", email: $("editEmail").value };
+    if (localStorage.getItem("prospektlab_user")) {
+      localStorage.setItem("prospektlab_user", JSON.stringify(user));
+    } else {
+      sessionStorage.setItem("prospektlab_user", JSON.stringify(user));
+    }
+    const prefs = { currency: $("editCurrency").value, risk: $("editRisk").value };
+    localStorage.setItem("prospektlab_prefs", JSON.stringify(prefs));
+    $("saveMsg").classList.remove("hidden");
+    setTimeout(() => $("saveMsg").classList.add("hidden"), 2200);
+    loadUser();
+  });
+
+  $("signOutBtn").addEventListener("click", () => {
+    localStorage.removeItem("prospektlab_user");
+    sessionStorage.removeItem("prospektlab_user");
+    localStorage.removeItem("prospektlab_session_id");
+    sessionStorage.removeItem("prospektlab_session_id");
+    window.location.href = "/landing";
+  });
+
+  loadUser();
+  loadMemos();
+  loadWatchlist();
+</script>
+
+  <!-- Auto a11y: hide decorative icon ligatures from screen readers -->
+  <script>
+    (function(){ try {
+      document.querySelectorAll('.material-symbols-outlined').forEach(function(s){
+        if (!s.hasAttribute('aria-hidden') && !s.getAttribute('aria-label') && !s.closest('[role="button"],button,a')) {
+          s.setAttribute('aria-hidden','true');
+        }
+      });
+    } catch(e){} })();
+  </script>
+</body>
+</html>

@@ -287,6 +287,8 @@ export async function getAuthMe(): Promise<AuthUser | null> {
 }
 
 function handleAuthFailure() {
+  const token = getAuthToken();
+  if (!token) return; // Don't redirect if user was never logged in (public pages)
   _cachedUser = null;
   setAuthToken(null);
   if (typeof window !== 'undefined') {

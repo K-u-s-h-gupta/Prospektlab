@@ -121,18 +121,26 @@ def _normalize_period(period: str) -> str:
     return _PERIOD_MAP.get(period.upper(), period.lower())
 
 
-# In-process TTL cache for yfinance calls (5 minutes)
+# In-process TTL cache for yfinance calls (15 minutes)
 import time
 _FETCH_CACHE: dict[tuple, tuple[float, dict]] = {}
-_CACHE_TTL = 300  # seconds
+_CACHE_TTL = 900  # seconds — 15 min to reduce Yahoo 429s
+_LAST_YF_CALL_TIME: float = 0.0
+_MIN_YF_INTERVAL_SECONDS = 2.0
 
 
 def _fetch_history_cached(ticker: str, period: str = "1y") -> dict[str, Any]:
-    """Fetch yfinance history with 5-minute in-process TTL cache."""
+    """Fetch yfinance history with 15-minute in-process TTL cache and rate limiting."""
     key = (ticker, period)
     cached = _FETCH_CACHE.get(key)
     if cached and (time.time() - cached[0]) < _CACHE_TTL:
         return cached[1]
+    # Rate-limit yfinance calls to avoid 429s
+    global _LAST_YF_CALL_TIME
+    elapsed = time.time() - _LAST_YF_CALL_TIME
+    if elapsed < _MIN_YF_INTERVAL_SECONDS:
+        time.sleep(_MIN_YF_INTERVAL_SECONDS - elapsed)
+    _LAST_YF_CALL_TIME = time.time()
     result = _fetch_history(ticker, period)
     _FETCH_CACHE[key] = (time.time(), result)
     return result
@@ -168,6 +176,26 @@ def _fetch_history(ticker: str, period: str = "1y") -> dict[str, Any]:
     except Exception as exc:
         logger.debug("Yahoo history fetch failed for %s (period=%s): %s", ticker, period, exc)
         return {}
+
+
+# Cache for _fetch_quote (15 min TTL)
+_QUOTE_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+def _fetch_quote_cached(ticker: str) -> dict[str, Any]:
+    """Fetch last price and day change with 15-min cache + rate limiting."""
+    cached = _QUOTE_CACHE.get(ticker)
+    if cached and (time.time() - cached[0]) < _CACHE_TTL:
+        return cached[1]
+    # Rate-limit
+    global _LAST_YF_CALL_TIME
+    elapsed = time.time() - _LAST_YF_CALL_TIME
+    if elapsed < _MIN_YF_INTERVAL_SECONDS:
+        time.sleep(_MIN_YF_INTERVAL_SECONDS - elapsed)
+    _LAST_YF_CALL_TIME = time.time()
+    result = _fetch_quote(ticker)
+    _QUOTE_CACHE[ticker] = (time.time(), result)
+    return result
 
 
 def _fetch_quote(ticker: str) -> dict[str, Any]:
@@ -424,7 +452,7 @@ def compute_portfolio_analytics(
     for pos in positions:
         ticker = pos.exchange_symbol
         kind = (pos.kind or "equity").strip().lower()
-        quote = _fetch_quote(ticker) if kind == "equity" else {}
+        quote = _fetch_quote_cached(ticker) if kind == "equity" else {}
         quote_price = _positive_float(quote.get("price"))
         mirror_price = _positive_float(pos.last_price)
         price = quote_price or mirror_price

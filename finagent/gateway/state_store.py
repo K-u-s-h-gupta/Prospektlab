@@ -60,6 +60,15 @@ def _init_state_db() -> None:
                 expires_at REAL NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS outreach_unsubscribes (
+                email TEXT PRIMARY KEY,
+                reason TEXT NOT NULL DEFAULT 'unsubscribe',
+                source TEXT NOT NULL DEFAULT 'public_page',
+                note TEXT NOT NULL DEFAULT '',
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_pending_tenant
             ON pending_extractions(tenant_id);
             """
@@ -191,6 +200,63 @@ def revoke_token(jti: str, expires_at: float) -> None:
             "INSERT OR REPLACE INTO revoked_tokens (jti, revoked_at, expires_at) VALUES (?, ?, ?)",
             (jti, time.time(), expires_at),
         )
+
+
+# -- Outreach unsubscribe state -------------------------------------------------
+
+def store_outreach_unsubscribe(
+    email: str,
+    reason: str = "unsubscribe",
+    source: str = "public_page",
+    note: str = "",
+) -> dict[str, Any]:
+    _init_state_db()
+    now = time.time()
+    normalized = email.lower().strip()
+    with connect_wal(_state_db_path(), timeout=5.0) as conn:
+        conn.execute(
+            """
+            INSERT INTO outreach_unsubscribes (email, reason, source, note, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(email) DO UPDATE SET
+                reason = excluded.reason,
+                source = excluded.source,
+                note = excluded.note,
+                updated_at = excluded.updated_at
+            """,
+            (normalized, reason, source, note, now, now),
+        )
+    return {
+        "email": normalized,
+        "reason": reason,
+        "source": source,
+        "note": note,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def list_outreach_unsubscribes() -> list[dict[str, Any]]:
+    _init_state_db()
+    with connect_wal(_state_db_path(), timeout=5.0) as conn:
+        rows = conn.execute(
+            """
+            SELECT email, reason, source, note, created_at, updated_at
+            FROM outreach_unsubscribes
+            ORDER BY updated_at DESC, email ASC
+            """
+        ).fetchall()
+    return [
+        {
+            "email": row[0],
+            "reason": row[1],
+            "source": row[2],
+            "note": row[3],
+            "created_at": row[4],
+            "updated_at": row[5],
+        }
+        for row in rows
+    ]
 
 
 # ── Periodic cleanup ─────────────────────────────────────────────────────

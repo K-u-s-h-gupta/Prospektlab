@@ -2,7 +2,8 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi.testclient import TestClient
 from fastapi import HTTPException
-from finagent.gateway.run import app, auth_rate_limiter, research_rate_limiter, default_rate_limiter
+from finagent.gateway.email_delivery import EmailDeliveryOutcome
+from finagent.gateway.run import app, auth_rate_limiter, research_rate_limiter, default_rate_limiter, _mint_token
 
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -28,6 +29,162 @@ def test_health_endpoint():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+@patch("finagent.gateway.run.supabase.store_outreach_unsubscribe", new_callable=AsyncMock)
+def test_outreach_unsubscribe_endpoint(mock_store_unsubscribe):
+    mock_store_unsubscribe.return_value = {
+        "email": "optout@example.com",
+        "reason": "unsubscribe",
+    }
+
+    response = client.post(
+        "/api/outreach/unsubscribe",
+        json={"email": "optout@example.com", "reason": "unsubscribe", "source": "public_page"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["email"] == "optout@example.com"
+    assert data["reason"] == "unsubscribe"
+    mock_store_unsubscribe.assert_awaited_once()
+
+
+def test_outreach_unsubscribe_endpoint_rejects_invalid_email():
+    response = client.post(
+        "/api/outreach/unsubscribe",
+        json={"email": "not-an-email", "reason": "unsubscribe", "source": "public_page"},
+    )
+
+    assert response.status_code == 422
+
+
+@patch("finagent.gateway.run.generate_article_automation", new_callable=AsyncMock)
+def test_generate_content_article_endpoint(mock_generate):
+    token = _mint_token("user-1", "content@example.com", "Content User")
+    mock_generate.return_value.model_dump.return_value = {
+        "slug": "automated-insight",
+        "title": "Automated Insight",
+        "description": "Automated article description for SEO publishing.",
+        "route_base": "insights",
+        "public_url": "https://prospektlab.com/insights/automated-insight/",
+        "html_path": "C:/tmp/article/index.html",
+        "json_path": "C:/tmp/article/article.json",
+        "image_path": "C:/tmp/article/cover.svg",
+        "mirrored_public_path": "C:/tmp/public/insights/automated-insight",
+        "mirrored_sitemap": "C:/tmp/public/sitemap.xml",
+        "generated_at": "2026-06-06T00:00:00+00:00",
+        "sources_used": [],
+    }
+
+    response = client.post(
+        "/api/content/articles/generate",
+        json={"topic": "Automated Insight Topic"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["slug"] == "automated-insight"
+    assert data["route_base"] == "insights"
+    mock_generate.assert_awaited_once()
+
+
+@patch("finagent.gateway.run.generate_article_batch", new_callable=AsyncMock)
+def test_generate_content_article_batch_endpoint(mock_generate_batch):
+    token = _mint_token("user-1", "content@example.com", "Content User")
+    mock_generate_batch.return_value.model_dump.return_value = {
+        "route_base": "insights",
+        "generated_at": "2026-06-06T00:00:00+00:00",
+        "total_requested": 2,
+        "total_completed": 2,
+        "total_failed": 0,
+        "items": [],
+        "failures": [],
+    }
+
+    response = client.post(
+        "/api/content/articles/generate-batch",
+        json={"topics": [{"topic": "First automated topic"}, {"topic": "Second automated topic"}]},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_requested"] == 2
+    assert data["total_completed"] == 2
+    mock_generate_batch.assert_awaited_once()
+
+
+@patch("finagent.gateway.run.ingest_market_event_triggers", new_callable=AsyncMock)
+def test_ingest_content_events_endpoint(mock_ingest):
+    token = _mint_token("user-1", "content@example.com", "Content User")
+    mock_ingest.return_value.model_dump.return_value = {
+        "route_base": "insights",
+        "generated_at": "2026-06-06T00:00:00+00:00",
+        "discovered_events": 3,
+        "generated_articles": 2,
+        "auto_published": 1,
+        "drafts": 1,
+        "skipped_seen": 1,
+        "failures": [],
+        "items": [],
+    }
+
+    response = client.post(
+        "/api/content/events/ingest",
+        json={"watches": [{"source": "sebi", "company_name": "SEBI"}]},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["discovered_events"] == 3
+    assert data["generated_articles"] == 2
+    mock_ingest.assert_awaited_once()
+
+
+@patch("finagent.gateway.run.list_generated_articles")
+def test_list_content_articles_endpoint(mock_list_articles):
+    token = _mint_token("user-1", "content@example.com", "Content User")
+    mock_list_articles.return_value = [
+        {
+            "slug": "automated-insight",
+            "title": "Automated Insight",
+            "route_base": "insights",
+            "public_url": "https://prospektlab.com/insights/automated-insight/",
+            "generated_at": "2026-06-06T00:00:00+00:00",
+        }
+    ]
+
+    response = client.get(
+        "/api/content/articles?route_base=insights&limit=10",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] == 1
+    assert data["items"][0]["slug"] == "automated-insight"
+
+
+@patch("finagent.gateway.run.load_generated_article_html")
+@patch("finagent.gateway.run.is_generated_article_published")
+def test_public_generated_insight_route(mock_is_published, mock_load_html):
+    mock_is_published.return_value = True
+    mock_load_html.return_value = "<html><body><h1>Automated Insight</h1></body></html>"
+    response = client.get("/insights/automated-insight")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Automated Insight" in response.text
+
+
+@patch("finagent.gateway.run.is_generated_article_published")
+def test_public_generated_insight_route_hides_draft(mock_is_published):
+    mock_is_published.return_value = False
+    response = client.get("/insights/draft-insight")
+    assert response.status_code == 404
 
 def test_capabilities_endpoint():
     response = client.get("/capabilities")
@@ -185,4 +342,133 @@ def test_get_user_id_from_auth_via_api(mock_get):
     user_id = get_user_id_from_auth("test@example.com")
     assert user_id == "uuid-1234"
     mock_get.assert_called_once()
+
+
+@patch("finagent.gateway.run._send_sms_code")
+@patch("finagent.gateway.supabase_client.store_verification_code", new_callable=AsyncMock)
+@patch("finagent.gateway.supabase_client.get_user_by_email", new_callable=AsyncMock)
+def test_auth_send_verification_sms_success(mock_get_user, mock_store_code, mock_send_sms):
+    mock_get_user.return_value = None
+    mock_store_code.return_value = True
+    mock_send_sms.return_value = EmailDeliveryOutcome(delivered=True, provider="sms", detail="message-123")
+
+    response = client.post("/auth/send-verification", json={
+        "email": "user@example.com",
+        "mobile": "9876543210",
+        "channel": "sms",
+    })
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Verification code sent by SMS successfully."
+    mock_store_code.assert_awaited_once()
+    args = mock_store_code.await_args.args
+    assert args[0] == "+919876543210"
+    assert mock_store_code.await_args.kwargs["type_"] == "signup"
+    mock_send_sms.assert_called_once()
+    assert mock_send_sms.call_args.args[0] == "+919876543210"
+
+
+@patch("finagent.gateway.supabase_client.get_user_by_email", new_callable=AsyncMock)
+def test_auth_send_verification_sms_requires_mobile(mock_get_user):
+    mock_get_user.return_value = None
+
+    response = client.post("/auth/send-verification", json={
+        "email": "user@example.com",
+        "channel": "sms",
+    })
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Mobile number is required for SMS verification."
+
+
+@patch("finagent.gateway.run._send_sms_code")
+@patch("finagent.gateway.supabase_client.store_verification_code", new_callable=AsyncMock)
+@patch("finagent.gateway.supabase_client.get_user_by_email", new_callable=AsyncMock)
+def test_auth_forgot_password_sms_success(mock_get_user, mock_store_code, mock_send_sms):
+    mock_get_user.return_value = {
+        "id": "user-1",
+        "email": "user@example.com",
+        "mobile": "+919876543210",
+    }
+    mock_store_code.return_value = True
+    mock_send_sms.return_value = EmailDeliveryOutcome(delivered=True, provider="sms", detail="message-456")
+
+    response = client.post("/auth/forgot-password", json={
+        "email": "user@example.com",
+        "channel": "sms",
+    })
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Reset code sent by SMS."
+    args = mock_store_code.await_args.args
+    assert args[0] == "+919876543210"
+    assert mock_store_code.await_args.kwargs["type_"] == "reset"
+    mock_send_sms.assert_called_once()
+    assert mock_send_sms.call_args.args[0] == "+919876543210"
+    assert mock_send_sms.call_args.kwargs["is_reset"] is True
+
+
+@patch("finagent.gateway.supabase_client.update_admin_user_password", new_callable=AsyncMock)
+@patch("finagent.gateway.supabase_client.verify_and_consume_code", new_callable=AsyncMock)
+@patch("finagent.gateway.supabase_client.get_user_by_email", new_callable=AsyncMock)
+def test_auth_reset_password_accepts_sms_code(mock_get_user, mock_verify_code, mock_update_password):
+    mock_get_user.return_value = {
+        "id": "user-1",
+        "email": "user@example.com",
+        "mobile": "+919876543210",
+    }
+    mock_verify_code.side_effect = [False, True]
+    mock_update_password.return_value = {}
+
+    response = client.post("/auth/reset-password", json={
+        "email": "user@example.com",
+        "code": "123456",
+        "new_password": "ValidPass1!",
+    })
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "Password reset successfully."
+    assert mock_verify_code.await_count == 2
+    first_call = mock_verify_code.await_args_list[0].args
+    second_call = mock_verify_code.await_args_list[1].args
+    assert first_call[0] == "user@example.com"
+    assert second_call[0] == "+919876543210"
+    mock_update_password.assert_awaited_once_with("user-1", "ValidPass1!")
+
+
+@patch("finagent.gateway.supabase_client.upsert_profile", new_callable=AsyncMock)
+@patch("finagent.gateway.supabase_client.create_admin_user", new_callable=AsyncMock)
+@patch("finagent.gateway.supabase_client.verify_and_consume_code", new_callable=AsyncMock)
+def test_auth_signup_accepts_sms_verification(mock_verify_code, mock_create_user, mock_upsert_profile):
+    mock_verify_code.side_effect = [False, True]
+    mock_create_user.return_value = {"id": "user-1"}
+    mock_upsert_profile.return_value = {
+        "id": "user-1",
+        "email": "user@example.com",
+        "full_name": "Test User",
+        "mobile": "+919876543210",
+    }
+
+    response = client.post("/auth/signup", json={
+        "name": "Test User",
+        "email": "user@example.com",
+        "password": "ValidPass1!",
+        "mobile": "9876543210",
+        "verification_code": "123456",
+    })
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "token" in body
+    assert body["user"]["email"] == "user@example.com"
+    assert mock_verify_code.await_count == 2
+    assert mock_verify_code.await_args_list[0].args[0] == "user@example.com"
+    assert mock_verify_code.await_args_list[1].args[0] == "+919876543210"
+    mock_create_user.assert_awaited_once_with(
+        "user@example.com",
+        "ValidPass1!",
+        "Test User",
+        mobile="+919876543210",
+        auth_provider="email",
+    )
 

@@ -81,6 +81,7 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
         g.accounts.id.initialize({
           client_id: '140159239234-l6g7cqb4okkkb1g8g5fsbs6oiqmgpk5n.apps.googleusercontent.com',
           callback: async (response: any) => {
+            if (isSubmitting) return;
             setIsSubmitting(true);
             try {
               const res = await googleLogin(response.credential);
@@ -285,11 +286,12 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
       return;
     }
     const formattedMobile = '+91' + mobileInput;
+    const userEmail = user?.email;
     setIsUpdatingMobile(true);
     try {
       await apiUpdateMobile(formattedMobile);
       updateUserMobile(formattedMobile);
-      const nextOnboarded = await refreshOnboardingStatus(user?.email);
+      const nextOnboarded = await refreshOnboardingStatus(userEmail);
       showToast('Profile completed successfully!', 'success');
       setRequireMobileMode(false);
       navigate(nextOnboarded ? '/dashboard' : '/onboarding');
@@ -754,59 +756,33 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
         {/* Third-Party Authentication */}
         <div className="auth-divider">or continue with</div>
 
-        <div style={{ position: 'relative', width: '100%', marginTop: '8px' }}>
-          {!isGoogleLoaded && (
-            <button
-              className="auth-btn-social"
-              onClick={handleGoogleSocialClick}
-              disabled={isSubmitting}
-              style={{
-                width: '100%',
-                background: 'var(--gradient-brand)',
-                color: '#0f172a',
-                border: 'none',
-                fontWeight: 600,
-                borderRadius: 'var(--radius-sm)',
-                boxShadow: '0 4px 12px rgba(6, 182, 212, 0.1)',
-                height: '42px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '10px'
-              }}
-            >
-              <svg style={{ width: '16px', height: '16px' }} viewBox="0 0 24 24">
-                <path
-                  fill="#0f172a"
-                  d="M12 5.04c1.67 0 3.17.58 4.35 1.71l3.25-3.25C17.65 1.58 15.01 1 12 1 7.37 1 3.44 3.63 1.57 7.43l3.81 2.95C6.27 7.38 8.9 5.04 12 5.04z"
-                />
-                <path
-                  fill="#0f172a"
-                  d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.44h6.45c-.28 1.48-1.12 2.74-2.38 3.59l3.71 2.87c2.17-2 3.71-4.94 3.71-8.56z"
-                />
-                <path
-                  fill="#0f172a"
-                  d="M5.38 14.88c-.23-.68-.36-1.41-.36-2.16s.13-1.48.36-2.16L1.57 7.61C.77 9.21.32 11 .32 12.88s.45 3.67 1.25 5.27l3.81-3.27z"
-                />
-                <path
-                  fill="#0f172a"
-                  d="M12 22.96c3.24 0 5.97-1.07 7.96-2.91l-3.71-2.87c-1.03.69-2.35 1.1-4.25 1.1-3.1 0-5.73-2.34-6.67-5.49l-3.81 2.95C3.44 20.33 7.37 22.96 12 22.96z"
-                />
+        <div className={isSubmitting ? 'google-auth-shell disabled' : 'google-auth-shell'}>
+          <button
+            type="button"
+            className="google-auth-visible"
+            onClick={!isGoogleLoaded ? handleGoogleSocialClick : undefined}
+            disabled={isSubmitting}
+            tabIndex={isGoogleLoaded ? -1 : 0}
+            aria-hidden={isGoogleLoaded ? true : undefined}
+          >
+            <span className="google-auth-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.44h6.45c-.28 1.48-1.12 2.74-2.38 3.59l3.71 2.87c2.17-2 3.71-4.94 3.71-8.56z" />
+                <path fill="#34A853" d="M12 22.96c3.24 0 5.97-1.07 7.96-2.91l-3.71-2.87c-1.03.69-2.35 1.1-4.25 1.1-3.1 0-5.73-2.34-6.67-5.49l-3.81 2.95C3.44 20.33 7.37 22.96 12 22.96z" />
+                <path fill="#FBBC05" d="M5.33 12.79c-.23-.68-.36-1.41-.36-2.16s.13-1.48.36-2.16L1.52 5.52C.72 7.12.27 8.91.27 10.79s.45 3.67 1.25 5.27l3.81-3.27z" />
+                <path fill="#EA4335" d="M12 5.04c1.67 0 3.17.58 4.35 1.71l3.25-3.25C17.65 1.58 15.01 1 12 1 7.37 1 3.44 3.63 1.57 7.43l3.81 2.95C6.27 7.38 8.9 5.04 12 5.04z" />
               </svg>
-              {activeTab === 'login' ? 'Sign in with Google' : 'Sign up with Google'}
-            </button>
-          )}
+            </span>
+            <span>{activeTab === 'login' ? 'Sign in with Google' : 'Sign up with Google'}</span>
+            <span className="google-auth-arrow" aria-hidden="true">→</span>
+          </button>
 
           {isGoogleLoaded && (
             <div
               key={activeTab}
               ref={googleBtnOverlayRef}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
+              className="google-native-overlay"
+              aria-label={activeTab === 'login' ? 'Sign in with Google' : 'Sign up with Google'}
             />
           )}
         </div>

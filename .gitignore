@@ -42,6 +42,10 @@ load_test.js
 # Environment
 .env
 .env.local
+outreach/config.local.json
+outreach/state/
+outreach/leads*.csv
+!outreach/leads.sample.csv
 
 # Frontend (Vite/React)
 Frontend/app/node_modules/

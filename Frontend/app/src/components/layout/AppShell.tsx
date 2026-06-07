@@ -71,7 +71,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           </button>
           <div className="mobile-logo-container">
             <Logo size={20} />
-            <span className="mobile-header-title text-gradient">ProspektLab</span>
+            <span className="mobile-header-title text-gradient" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>Prospekt Lab</span>
           </div>
           <div style={{ width: 36 }} /> {/* Balance space */}
         </header>

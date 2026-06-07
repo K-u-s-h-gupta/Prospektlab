@@ -33,10 +33,21 @@ def _get_supabase_url():
 def _get_supabase_key():
     return os.environ.get("SUPABASE_KEY", "")
 
-def get_headers():
-    url = _get_supabase_url()
-    key = _get_supabase_key()
+def _get_outreach_supabase_url():
+    return (os.environ.get("OUTREACH_SUPABASE_URL", "") or _get_supabase_url()).rstrip("/")
+
+def _get_outreach_supabase_key():
+    return os.environ.get("OUTREACH_SUPABASE_KEY", "") or _get_supabase_key()
+
+def get_headers(*, outreach: bool = False):
+    url = _get_outreach_supabase_url() if outreach else _get_supabase_url()
+    key = _get_outreach_supabase_key() if outreach else _get_supabase_key()
     if not url or not key:
+        if outreach:
+            raise HTTPException(
+                status_code=500,
+                detail="Outreach Supabase environment variables are not set.",
+            )
         raise HTTPException(status_code=500, detail="SUPABASE_URL and SUPABASE_KEY environment variables are not set.")
     return {
         "apikey": key,
@@ -440,6 +451,66 @@ async def delete_pending_extraction(review_id: str) -> bool:
 
 
 # â”€â”€ Token revocation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+async def store_outreach_unsubscribe(
+    email: str,
+    reason: str = "unsubscribe",
+    source: str = "public_page",
+    note: str = "",
+):
+    """Store a durable outreach unsubscribe in Supabase (or local SQLite fallback)."""
+    normalized = email.lower().strip()
+    url = f"{_get_outreach_supabase_url()}/rest/v1/outreach_unsubscribes"
+    payload = {
+        "email": normalized,
+        "reason": (reason or "unsubscribe").strip() or "unsubscribe",
+        "source": (source or "public_page").strip() or "public_page",
+        "note": (note or "").strip(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        async with _supabase_async_client() as client:
+            headers = get_headers(outreach=True)
+            headers["Prefer"] = "resolution=merge-duplicates,return=representation"
+            params = {"on_conflict": "email"}
+            res = await client.post(url, json=payload, headers=headers, params=params)
+            if res.is_success:
+                data = res.json()
+                if isinstance(data, list) and data:
+                    return data[0]
+                if isinstance(data, dict):
+                    return data
+                return payload
+    except Exception:
+        pass
+
+    from finagent.gateway.state_store import store_outreach_unsubscribe as local_store
+
+    return local_store(normalized, payload["reason"], payload["source"], payload["note"])
+
+
+async def list_outreach_unsubscribes() -> list[dict]:
+    """Return all outreach unsubscribes from Supabase (or local SQLite fallback)."""
+    url = f"{_get_outreach_supabase_url()}/rest/v1/outreach_unsubscribes"
+    try:
+        async with _supabase_async_client() as client:
+            headers = get_headers(outreach=True)
+            params = {
+                "select": "email,reason,source,note,created_at,updated_at",
+                "order": "updated_at.desc,email.asc",
+            }
+            res = await client.get(url, params=params, headers=headers)
+            if res.is_success:
+                data = res.json()
+                if isinstance(data, list):
+                    return data
+    except Exception:
+        pass
+
+    from finagent.gateway.state_store import list_outreach_unsubscribes as local_list
+
+    return local_list()
+
 
 async def revoke_token(jti: str, expires_at: float) -> bool:
     """Revoke a token via Supabase (or local SQLite fallback)."""

@@ -71,9 +71,24 @@ from finagent.memory.chat_memory import ChatMemoryManager
 from finagent.ingestion.image_ingestion import PortfolioImageExtractionError, extract_portfolio_from_image
 from finagent.ingestion.portfolio_document import extraction_to_position_dicts, parse_portfolio_document
 from finagent.ingestion.portfolio_schema import PortfolioExtractionConfirmRequest, PortfolioExtractionSchema
+from finagent.content_automation import (
+    ContentAutomationBatchRequest,
+    ContentEventIngestionRequest,
+    ContentAutomationRequest,
+    generate_article_batch,
+    generate_article_automation,
+    ingest_market_event_triggers,
+    is_generated_article_published,
+    list_generated_articles,
+    load_generated_article,
+    load_generated_article_html,
+)
 from finagent.portfolio_mirrors import load_active_positions, replace_active_positions, summarize_positions, delete_positions
 from finagent.portfolio.analytics import compute_portfolio_analytics
 from finagent.portfolio.news import fetch_portfolio_news
+from finagent.ops.control_tower import build_control_tower_snapshot
+from finagent.gateway.email_delivery import EmailDeliveryOutcome, send_email_message
+from finagent.gateway.sms_delivery import send_sms_message
 from finagent.gateway import supabase_client as supabase
 from finagent.gateway.auth_guard import decode_current_user_token
 from finagent.telemetry import TELEMETRY, TelemetryUserContext, telemetry_request_context, telemetry_user_from_authorization_header, telemetry_user_from_request_user
@@ -328,6 +343,47 @@ def _profile_mobile(profile: dict[str, Any] | None) -> str:
         return ""
     return str(profile.get("mobile") or profile.get("phone") or "").strip()
 
+
+_PHONE_E164_RE = re.compile(r"^\+[1-9]\d{7,14}$")
+
+
+def _sms_default_country_code() -> str:
+    raw = os.getenv("AUTH_SMS_DEFAULT_COUNTRY_CODE", "+91").strip()
+    if not raw.startswith("+"):
+        raw = f"+{raw.lstrip('+')}"
+    return raw
+
+
+def _normalize_mobile(value: str) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        raise ValueError("Mobile number is required.")
+
+    if raw.startswith("+"):
+        digits = "+" + re.sub(r"\D", "", raw[1:])
+        if not _PHONE_E164_RE.match(digits):
+            raise ValueError("Mobile number must be in E.164 format.")
+        return digits
+
+    digits_only = re.sub(r"\D", "", raw)
+    if len(digits_only) == 10:
+        normalized = f"{_sms_default_country_code()}{digits_only}"
+    elif 8 <= len(digits_only) <= 15:
+        normalized = f"+{digits_only}"
+    else:
+        raise ValueError("Mobile number is invalid.")
+
+    if not _PHONE_E164_RE.match(normalized):
+        raise ValueError("Mobile number must be in E.164 format.")
+    return normalized
+
+
+def _normalize_optional_mobile(value: str | None) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    return _normalize_mobile(raw)
+
 _COMPARISON_RE = re.compile(
     r"\b(?:compare|comparison|compares|comparing|vs\.?|versus|against|head[\s-]to[\s-]head)\b",
     re.IGNORECASE,
@@ -511,18 +567,29 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    # Hardened CSP: unsafe-inline and unsafe-eval removed from script-src.
-    # Google Identity Services is loaded via a separate script file or
-    # CSP nonce (recommended). For now, specific external domains are allowed.
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self' https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; "
-        "style-src 'self' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
-        "font-src 'self' data: https://fonts.gstatic.com; "
-        "img-src 'self' data: https://*.googleusercontent.com; "
-        "frame-src 'self' https://accounts.google.com; "
-        "connect-src 'self' https: wss: https://oauth2.googleapis.com https://*.supabase.co https://*.execute-api.us-east-1.amazonaws.com https://*.amplifyapp.com;"
-    )
+    if request.url.path.startswith("/ops"):
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "img-src 'self' data: https://*.googleusercontent.com; "
+            "frame-src 'self' https://accounts.google.com; "
+            "connect-src 'self' https: wss: https://oauth2.googleapis.com https://*.supabase.co https://*.execute-api.us-east-1.amazonaws.com https://*.amplifyapp.com;"
+        )
+    else:
+        # Hardened CSP: unsafe-inline and unsafe-eval remain blocked for the main app.
+        # Google Identity Services is loaded via a separate script file or
+        # CSP nonce (recommended). For now, specific external domains are allowed.
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; "
+            "style-src 'self' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "img-src 'self' data: https://*.googleusercontent.com; "
+            "frame-src 'self' https://accounts.google.com; "
+            "connect-src 'self' https: wss: https://oauth2.googleapis.com https://*.supabase.co https://*.execute-api.us-east-1.amazonaws.com https://*.amplifyapp.com;"
+        )
     return response
 
 # ── Unified get_current_user Dependency for JWT and BOLA checks ──────────
@@ -547,6 +614,29 @@ def _clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(AUTH_COOKIE_NAME, path="/", samesite="lax")
 
 
+CONTROL_TOWER_HTML_PATH = Path(__file__).with_name("control_tower.html")
+
+
+def _control_tower_allowed_emails() -> set[str]:
+    raw = os.getenv("CONTROL_TOWER_ALLOWED_EMAILS", "")
+    return {email.strip().lower() for email in raw.split(",") if email.strip()}
+
+
+def _control_tower_requires_auth() -> bool:
+    raw = os.getenv("CONTROL_TOWER_REQUIRE_AUTH")
+    if raw is not None:
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("PROSPEKTLAB_ENV") == "production" or bool(_control_tower_allowed_emails())
+
+
+def _control_tower_can_access(current_user: dict[str, Any] | None) -> bool:
+    allowed_emails = _control_tower_allowed_emails()
+    if not allowed_emails:
+        return True
+    email = (current_user or {}).get("email") if current_user else ""
+    return str(email or "").strip().lower() in allowed_emails
+
+
 def _decode_current_user(actual_token: str) -> dict:
     return decode_current_user_token(actual_token, local_jwt_secret=JWT_SECRET)
 
@@ -561,6 +651,23 @@ async def get_current_user(
     else:
         actual_token = request.cookies.get(AUTH_COOKIE_NAME)
     return _decode_current_user(actual_token)
+
+
+async def get_current_user_optional(
+    request: Request,
+    authorization: str = Header(None),
+) -> dict[str, Any] | None:
+    actual_token = None
+    if authorization and authorization.startswith("Bearer "):
+        actual_token = authorization.split(" ")[1]
+    else:
+        actual_token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not actual_token:
+        return None
+    try:
+        return _decode_current_user(actual_token)
+    except HTTPException:
+        return None
 
 
 async def enforce_token_limit(
@@ -975,6 +1082,11 @@ class SignupRequest(BaseModel):
     def _email(cls, v: str) -> str:
         return _validate_email(v)
 
+    @field_validator("mobile")
+    @classmethod
+    def _mobile(cls, v: str) -> str:
+        return _normalize_mobile(v)
+
     @field_validator("password")
     @classmethod
     def _password(cls, v: str) -> str:
@@ -1002,20 +1114,66 @@ class LoginRequest(BaseModel):
 
 class SendVerificationRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=160)
+    mobile: str | None = Field(default=None, min_length=5, max_length=30)
+    channel: str = Field(default="email", min_length=3, max_length=16)
 
     @field_validator("email")
     @classmethod
     def _email(cls, v: str) -> str:
         return _validate_email(v)
+
+    @field_validator("mobile")
+    @classmethod
+    def _mobile(cls, v: str | None) -> str | None:
+        return _normalize_optional_mobile(v) or None
+
+    @field_validator("channel")
+    @classmethod
+    def _channel(cls, v: str) -> str:
+        value = (v or "email").strip().lower()
+        if value not in {"email", "sms"}:
+            raise ValueError("Channel must be email or sms.")
+        return value
+
+
+class OutreachUnsubscribeRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=160)
+    reason: str = Field(default="unsubscribe", min_length=3, max_length=80)
+    source: str = Field(default="public_page", min_length=3, max_length=80)
+    note: str = Field(default="", max_length=500)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        return _validate_email(v)
+
+    @field_validator("reason", "source")
+    @classmethod
+    def _label(cls, v: str) -> str:
+        return (v or "").strip().lower()
+
+    @field_validator("note")
+    @classmethod
+    def _note(cls, v: str) -> str:
+        return (v or "").strip()
 
 
 class ForgotPasswordRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=160)
+    channel: str = Field(default="email", min_length=3, max_length=16)
 
     @field_validator("email")
     @classmethod
     def _email(cls, v: str) -> str:
         return _validate_email(v)
+
+    @field_validator("channel")
+    @classmethod
+    def _channel(cls, v: str) -> str:
+        value = (v or "email").strip().lower()
+        if value not in {"email", "sms"}:
+            raise ValueError("Channel must be email or sms.")
+        return value
 
 
 class ResetPasswordRequest(BaseModel):
@@ -1173,6 +1331,37 @@ def health():
         "finagent_home": "<redacted>",
         "version": app.version,
     }
+
+
+@app.post("/api/outreach/unsubscribe", dependencies=[Depends(default_rate_limiter)])
+async def outreach_unsubscribe(req: OutreachUnsubscribeRequest, request: Request):
+    note_parts: list[str] = []
+    if req.note:
+        note_parts.append(req.note)
+
+    if request.client and request.client.host:
+        host_hash = hashlib.sha256(request.client.host.encode("utf-8")).hexdigest()[:16]
+        note_parts.append(f"ip_hash={host_hash}")
+
+    user_agent = (request.headers.get("user-agent") or "").strip()
+    if user_agent:
+        note_parts.append(f"user_agent={user_agent[:180]}")
+
+    row = await supabase.store_outreach_unsubscribe(
+        req.email,
+        reason=req.reason,
+        source=req.source,
+        note=" | ".join(note_parts)[:500],
+    )
+    return JSONResponse(
+        {
+            "status": "ok",
+            "email": row.get("email", req.email),
+            "reason": row.get("reason", req.reason),
+            "message": "You have been unsubscribed from outreach emails.",
+        },
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/auth/me")
@@ -2422,6 +2611,116 @@ def widget(request: Request) -> RedirectResponse:
     return RedirectResponse(url=_frontend_hash_url("dashboard"), status_code=302)
 
 
+@app.get("/ops")
+def ops_index() -> RedirectResponse:
+    return RedirectResponse(url="/ops/control-tower", status_code=302)
+
+
+@app.get("/ops/control-tower")
+def control_tower_page(request: Request):
+    require_auth = _control_tower_requires_auth()
+    actual_token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not actual_token and require_auth:
+        return RedirectResponse(url="/login", status_code=302)
+    current_user = None
+    invalid_token = False
+    if actual_token:
+        try:
+            current_user = _decode_current_user(actual_token)
+        except HTTPException:
+            invalid_token = True
+            if require_auth:
+                response = RedirectResponse(url="/login", status_code=302)
+                _clear_auth_cookie(response)
+                return response
+    try:
+        if require_auth and current_user is None:
+            response = RedirectResponse(url="/login", status_code=302)
+            if invalid_token:
+                _clear_auth_cookie(response)
+            return response
+
+        if not _control_tower_can_access(current_user):
+            return HTMLResponse(
+                """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProspektLab Control Tower</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #06111d;
+      color: #eaf2fb;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    main {
+      width: min(720px, calc(100vw - 32px));
+      padding: 32px;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(13, 24, 38, 0.94);
+      box-shadow: 0 24px 90px rgba(0, 0, 0, 0.36);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 2rem;
+      font-family: "Space Grotesk", Inter, system-ui, sans-serif;
+    }
+    p {
+      margin: 0;
+      color: #8ea5b9;
+      line-height: 1.6;
+    }
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #eaf2fb;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Access restricted</h1>
+    <p>This control tower is limited to authorized operators. If you expected access, add your email to <code>CONTROL_TOWER_ALLOWED_EMAILS</code> or remove the allowlist.</p>
+  </main>
+</body>
+</html>""",
+                status_code=403,
+                headers={"Cache-Control": "no-store, max-age=0", "X-Robots-Tag": "noindex, nofollow"},
+            )
+
+        return HTMLResponse(
+            CONTROL_TOWER_HTML_PATH.read_text(encoding="utf-8"),
+            headers={"Cache-Control": "no-store, max-age=0", "X-Robots-Tag": "noindex, nofollow"},
+        )
+    except Exception:
+        return HTMLResponse(
+            "<h1>Control Tower unavailable</h1>",
+            status_code=500,
+            headers={"Cache-Control": "no-store, max-age=0", "X-Robots-Tag": "noindex, nofollow"},
+        )
+
+
+@app.get("/api/ops/control-tower")
+async def ops_control_tower_snapshot(
+    request: Request,
+    range: str = "30D",
+    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+) -> JSONResponse:
+    if _control_tower_requires_auth() and current_user is None:
+        raise HTTPException(status_code=401, detail="Missing or invalid authentication credentials")
+    if not _control_tower_can_access(current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    snapshot = await build_control_tower_snapshot(range)
+    return JSONResponse(snapshot, headers={"Cache-Control": "no-store, max-age=0"})
+
+
 @app.post("/auth/logout")
 def auth_logout() -> JSONResponse:
     response = JSONResponse({"ok": True})
@@ -2435,7 +2734,7 @@ def auth_logout() -> JSONResponse:
 # Verification codes and reset codes are stored in Supabase (or local SQLite fallback)
 # via finagent.gateway.state_store / supabase_client.
 
-def _send_email_code(email: str, code: str, is_reset: bool = False) -> bool:
+def _send_email_code(email: str, code: str, is_reset: bool = False) -> EmailDeliveryOutcome:
     subject = "Reset Your ProspektLab Password" if is_reset else "Verify Your ProspektLab Email"
     body = (
         f"Your verification code to reset your password is: {code}\n\n"
@@ -2444,71 +2743,87 @@ def _send_email_code(email: str, code: str, is_reset: bool = False) -> bool:
         f"Your email verification code for ProspektLab signup is: {code}\n\n"
         "This code will expire in 10 minutes."
     )
-    
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = os.getenv("SMTP_PORT")
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    smtp_from = os.getenv("SMTP_FROM", smtp_user or "no-reply@prospektlab.com")
-    
-    if not smtp_host or not smtp_user or not smtp_password:
-        # Fallback to printing in console
-        action_type = "RESET PASSWORD" if is_reset else "EMAIL VERIFICATION"
-        print(f"\n==================================================")
-        print(f"[SMTP FALLBACK - {action_type}]")
-        print(f"To: {email}")
-        print(f"Subject: {subject}")
-        print(f"Code: {code}")
-        print(f"==================================================\n", flush=True)
-        return False
 
-    try:
-        import smtplib
-        from email.mime.text import MIMEText
-        msg = MIMEText(body)
-        msg["Subject"] = subject
-        msg["From"] = smtp_from
-        msg["To"] = email
-        
-        port = int(smtp_port) if smtp_port else 587
-        server = smtplib.SMTP(smtp_host, port, timeout=10)
-        server.starttls()
-        server.login(smtp_user, smtp_password)
-        server.sendmail(smtp_from, [email], msg.as_string())
-        server.quit()
-        return True
-    except Exception as e:
-        print(f"[SMTP ERROR] Failed to send email to {email}: {e}", flush=True)
-        print(f"\n==================================================")
-        print(f"[SMTP FALLBACK ON FAILURE - Code: {code}]")
-        print(f"To: {email}")
-        print(f"==================================================\n", flush=True)
-        return False
+    outcome = send_email_message(
+        to_email=email,
+        subject=subject,
+        plain_text=body,
+        html=f"<p>{body.replace(chr(10), '<br/>')}</p>",
+    )
+    if outcome.delivered:
+        return outcome
+
+    action_type = "RESET PASSWORD" if is_reset else "EMAIL VERIFICATION"
+    print(f"\n==================================================")
+    print(f"[EMAIL DELIVERY FALLBACK - {action_type}]")
+    print(f"To: {email}")
+    print(f"Subject: {subject}")
+    print(f"Code: {code}")
+    print(f"Provider detail: {outcome.detail or 'not configured'}")
+    print(f"==================================================\n", flush=True)
+    return outcome
+
+
+def _send_sms_code(mobile: str, code: str, is_reset: bool = False) -> EmailDeliveryOutcome:
+    message = (
+        f"ProspektLab reset code: {code}. It expires in 10 minutes."
+        if is_reset else
+        f"ProspektLab verification code: {code}. It expires in 10 minutes."
+    )
+
+    outcome = send_sms_message(
+        to_phone=mobile,
+        message=message,
+    )
+    if outcome.delivered:
+        return outcome
+
+    action_type = "RESET PASSWORD" if is_reset else "SMS VERIFICATION"
+    print(f"\n==================================================")
+    print(f"[SMS DELIVERY FALLBACK - {action_type}]")
+    print(f"To: {mobile}")
+    print(f"Code: {code}")
+    print(f"Provider detail: {outcome.detail or 'not configured'}")
+    print(f"==================================================\n", flush=True)
+    return outcome
 
 
 @app.post("/auth/send-verification", dependencies=[Depends(auth_rate_limiter)])
 async def auth_send_verification(req: SendVerificationRequest):
     email_clean = req.email.lower().strip()
+    mobile_clean = req.mobile or ""
+    channel = req.channel
     
     # Check if user already exists
     existing = await supabase.get_user_by_email(email_clean)
     if existing:
         raise HTTPException(status_code=409, detail="An account with that email already exists.")
+
+    if channel == "sms" and not mobile_clean:
+        raise HTTPException(status_code=400, detail="Mobile number is required for SMS verification.")
         
     code = f"{secrets.randbelow(900000) + 100000}"
-    await supabase.store_verification_code(email_clean, code, type_="signup")
-    
-    sent = _send_email_code(email_clean, code, is_reset=False)
-    if sent:
+    recipient_key = mobile_clean if channel == "sms" else email_clean
+    await supabase.store_verification_code(recipient_key, code, type_="signup")
+
+    outcome = (
+        _send_sms_code(mobile_clean, code, is_reset=False)
+        if channel == "sms"
+        else _send_email_code(email_clean, code, is_reset=False)
+    )
+    if outcome.delivered:
         TELEMETRY.emit_event(
             "auth_verification_sent",
             user=TelemetryUserContext(email=email_clean, name=email_clean),
             properties={
                 "source": "backend",
                 "flow": "signup",
+                "delivery": outcome.provider,
+                "channel": channel,
             },
         )
-        return {"message": "Verification email sent successfully."}
+        channel_label = "SMS" if channel == "sms" else "email"
+        return {"message": f"Verification code sent by {channel_label} successfully."}
     else:
         TELEMETRY.emit_event(
             "auth_verification_sent",
@@ -2517,37 +2832,51 @@ async def auth_send_verification(req: SendVerificationRequest):
                 "source": "backend",
                 "flow": "signup",
                 "delivery": "simulated",
+                "channel": channel,
             },
         )
+        simulated_target = mobile_clean if channel == "sms" else email_clean
         return {
             "message": "Verification code generated.",
-            "detail": f"Verification code simulated. Code {code} has been logged to the server terminal console."
+            "detail": f"Verification code simulated for {simulated_target}. Code {code} has been logged to the server terminal console."
         }
 
 
 @app.post("/auth/forgot-password", dependencies=[Depends(auth_rate_limiter)])
 async def auth_forgot_password(req: ForgotPasswordRequest):
     email_clean = req.email.lower().strip()
+    channel = req.channel
     
     # Verify user exists
     existing = await supabase.get_user_by_email(email_clean)
     if not existing:
         raise HTTPException(status_code=404, detail="No account with that email exists.")
+
+    mobile_clean = _normalize_optional_mobile(_profile_mobile(existing))
+    if channel == "sms" and not mobile_clean:
+        raise HTTPException(status_code=400, detail="No mobile number is available for SMS reset codes.")
         
     code = f"{secrets.randbelow(900000) + 100000}"
-    await supabase.store_verification_code(email_clean, code, type_="reset")
-    
-    sent = _send_email_code(email_clean, code, is_reset=True)
-    if sent:
+    recipient_key = mobile_clean if channel == "sms" else email_clean
+    await supabase.store_verification_code(recipient_key, code, type_="reset")
+
+    outcome = (
+        _send_sms_code(mobile_clean, code, is_reset=True)
+        if channel == "sms"
+        else _send_email_code(email_clean, code, is_reset=True)
+    )
+    if outcome.delivered:
         TELEMETRY.emit_event(
             "auth_password_reset_requested",
             user=TelemetryUserContext(email=email_clean, name=email_clean),
             properties={
                 "source": "backend",
-                "delivery": "email",
+                "delivery": outcome.provider,
+                "channel": channel,
             },
         )
-        return {"message": "Reset code sent to your email."}
+        channel_label = "SMS" if channel == "sms" else "email"
+        return {"message": f"Reset code sent by {channel_label}."}
     else:
         TELEMETRY.emit_event(
             "auth_password_reset_requested",
@@ -2555,26 +2884,31 @@ async def auth_forgot_password(req: ForgotPasswordRequest):
             properties={
                 "source": "backend",
                 "delivery": "simulated",
+                "channel": channel,
             },
         )
+        simulated_target = mobile_clean if channel == "sms" else email_clean
         return {
             "message": "Reset code generated.",
-            "detail": f"Reset code simulated. Code {code} has been logged to the server terminal console."
+            "detail": f"Reset code simulated for {simulated_target}. Code {code} has been logged to the server terminal console."
         }
 
 
 @app.post("/auth/reset-password", dependencies=[Depends(auth_rate_limiter)])
 async def auth_reset_password(req: ResetPasswordRequest):
     email_clean = req.email.lower().strip()
-    
-    valid = await supabase.verify_and_consume_code(email_clean, req.code, type_="reset", ttl_seconds=600)
-    if not valid:
-        raise HTTPException(status_code=400, detail="Invalid or expired reset code. Please request a new one.")
-        
-    # Validate via Supabase
+
     existing = await supabase.get_user_by_email(email_clean)
     if not existing:
         raise HTTPException(status_code=404, detail="Account not found.")
+
+    valid = await supabase.verify_and_consume_code(email_clean, req.code, type_="reset", ttl_seconds=600)
+    if not valid:
+        mobile_clean = _normalize_optional_mobile(_profile_mobile(existing))
+        if mobile_clean:
+            valid = await supabase.verify_and_consume_code(mobile_clean, req.code, type_="reset", ttl_seconds=600)
+    if not valid:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset code. Please request a new one.")
         
     user_id = existing["id"]
     await supabase.update_admin_user_password(user_id, req.new_password)
@@ -2592,14 +2926,16 @@ async def auth_reset_password(req: ResetPasswordRequest):
 @app.post("/auth/signup", dependencies=[Depends(auth_rate_limiter)])
 async def auth_signup(req: SignupRequest, request: Request):
     email_clean = req.email.lower().strip()
+    mobile_clean = req.mobile.strip()
     
     # Verify and consume code (one-shot, atomically deleted on success)
     valid = await supabase.verify_and_consume_code(email_clean, req.verification_code, type_="signup", ttl_seconds=600)
     if not valid:
+        valid = await supabase.verify_and_consume_code(mobile_clean, req.verification_code, type_="signup", ttl_seconds=600)
+    if not valid:
         raise HTTPException(status_code=400, detail="Invalid or expired verification code.")
         
     name_clean = req.name.strip()
-    mobile_clean = req.mobile.strip()
     
     # Create via Supabase
     res = await supabase.create_admin_user(email_clean, req.password, name_clean, mobile=mobile_clean, auth_provider="email")
@@ -3359,6 +3695,102 @@ def get_memo(session_id: str, current_user: dict = Depends(get_current_user)):
         media_type="text/markdown",
         headers={"Cache-Control": "no-store, max-age=0"}
     )
+
+
+@app.post("/api/content/articles/generate", dependencies=[Depends(default_rate_limiter)])
+async def generate_content_article(
+    req: ContentAutomationRequest,
+    current_user: dict = Depends(enforce_token_limit),
+):
+    result = await generate_article_automation(req, requested_by=current_user["email"])
+    TELEMETRY.emit_event(
+        "content_article_generated",
+        user=telemetry_user_from_request_user(current_user),
+        properties={
+            "source": "backend",
+            "slug": result.slug,
+            "route_base": result.route_base,
+            "mirrored_public": bool(result.mirrored_public_path),
+        },
+    )
+    return JSONResponse(result.model_dump())
+
+
+@app.post("/api/content/articles/generate-batch", dependencies=[Depends(default_rate_limiter)])
+async def generate_content_article_batch(
+    req: ContentAutomationBatchRequest,
+    current_user: dict = Depends(enforce_token_limit),
+):
+    result = await generate_article_batch(req, requested_by=current_user["email"])
+    TELEMETRY.emit_event(
+        "content_article_batch_generated",
+        user=telemetry_user_from_request_user(current_user),
+        properties={
+            "source": "backend",
+            "route_base": result.route_base,
+            "requested": result.total_requested,
+            "completed": result.total_completed,
+            "failed": result.total_failed,
+        },
+    )
+    return JSONResponse(result.model_dump())
+
+
+@app.post("/api/content/events/ingest", dependencies=[Depends(default_rate_limiter)])
+async def ingest_content_events(
+    req: ContentEventIngestionRequest,
+    current_user: dict = Depends(enforce_token_limit),
+):
+    result = await ingest_market_event_triggers(req, requested_by=current_user["email"])
+    TELEMETRY.emit_event(
+        "content_events_ingested",
+        user=telemetry_user_from_request_user(current_user),
+        properties={
+            "source": "backend",
+            "route_base": result.route_base,
+            "discovered_events": result.discovered_events,
+            "generated_articles": result.generated_articles,
+            "auto_published": result.auto_published,
+            "drafts": result.drafts,
+        },
+    )
+    return JSONResponse(result.model_dump())
+
+
+@app.get("/api/content/articles")
+async def list_content_articles(
+    route_base: str | None = None,
+    limit: int = 50,
+    current_user: dict = Depends(get_current_user),
+):
+    entries = list_generated_articles(route_base=route_base, limit=limit)
+    return JSONResponse({"items": entries, "count": len(entries)})
+
+
+@app.get("/api/content/articles/{slug}")
+async def get_content_article(slug: str, route_base: str = "insights", current_user: dict = Depends(get_current_user)):
+    article = load_generated_article(slug, route_base=route_base)
+    if not article:
+        raise HTTPException(status_code=404, detail="Generated article not found")
+    return JSONResponse(article)
+
+
+@app.get("/api/content/articles/{slug}/html")
+async def get_content_article_html(slug: str, route_base: str = "insights"):
+    article_html = load_generated_article_html(slug, route_base=route_base)
+    if not article_html:
+        raise HTTPException(status_code=404, detail="Generated article not found")
+    return HTMLResponse(article_html, headers={"Cache-Control": "public, max-age=300"})
+
+
+@app.get("/insights/{slug}", include_in_schema=False)
+async def public_generated_insight(slug: str):
+    if not is_generated_article_published(slug):
+        raise HTTPException(status_code=404, detail="Generated article not found")
+    article_html = load_generated_article_html(slug)
+    if not article_html:
+        raise HTTPException(status_code=404, detail="Generated article not found")
+    return HTMLResponse(article_html, headers={"Cache-Control": "public, max-age=300"})
 
 
 @app.get("/sessions/{session_id}/status")

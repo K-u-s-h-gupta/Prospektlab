@@ -143,11 +143,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return localStorage.getItem(WHATSAPP_JOINED_KEY) === 'true';
   }, []);
 
-  const isWhatsAppInviteSnoozed = useCallback(() => {
-    const snoozeUntil = Number(localStorage.getItem(WHATSAPP_SNOOZE_UNTIL_KEY) || '0');
-    return Date.now() < snoozeUntil;
-  }, []);
-
   const closeWhatsAppInvite = useCallback(() => {
     localStorage.setItem(WHATSAPP_SNOOZE_UNTIL_KEY, String(Date.now() + WHATSAPP_SNOOZE_MS));
     setShowWhatsAppInvite(false);
@@ -159,13 +154,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.open(WHATSAPP_INVITE_URL, '_blank', 'noopener,noreferrer');
     setShowWhatsAppInvite(false);
   }, []);
-
-  useEffect(() => {
-    if (!user || showWhatsAppInvite) return;
-    if (hasJoinedWhatsAppCommunity() || isWhatsAppInviteSnoozed()) return;
-
-    setShowWhatsAppInvite(true);
-  }, [hasJoinedWhatsAppCommunity, isWhatsAppInviteSnoozed, showWhatsAppInvite, user]);
 
   useEffect(() => {
     if (!showWhatsAppInvite) return;
@@ -242,13 +230,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const googleLogin = useCallback(async (credential: string) => {
     try {
       const data = await apiGoogleAuth(credential);
+      const hasMobile = !!data.mobile;
+      const requireMobile = data.require_mobile ?? !hasMobile;
       const signedInUser = {
         email: data.email,
         name: data.name || data.full_name || 'Researcher',
         mobile: data.mobile,
-        require_mobile: data.require_mobile,
+        require_mobile: requireMobile,
       };
-      const nextOnboarded = data.require_mobile
+      const nextOnboarded = requireMobile
         ? false
         : await refreshOnboardingStatus(signedInUser.email);
 
@@ -261,7 +251,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       showToast('Successfully signed in with Google.', 'success');
-      return { ...data, onboarded: nextOnboarded };
+      return { ...data, require_mobile: requireMobile, onboarded: nextOnboarded };
     } catch (err: any) {
       trackEvent('auth_google_login_failed', {
         error_type: err?.name || 'Error',
@@ -277,6 +267,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await apiLogout();
       setUser(null);
       setOnboarded(false);
+      setShowWhatsAppInvite(false);
       trackEvent('auth_logout', {
         email: activeUser?.email || '',
         name: activeUser?.name || '',
@@ -286,6 +277,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Logout error', err);
       setUser(null);
       setOnboarded(false);
+      setShowWhatsAppInvite(false);
     }
   }, [setOnboarded, showToast]);
 
