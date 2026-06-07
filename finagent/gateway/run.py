@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -622,6 +624,35 @@ def _control_tower_allowed_emails() -> set[str]:
     return {email.strip().lower() for email in raw.split(",") if email.strip()}
 
 
+def _control_tower_shared_username() -> str:
+    return (os.getenv("CONTROL_TOWER_SHARED_USERNAME") or os.getenv("CONTROL_TOWER_BASIC_AUTH_USER") or "").strip()
+
+
+def _control_tower_shared_password() -> str:
+    return (os.getenv("CONTROL_TOWER_SHARED_PASSWORD") or os.getenv("CONTROL_TOWER_BASIC_AUTH_PASSWORD") or "").strip()
+
+
+def _control_tower_shared_email() -> str:
+    return (os.getenv("CONTROL_TOWER_SHARED_EMAIL") or "ops@prospektlab.internal").strip().lower()
+
+
+def _control_tower_shared_name() -> str:
+    return (os.getenv("CONTROL_TOWER_SHARED_NAME") or "ProspektLab Ops").strip()
+
+
+def _control_tower_shared_days() -> int:
+    raw = (os.getenv("CONTROL_TOWER_SHARED_TOKEN_DAYS") or "14").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return 14
+    return min(max(value, 1), 30)
+
+
+def _control_tower_shared_auth_enabled() -> bool:
+    return bool(_control_tower_shared_username() and _control_tower_shared_password())
+
+
 def _control_tower_requires_auth() -> bool:
     raw = os.getenv("CONTROL_TOWER_REQUIRE_AUTH")
     if raw is not None:
@@ -630,11 +661,71 @@ def _control_tower_requires_auth() -> bool:
 
 
 def _control_tower_can_access(current_user: dict[str, Any] | None) -> bool:
+    if current_user and str(current_user.get("user_id") or "").strip() == "ops-shared":
+        return True
+    if current_user and str(current_user.get("email") or "").strip().lower() == _control_tower_shared_email():
+        return True
     allowed_emails = _control_tower_allowed_emails()
     if not allowed_emails:
         return True
     email = (current_user or {}).get("email") if current_user else ""
     return str(email or "").strip().lower() in allowed_emails
+
+
+def _control_tower_has_valid_shared_basic_auth(request: Request) -> bool:
+    if not _control_tower_shared_auth_enabled():
+        return False
+    header = (request.headers.get("Authorization") or "").strip()
+    if not header.startswith("Basic "):
+        return False
+    encoded = header.split(" ", 1)[1].strip()
+    try:
+        decoded = base64.b64decode(encoded).decode("utf-8")
+    except Exception:
+        return False
+    if ":" not in decoded:
+        return False
+    username, password = decoded.split(":", 1)
+    return hmac.compare_digest(username, _control_tower_shared_username()) and hmac.compare_digest(password, _control_tower_shared_password())
+
+
+def _control_tower_shared_redirect() -> RedirectResponse:
+    token = _mint_token(
+        "ops-shared",
+        _control_tower_shared_email(),
+        _control_tower_shared_name(),
+        days=_control_tower_shared_days(),
+    )
+    return RedirectResponse(
+        url=_frontend_url("ops", {"opsToken": token}),
+        status_code=302,
+        headers={"Cache-Control": "no-store, max-age=0", "X-Robots-Tag": "noindex, nofollow"},
+    )
+
+
+def _control_tower_shared_challenge() -> HTMLResponse:
+    return HTMLResponse(
+        """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProspektLab Control Tower</title>
+</head>
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#06111d;color:#eaf2fb;font-family:Inter,system-ui,sans-serif;">
+  <main style="width:min(640px,calc(100vw - 32px));padding:32px;border-radius:24px;border:1px solid rgba(255,255,255,0.12);background:rgba(13,24,38,0.94);box-shadow:0 24px 90px rgba(0,0,0,0.36);">
+    <h1 style="margin:0 0 12px;font-size:2rem;">Protected operator access</h1>
+    <p style="margin:0;color:#8ea5b9;line-height:1.6;">Enter the shared control tower credentials to open the dashboard.</p>
+  </main>
+</body>
+</html>""",
+        status_code=401,
+        headers={
+            "WWW-Authenticate": 'Basic realm="ProspektLab Control Tower", charset="UTF-8"',
+            "Cache-Control": "no-store, max-age=0",
+            "X-Robots-Tag": "noindex, nofollow",
+        },
+    )
 
 
 def _decode_current_user(actual_token: str) -> dict:
@@ -955,10 +1046,19 @@ def _frontend_base_url() -> str:
     return "http://localhost:5173"
 
 
-def _frontend_hash_url(route: str = "") -> str:
+def _frontend_url(route: str = "", query: dict[str, Any] | None = None) -> str:
     cleaned = (route or "").lstrip("/")
     base = _frontend_base_url()
-    return f"{base}/{cleaned}" if cleaned else f"{base}/"
+    url = f"{base}/{cleaned}" if cleaned else f"{base}/"
+    if query:
+        encoded = urllib.parse.urlencode({key: value for key, value in query.items() if value is not None})
+        if encoded:
+            url = f"{url}?{encoded}"
+    return url
+
+
+def _frontend_hash_url(route: str = "") -> str:
+    return _frontend_url(route)
 
 
 class StartResearchRequest(BaseModel):
@@ -1374,6 +1474,7 @@ async def auth_me(current_user: dict = Depends(get_current_user)):
     return {
         "user_id": current_user.get("user_id"),
         "email": current_user.get("email"),
+        "name": current_user.get("name") or current_user.get("email"),
         "tenant_id": current_user.get("tenant_id"),
         "auth_provider": current_user.get("auth_provider"),
     }
@@ -2612,15 +2713,23 @@ def widget(request: Request) -> RedirectResponse:
 
 
 @app.get("/ops")
-def ops_index() -> RedirectResponse:
+def ops_index(request: Request):
+    if _control_tower_has_valid_shared_basic_auth(request):
+        return _control_tower_shared_redirect()
+    if _control_tower_shared_auth_enabled():
+        return _control_tower_shared_challenge()
     return RedirectResponse(url=_frontend_hash_url("ops"), status_code=302)
 
 
 @app.get("/ops/control-tower")
 def control_tower_page(request: Request):
+    if _control_tower_has_valid_shared_basic_auth(request):
+        return _control_tower_shared_redirect()
     require_auth = _control_tower_requires_auth()
     actual_token = request.cookies.get(AUTH_COOKIE_NAME)
     if not actual_token and require_auth:
+        if _control_tower_shared_auth_enabled():
+            return _control_tower_shared_challenge()
         return RedirectResponse(url="/login", status_code=302)
     current_user = None
     invalid_token = False
@@ -2630,11 +2739,15 @@ def control_tower_page(request: Request):
         except HTTPException:
             invalid_token = True
             if require_auth:
+                if _control_tower_shared_auth_enabled():
+                    return _control_tower_shared_challenge()
                 response = RedirectResponse(url="/login", status_code=302)
                 _clear_auth_cookie(response)
                 return response
     try:
         if require_auth and current_user is None:
+            if _control_tower_shared_auth_enabled():
+                return _control_tower_shared_challenge()
             response = RedirectResponse(url="/login", status_code=302)
             if invalid_token:
                 _clear_auth_cookie(response)

@@ -104,17 +104,18 @@ function upgradeLegacyHashLocation() {
   window.history.replaceState(null, '', nextUrl);
 }
 
-function hydrateLocalDevTokenFromUrl() {
+function hydrateBootstrapTokenFromUrl() {
   if (typeof window === 'undefined') return;
-  const isLocalHost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-  if (!isLocalHost) return;
-
   const current = new URL(window.location.href);
   const params = new URLSearchParams(current.search);
+  const opsToken = params.get('opsToken');
   const devToken = params.get('devToken');
-  if (!devToken) return;
+  const isLocalHost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+  const bootstrapToken = opsToken || (isLocalHost ? devToken : '');
+  if (!bootstrapToken) return;
 
-  hydrateAuthToken(devToken, true);
+  hydrateAuthToken(bootstrapToken, true);
+  params.delete('opsToken');
   params.delete('devToken');
   const nextSearch = params.toString();
   window.history.replaceState(null, '', `${current.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
@@ -122,7 +123,7 @@ function hydrateLocalDevTokenFromUrl() {
 
 export const AppContent: React.FC = () => {
   upgradeLegacyHashLocation();
-  hydrateLocalDevTokenFromUrl();
+  hydrateBootstrapTokenFromUrl();
 
   return (
     <BrowserRouter>
