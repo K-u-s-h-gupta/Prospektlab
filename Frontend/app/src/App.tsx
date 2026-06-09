@@ -8,14 +8,17 @@ import Onboarding from './pages/Onboarding';
 import ContactUs from './pages/ContactUs';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
+import InsightsStudio from './pages/InsightsStudio';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { trackPageView } from './telemetry';
 
 // Protected Route for authenticated users
-const ProtectedRoute: React.FC<{ children: React.ReactElement; requireOnboarded?: boolean }> = ({ 
-  children, 
-  requireOnboarded = false 
-}) => {
+const ProtectedRoute: React.FC<{
+  children: React.ReactElement;
+  requireOnboarded?: boolean;
+  /** Skip all onboarding checks — just require the user to be authenticated */
+  authOnly?: boolean;
+}> = ({ children, requireOnboarded = false, authOnly = false }) => {
   const { isAuthenticated, isLoading, onboarded } = useAuth();
 
   if (isLoading) {
@@ -28,6 +31,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement; requireOnboarded?
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // authOnly routes (e.g. Insights Studio) skip all portfolio-onboarding checks
+  if (authOnly) {
+    return children;
   }
 
   if (requireOnboarded && !onboarded) {
@@ -114,13 +122,22 @@ export const AppContent: React.FC = () => {
           } 
         />
         
-        <Route 
-          path="/dashboard" 
+        <Route
+          path="/dashboard"
           element={
             <ProtectedRoute requireOnboarded>
               <Dashboard />
             </ProtectedRoute>
-          } 
+          }
+        />
+
+        <Route
+          path="/insights-studio"
+          element={
+            <ProtectedRoute authOnly>
+              <InsightsStudio />
+            </ProtectedRoute>
+          }
         />
 
         {/* Fallback */}

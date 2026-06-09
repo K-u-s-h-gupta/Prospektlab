@@ -173,6 +173,76 @@ def _append_yahoo_metric_findings(ctx: SubAgentContext, out: AgentTaskResult) ->
             out.claims.append(Claim(text=text, is_material=True))
 
 
+def _append_ikg_financial_findings(ctx: SubAgentContext, out: AgentTaskResult) -> None:
+    ikg_ctx = ctx.agent_context("financials")
+    fin = ikg_ctx or {}
+    statement = fin.get("income_statement") or {}
+    ratios = fin.get("ratios") or {}
+    if not statement and not ratios:
+        company_financials = (ctx.ikg_bundle.financials.get("company_financials") if ctx.ikg_bundle else {}) or {}
+        if not company_financials:
+            return
+        detail_parts: list[str] = []
+        for label, key in (
+            ("Revenue", "total_revenue"),
+            ("Net income", "net_income"),
+            ("EBITDA", "ebitda"),
+            ("Cash", "total_cash"),
+            ("Debt", "total_debt"),
+        ):
+            value = company_financials.get(key)
+            if value is not None:
+                detail_parts.append(f"{label} {value}")
+        if detail_parts:
+            out.findings.append(
+                Finding(
+                    agent="financials",
+                    kind="financial",
+                    headline="IKG financial snapshot available",
+                    detail=". ".join(detail_parts) + ".",
+                    confidence="MEDIUM",
+                    evidence=(ctx.ikg_bundle.source_refs[:3] if ctx.ikg_bundle else []),
+                    metrics={k: company_financials.get(k) for k in ("total_revenue", "net_income", "ebitda", "total_cash", "total_debt")},
+                )
+            )
+        return
+
+    details: list[str] = []
+    for label, key in (
+        ("Revenue", "revenue"),
+        ("Net income", "net_income"),
+        ("Operating income", "operating_income"),
+    ):
+        value = statement.get(key)
+        if value is not None:
+            details.append(f"{label} {value}")
+    if ratios:
+        ratio_bits = []
+        for label, key in (
+            ("ROE", "roe"),
+            ("ROCE", "roce"),
+            ("P/E", "pe_ratio"),
+            ("P/B", "pb_ratio"),
+        ):
+            value = ratios.get(key)
+            if value is not None:
+                ratio_bits.append(f"{label} {value}")
+        if ratio_bits:
+            details.append("Ratios " + ", ".join(ratio_bits))
+    if details:
+        out.findings.append(
+            Finding(
+                agent="financials",
+                kind="financial",
+                headline="IKG financial context injected",
+                detail=". ".join(details) + ".",
+                confidence="MEDIUM",
+                evidence=(ctx.ikg_bundle.source_refs[:3] if ctx.ikg_bundle else []),
+                metrics={"source": "ikg_bundle"},
+            )
+        )
+
+
 class FinancialsAgent(BaseSubAgent):
     name = "financials"
     display = "Financial Health"
@@ -181,7 +251,8 @@ class FinancialsAgent(BaseSubAgent):
 
     def precondition(self, ctx: SubAgentContext):
         has_bundle = ctx.bundle and (ctx.bundle.sec is not None or ctx.bundle.yahoo is not None)
-        return bool(has_bundle or ctx.seed_docs), "no financial enrichment"
+        has_ikg = bool(ctx.ikg_bundle and ctx.ikg_bundle.coverage.get("financials") != "missing")
+        return bool(has_bundle or has_ikg or ctx.seed_docs), "no financial enrichment"
 
     async def execute(self, ctx: SubAgentContext) -> AgentTaskResult:
         sec = ctx.bundle.sec if ctx.bundle else None
@@ -189,6 +260,9 @@ class FinancialsAgent(BaseSubAgent):
         out = AgentTaskResult(agent_name=self.name)
         metrics = sec.metrics or {} if sec else {}
         hist = sec.history or {} if sec else {}
+
+        if ctx.ikg_bundle:
+            _append_ikg_financial_findings(ctx, out)
 
         if not sec and yahoo:
             detail = f"{yahoo.currency or ''} {yahoo.price:,.2f}" if yahoo.price is not None else "quote unavailable"

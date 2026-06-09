@@ -75,6 +75,7 @@ create table if not exists public.profiles (
   email text not null,
   full_name text not null default '',
   mobile text not null default '',
+  referral_source text not null default '',
   auth_provider text not null default 'email',
   avatar_url text not null default '',
   created_at timestamptz not null default now(),
@@ -83,6 +84,7 @@ create table if not exists public.profiles (
 
 alter table public.profiles add column if not exists full_name text not null default '';
 alter table public.profiles add column if not exists mobile text not null default '';
+alter table public.profiles add column if not exists referral_source text not null default '';
 alter table public.profiles add column if not exists auth_provider text not null default 'email';
 alter table public.profiles add column if not exists avatar_url text not null default '';
 alter table public.profiles add column if not exists created_at timestamptz not null default now();
@@ -145,52 +147,6 @@ create trigger trg_portfolio_mirrors_updated_at
 before update on public.portfolio_mirrors
 for each row
 execute function public.set_updated_at();
-
--- -----------------------------------------------------------------------------
--- Memory / session tables
--- -----------------------------------------------------------------------------
-create table if not exists public.facts (
-  id bigserial primary key,
-  target_key text not null,
-  kind text not null,
-  body text not null,
-  confidence text not null,
-  source_url text,
-  session_id text,
-  user_email text not null,
-  created_at double precision not null default extract(epoch from now())
-);
-
-alter table public.facts add column if not exists source_url text;
-alter table public.facts add column if not exists session_id text;
-alter table public.facts add column if not exists user_email text not null default '';
-alter table public.facts add column if not exists created_at double precision not null default extract(epoch from now());
-
-create index if not exists idx_facts_target on public.facts (target_key, created_at desc);
-create index if not exists idx_facts_kind on public.facts (target_key, kind);
-create index if not exists idx_facts_user on public.facts (user_email, target_key, created_at desc);
-
-create table if not exists public.session_summaries (
-  session_id text primary key,
-  target_key text not null,
-  target_display text,
-  summary text not null,
-  metrics_json text,
-  citation_count integer,
-  quality_score double precision,
-  user_email text not null,
-  created_at double precision not null default extract(epoch from now())
-);
-
-alter table public.session_summaries add column if not exists target_display text;
-alter table public.session_summaries add column if not exists metrics_json text;
-alter table public.session_summaries add column if not exists citation_count integer;
-alter table public.session_summaries add column if not exists quality_score double precision;
-alter table public.session_summaries add column if not exists user_email text not null default '';
-alter table public.session_summaries add column if not exists created_at double precision not null default extract(epoch from now());
-
-create index if not exists idx_summaries_target on public.session_summaries (target_key, created_at desc);
-create index if not exists idx_summaries_user on public.session_summaries (user_email, target_key, created_at desc);
 
 -- -----------------------------------------------------------------------------
 -- State / auth support tables
@@ -282,32 +238,6 @@ begin
   if exists (
     select 1
     from information_schema.columns
-    where table_schema = 'public' and table_name = 'facts' and column_name = 'created_at'
-      and data_type <> 'double precision'
-  ) then
-    execute $sql$
-      alter table public.facts
-      alter column created_at type double precision
-      using public._to_epoch_seconds(created_at::text)
-    $sql$;
-  end if;
-
-  if exists (
-    select 1
-    from information_schema.columns
-    where table_schema = 'public' and table_name = 'session_summaries' and column_name = 'created_at'
-      and data_type <> 'double precision'
-  ) then
-    execute $sql$
-      alter table public.session_summaries
-      alter column created_at type double precision
-      using public._to_epoch_seconds(created_at::text)
-    $sql$;
-  end if;
-
-  if exists (
-    select 1
-    from information_schema.columns
     where table_schema = 'public' and table_name = 'verification_codes' and column_name = 'created_at'
       and data_type <> 'timestamp with time zone'
   ) then
@@ -363,8 +293,6 @@ end $$;
 -- -----------------------------------------------------------------------------
 alter table public.profiles enable row level security;
 alter table public.portfolio_mirrors enable row level security;
-alter table public.facts enable row level security;
-alter table public.session_summaries enable row level security;
 alter table public.rate_limits enable row level security;
 alter table public.verification_codes enable row level security;
 alter table public.pending_extractions enable row level security;
@@ -395,18 +323,6 @@ for all to authenticated
 using (tenant_id::text = auth.uid()::text)
 with check (tenant_id::text = auth.uid()::text);
 
-drop policy if exists facts_user_isolation on public.facts;
-create policy facts_user_isolation on public.facts
-for all to authenticated
-using (lower(user_email) = lower(coalesce(auth.jwt() ->> 'email', '')))
-with check (lower(user_email) = lower(coalesce(auth.jwt() ->> 'email', '')));
-
-drop policy if exists session_summaries_user_isolation on public.session_summaries;
-create policy session_summaries_user_isolation on public.session_summaries
-for all to authenticated
-using (lower(user_email) = lower(coalesce(auth.jwt() ->> 'email', '')))
-with check (lower(user_email) = lower(coalesce(auth.jwt() ->> 'email', '')));
-
 drop policy if exists pending_extractions_tenant_isolation on public.pending_extractions;
 create policy pending_extractions_tenant_isolation on public.pending_extractions
 for all to authenticated
@@ -424,8 +340,6 @@ grant usage on schema public to service_role;
 grant select, insert, update, delete on table
   public.profiles,
   public.portfolio_mirrors,
-  public.facts,
-  public.session_summaries,
   public.rate_limits,
   public.verification_codes,
   public.pending_extractions,

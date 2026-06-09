@@ -21,6 +21,7 @@ from typing import Any, Awaitable, Callable
 
 from finagent.accuracy_validator import Claim
 from finagent.geo.entity_resolver import ResolvedEntity
+from finagent.ikg.service import IKGCompanyBundle
 from finagent.geo.query_localizer import localize_search_query
 from finagent.synthesis import EnrichmentBundle
 from finagent.tools.web.scraper import ScrapedDoc
@@ -111,6 +112,8 @@ class SubAgentContext:
     deadline_ms: int = 45_000
     max_queries: int = 6
     resolved_entity: ResolvedEntity | None = None
+    ikg_bundle: IKGCompanyBundle | None = None
+    agent_contexts: dict[str, dict[str, Any]] = field(default_factory=dict)
     preferred_domains: list[str] = field(default_factory=list)
     query_cache: dict[str, list[ScrapedDoc]] | None = None
     portfolio_symbols: list[str] = field(default_factory=list)
@@ -118,6 +121,9 @@ class SubAgentContext:
     runtime_rules: list[str] = field(default_factory=list)
     # Wall-clock guard shared with the main agent loop.
     budget_exceeded: Callable[[], bool] | None = None
+
+    def agent_context(self, agent_name: str) -> dict[str, Any]:
+        return self.agent_contexts.get(agent_name, {})
 
 
 class BaseSubAgent(abc.ABC):

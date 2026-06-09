@@ -3,10 +3,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import html
+import hashlib
+import io
 import json
 import logging
+import math
 import os
 import re
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +20,7 @@ from xml.etree import ElementTree as ET
 from pydantic import BaseModel, Field
 
 from finagent.paths import finagent_data_path, repo_root
+from finagent.seo.google_search_console import submit_sitemap
 from finagent.news.sources.bse_announcements import fetch_bse_announcements
 from finagent.news.sources.nse_announcements import fetch_nse_announcements
 from finagent.news.sources.sebi_rss import fetch_sebi_news
@@ -28,6 +33,17 @@ logger = logging.getLogger("finagent.content_automation")
 _SITE_URL = (os.getenv("PROSPEKTLAB_SITE_URL") or "https://prospektlab.com").rstrip("/")
 _DEFAULT_ARTICLE_ROUTE = "insights"
 _DATA_ROOT = finagent_data_path("content_automation")
+
+
+@dataclass(frozen=True)
+class _ImageClientConfig:
+    api_key: str
+    model: str
+    provider: str
+    base_url: str | None = None
+    image_endpoint: str | None = None
+    request_url: str | None = None
+    api_version: str | None = None
 
 
 class ContentArticleSection(BaseModel):
@@ -45,7 +61,7 @@ class ContentArticlePackage(BaseModel):
     slug: str = Field(..., min_length=1, max_length=120)
     title: str = Field(..., min_length=12, max_length=120)
     description: str = Field(..., min_length=80, max_length=220)
-    hero_eyebrow: str = Field(default="Automated Insight", max_length=60)
+    hero_eyebrow: str = Field(default="Research Brief", max_length=60)
     hero_title: str = Field(..., min_length=12, max_length=120)
     hero_summary: str = Field(..., min_length=80, max_length=360)
     audience: str = Field(default="Indian investors and market researchers", max_length=120)
@@ -187,7 +203,83 @@ def is_generated_article_published(slug: str, route_base: str = _DEFAULT_ARTICLE
     return str(article.get("publish_status") or "draft").lower() == "published"
 
 
+def _find_cover_asset_name(route_base: str, slug: str) -> str | None:
+    article_dir = _article_dir(route_base, slug)
+    for ext in (".png", ".jpg", ".jpeg", ".webp", ".svg"):
+        candidate = article_dir / f"cover{ext}"
+        if candidate.is_file():
+            return candidate.name
+    return None
+
+
+def _render_article_html_from_manifest(slug: str, route_base: str = _DEFAULT_ARTICLE_ROUTE) -> str | None:
+    manifest = load_generated_article(slug, route_base=route_base)
+    if not manifest:
+        return None
+    article_payload = manifest.get("article")
+    if not isinstance(article_payload, dict):
+        return None
+    try:
+        article = ContentArticlePackage.model_validate(article_payload)
+    except Exception:
+        logger.exception("Failed to validate article payload for %s/%s", route_base, slug)
+        return None
+    article_data = article.model_dump()
+    field_limits = {
+        "title": 120,
+        "description": 220,
+        "hero_eyebrow": 60,
+        "hero_title": 120,
+        "hero_summary": 360,
+        "audience": 120,
+        "cta_label": 40,
+        "cta_href": 200,
+        "image_prompt": 1200,
+    }
+    for key, limit in field_limits.items():
+        if isinstance(article_data.get(key), str):
+            article_data[key] = _repair_mojibake_text(str(article_data.get(key) or ""))[:limit].strip()
+    article_data["keywords"] = [
+        _repair_mojibake_text(str(keyword))[:120].strip()
+        for keyword in (article_data.get("keywords") or [])
+    ]
+    for section in article_data.get("sections") or []:
+        section["heading"] = _repair_mojibake_text(str(section.get("heading") or ""))[:140].strip()
+        section["paragraphs"] = [
+            _repair_mojibake_text(str(paragraph))
+            for paragraph in (section.get("paragraphs") or [])
+        ]
+        section["bullets"] = [
+            _repair_mojibake_text(str(item))
+            for item in (section.get("bullets") or [])
+        ]
+    for faq in article_data.get("faqs") or []:
+        faq["question"] = _repair_mojibake_text(str(faq.get("question") or ""))[:180].strip()
+        faq["answer"] = _repair_mojibake_text(str(faq.get("answer") or ""))[:900].strip()
+    try:
+        article = ContentArticlePackage.model_validate(article_data)
+    except Exception:
+        logger.exception("Failed to sanitize article payload for %s/%s", route_base, slug)
+
+    cover_name = _find_cover_asset_name(route_base, slug)
+    image_href = f"/{_safe_route_base(route_base)}/{slug}/{cover_name}" if cover_name else None
+    public_url = str(manifest.get("public_url") or f"{_SITE_URL}/{_safe_route_base(route_base)}/{slug}/")
+    generated_at = str(manifest.get("generated_at") or datetime.now(timezone.utc).replace(microsecond=0).isoformat())
+    meta = {
+        "content_type": manifest.get("content_type") or manifest.get("requested_content_type") or "manual",
+        "mode": manifest.get("mode") or "research",
+        "quality_score": manifest.get("quality_score") or manifest.get("confidence_score") or 0,
+        "ikg_covered": bool(manifest.get("ikg_covered")),
+        "hub_path": f"/{_safe_route_base(route_base)}/research/" if _safe_route_base(route_base) == "insights" else f"/{_safe_route_base(route_base)}/",
+        "sources_used": manifest.get("sources_used") or [],
+    }
+    return render_article_html(article, public_url, image_href, generated_at, meta=meta)
+
+
 def load_generated_article_html(slug: str, route_base: str = _DEFAULT_ARTICLE_ROUTE) -> str | None:
+    rendered = _render_article_html_from_manifest(slug, route_base=route_base)
+    if rendered:
+        return rendered
     html_path = _article_dir(route_base, slug) / "index.html"
     if not html_path.is_file():
         return None
@@ -196,6 +288,16 @@ def load_generated_article_html(slug: str, route_base: str = _DEFAULT_ARTICLE_RO
     except Exception:
         logger.exception("Failed to load generated article html %s", html_path)
         return None
+
+
+def load_generated_article_asset(slug: str, asset_name: str, route_base: str = _DEFAULT_ARTICLE_ROUTE) -> Path | None:
+    safe_name = Path(asset_name or "").name
+    if not safe_name or safe_name != (asset_name or ""):
+        return None
+    asset_path = _article_dir(route_base, slug) / safe_name
+    if not asset_path.is_file():
+        return None
+    return asset_path
 
 
 def list_generated_articles(route_base: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
@@ -216,10 +318,11 @@ def list_generated_articles(route_base: str | None = None, limit: int = 50) -> l
             except Exception:
                 logger.exception("Failed reading article manifest %s", article_json)
                 continue
+            article_meta = data.get("article") if isinstance(data.get("article"), dict) else {}
             item = {
                 "slug": data.get("slug") or article_json.parent.name,
-                "title": data.get("title") or "",
-                "description": data.get("description") or "",
+                "title": _repair_mojibake_text(data.get("title") or ""),
+                "description": _repair_mojibake_text(data.get("description") or ""),
                 "route_base": data.get("route_base") or current_route_base,
                 "public_url": data.get("public_url") or f"{_SITE_URL}/{current_route_base}/{article_json.parent.name}/",
                 "generated_at": data.get("generated_at") or "",
@@ -227,6 +330,27 @@ def list_generated_articles(route_base: str | None = None, limit: int = 50) -> l
                 "image_path": data.get("image_path") or None,
                 "confidence_score": data.get("confidence_score") or 0,
                 "publish_status": data.get("publish_status") or "draft",
+                "content_type": data.get("content_type") or "manual",
+                "requested_content_type": data.get("requested_content_type") or data.get("content_type") or "manual",
+                "mode": data.get("mode") or "",
+                "quality_score": data.get("quality_score") or 0,
+                "ikg_covered": bool(data.get("ikg_covered")),
+                "job_id": data.get("job_id") or "",
+                "published_at": data.get("published_at") or "",
+                "hero_summary": _repair_mojibake_text(article_meta.get("hero_summary") or ""),
+                "audience": _repair_mojibake_text(article_meta.get("audience") or ""),
+                "keywords": [_repair_mojibake_text(str(keyword)) for keyword in (article_meta.get("keywords") or [])],
+                "editorial_review": data.get("editorial_review") or {},
+                "editorial_quality_score": (
+                    (data.get("editorial_review") or {}).get("total_score")
+                    if isinstance(data.get("editorial_review"), dict)
+                    else 0
+                ),
+                "publish_urgency_score": (
+                    (data.get("editorial_review") or {}).get("urgency_score")
+                    if isinstance(data.get("editorial_review"), dict)
+                    else 0
+                ),
             }
             articles.append(item)
 
@@ -446,7 +570,12 @@ def _fallback_article(req: ContentAutomationRequest, slug: str, context: str) ->
         keywords=keywords[:8],
         sections=sections,
         faqs=faqs,
-        image_prompt=f"Editorial finance hero illustration for {topic}, dark premium interface, Indian market intelligence, modern publication cover, no text.",
+        image_prompt=(
+            f"Premium editorial cover for {topic}. Build a sharp 3:2 business-news visual with layered "
+            f"financial screens, documents, market cues, and one strong central subject tied to the story. "
+            "Keep the full composition comfortably inside frame with generous padding so it works in a report card. "
+            "High-end publication aesthetic, cinematic lighting, rich depth, India market context, no headline text, no watermark."
+        ),
     )
 
 
@@ -542,32 +671,225 @@ def _render_json_ld(article: ContentArticlePackage, public_url: str, image_url: 
     return json.dumps(payload, ensure_ascii=True)
 
 
-def render_article_html(article: ContentArticlePackage, public_url: str, image_href: str | None, generated_at: str) -> str:
+def _repair_mojibake_text(value: str) -> str:
+    text = str(value or "")
+    if not text:
+        return ""
+    if any(token in text for token in ("Ã", "Â", "â")):
+        try:
+            repaired = text.encode("cp1252", errors="ignore").decode("utf-8", errors="ignore")
+            if repaired and repaired.count("�") <= text.count("�"):
+                text = repaired
+        except Exception:
+            pass
+    replacements = {
+        "â€”": "—",
+        "â€“": "–",
+        "â€˜": "'",
+        "â€™": "'",
+        "â€œ": '"',
+        "â€": '"',
+        "â€¦": "...",
+        "â€¢": "•",
+        "â†’": "→",
+        "â‚¹": "₹",
+        "Â·": "·",
+        "Â±": "±",
+        "Â ": " ",
+        "Â": "",
+    }
+    for bad, good in replacements.items():
+        text = text.replace(bad, good)
+    return text.replace("\ufeff", "").strip()
+
+
+def _repair_mojibake_text(value: str) -> str:
+    text = str(value or "")
+    if not text:
+        return ""
+    if any(token in text for token in ("Ãƒ", "Ã‚", "Ã¢", "â", "Â")):
+        try:
+            repaired = text.encode("cp1252", errors="ignore").decode("utf-8", errors="ignore")
+            if repaired and repaired.count("\ufffd") <= text.count("\ufffd"):
+                text = repaired
+        except Exception:
+            pass
+    replacements = {
+        "Ã¢â‚¬â€": " - ",
+        "Ã¢â‚¬â€œ": " - ",
+        "Ã¢â‚¬Ëœ": "'",
+        "Ã¢â‚¬â„¢": "'",
+        "Ã¢â‚¬Å“": '"',
+        "Ã¢â‚¬Â": '"',
+        "Ã¢â‚¬Â¦": "...",
+        "Ã¢â‚¬Â¢": " - ",
+        "Ã¢â€ â€™": "->",
+        "Ã¢â€šÂ¹": "Rs ",
+        "Ã‚Â·": " - ",
+        "Ã‚Â±": "+/-",
+        "Ã‚ ": " ",
+        "Ã‚": "",
+        "â€”": " - ",
+        "–": " - ",
+        "•": " - ",
+        "→": "->",
+        "₹": "Rs ",
+        "Â": "",
+    }
+    for bad, good in replacements.items():
+        text = text.replace(bad, good)
+    text = text.replace("\u00a0", " ").replace("\ufeff", "")
+    text = re.sub(r"[^\S\r\n]+", " ", text)
+    return text.strip()
+
+
+def _hub_public_dir(route_base: str) -> Path:
+    route_base = _safe_route_base(route_base)
+    if route_base == "insights":
+        return repo_root() / "Frontend" / "app" / "public" / route_base / "research"
+    return repo_root() / "Frontend" / "app" / "public" / route_base
+
+
+def refresh_public_research_hub(route_base: str = _DEFAULT_ARTICLE_ROUTE) -> str | None:
+    route_base = _safe_route_base(route_base)
+    try:
+        from finagent.content.flash_engine import build_insights_hub_html
+    except Exception:
+        logger.exception("Failed to import public research hub builder")
+        return None
+
+    try:
+        public_dir = _hub_public_dir(route_base)
+        html_text = build_insights_hub_html(route_base=route_base)
+        _write_text(public_dir / "index.html", html_text)
+        return str(public_dir / "index.html")
+    except Exception:
+        logger.exception("Failed to refresh public research hub for %s", route_base)
+        return None
+
+
+def render_article_html(
+    article: ContentArticlePackage,
+    public_url: str,
+    image_href: str | None,
+    generated_at: str,
+    meta: dict[str, Any] | None = None,
+) -> str:
     def esc(value: str) -> str:
-        return html.escape(value or "", quote=True)
+        return html.escape(_repair_mojibake_text(value), quote=True)
+
+    meta = dict(meta or {})
+    route_base = _DEFAULT_ARTICLE_ROUTE
+    try:
+        parsed = urlparse(public_url)
+        parts = [part for part in (parsed.path or "").split("/") if part]
+        if len(parts) >= 2:
+            route_base = _safe_route_base(parts[0])
+    except Exception:
+        route_base = _DEFAULT_ARTICLE_ROUTE
+    hub_path = str(meta.get("hub_path") or (f"/{route_base}/research/" if route_base == "insights" else f"/{route_base}/"))
+    raw_sources = meta.get("sources_used") if isinstance(meta.get("sources_used"), list) else []
+    sources_used = [source for source in raw_sources if isinstance(source, dict)]
 
     section_html: list[str] = []
     toc_items: list[str] = []
+    highlight_points: list[str] = []
     for idx, section in enumerate(article.sections, start=1):
         anchor = f"section-{idx}-{slugify(section.heading)}"
-        toc_items.append(f'<li><a href="#{anchor}">{esc(section.heading)}</a></li>')
+        toc_items.append(f'<li><a href="#{anchor}" data-toc-link>{esc(section.heading)}</a></li>')
         paragraphs = "".join(f"<p>{esc(paragraph)}</p>" for paragraph in section.paragraphs)
         bullets = ""
         if section.bullets:
-            items = "".join(f"<li>{esc(item)}</li>" for item in section.bullets)
-            bullets = f"<ul>{items}</ul>"
+            for item in section.bullets:
+                if len(highlight_points) < 4:
+                    highlight_points.append(item)
+            items = "".join(f'<li class="data-row">{esc(item)}</li>' for item in section.bullets)
+            bullets = f'<ul class="data-list">{items}</ul>'
+        heading_key = section.heading.lower()
+        section_class = (
+            "section-card section-ikg"
+            if ("knowledge graph" in heading_key or "verified ownership" in heading_key or "governance records" in heading_key)
+            else "section-card"
+        )
         section_html.append(
-            f'<section class="section" id="{anchor}"><h2>{esc(section.heading)}</h2>{paragraphs}{bullets}</section>'
+            f'<section class="{section_class}" id="{anchor}" data-section>'
+            f'<div class="section-kicker">Section {idx:02d}</div>'
+            f'<h2>{esc(section.heading)}</h2>{paragraphs}{bullets}'
+            f'</section>'
         )
 
-    faq_items = "".join(
-        f'<div class="faq-item"><h3>{esc(faq.question)}</h3><p>{esc(faq.answer)}</p></div>' for faq in article.faqs
+    if not highlight_points:
+        highlight_points = article.keywords[:4]
+
+    def _metric_card(idx: int, text: str) -> str:
+        """Render a highlight bullet as a structured metric tile.
+
+        Parses 'Label: Value (±Change)' format.  Falls back to plain card
+        when the format doesn't match.
+        """
+        if ":" in text:
+            label, rest = text.split(":", 1)
+            rest = rest.strip()
+            cm = re.search(r"\(([+\-][^)]+)\)", rest)
+            if cm:
+                chg = cm.group(1)
+                val = rest[: cm.start()].rstrip(" —")
+                css_dir = "mc-pos" if chg.startswith("+") else "mc-neg"
+                return (
+                    f'<article class="signal-card">'
+                    f'<div class="signal-index">{idx:02d}</div>'
+                    f'<div class="mc-lbl">{esc(label.strip())}</div>'
+                    f'<div class="mc-val">{esc(val.strip())}</div>'
+                    f'<span class="mc-chg {css_dir}">{esc(chg)}</span>'
+                    f"</article>"
+                )
+            return (
+                f'<article class="signal-card">'
+                f'<div class="signal-index">{idx:02d}</div>'
+                f'<div class="mc-lbl">{esc(label.strip())}</div>'
+                f'<div class="mc-val">{esc(rest)}</div>'
+                f"</article>"
+            )
+        return (
+            f'<article class="signal-card">'
+            f'<div class="signal-index">{idx:02d}</div>'
+            f"<p>{esc(text)}</p>"
+            f"</article>"
+        )
+
+    highlight_html = "".join(
+        _metric_card(idx, point) for idx, point in enumerate(highlight_points[:4], start=1)
     )
-    keywords = "<div class=\"keyword-wrap\">" + "".join(
-        f'<span class="keyword">{esc(keyword)}</span>' for keyword in article.keywords[:10]
-    ) + "</div>"
-    image_markup = f'<img class="hero-image" src="{esc(image_href)}" alt="{esc(article.title)} cover image" loading="eager" />' if image_href else ""
+
+    faq_items = "".join(
+        f'<details class="faq-item"><summary><span class="faq-q-text">{esc(faq.question)}</span><span class="faq-chevron" aria-hidden="true">&#8250;</span></summary><div class="faq-answer"><p>{esc(faq.answer)}</p></div></details>'
+        for faq in article.faqs
+    )
+    image_markup = f'<img class="hero-image" src="{esc(image_href)}" alt="{esc(article.title)} cover image" loading="eager" />' if image_href else '<div class="hero-image hero-image-fallback">ProspektLab Insight</div>'
     json_ld = _render_json_ld(article, public_url, f"{_SITE_URL}{image_href}" if image_href and image_href.startswith("/") else image_href, generated_at).replace("</", "<\\/")
+    total_words = sum(len(paragraph.split()) for section in article.sections for paragraph in section.paragraphs)
+    read_minutes = max(4, (total_words + 219) // 220)
+    hero_context = f"{generated_at[:10]} • {read_minutes} min read"
+
+    methodology_points = [
+        "Primary source bias: official company filings, exchange disclosures, and transcripts should outrank generic summaries.",
+        "This article avoids live market price commentary unless the source explicitly belongs to the reporting period.",
+        "Ownership, governance, and filing signals appear only when verified records provide usable depth; thin coverage should be disclosed, not embellished.",
+    ]
+    methodology_html = "".join(f"<li>{esc(point)}</li>" for point in methodology_points)
+    source_html = ""
+    if sources_used:
+        source_items = "".join(
+            f'<li><a href="{esc(str(source.get("url") or "#"))}" rel="noopener noreferrer">{esc(str(source.get("title") or source.get("url") or "Source"))}</a></li>'
+            for source in sources_used[:6]
+        )
+        source_html = (
+            '<section class="rail-card">'
+            '<div class="rail-label">Primary sources</div>'
+            f"<ul>{source_items}</ul>"
+            "</section>"
+        )
+
     return f"""<!doctype html>
 <html lang=\"en-IN\">
   <head>
@@ -576,7 +898,7 @@ def render_article_html(article: ContentArticlePackage, public_url: str, image_h
     <title>{esc(article.title)}</title>
     <meta name=\"description\" content=\"{esc(article.description)}\" />
     <meta name=\"robots\" content=\"index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1\" />
-    <meta name=\"theme-color\" content=\"#081221\" />
+    <meta name=\"theme-color\" content=\"#f4ecdf\" />
     <link rel=\"canonical\" href=\"{esc(public_url)}\" />
     <link rel=\"icon\" type=\"image/svg+xml\" href=\"/prospektlab-favicon-v2.svg\" />
     <meta property=\"og:type\" content=\"article\" />
@@ -591,147 +913,1775 @@ def render_article_html(article: ContentArticlePackage, public_url: str, image_h
     <meta name=\"twitter:image\" content=\"{esc(f'{_SITE_URL}{image_href}' if image_href and image_href.startswith('/') else (image_href or f'{_SITE_URL}/prospektlab-logo.svg'))}\" />
     <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />
     <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />
-    <link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap\" rel=\"stylesheet\" />
+    <link href=\"https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap\" rel=\"stylesheet\" />
     <style>
       :root {{
-        color-scheme: dark;
-        --bg: #04101f;
-        --panel: rgba(10, 21, 38, 0.9);
-        --panel-soft: rgba(9, 18, 33, 0.82);
-        --text: #f6f8fc;
-        --muted: #aab6cb;
-        --line: rgba(145, 180, 230, 0.16);
-        --accent: #7dd3fc;
-        --accent-2: #60a5fa;
+        color-scheme: light;
+        --paper: #f4ecdf;
+        --paper-soft: #fffaf2;
+        --ink: #142033;
+        --muted: #5f6778;
+        --line: rgba(20, 32, 51, 0.12);
+        --line-strong: rgba(20, 32, 51, 0.22);
+        --accent: #0d766e;
+        --accent-soft: rgba(13, 118, 110, 0.12);
+        --accent-2: #ad6a1f;
+        --accent-3: #0f3d91;
+        --shadow: 0 28px 90px rgba(17, 24, 39, 0.08);
       }}
       * {{ box-sizing: border-box; }}
-      body {{ margin: 0; font-family: Inter, Arial, sans-serif; background: linear-gradient(180deg, #03101f 0%, #081425 100%); color: var(--text); line-height: 1.7; }}
-      a {{ color: var(--accent); }}
-      .shell {{ width: min(calc(100% - 28px), 1120px); margin: 0 auto; }}
-      .hero {{ padding: 28px 0 18px; }}
-      .card {{ border: 1px solid var(--line); border-radius: 26px; background: var(--panel); box-shadow: 0 22px 64px rgba(0,0,0,.28); }}
-      .hero-card {{ display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .85fr); gap: 24px; padding: 30px; align-items: center; }}
-      .eyebrow {{ display: inline-flex; margin-bottom: 12px; padding: 7px 12px; border-radius: 999px; background: rgba(96,165,250,.12); border: 1px solid rgba(125,211,252,.18); color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }}
-      h1, h2, h3 {{ line-height: 1.16; margin: 0 0 10px; }}
-      h1 {{ font-size: clamp(2.2rem, 5vw, 4rem); letter-spacing: -.04em; max-width: 12ch; }}
-      h2 {{ font-size: clamp(1.45rem, 2.5vw, 2rem); letter-spacing: -.03em; }}
-      p, li {{ color: var(--muted); font-size: 1rem; }}
-      .hero-summary {{ font-size: 1.08rem; max-width: 62ch; }}
-      .hero-meta {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }}
-      .pill, .keyword {{ padding: 9px 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(6,14,27,.56); color: var(--text); }}
-      .hero-image {{ display: block; width: 100%; border-radius: 22px; border: 1px solid var(--line); background: #071221; aspect-ratio: 4 / 3; object-fit: cover; }}
-      main {{ padding: 4px 0 48px; }}
-      .layout {{ display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 24px; }}
-      .toc {{ position: sticky; top: 20px; padding: 18px; }}
-      .toc ol {{ margin: 0; padding-left: 18px; }}
-      .toc li + li {{ margin-top: 8px; }}
-      .toc a {{ text-decoration: none; color: var(--muted); }}
-      .article {{ display: grid; gap: 18px; }}
-      .section, .faq {{ padding: 24px; }}
-      .section ul {{ padding-left: 18px; margin: 0; }}
-      .section li + li {{ margin-top: 8px; }}
-      .keyword-wrap {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }}
-      .faq-grid {{ display: grid; gap: 14px; }}
-      .faq-item {{ padding: 18px; border-radius: 18px; border: 1px solid var(--line); background: var(--panel-soft); }}
-      .footer {{ padding-bottom: 36px; }}
-      .footer-card {{ padding: 20px 24px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }}
-      @media (max-width: 980px) {{ .hero-card, .layout {{ grid-template-columns: 1fr; }} .toc {{ position: static; }} }}
-      @media (max-width: 720px) {{ .hero-card, .section, .faq, .toc {{ padding: 20px; }} h1 {{ max-width: 100%; }} }}
+      html {{ scroll-behavior: smooth; }}
+      body {{
+        margin: 0;
+        font-family: "Manrope", Arial, sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(13, 118, 110, 0.10), transparent 26%),
+          radial-gradient(circle at 100% 0%, rgba(15, 61, 145, 0.12), transparent 20%),
+          linear-gradient(180deg, #f7f1e6 0%, #f4ecdf 46%, #f0e7d8 100%);
+        color: var(--ink);
+        line-height: 1.75;
+      }}
+      a {{ color: inherit; }}
+      img {{ max-width: 100%; }}
+      .progress-bar {{
+        position: fixed;
+        inset: 0 0 auto;
+        height: 4px;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        transform-origin: left center;
+        transform: scaleX(0);
+        z-index: 1000;
+      }}
+      .shell {{ width: min(calc(100% - 36px), 1240px); margin: 0 auto; }}
+      .masthead {{
+        position: sticky;
+        top: 0;
+        z-index: 80;
+        backdrop-filter: blur(18px);
+        background: rgba(244, 236, 223, 0.86);
+        border-bottom: 1px solid rgba(20, 32, 51, 0.08);
+      }}
+      .masthead-inner {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 14px 0;
+      }}
+      .brand {{
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        color: var(--ink);
+      }}
+      .brand-mark {{
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent), var(--accent-3));
+        box-shadow: 0 0 0 8px rgba(13, 118, 110, 0.08);
+      }}
+      .brand-text {{
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }}
+      .masthead-links {{
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        color: var(--muted);
+        font-size: 13px;
+      }}
+      .masthead-links a {{
+        text-decoration: none;
+        transition: color 0.18s ease;
+      }}
+      .masthead-links a:hover {{ color: var(--ink); }}
+      .hero {{
+        padding: 34px 0 24px;
+      }}
+      .hero-frame {{
+        border: 1px solid var(--line);
+        border-radius: 34px;
+        padding: 30px;
+        background: linear-gradient(135deg, rgba(255, 250, 242, 0.92), rgba(249, 243, 233, 0.94));
+        box-shadow: var(--shadow);
+      }}
+      .hero-grid {{
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.86fr);
+        gap: 28px;
+        align-items: start;
+      }}
+      .eyebrow {{
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 14px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        border: 1px solid rgba(13, 118, 110, 0.16);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }}
+      .eyebrow::before {{
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+      }}
+      h1, h2, h3 {{ margin: 0; color: var(--ink); }}
+      h1 {{
+        margin-top: 18px;
+        font-family: "Newsreader", Georgia, serif;
+        font-size: clamp(3rem, 7vw, 5.3rem);
+        line-height: 0.96;
+        letter-spacing: -0.05em;
+        max-width: 10.8ch;
+      }}
+      h2 {{
+        font-family: "Newsreader", Georgia, serif;
+        font-size: clamp(2rem, 3vw, 2.7rem);
+        line-height: 1.02;
+        letter-spacing: -0.04em;
+        margin-bottom: 14px;
+      }}
+      h3 {{
+        font-family: "Newsreader", Georgia, serif;
+        font-size: 1.5rem;
+        letter-spacing: -0.03em;
+      }}
+      p, li {{
+        margin: 0 0 14px;
+        color: var(--muted);
+        font-size: 1.02rem;
+      }}
+      .hero-summary {{
+        margin-top: 18px;
+        max-width: 60ch;
+        font-size: 1.08rem;
+      }}
+      .hero-context {{
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }}
+      .hero-meta {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+      }}
+      .meta-pill, .keyword, .jump-chip {{
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 13px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--ink);
+        font-size: 12px;
+        text-decoration: none;
+      }}
+      .meta-pill-accent {{
+        border-color: rgba(13, 118, 110, 0.24);
+        background: rgba(13, 118, 110, 0.08);
+        color: var(--accent);
+      }}
+      .keyword-wrap, .jump-wrap {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+      }}
+      .hero-image {{
+        display: block;
+        width: 100%;
+        min-height: 320px;
+        aspect-ratio: 3 / 2;
+        padding: 14px;
+        box-sizing: border-box;
+        border-radius: 26px;
+        border: 1px solid rgba(20, 32, 51, 0.10);
+        background: linear-gradient(135deg, rgba(13, 118, 110, 0.10), rgba(15, 61, 145, 0.14));
+        object-fit: contain;
+        object-position: center;
+        box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+      }}
+      .hero-image-fallback {{
+        display: grid;
+        place-items: center;
+        color: var(--accent-3);
+        font-family: "IBM Plex Mono", monospace;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }}
+      .signal-board {{
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 22px;
+      }}
+      .signal-card {{
+        border-radius: 20px;
+        border: 1px solid var(--line-strong);
+        padding: 18px 20px 20px;
+        background: rgba(255, 255, 255, 0.88);
+        box-shadow: 0 4px 16px rgba(20,32,51,0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }}
+      .signal-index {{
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 6px;
+      }}
+      .signal-card p {{
+        margin: 0;
+        color: var(--ink);
+        font-size: 0.93rem;
+        line-height: 1.5;
+      }}
+      .mc-lbl {{
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 2px;
+      }}
+      .mc-val {{
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--ink);
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }}
+      .mc-chg {{
+        display: inline-block;
+        margin-top: 6px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }}
+      .mc-pos {{ background: rgba(16,185,129,0.12); color: #047857; }}
+      .mc-neg {{ background: rgba(239,68,68,0.12); color: #b91c1c; }}
+      /* ── Data list (section bullets) ─────────────── */
+      ul.data-list {{
+        list-style: none;
+        padding: 0;
+        margin: 18px 0 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }}
+      li.data-row {{
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 10px 16px;
+        background: rgba(20,32,51,0.035);
+        border-left: 3px solid var(--accent);
+        border-radius: 0 10px 10px 0;
+        color: var(--ink);
+        font-size: 0.965rem;
+        line-height: 1.55;
+      }}
+      li.data-row::before {{
+        content: "→";
+        color: var(--accent);
+        font-weight: 700;
+        flex-shrink: 0;
+        font-size: 12px;
+      }}
+      main {{
+        padding: 8px 0 54px;
+      }}
+      .story-shell {{
+        display: grid;
+        grid-template-columns: minmax(0, 270px) minmax(0, 1fr);
+        gap: 24px;
+        align-items: start;
+      }}
+      .story-rail {{
+        position: sticky;
+        top: 86px;
+        display: grid;
+        gap: 16px;
+      }}
+      .rail-card {{
+        border-radius: 24px;
+        border: 1px solid var(--line);
+        background: rgba(255, 250, 242, 0.84);
+        padding: 18px 18px 20px;
+        box-shadow: 0 14px 36px rgba(15, 23, 42, 0.04);
+      }}
+      .rail-label {{
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 10px;
+      }}
+      .toc ol {{
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 8px;
+      }}
+      .toc a {{
+        display: block;
+        padding: 10px 12px;
+        border-radius: 14px;
+        text-decoration: none;
+        color: var(--muted);
+        transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+      }}
+      .toc a:hover, .toc a.is-active {{
+        background: rgba(13, 118, 110, 0.08);
+        color: var(--ink);
+        transform: translateX(2px);
+      }}
+      .rail-card ul {{
+        padding-left: 18px;
+        margin: 0;
+      }}
+      .rail-card li {{
+        margin-bottom: 10px;
+        font-size: 0.93rem;
+      }}
+      .article-flow {{
+        display: grid;
+        gap: 18px;
+      }}
+      .section-card {{
+        border-radius: 28px;
+        border: 1px solid var(--line);
+        background: rgba(255, 250, 242, 0.86);
+        padding: 26px 28px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+      }}
+      .section-ikg {{
+        border-color: rgba(13, 118, 110, 0.24);
+        background: linear-gradient(180deg, rgba(13, 118, 110, 0.07), rgba(255, 250, 242, 0.94));
+      }}
+      .section-kicker {{
+        margin-bottom: 10px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--accent-2);
+      }}
+      .section-card ul {{
+        margin: 8px 0 0;
+        padding-left: 18px;
+      }}
+      .section-card li {{
+        color: var(--ink);
+      }}
+      .faq-shell {{
+        border-radius: 28px;
+        border: 1px solid var(--line);
+        background: rgba(255, 250, 242, 0.9);
+        padding: 24px 26px;
+      }}
+      .faq-grid {{
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+      }}
+      .faq-item {{
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.80);
+        overflow: hidden;
+        transition: box-shadow 0.18s ease;
+      }}
+      .faq-item[open] {{
+        box-shadow: 0 8px 24px rgba(20,32,51,0.07);
+        border-color: var(--line-strong);
+      }}
+      .faq-item summary {{
+        list-style: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 20px;
+        transition: background 0.15s ease;
+      }}
+      .faq-item summary:hover {{ background: rgba(13,118,110,0.04); }}
+      .faq-item summary::-webkit-details-marker {{ display: none; }}
+      .faq-q-text {{
+        font-weight: 700;
+        color: var(--ink);
+        font-size: 1rem;
+        line-height: 1.4;
+      }}
+      .faq-chevron {{
+        font-size: 22px;
+        color: var(--accent);
+        flex-shrink: 0;
+        transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
+        display: inline-block;
+      }}
+      .faq-item[open] .faq-chevron {{ transform: rotate(90deg); }}
+      .faq-answer {{
+        padding: 0 20px 18px;
+        border-top: 1px solid var(--line);
+      }}
+      .faq-answer p {{
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 0.98rem;
+        line-height: 1.75;
+      }}
+      .footer {{
+        padding: 0 0 42px;
+      }}
+      .footer-card {{
+        border-radius: 30px;
+        padding: 28px 30px;
+        background: linear-gradient(135deg, #15253d, #102036);
+        color: #f6f8fc;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        box-shadow: 0 30px 70px rgba(15, 23, 42, 0.18);
+      }}
+      .footer-card p {{
+        color: rgba(246, 248, 252, 0.76);
+        margin: 8px 0 0;
+      }}
+      .footer-link {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 11px 18px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.10);
+        color: #f6f8fc;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        text-decoration: none;
+        white-space: nowrap;
+      }}
+      @media (max-width: 1080px) {{
+        .hero-grid, .story-shell {{
+          grid-template-columns: 1fr;
+        }}
+        .story-rail {{
+          position: static;
+          order: 2;
+        }}
+        .signal-board {{
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }}
+        h1 {{
+          max-width: 100%;
+        }}
+      }}
+      @media (max-width: 720px) {{
+        .shell {{
+          width: min(calc(100% - 22px), 1240px);
+        }}
+        .masthead-inner {{
+          padding: 12px 0;
+        }}
+        .masthead-links {{
+          gap: 10px;
+          font-size: 12px;
+        }}
+        .hero-frame {{
+          padding: 22px;
+          border-radius: 26px;
+        }}
+        .section-card, .faq-shell, .rail-card {{
+          padding: 20px;
+          border-radius: 22px;
+        }}
+        .signal-board {{
+          grid-template-columns: 1fr;
+        }}
+        .footer-card {{
+          padding: 22px;
+          flex-direction: column;
+          align-items: flex-start;
+        }}
+      }}
     </style>
     <script type=\"application/ld+json\">{json_ld}</script>
   </head>
   <body>
+    <div class=\"progress-bar\" data-progress></div>
+    <div class=\"masthead\">
+      <div class=\"shell masthead-inner\">
+        <a class=\"brand\" href=\"{esc(hub_path)}\">
+          <span class=\"brand-mark\"></span>
+          <span class=\"brand-text\">ProspektLab Research</span>
+        </a>
+        <div class=\"masthead-links\">
+          <a href=\"{esc(hub_path)}\">All insights</a>
+          <a href=\"/#/dashboard\">Dashboard</a>
+          <a href=\"/#/contact\">Contact</a>
+        </div>
+      </div>
+    </div>
     <header class=\"hero\">
       <div class=\"shell\">
-        <section class=\"card hero-card\">
-          <div>
-            <div class=\"eyebrow\">{esc(article.hero_eyebrow)}</div>
-            <h1>{esc(article.hero_title)}</h1>
-            <p class=\"hero-summary\">{esc(article.hero_summary)}</p>
-            <div class=\"hero-meta\">
-              <span class=\"pill\">Audience: {esc(article.audience)}</span>
-              <span class=\"pill\">Published: {esc(generated_at[:10])}</span>
-              <span class=\"pill\">Format: Automated long-form article</span>
+        <section class=\"hero-frame\">
+          <div class=\"hero-grid\">
+            <div>
+              <div class=\"eyebrow\">{esc(article.hero_eyebrow)}</div>
+              <h1>{esc(article.hero_title)}</h1>
+              <p class=\"hero-summary\">{esc(article.hero_summary)}</p>
+              <p class=\"hero-context\">{esc(hero_context)}</p>
             </div>
-            {keywords}
+            <div>{image_markup}</div>
           </div>
-          <div>{image_markup}</div>
+          <div class=\"signal-board\">{highlight_html}</div>
         </section>
       </div>
     </header>
     <main>
-      <div class=\"shell layout\">
-        <aside class=\"card toc\"><h2>On this page</h2><ol>{''.join(toc_items)}</ol></aside>
-        <article class=\"article\">{''.join(section_html)}<section class=\"card faq\" id=\"faq\"><h2>Frequently Asked Questions</h2><div class=\"faq-grid\">{faq_items}</div></section></article>
+      <div class=\"shell story-shell\">
+        <aside class=\"story-rail\">
+          <section class=\"rail-card toc\">
+            <div class=\"rail-label\">On this page</div>
+            <ol>{''.join(toc_items)}</ol>
+          </section>
+          <section class=\"rail-card\">
+            <div class=\"rail-label\">How to read this</div>
+            <ul>{methodology_html}</ul>
+          </section>
+          {source_html}
+        </aside>
+        <article class=\"article-flow\">
+          {''.join(section_html)}
+          <section class=\"faq-shell\" id=\"faq\">
+            <div class=\"section-kicker\">Retail investor FAQ</div>
+            <h2>Questions readers usually ask after the numbers</h2>
+            <div class=\"faq-grid\">{faq_items}</div>
+          </section>
+        </article>
       </div>
     </main>
     <footer class=\"footer\">
-      <div class=\"shell\"><div class=\"card footer-card\"><div><strong>ProspektLab</strong><p>Automated content generated from platform APIs and research context.</p></div><div><a href=\"{esc(article.cta_href)}\">{esc(article.cta_label)}</a></div></div></div>
+      <div class=\"shell\">
+        <div class=\"footer-card\">
+          <div>
+            <div class=\"rail-label\" style=\"color: rgba(246, 248, 252, 0.64);\">ProspektLab</div>
+            <h3 style=\"color:#f6f8fc;\">Research pages should feel like finished editorial products.</h3>
+            <p>This page is designed to read like a serious market note, not a raw model export.</p>
+          </div>
+          <a class=\"footer-link\" href=\"{esc(article.cta_href)}\">{esc(article.cta_label)}</a>
+        </div>
+      </div>
     </footer>
+    <script>
+      (function () {{
+        'use strict';
+
+        /* ── Reading progress bar ──────────────────────── */
+        const progress = document.querySelector('[data-progress]');
+        let raf = null;
+        const updateProgress = () => {{
+          raf = null;
+          if (!progress) return;
+          const max = document.documentElement.scrollHeight - window.innerHeight;
+          const ratio = max > 0 ? window.scrollY / max : 0;
+          progress.style.transform = 'scaleX(' + Math.max(0, Math.min(1, ratio)) + ')';
+        }};
+        updateProgress();
+        window.addEventListener('scroll', () => {{ if (!raf) raf = requestAnimationFrame(updateProgress); }}, {{ passive: true }});
+
+        /* ── TOC active section ─────────────────────────── */
+        const tocLinks = Array.from(document.querySelectorAll('[data-toc-link]'));
+        const sections = tocLinks
+          .map((link) => document.querySelector(link.getAttribute('href')))
+          .filter(Boolean);
+
+        if ('IntersectionObserver' in window && tocLinks.length && sections.length) {{
+          const observer = new IntersectionObserver((entries) => {{
+            entries.forEach((entry) => {{
+              if (!entry.isIntersecting) return;
+              const activeId = '#' + entry.target.id;
+              tocLinks.forEach((link) => {{
+                const isActive = link.getAttribute('href') === activeId;
+                link.classList.toggle('is-active', isActive);
+              }});
+            }});
+          }}, {{ rootMargin: '-18% 0px -58% 0px', threshold: 0.1 }});
+          sections.forEach((section) => observer.observe(section));
+        }}
+
+        /* ── Back-to-top button ─────────────────────────── */
+        const btn = document.createElement('button');
+        btn.id = 'btt';
+        btn.setAttribute('aria-label', 'Back to top');
+        btn.innerHTML = '&#8593;';
+        document.body.appendChild(btn);
+
+        const bttStyle = document.createElement('style');
+        bttStyle.textContent = [
+          '#btt{{position:fixed;bottom:28px;right:28px;z-index:200;',
+          'width:44px;height:44px;border-radius:50%;border:1px solid var(--line-strong);',
+          'background:rgba(255,250,242,0.92);backdrop-filter:blur(10px);',
+          'color:var(--ink);font-size:18px;cursor:pointer;',
+          'display:flex;align-items:center;justify-content:center;',
+          'opacity:0;transform:translateY(12px);',
+          'transition:opacity .22s,transform .22s;pointer-events:none;',
+          'box-shadow:0 6px 20px rgba(20,32,51,0.12)}}',
+          '#btt.show{{opacity:1;transform:translateY(0);pointer-events:auto}}',
+          '#btt:hover{{background:rgba(13,118,110,0.12);border-color:var(--accent)}}',
+        ].join('');
+        document.head.appendChild(bttStyle);
+
+        window.addEventListener('scroll', () => {{
+          btn.classList.toggle('show', window.scrollY > 600);
+        }}, {{ passive: true }});
+        btn.addEventListener('click', () => window.scrollTo({{ top: 0, behavior: 'smooth' }}));
+
+        /* ── Highlight change indicators in metric cards ── */
+        document.querySelectorAll('.mc-chg').forEach((el) => {{
+          const txt = el.textContent || '';
+          if (txt.startsWith('+')) el.classList.add('mc-pos');
+          else if (txt.startsWith('-')) el.classList.add('mc-neg');
+        }});
+
+        /* ── Smooth anchor scroll (override jump chips) ─── */
+        document.querySelectorAll('a.jump-chip, a[data-toc-link]').forEach((a) => {{
+          a.addEventListener('click', (e) => {{
+            const href = a.getAttribute('href');
+            if (!href || !href.startsWith('#')) return;
+            const target = document.querySelector(href);
+            if (!target) return;
+            e.preventDefault();
+            const y = target.getBoundingClientRect().top + window.scrollY - 96;
+            window.scrollTo({{ top: y, behavior: 'smooth' }});
+          }});
+        }});
+      }})();
+    </script>
   </body>
 </html>
 """
 
 
-async def _generate_image(req: ContentAutomationRequest, article: ContentArticlePackage, route_base: str) -> tuple[bytes, str, str]:
-    prompt = article.image_prompt or f"Editorial hero image for {article.title}, premium finance publication aesthetic, dark blue background, no text."
-    model = os.getenv("FINAGENT_CONTENT_IMAGE_MODEL", "gpt-image-1").strip()
-    openai_key = os.getenv("OPENAI_API_KEY")
-    if req.include_image and openai_key and model:
-        try:
-            from openai import AsyncOpenAI
+def _compose_editorial_cover_prompt(article: ContentArticlePackage) -> str:
+    profile = _topic_profile(article)
+    visual_plan = _visual_story_plan(article)
+    intent = _story_intent(article)
+    base_prompt = (article.image_prompt or "").strip()
+    if not base_prompt:
+        base_prompt = (
+            f"Premium editorial cover for {article.title}. High-end business publication look, layered market "
+            "graphics, documents, devices, and one strong central subject tied to the story."
+        )
+    return (
+        f"{base_prompt} "
+        f"Story topic: {article.title}. "
+        f"Story intent: {intent}. "
+        f"Topic direction: {profile['prompt']}. "
+        f"Central branded object: {visual_plan['hero_object']}. "
+        f"Business cues: {', '.join(visual_plan['business_cues'])}. "
+        f"Event clues: {', '.join(visual_plan['event_cues'])}. "
+        "Create one coherent scene where the main object, business model, and event signal are visually obvious at first glance. "
+        "Landscape 3:2 composition for a news-card thumbnail and report hero, with a centered safe area that survives responsive crops. "
+        "Match a light, elegant financial publication UI with cream paper tones, balanced spacing, and attractive editorial depth. "
+        "Keep all important elements fully inside frame with safe margins. "
+        "No stretched or distorted objects. Do not crop the central branded object or key evidence props. "
+        "Use clear subject separation, balanced contrast, and readable depth so the card feels interactive and professional on a light interface. "
+        "No stretched perspective, no cropped main subject, no border text, no watermark, no UI chrome. "
+        "Use rich lighting, dimensional materials, and a polished financial newsroom aesthetic."
+    )
 
-            client = AsyncOpenAI(api_key=openai_key)
-            response = await client.images.generate(
-                model=model,
-                prompt=prompt,
-                size="1536x1024",
+
+def _story_intent(article: ContentArticlePackage) -> str:
+    text = _repair_mojibake_text(
+        " ".join(
+            [
+                article.hero_eyebrow,
+                article.title,
+                article.description,
+                article.hero_summary,
+                *article.keywords[:10],
+            ]
+        )
+    ).lower()
+    if any(token in text for token in ("probe", "enforcement", "ed", "sebi", "order", "adjudication", "litigation", "investigation")):
+        return "Explain the regulatory risk, timeline pressure, and compliance consequences around the event."
+    if any(token in text for token in ("acquire", "acquisition", "stake", "deal", "merger", "investment", "majority")):
+        return "Show strategic deal logic, ownership shift, and integration consequences for the business."
+    if any(token in text for token in ("earnings", "results", "guidance", "margin", "revenue", "profit", "ebit")):
+        return "Highlight what moved in the quarter, what management signaled, and what readers should monitor next."
+    if any(token in text for token in ("trend", "sector", "macro", "policy", "market")):
+        return "Frame the wider market narrative and expose the structural drivers behind the trend."
+    return "Clarify the company event with strong business context and practical takeaways for informed readers."
+
+
+def _cover_seed(article: ContentArticlePackage) -> int:
+    payload = f"{article.slug}|{article.title}|{'|'.join(article.keywords[:4])}"
+    return int(hashlib.sha256(payload.encode('utf-8')).hexdigest()[:8], 16)
+
+
+def _normalize_image_base_url(raw: str | None) -> str | None:
+    value = (raw or "").strip().rstrip("/")
+    if not value:
+        return None
+    lowered = value.lower()
+    if lowered.endswith("/v1"):
+        return value
+    if lowered.endswith("/openai/v1"):
+        return value
+    if "/openai/" in lowered:
+        return value
+    return f"{value}/openai/v1"
+
+
+def _normalize_foundry_resource_endpoint(raw: str | None) -> str | None:
+    value = (raw or "").strip().rstrip("/")
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _foundry_image_generation_url(resource_endpoint: str, deployment: str, api_version: str) -> str:
+    safe_endpoint = resource_endpoint.rstrip("/")
+    safe_deployment = deployment.strip().strip("/")
+    safe_version = api_version.strip()
+    return f"{safe_endpoint}/openai/deployments/{safe_deployment}/images/generations?api-version={safe_version}"
+
+
+def _foundry_openai_base_url(resource_endpoint: str) -> str:
+    return _normalize_image_base_url(resource_endpoint) or f"{resource_endpoint.rstrip('/')}/openai/v1"
+
+
+def _normalize_url(raw: str | None) -> str | None:
+    value = (raw or "").strip().rstrip("/")
+    return value or None
+
+
+def _resolve_image_client_config() -> _ImageClientConfig | None:
+    provider = (os.getenv("FINAGENT_CONTENT_IMAGE_PROVIDER") or "").strip().lower()
+    foundry_key = (
+        os.getenv("AZURE_AI_FOUNDRY_API_KEY")
+        or os.getenv("AZURE_AI_PROJECTS_API_KEY")
+        or os.getenv("AZURE_OPENAI_API_KEY")
+        or ""
+    ).strip()
+    foundry_image_endpoint = _normalize_url(
+        os.getenv("AZURE_AI_FOUNDRY_IMAGE_ENDPOINT")
+        or os.getenv("AZURE_AI_PROJECTS_IMAGE_ENDPOINT")
+        or os.getenv("AZURE_OPENAI_IMAGE_ENDPOINT")
+    )
+    foundry_openai_base_url = _normalize_image_base_url(
+        os.getenv("AZURE_AI_FOUNDRY_OPENAI_BASE_URL")
+        or os.getenv("AZURE_AI_PROJECTS_OPENAI_BASE_URL")
+        or os.getenv("AZURE_OPENAI_BASE_URL")
+    )
+    foundry_resource_endpoint = _normalize_foundry_resource_endpoint(
+        os.getenv("AZURE_AI_FOUNDRY_PROJECT_ENDPOINT")
+        or os.getenv("AZURE_AI_PROJECT_ENDPOINT")
+        or os.getenv("AZURE_OPENAI_ENDPOINT")
+    )
+    allow_legacy_image_model = (os.getenv("FINAGENT_CONTENT_IMAGE_ALLOW_GPT_IMAGE_1") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _normalize_image_model(value: str) -> str:
+        cleaned = (value or "").strip()
+        if cleaned.lower() == "gpt-image-1" and not allow_legacy_image_model:
+            return "chatgpt-image-2"
+        return cleaned
+
+    foundry_deployment = (
+        os.getenv("AZURE_AI_FOUNDRY_IMAGE_DEPLOYMENT")
+        or os.getenv("AZURE_AI_PROJECTS_IMAGE_DEPLOYMENT")
+        or os.getenv("AZURE_OPENAI_IMAGE_DEPLOYMENT")
+        or "chatgpt-image-2"
+    ).strip()
+    foundry_deployment = _normalize_image_model(foundry_deployment)
+    foundry_api_version = (os.getenv("AZURE_AI_FOUNDRY_IMAGE_API_VERSION") or "2025-04-01-preview").strip()
+    openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    openai_base_url = _normalize_image_base_url(os.getenv("FINAGENT_CONTENT_IMAGE_BASE_URL"))
+    openai_model = _normalize_image_model((os.getenv("FINAGENT_CONTENT_IMAGE_MODEL") or "chatgpt-image-2").strip())
+    foundry_request_url = None
+    if foundry_resource_endpoint and foundry_deployment:
+        foundry_request_url = _foundry_image_generation_url(foundry_resource_endpoint, foundry_deployment, foundry_api_version)
+    elif foundry_openai_base_url and foundry_deployment:
+        inferred_resource_endpoint = _normalize_foundry_resource_endpoint(foundry_openai_base_url)
+        if inferred_resource_endpoint:
+            foundry_request_url = _foundry_image_generation_url(inferred_resource_endpoint, foundry_deployment, foundry_api_version)
+
+    if provider in {"foundry", "azure", "azure_foundry", "mai"}:
+        if foundry_key and (foundry_image_endpoint or foundry_openai_base_url or foundry_resource_endpoint) and foundry_deployment:
+            return _ImageClientConfig(
+                api_key=foundry_key,
+                model=foundry_deployment,
+                provider="azure-foundry",
+                base_url=foundry_openai_base_url or foundry_resource_endpoint,
+                image_endpoint=foundry_image_endpoint,
+                request_url=foundry_request_url,
+                api_version=foundry_api_version,
             )
-            data = response.data[0]
-            b64 = getattr(data, "b64_json", None)
-            if b64:
-                return base64.b64decode(b64), ".png", "image/png"
-        except Exception:
-            logger.exception("Image generation failed; falling back to SVG")
+        logger.warning("Azure Foundry image provider selected but required config is missing; falling back")
 
+    if provider == "openai":
+        if openai_key and openai_model:
+            return _ImageClientConfig(
+                api_key=openai_key,
+                model=openai_model,
+                provider="openai",
+                base_url=openai_base_url,
+            )
+        logger.warning("OpenAI image provider selected but OPENAI_API_KEY or model is missing")
+
+    # Default routing: chatgpt-image-2 should use OPENAI_API_KEY unless caller
+    # explicitly forces Foundry with FINAGENT_CONTENT_IMAGE_PROVIDER=foundry.
+    if provider not in {"foundry", "azure", "azure_foundry", "mai"}:
+        if openai_key and openai_model.lower() == "chatgpt-image-2":
+            return _ImageClientConfig(
+                api_key=openai_key,
+                model=openai_model,
+                provider="openai",
+                base_url=openai_base_url,
+            )
+
+    if foundry_key and (foundry_image_endpoint or foundry_openai_base_url or foundry_resource_endpoint) and foundry_deployment:
+        return _ImageClientConfig(
+            api_key=foundry_key,
+            model=foundry_deployment,
+            provider="azure-foundry",
+            base_url=foundry_openai_base_url or foundry_resource_endpoint,
+            image_endpoint=foundry_image_endpoint,
+            request_url=foundry_request_url,
+            api_version=foundry_api_version,
+        )
+    if openai_key and openai_model:
+        return _ImageClientConfig(
+            api_key=openai_key,
+            model=openai_model,
+            provider="openai",
+            base_url=openai_base_url,
+        )
+    return None
+
+
+def _visual_story_plan(article: ContentArticlePackage) -> dict[str, Any]:
+    text = _repair_mojibake_text(" ".join([
+        article.hero_eyebrow,
+        article.title,
+        article.description,
+        article.hero_summary,
+        *article.keywords[:8],
+    ])).lower()
+    plan = {
+        "object_kind": "panel",
+        "hero_object": "a branded publication panel with layered market documents",
+        "business_cues": ["research notes", "charts", "statement pages"],
+        "event_cues": ["story-specific highlight panel", "supporting documents", "light newsroom depth"],
+        "coverage_label": "Coverage",
+    }
+    if any(token in text for token in ("quick commerce", "delivery", "grocery", "e-commerce", "retail app", "retail platform")):
+        plan.update({
+            "object_kind": "bag",
+            "hero_object": "a branded delivery bag or parcel crate that clearly reflects the company's delivery business",
+            "business_cues": ["shopping receipts", "route pins", "app screens", "parcel labels"],
+            "coverage_label": "Delivery",
+        })
+    elif any(token in text for token in ("bank", "banking", "fintech", "payments", "nbfc", "insurance")):
+        plan.update({
+            "object_kind": "card",
+            "hero_object": "a branded banking or payments card with ledger-style overlays",
+            "business_cues": ["account ledger", "payment device", "balance sheet pages"],
+            "coverage_label": "Finance",
+        })
+    elif any(token in text for token in ("software", "technology", "it services", "cloud", "saas", "consulting", "infosys", "tcs", "wipro", "hcl")):
+        plan.update({
+            "object_kind": "screen",
+            "hero_object": "a branded technology screen or terminal surrounded by deal and execution material",
+            "business_cues": ["code-like grids", "delivery dashboards", "contract pages"],
+            "coverage_label": "Technology",
+        })
+    elif any(token in text for token in ("travel", "airline", "aviation", "hotel", "hospitality", "rail")):
+        plan.update({
+            "object_kind": "suitcase",
+            "hero_object": "a branded suitcase or ticket wallet representing the travel business",
+            "business_cues": ["route map", "boarding pass", "terminal signage"],
+            "coverage_label": "Travel",
+        })
+    elif any(token in text for token in ("factory", "manufacturing", "industrial", "auto", "automotive", "chemicals")):
+        plan.update({
+            "object_kind": "crate",
+            "hero_object": "a branded industrial crate or component case tied to the operating business",
+            "business_cues": ["component sketches", "plant floor grid", "production sheets"],
+            "coverage_label": "Industry",
+        })
+    if any(token in text for token in ("probe", "enforcement", "ed", "sebi", "regulat", "order", "litigation", "investigation")):
+        plan["event_cues"] = ["official seal", "case files", "investigation board", "magnifier"]
+    elif any(token in text for token in ("acquire", "stake", "deal", "merger", "investment", "majority")):
+        plan["event_cues"] = ["transaction papers", "network map", "connected entities", "capital trail"]
+    elif any(token in text for token in ("earnings", "results", "guidance", "margin", "revenue", "profit")):
+        plan["event_cues"] = ["earnings memo", "guidance board", "results chart", "statement highlights"]
+    return plan
+
+
+def _topic_profile(article: ContentArticlePackage) -> dict[str, Any]:
+    text = _repair_mojibake_text(" ".join([
+        article.hero_eyebrow,
+        article.title,
+        article.description,
+        article.hero_summary,
+        *article.keywords[:8],
+    ])).lower()
+
+    if any(token in text for token in ("earnings", "results", "guidance", "margin", "revenue", "profit", "ebit")):
+        if any(token in text for token in ("guidance upgrade", "raised fy", "raised full-year", "outlook improved", "first guidance upgrade")):
+            return {
+                "kind": "earnings",
+                "variant": "guidance",
+                "badge": "Outlook",
+                "cues": ["Guidance", "Growth", "Outlook"],
+                "prompt": "A light editorial earnings-and-guidance cover with forecast cards, upward momentum, management outlook cues, and a premium publication finish",
+            }
+        if any(token in text for token in ("deal", "order", "tcv", "pipeline", "wins")):
+            return {
+                "kind": "earnings",
+                "variant": "dealwins",
+                "badge": "Earnings",
+                "cues": ["Deal wins", "Order book", "Margins"],
+                "prompt": "A light editorial earnings cover focused on deal wins, order-book momentum, statement pages, and a strong company-linked visual center",
+            }
+        return {
+            "kind": "earnings",
+            "variant": "standard",
+            "badge": "Earnings",
+            "cues": ["Revenue", "Margins", "Guidance"],
+            "prompt": "A light editorial earnings cover with statement pages, a guidance chart, polished market panels, and a strong focal subject tied to the company",
+        }
+    if "sebi" in text or "regulat" in text or "order" in text or "probe" in text:
+        return {
+            "kind": "regulation",
+            "variant": "standard",
+            "badge": "Regulation",
+            "cues": ["Order", "Filings", "Timeline"],
+            "prompt": "A bright editorial compliance scene with official papers, a verification seal, timeline markers, and premium legal-finance details",
+        }
+    if any(token in text for token in ("acquire", "stake", "deal", "invest", "merger", "majority")):
+        return {
+            "kind": "deal",
+            "variant": "standard",
+            "badge": "Deal",
+            "cues": ["Stake", "Capital", "Network"],
+            "prompt": "A polished M&A editorial image with connected entities, transaction documents, travel or sector props when relevant, and a confident publication finish",
+        }
+    if any(token in text for token in ("trend", "sector", "theme", "macro", "policy")):
+        return {
+            "kind": "trend",
+            "variant": "standard",
+            "badge": "Trend",
+            "cues": ["Sector", "Momentum", "Shift"],
+            "prompt": "A light editorial market-trend visual with layered charts, sector tiles, policy papers, and calm strategic composition",
+        }
+    if any(token in text for token in ("company", "ownership", "board", "governance", "shareholder")):
+        return {
+            "kind": "company",
+            "variant": "standard",
+            "badge": "Company",
+            "cues": ["Ownership", "Board", "Capital"],
+            "prompt": "A refined company-intelligence cover with governance papers, corporate architecture, connected nodes, and a premium research-desk feel",
+        }
+    return {
+        "kind": "company",
+        "variant": "standard",
+        "badge": "Research",
+        "cues": ["Coverage", "Signals", "Context"],
+        "prompt": "A polished market-research cover with balanced editorial composition, company context, and warm publication styling",
+    }
+
+
+def _cover_palette(article: ContentArticlePackage) -> dict[str, tuple[int, int, int]]:
+    profile = _topic_profile(article)
+    palettes: dict[str, list[dict[str, tuple[int, int, int]]]] = {
+        "earnings": [
+            {
+                "bg_top": (249, 243, 235),
+                "bg_bottom": (238, 228, 214),
+                "frame": (255, 250, 243),
+                "panel_top": (251, 247, 240),
+                "panel_bottom": (233, 224, 209),
+                "ink": (24, 37, 52),
+                "muted": (104, 115, 131),
+                "line": (207, 191, 171),
+                "accent": (13, 118, 110),
+                "accent_soft": (233, 146, 85),
+                "accent_alt": (69, 128, 201),
+                "glow_a": (245, 205, 142),
+                "glow_b": (170, 215, 205),
+                "chip": (184, 30, 30),
+            },
+            {
+                "bg_top": (250, 244, 238),
+                "bg_bottom": (235, 229, 217),
+                "frame": (255, 251, 246),
+                "panel_top": (250, 246, 239),
+                "panel_bottom": (229, 223, 212),
+                "ink": (28, 39, 59),
+                "muted": (108, 117, 130),
+                "line": (208, 196, 181),
+                "accent": (31, 127, 160),
+                "accent_soft": (240, 165, 102),
+                "accent_alt": (67, 108, 188),
+                "glow_a": (252, 210, 151),
+                "glow_b": (181, 206, 236),
+                "chip": (192, 36, 24),
+            },
+        ],
+        "regulation": [
+            {
+                "bg_top": (248, 242, 235),
+                "bg_bottom": (235, 227, 220),
+                "frame": (255, 250, 245),
+                "panel_top": (250, 246, 240),
+                "panel_bottom": (233, 226, 220),
+                "ink": (39, 37, 47),
+                "muted": (118, 108, 111),
+                "line": (210, 196, 188),
+                "accent": (134, 38, 53),
+                "accent_soft": (199, 151, 88),
+                "accent_alt": (75, 103, 140),
+                "glow_a": (241, 213, 182),
+                "glow_b": (224, 190, 201),
+                "chip": (150, 30, 46),
+            }
+        ],
+        "deal": [
+            {
+                "bg_top": (250, 244, 236),
+                "bg_bottom": (238, 230, 219),
+                "frame": (255, 250, 244),
+                "panel_top": (252, 248, 241),
+                "panel_bottom": (236, 227, 214),
+                "ink": (32, 42, 57),
+                "muted": (111, 118, 128),
+                "line": (208, 193, 176),
+                "accent": (207, 111, 60),
+                "accent_soft": (86, 146, 208),
+                "accent_alt": (18, 132, 122),
+                "glow_a": (244, 210, 167),
+                "glow_b": (185, 212, 232),
+                "chip": (181, 54, 27),
+            }
+        ],
+        "company": [
+            {
+                "bg_top": (248, 243, 234),
+                "bg_bottom": (234, 228, 216),
+                "frame": (255, 250, 244),
+                "panel_top": (249, 246, 239),
+                "panel_bottom": (229, 223, 212),
+                "ink": (31, 41, 54),
+                "muted": (106, 115, 124),
+                "line": (206, 193, 179),
+                "accent": (19, 121, 115),
+                "accent_soft": (191, 149, 83),
+                "accent_alt": (107, 129, 189),
+                "glow_a": (236, 216, 175),
+                "glow_b": (190, 219, 215),
+                "chip": (177, 98, 39),
+            }
+        ],
+        "trend": [
+            {
+                "bg_top": (246, 243, 237),
+                "bg_bottom": (231, 232, 226),
+                "frame": (252, 250, 245),
+                "panel_top": (246, 248, 244),
+                "panel_bottom": (226, 231, 225),
+                "ink": (29, 42, 53),
+                "muted": (102, 116, 124),
+                "line": (193, 203, 199),
+                "accent": (18, 121, 114),
+                "accent_soft": (92, 144, 211),
+                "accent_alt": (210, 149, 80),
+                "glow_a": (206, 231, 214),
+                "glow_b": (205, 220, 241),
+                "chip": (163, 89, 30),
+            }
+        ],
+    }
+    variants = palettes.get(profile["kind"], palettes["earnings"])
+    return variants[_cover_seed(article) % len(variants)]
+
+
+def _cover_label(article: ContentArticlePackage) -> str:
+    tokens = re.findall(r"[A-Za-z0-9&]+", article.hero_title or article.title)
+    stop = {"Q1", "Q2", "Q3", "Q4", "FY24", "FY25", "FY26", "THE", "AND", "WHAT", "WITH"}
+    for token in tokens:
+        if token.upper() in stop:
+            continue
+        if token.isupper() and 2 <= len(token) <= 8:
+            return token
+        if token[0].isalpha() and 3 <= len(token) <= 10:
+            return token.title()
+    return "Market"
+
+
+def _content_badge(article: ContentArticlePackage) -> str:
+    text = _repair_mojibake_text(" ".join([article.hero_eyebrow, article.title, article.description] + article.keywords[:4])).lower()
+    if "sebi" in text or "regulat" in text:
+        return "Regulation"
+    if "earnings" in text or "results" in text or "margin" in text:
+        return "Earnings"
+    if "company" in text or "ownership" in text:
+        return "Company"
+    if "trend" in text or "sector" in text:
+        return "Trend"
+    return "Research"
+
+
+def _fit_font(font_paths: list[str], size: int):
+    from PIL import ImageFont
+
+    for path in font_paths:
+        try:
+            return ImageFont.truetype(path, size=size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def render_cover_png(article: ContentArticlePackage) -> bytes | None:
+    try:
+        from PIL import Image, ImageDraw, ImageFilter
+    except Exception:
+        return None
+
+    width, height = 1600, 1000
+    profile = _topic_profile(article)
+    visual_plan = _visual_story_plan(article)
+    palette = _cover_palette(article)
+    label = _cover_label(article)
+    badge = profile["badge"]
+    cues = profile["cues"]
+
+    font_paths_bold = [
+        "C:/Windows/Fonts/arialbd.ttf",
+        "C:/Windows/Fonts/segoeuib.ttf",
+        "C:/Windows/Fonts/trebucbd.ttf",
+    ]
+    font_paths_regular = [
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/calibri.ttf",
+    ]
+    mono_paths = [
+        "C:/Windows/Fonts/consola.ttf",
+        "C:/Windows/Fonts/cour.ttf",
+        "C:/Windows/Fonts/lucon.ttf",
+    ]
+
+    eyebrow_font = _fit_font(mono_paths, 20)
+    cue_font = _fit_font(font_paths_bold, 22)
+    deck_font = _fit_font(font_paths_regular, 28)
+    body_font = _fit_font(font_paths_regular, 20)
+    metric_font = _fit_font(font_paths_bold, 26)
+    label_font = _fit_font(font_paths_bold, 220 if len(label) <= 4 else 170 if len(label) <= 6 else 140)
+
+    resample_ns = getattr(Image, "Resampling", Image)
+
+    def metric_tokens() -> list[str]:
+        blob = _repair_mojibake_text(" ".join([
+            article.title,
+            article.description,
+            article.hero_summary,
+            *article.keywords[:6],
+        ]))
+        blob = blob.replace("\u2013", "-").replace("\u2014", "-")
+        found: list[str] = []
+        patterns = [
+            r"\$\d+(?:\.\d+)?\s?[BM]",
+            r"(?:FY\d{2}\s)?\d+(?:\.\d+)?%\s?-\s?\d+(?:\.\d+)?%",
+            r"(?:Rs\.?|INR)\s?\d[\d,]*(?:\.\d+)?\s?Cr",
+            r"\d+(?:\.\d+)?%\s?[A-Za-z]{0,12}",
+            r"\d+(?:\.\d+)?\s?bps",
+        ]
+        for pattern in patterns:
+            for match in re.findall(pattern, blob):
+                token = re.sub(r"\s+", " ", match).strip(" -")
+                if token and token not in found:
+                    found.append(token)
+                if len(found) == 4:
+                    return found
+        return found
+
+    metrics = metric_tokens()
+    story_blob = _repair_mojibake_text(" ".join([article.title, article.description, article.hero_summary])).replace("\u2013", "-").replace("\u2014", "-")
+    guidance_match = re.search(r"(?:FY\d{2}\s)?\d+(?:\.\d+)?%\s?-\s?\d+(?:\.\d+)?%", story_blob)
+    deal_match = re.search(r"\$\d+(?:\.\d+)?\s?[BM]", story_blob)
+    margin_match = re.search(r"\d+(?:\.\d+)?%\s?(?:EBIT|margin)?", story_blob)
+    revenue_match = re.search(r"(?:Rs\.?|INR)?\s?\d[\d,]*(?:\.\d+)?\s?Cr", story_blob)
+
+    if profile["kind"] == "earnings" and profile.get("variant") == "guidance":
+        primary_metric = guidance_match.group(0) if guidance_match else (margin_match.group(0) if margin_match else (metrics[0] if metrics else cues[0]))
+        secondary_metric = margin_match.group(0) if margin_match else (deal_match.group(0) if deal_match else (metrics[1] if len(metrics) > 1 else cues[min(1, len(cues) - 1)]))
+    elif profile["kind"] == "earnings" and profile.get("variant") == "dealwins":
+        primary_metric = deal_match.group(0) if deal_match else (metrics[0] if metrics else cues[0])
+        secondary_metric = margin_match.group(0) if margin_match else (metrics[1] if len(metrics) > 1 else cues[min(1, len(cues) - 1)])
+    else:
+        primary_metric = metrics[0] if metrics else cues[0]
+        secondary_metric = revenue_match.group(0) if revenue_match else (metrics[1] if len(metrics) > 1 else cues[min(1, len(cues) - 1)])
+
+    def blend(a: tuple[int, int, int], b: tuple[int, int, int], mix: float) -> tuple[int, int, int]:
+        return tuple(int(a[idx] + (b[idx] - a[idx]) * mix) for idx in range(3))
+
+    def text_width(font, text: str) -> int:
+        bbox = font.getbbox(text)
+        return bbox[2] - bbox[0]
+
+    def wrap_text(font, text: str, max_width: int, max_lines: int) -> list[str]:
+        words = text.split()
+        if not words:
+            return []
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if not current or text_width(font, candidate) <= max_width:
+                current = candidate
+                continue
+            lines.append(current)
+            current = word
+            if len(lines) == max_lines - 1:
+                break
+        if current and len(lines) < max_lines:
+            lines.append(current)
+        consumed = sum(len(line.split()) for line in lines)
+        if consumed < len(words) and lines:
+            leftover = " ".join(words[consumed:])
+            candidate = f"{lines[-1]} {leftover}".strip()
+            while text_width(font, candidate + "...") > max_width and " " in candidate:
+                candidate = candidate.rsplit(" ", 1)[0]
+            lines[-1] = candidate.rstrip() + "..."
+        return lines[:max_lines]
+
+    def rounded_gradient(
+        size: tuple[int, int],
+        radius: int,
+        top: tuple[int, int, int],
+        bottom: tuple[int, int, int],
+        *,
+        outline: tuple[int, int, int] | None = None,
+    ) -> Image.Image:
+        w, h = size
+        layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        ldraw = ImageDraw.Draw(layer)
+        for y in range(h):
+            ldraw.line((0, y, w, y), fill=blend(top, bottom, y / max(h - 1, 1)) + (255,))
+        mask = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, w - 1, h - 1), radius=radius, fill=255)
+        card = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        card.paste(layer, (0, 0), mask)
+        if outline:
+            ImageDraw.Draw(card).rounded_rectangle((0, 0, w - 1, h - 1), radius=radius, outline=outline + (165,), width=2)
+        return card
+
+    def paint_shadow(base: Image.Image, layer: Image.Image, position: tuple[int, int], *, blur: int = 36, alpha: int = 68, offset: tuple[int, int] = (0, 28)) -> None:
+        shadow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        alpha_layer = layer.getchannel("A").point(lambda value: value * alpha // 255)
+        shadow_layer = Image.new("RGBA", layer.size, (84, 60, 38, 255))
+        shadow_layer.putalpha(alpha_layer)
+        shadow.paste(shadow_layer, (position[0] + offset[0], position[1] + offset[1]), shadow_layer)
+        base.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(blur)))
+
+    def paste_rotated(base: Image.Image, layer: Image.Image, position: tuple[int, int], angle: float, *, shadow_offset: tuple[int, int] = (0, 28), shadow_alpha: int = 64) -> None:
+        rotated = layer.rotate(angle, expand=True, resample=resample_ns.BICUBIC)
+        x = int(position[0] - rotated.size[0] / 2)
+        y = int(position[1] - rotated.size[1] / 2)
+        paint_shadow(base, rotated, (x, y), offset=shadow_offset, alpha=shadow_alpha)
+        base.alpha_composite(rotated, (x, y))
+
+    def make_chip(text: str, *, fill: tuple[int, int, int], ink: tuple[int, int, int] = (255, 255, 255), padding_x: int = 26) -> Image.Image:
+        tw = text_width(metric_font, text)
+        chip = Image.new("RGBA", (tw + padding_x * 2, 58), (0, 0, 0, 0))
+        cdraw = ImageDraw.Draw(chip)
+        cdraw.rounded_rectangle((0, 0, chip.size[0] - 1, 57), radius=20, fill=fill + (238,), outline=(255, 255, 255, 90), width=1)
+        cdraw.text((padding_x, 14), text, font=metric_font, fill=ink + (255,))
+        return chip
+
+    def draw_business_object(draw: Any, box: tuple[int, int, int, int], *, kind: str, fill: tuple[int, int, int], accent: tuple[int, int, int]) -> None:
+        x0, y0, x1, y1 = box
+        if kind == "bag":
+            draw.rounded_rectangle((x0, y0 + 34, x1, y1), radius=28, fill=fill + (190,), outline=(255, 255, 255, 120), width=2)
+            draw.arc((x0 + 54, y0 - 10, x1 - 54, y0 + 86), start=200, end=340, fill=(255, 255, 255, 190), width=8)
+            draw.line((x0 + 64, y0 + 48, x1 - 64, y0 + 48), fill=accent + (180,), width=6)
+            return
+        if kind == "card":
+            draw.rounded_rectangle((x0, y0 + 18, x1, y1), radius=26, fill=fill + (188,), outline=(255, 255, 255, 120), width=2)
+            draw.rounded_rectangle((x0 + 26, y0 + 58, x0 + 108, y0 + 102), radius=10, fill=(255, 255, 255, 120))
+            draw.line((x0 + 28, y0 + 132, x1 - 28, y0 + 132), fill=(255, 255, 255, 138), width=5)
+            return
+        if kind == "suitcase":
+            draw.rounded_rectangle((x0, y0 + 38, x1, y1), radius=24, fill=fill + (188,), outline=(255, 255, 255, 120), width=2)
+            draw.rounded_rectangle((x0 + 74, y0 + 6, x1 - 74, y0 + 54), radius=16, outline=(255, 255, 255, 180), width=6)
+            return
+        if kind == "crate":
+            draw.rounded_rectangle((x0, y0 + 30, x1, y1), radius=20, fill=fill + (188,), outline=(255, 255, 255, 120), width=2)
+            for step in range(1, 4):
+                draw.line((x0 + step * ((x1 - x0) // 4), y0 + 40, x0 + step * ((x1 - x0) // 4), y1 - 12), fill=(255, 255, 255, 106), width=3)
+            return
+        if kind == "screen":
+            draw.rounded_rectangle((x0, y0, x1, y1 - 28), radius=22, fill=fill + (188,), outline=(255, 255, 255, 120), width=2)
+            draw.rounded_rectangle((x0 + 90, y1 - 26, x1 - 90, y1), radius=10, fill=(255, 255, 255, 170))
+            return
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=28, fill=fill + (178,), outline=(255, 255, 255, 110), width=2)
+
+    image = Image.new("RGBA", (width, height), palette["bg_top"] + (255,))
+    bg = ImageDraw.Draw(image)
+    for y in range(height):
+        bg.line((0, y, width, y), fill=blend(palette["bg_top"], palette["bg_bottom"], y / max(height - 1, 1)) + (255,))
+
+    glow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    gdraw = ImageDraw.Draw(glow)
+    gdraw.ellipse((-120, -40, 760, 780), fill=palette["glow_a"] + (110,))
+    gdraw.ellipse((900, -20, 1680, 780), fill=palette["glow_b"] + (105,))
+    gdraw.ellipse((420, 500, 1180, 1120), fill=blend(palette["glow_a"], palette["glow_b"], 0.5) + (80,))
+    gdraw.polygon([(640, -20), (920, -20), (1140, 760), (420, 760)], fill=(255, 255, 255, 52))
+    image.alpha_composite(glow.filter(ImageFilter.GaussianBlur(92)))
+
+    grid = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    grid_draw = ImageDraw.Draw(grid)
+    for x in range(72, width, 96):
+        grid_draw.line((x, 64, x, height - 64), fill=palette["line"] + (24,), width=1)
+    for y in range(72, height, 78):
+        grid_draw.line((64, y, width - 64, y), fill=palette["line"] + (20,), width=1)
+    image.alpha_composite(grid)
+
+    trails = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    tdraw = ImageDraw.Draw(trails)
+    tdraw.arc((120, 260, 1240, 1060), start=188, end=308, fill=palette["accent_soft"] + (62,), width=4)
+    tdraw.arc((360, 110, 1540, 930), start=198, end=332, fill=palette["accent_alt"] + (56,), width=5)
+    tdraw.arc((540, 180, 1660, 980), start=198, end=316, fill=palette["accent"] + (42,), width=4)
+    image.alpha_composite(trails.filter(ImageFilter.GaussianBlur(8)))
+
+    hero = rounded_gradient(
+        (770, 500),
+        46,
+        blend(palette["accent_alt"], (255, 255, 255), 0.12),
+        blend(palette["accent"], (255, 255, 255), 0.04),
+        outline=palette["line"],
+    )
+    hdraw = ImageDraw.Draw(hero)
+    for y in range(64, hero.size[1] - 26, 42):
+        hdraw.line((36, y, hero.size[0] - 36, y), fill=(255, 255, 255, 18), width=1)
+    hero_glow = Image.new("RGBA", hero.size, (0, 0, 0, 0))
+    hgdraw = ImageDraw.Draw(hero_glow)
+    hgdraw.ellipse((80, 90, 620, 520), fill=(255, 255, 255, 64))
+    hgdraw.polygon([(540, 0), (770, 0), (770, 260), (470, 210)], fill=(255, 255, 255, 20))
+    hero.alpha_composite(hero_glow.filter(ImageFilter.GaussianBlur(28)))
+    hdraw.text((54, 48), article.hero_eyebrow[:28].upper(), font=eyebrow_font, fill=(255, 255, 255, 198))
+    hero.alpha_composite(make_chip(primary_metric, fill=palette["chip"]), (48, 100))
+    for idx, cue in enumerate(cues[:2]):
+        cue_chip = make_chip(cue, fill=blend(palette["accent_soft"], (255, 255, 255), 0.22), ink=palette["ink"])
+        hero.alpha_composite(cue_chip, (48, 178 + idx * 72))
+    label_w = text_width(label_font, label)
+    label_x = (hero.size[0] - label_w) // 2
+    label_y = 210
+    for offset, alpha in ((16, 34), (9, 58), (0, 236)):
+        hdraw.text((label_x + offset, label_y + offset // 2), label, font=label_font, fill=(255, 255, 255, alpha))
+    draw_business_object(
+        hdraw,
+        (520, 150, 712, 338),
+        kind=str(visual_plan.get("object_kind") or "panel"),
+        fill=blend(palette["accent_soft"], (255, 255, 255), 0.22),
+        accent=palette["accent"],
+    )
+    hero.alpha_composite(make_chip(badge, fill=palette["chip"]), (46, hero.size[1] - 92))
+    hdraw.line((530, 132, 660, 96, 730, 152), fill=(255, 255, 255, 148), width=8)
+
+    analytics = rounded_gradient((560, 420), 42, palette["frame"], palette["panel_bottom"], outline=palette["line"])
+    adraw = ImageDraw.Draw(analytics)
+    adraw.rounded_rectangle((26, 26, 534, 88), radius=28, fill=(255, 255, 255, 150))
+    analytics.alpha_composite(make_chip(secondary_metric, fill=blend(palette["accent_alt"], (255, 255, 255), 0.42), ink=palette["ink"], padding_x=22), (32, 30))
+    graph = Image.new("RGBA", analytics.size, (0, 0, 0, 0))
+    g = ImageDraw.Draw(graph)
+    for x in range(44, 528, 66):
+        g.line((x, 96, x, 380), fill=palette["line"] + (84,), width=1)
+    for y in range(108, 380, 56):
+        g.line((34, y, 526, y), fill=palette["line"] + (70,), width=1)
+    watermark_font = _fit_font(font_paths_bold, 150 if len(label) <= 5 else 128)
+    g.text((108, 120), label, font=watermark_font, fill=palette["ink"] + (34,))
+    bars = [122, 92, 176, 144, 214, 188]
+    if profile["kind"] == "earnings" and profile.get("variant") == "guidance":
+        bars = [98, 116, 138, 160, 202, 230]
+    elif profile["kind"] == "deal":
+        bars = [86, 154, 126, 178, 212, 238]
+    for idx, value in enumerate(bars):
+        bx = 78 + idx * 70
+        fill = palette["accent_soft"] if idx % 2 == 0 else palette["accent_alt"]
+        g.rounded_rectangle((bx, 338 - value, bx + 46, 338), radius=16, fill=fill + (225,))
+    points = [(56, 260), (138, 312), (214, 292), (302, 208), (388, 242), (472, 150)]
+    if profile["kind"] == "earnings" and profile.get("variant") == "guidance":
+        points = [(56, 292), (144, 252), (232, 240), (314, 204), (400, 166), (486, 126)]
+    g.line(points, fill=palette["accent"] + (255,), width=12, joint="curve")
+    for px, py in points:
+        g.ellipse((px - 9, py - 9, px + 9, py + 9), fill=(255, 255, 255, 236))
+    analytics.alpha_composite(graph)
+
+    memo = rounded_gradient((376, 252), 34, (255, 252, 246), blend(palette["panel_bottom"], (255, 255, 255), 0.52), outline=palette["line"])
+    mdraw = ImageDraw.Draw(memo)
+    memo_title = "Research memo" if profile["kind"] != "regulation" else "Action memo"
+    mdraw.text((28, 24), memo_title, font=cue_font, fill=palette["ink"] + (214,))
+    snippet_lines = wrap_text(body_font, article.title, 300, 2)
+    for idx, line in enumerate(snippet_lines):
+        mdraw.text((28, 66 + idx * 24), line, font=body_font, fill=palette["muted"] + (218,))
+    for idx in range(4):
+        y = 126 + idx * 28
+        length = 236 + ((idx + 1) % 2) * 52
+        mdraw.rounded_rectangle((28, y, 28 + length, y + 10), radius=5, fill=palette["line"] + (148,))
+    mdraw.ellipse((224, 112, 300, 188), outline=palette["accent_soft"] + (206,), width=6)
+    mdraw.ellipse((286, 90, 352, 156), outline=palette["accent_alt"] + (206,), width=6)
+
+    focus = rounded_gradient((396, 294), 34, blend(palette["accent_soft"], (255, 255, 255), 0.56), blend(palette["accent_alt"], (255, 255, 255), 0.38), outline=palette["line"])
+    fdraw = ImageDraw.Draw(focus)
+    focus_title = "Guidance reset" if profile["kind"] == "earnings" and profile.get("variant") == "guidance" else "Deal momentum" if profile["kind"] == "earnings" else "Story frame"
+    if profile["kind"] == "regulation":
+        focus_title = "Order trail"
+    elif profile["kind"] == "deal":
+        focus_title = "Transaction map"
+    fdraw.text((34, 30), focus_title, font=cue_font, fill=palette["ink"] + (220,))
+    if profile["kind"] == "earnings" and profile.get("variant") == "guidance":
+        focus.alpha_composite(make_chip(primary_metric, fill=(255, 255, 255), ink=palette["ink"], padding_x=24), (30, 84))
+        path = [(52, 214), (132, 186), (208, 194), (282, 152), (346, 116)]
+        fdraw.line(path, fill=palette["accent"] + (244,), width=9)
+        fdraw.polygon([(334, 106), (370, 92), (348, 134)], fill=palette["accent"] + (245,))
+        for px, py in path[:-1]:
+            fdraw.ellipse((px - 7, py - 7, px + 7, py + 7), fill=(255, 255, 255, 230))
+    elif profile["kind"] == "earnings":
+        for idx in range(3):
+            px = 36 + idx * 104
+            fdraw.rounded_rectangle((px, 90, px + 76, 154), radius=18, fill=(255, 255, 255, 178), outline=palette["line"] + (112,), width=1)
+        fdraw.text((44, 188), primary_metric, font=metric_font, fill=palette["ink"] + (218,))
+        path = [(44, 236), (118, 198), (196, 216), (282, 164), (348, 122)]
+        fdraw.line(path, fill=palette["accent_alt"] + (240,), width=8)
+        for px, py in path:
+            fdraw.ellipse((px - 7, py - 7, px + 7, py + 7), fill=(255, 255, 255, 234))
+    elif profile["kind"] == "regulation":
+        for idx, doc in enumerate(((40, 96, 166, 214), (116, 74, 246, 196))):
+            fdraw.rounded_rectangle(doc, radius=18, fill=(255, 255, 255, 206 - idx * 20), outline=palette["line"] + (116,), width=1)
+        fdraw.ellipse((260, 110, 346, 196), outline=palette["accent"] + (236,), width=8)
+        fdraw.line((308, 168, 356, 220), fill=palette["accent"] + (236,), width=8)
+    elif profile["kind"] == "deal":
+        for idx, box in enumerate(((40, 90, 164, 182), (188, 112, 318, 204))):
+            fill = (255, 255, 255, 186) if idx == 0 else (255, 255, 255, 152)
+            fdraw.rounded_rectangle(box, radius=22, fill=fill, outline=palette["line"] + (110,), width=1)
+        fdraw.line((164, 136, 188, 156), fill=palette["accent"] + (238,), width=8)
+        fdraw.polygon([(178, 146), (208, 156), (184, 174)], fill=palette["accent"] + (236,))
+        fdraw.text((38, 220), secondary_metric, font=metric_font, fill=palette["ink"] + (214,))
+    else:
+        focus.alpha_composite(make_chip(cues[0], fill=(255, 255, 255), ink=palette["ink"], padding_x=22), (34, 86))
+        focus.alpha_composite(make_chip(cues[min(1, len(cues) - 1)], fill=(255, 255, 255), ink=palette["ink"], padding_x=22), (34, 156))
+        fdraw.line((52, 240, 338, 148), fill=palette["accent_alt"] + (228,), width=7)
+
+    device = rounded_gradient((280, 380), 32, blend(palette["panel_top"], (255, 255, 255), 0.18), blend(palette["panel_bottom"], palette["frame"], 0.25), outline=palette["line"])
+    ddraw = ImageDraw.Draw(device)
+    ddraw.rounded_rectangle((26, 26, 254, 64), radius=18, fill=(255, 255, 255, 136))
+    ddraw.text((42, 32), str(visual_plan.get("coverage_label") or "Coverage"), font=cue_font, fill=palette["ink"] + (212,))
+    ddraw.rounded_rectangle((54, 94, 226, 224), radius=26, fill=blend(palette["accent"], (255, 255, 255), 0.58) + (214,), outline=(255, 255, 255, 110), width=1)
+    device_label_font = _fit_font(font_paths_bold, 74 if len(label) <= 6 else 58)
+    ddraw.text(((280 - text_width(device_label_font, label)) // 2, 120), label, font=device_label_font, fill=(255, 255, 255, 236))
+    ddraw.rounded_rectangle((44, 256, 236, 314), radius=22, fill=(255, 255, 255, 168), outline=palette["line"] + (104,), width=1)
+    ddraw.text((64, 270), badge, font=cue_font, fill=palette["ink"] + (214,))
+    ddraw.line((62, 342, 112, 312, 154, 324, 214, 272), fill=palette["accent"] + (244,), width=8)
+    ddraw.polygon([(204, 264), (232, 252), (216, 286)], fill=palette["accent"] + (242,))
+
+    connectors = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    cdraw = ImageDraw.Draw(connectors)
+    route_points = [(480, 442), (704, 372), (920, 522), (1164, 434)]
+    cdraw.line(route_points, fill=palette["accent"] + (116,), width=6)
+    for px, py in route_points:
+        cdraw.ellipse((px - 12, py - 12, px + 12, py + 12), fill=(255, 255, 255, 188), outline=palette["accent"] + (160,), width=2)
+    image.alpha_composite(connectors.filter(ImageFilter.GaussianBlur(2)))
+
+    image.alpha_composite(make_chip("PROSPEKTLAB RESEARCH", fill=(255, 255, 255), ink=palette["ink"], padding_x=22), (84, 54))
+
+    paste_rotated(image, hero, (442, 388), -5)
+    paste_rotated(image, analytics, (1180, 336), 4)
+    paste_rotated(image, memo, (314, 790), -6, shadow_offset=(0, 22), shadow_alpha=58)
+    paste_rotated(image, focus, (850, 798), 7, shadow_offset=(0, 22), shadow_alpha=60)
+    paste_rotated(image, device, (1268, 736), -8, shadow_offset=(0, 24), shadow_alpha=60)
+
+    footer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    ImageDraw.Draw(footer).text((84, 934), "Markets, policy, and company moves", font=deck_font, fill=palette["ink"] + (190,))
+    image.alpha_composite(footer)
+
+    final_image = image.convert("RGB")
+    buffer = io.BytesIO()
+    final_image.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
+async def _generate_image(req: ContentAutomationRequest, article: ContentArticlePackage, route_base: str) -> tuple[bytes, str, str]:
+    prompt = _compose_editorial_cover_prompt(article)
+    config = _resolve_image_client_config()
+    if req.include_image and config:
+        try:
+            logger.info(
+                "Generating cover image via %s using model/deployment %s",
+                config.provider,
+                config.model,
+            )
+            if config.provider == "azure-foundry":
+                import httpx
+
+                direct_error: str | None = None
+                if config.image_endpoint:
+                    headers = {
+                        "api-key": config.api_key,
+                        "Content-Type": "application/json",
+                    }
+                    payload = {
+                        "model": config.model,
+                        "prompt": prompt,
+                        "size": "1536x1024",
+                    }
+                    async with httpx.AsyncClient(timeout=180.0, trust_env=False) as http_client:
+                        response = await http_client.post(config.image_endpoint, headers=headers, json=payload)
+                    if response.is_success:
+                        content_type = (response.headers.get("content-type") or "").split(";")[0].strip().lower()
+                        if content_type.startswith("image/"):
+                            return response.content, ".png", content_type
+                        data = response.json()
+                        items = data.get("data") if isinstance(data, dict) else None
+                        if isinstance(items, list) and items:
+                            first = items[0] or {}
+                            b64 = first.get("b64_json")
+                            if b64:
+                                return base64.b64decode(b64), ".png", "image/png"
+                            image_url = first.get("url")
+                            if image_url:
+                                async with httpx.AsyncClient(timeout=60.0, trust_env=False) as http_client:
+                                    image_response = await http_client.get(image_url)
+                                    image_response.raise_for_status()
+                                    remote_type = (image_response.headers.get("content-type") or "image/png").split(";")[0].strip()
+                                    return image_response.content, ".png", remote_type or "image/png"
+                    else:
+                        direct_error = response.text[:400]
+                        logger.warning(
+                            "Azure Foundry direct image endpoint failed for deployment %s: %s",
+                            config.model,
+                            direct_error,
+                        )
+
+                v1_error: str | None = None
+                if config.base_url:
+                    from openai import AsyncOpenAI
+
+                    client = AsyncOpenAI(
+                        api_key=config.api_key,
+                        base_url=_foundry_openai_base_url(config.base_url or ""),
+                        http_client=httpx.AsyncClient(timeout=120.0, trust_env=False),
+                    )
+                    try:
+                        response = await client.images.generate(
+                            model=config.model,
+                            prompt=prompt,
+                            size="1536x1024",
+                            response_format="b64_json",
+                        )
+                        data = response.data[0]
+                        b64 = getattr(data, "b64_json", None)
+                        if b64:
+                            return base64.b64decode(b64), ".png", "image/png"
+                    except Exception as exc:
+                        v1_error = str(exc)
+                        logger.warning(
+                            "Azure Foundry OpenAI v1 image generation failed for deployment %s: %s",
+                            config.model,
+                            v1_error[:300],
+                        )
+                    finally:
+                        await client.close()
+
+                if config.request_url:
+                    headers = {
+                        "api-key": config.api_key,
+                        "Content-Type": "application/json",
+                    }
+                    payload = {
+                        "prompt": prompt,
+                        "size": "1536x1024",
+                        "quality": "high",
+                        "output_format": "png",
+                    }
+                    async with httpx.AsyncClient(timeout=180.0, trust_env=False) as http_client:
+                        response = await http_client.post(config.request_url, headers=headers, json=payload)
+                    if response.is_success:
+                        content_type = (response.headers.get("content-type") or "image/png").split(";")[0].strip()
+                        return response.content, ".png", content_type or "image/png"
+                    logger.error(
+                        "Azure Foundry preview image generation failed with status %s for deployment %s: %s",
+                        response.status_code,
+                        config.model,
+                        response.text[:400],
+                    )
+                    if direct_error:
+                        logger.error("Azure Foundry direct endpoint attempt also failed: %s", direct_error)
+                    if v1_error:
+                        logger.error("Azure Foundry OpenAI v1 attempt also failed: %s", v1_error[:400])
+                    response.raise_for_status()
+            else:
+                from openai import AsyncOpenAI
+                import httpx
+
+                client = AsyncOpenAI(
+                    api_key=config.api_key,
+                    base_url=config.base_url,
+                    http_client=httpx.AsyncClient(timeout=120.0, trust_env=False),
+                )
+                try:
+                    response = await client.images.generate(
+                        model=config.model,
+                        prompt=prompt,
+                        size="1536x1024",
+                        response_format="b64_json",
+                    )
+                finally:
+                    await client.close()
+                data = response.data[0]
+                b64 = getattr(data, "b64_json", None)
+                if b64:
+                    return base64.b64decode(b64), ".png", "image/png"
+                image_url = getattr(data, "url", None)
+                if image_url:
+                    async with httpx.AsyncClient(timeout=60.0, trust_env=False) as http_client:
+                        image_response = await http_client.get(image_url)
+                        image_response.raise_for_status()
+                        content_type = (image_response.headers.get("content-type") or "image/png").split(";")[0].strip()
+                        return image_response.content, ".png", content_type or "image/png"
+        except Exception:
+            logger.exception("Image generation failed; falling back to local cover renderer")
+    png = render_cover_png(article)
+    if png:
+        return png, ".png", "image/png"
     svg = render_cover_svg(article)
     return svg.encode("utf-8"), ".svg", "image/svg+xml"
 
 
 def render_cover_svg(article: ContentArticlePackage) -> str:
-    title = html.escape(article.hero_title)
-    subtitle = html.escape(article.description[:160])
+    def wrap_lines(text: str, *, max_chars: int, max_lines: int) -> list[str]:
+        words = (text or "").split()
+        if not words:
+            return []
+        lines: list[str] = []
+        current = ""
+        idx = 0
+        while idx < len(words):
+            word = words[idx]
+            candidate = f"{current} {word}".strip()
+            if not current or len(candidate) <= max_chars:
+                current = candidate
+                idx += 1
+                continue
+            lines.append(current)
+            current = ""
+            if len(lines) == max_lines - 1:
+                break
+        if current and len(lines) < max_lines:
+            lines.append(current)
+        if idx < len(words):
+            remaining = " ".join(words[idx:])
+            if lines:
+                lines[-1] = (lines[-1] + " " + remaining).strip()
+            else:
+                lines.append(remaining)
+        if lines and len(lines[-1]) > max_chars:
+            lines[-1] = lines[-1][: max_chars - 1].rstrip() + "..."
+        return lines[:max_lines]
+
+    title_lines = wrap_lines(article.hero_title, max_chars=18, max_lines=3)
+    subtitle_lines = wrap_lines(article.description[:170], max_chars=42, max_lines=3)
+    title_svg = "".join(
+        f'<tspan x="96" dy="{0 if idx == 0 else 92}">{html.escape(line)}</tspan>'
+        for idx, line in enumerate(title_lines)
+    )
+    subtitle_svg = "".join(
+        f'<tspan x="96" dy="{0 if idx == 0 else 36}">{html.escape(line)}</tspan>'
+        for idx, line in enumerate(subtitle_lines)
+    )
+
     chips = article.keywords[:4]
-    chip_svg = []
-    x = 60
+    chip_svg: list[str] = []
+    x = 96
+    y = 824
     for keyword in chips:
         safe = html.escape(keyword[:24])
-        width = max(120, min(260, 20 + len(safe) * 10))
+        width = max(158, min(280, 48 + len(safe) * 10))
         chip_svg.append(
-            f'<g><rect x="{x}" y="760" rx="22" ry="22" width="{width}" height="52" fill="rgba(255,255,255,0.08)" stroke="rgba(125,211,252,0.22)"/><text x="{x + 20}" y="792" fill="#dbeafe" font-size="24" font-family="Inter, Arial, sans-serif">{safe}</text></g>'
+            f'<g><rect x="{x}" y="{y}" rx="24" ry="24" width="{width}" height="56" fill="#fff7ee" fill-opacity="0.88" stroke="#17314d" stroke-opacity="0.10" />'
+            f'<text x="{x + 24}" y="{y + 36}" fill="#17314d" font-size="24" font-family="Manrope, Arial, sans-serif" font-weight="700">{safe}</text></g>'
         )
-        x += width + 18
-        if x > 1200:
+        x += width + 16
+        if x > 1180:
             break
-    return f"""<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1536\" height=\"1024\" viewBox=\"0 0 1536 1024\" role=\"img\" aria-label=\"{title}\">
+
+    return f"""<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1536\" height=\"1024\" viewBox=\"0 0 1536 1024\" role=\"img\" aria-label=\"{html.escape(article.hero_title)}\">
   <defs>
     <linearGradient id=\"bg\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">
-      <stop offset=\"0%\" stop-color=\"#03101f\" />
-      <stop offset=\"55%\" stop-color=\"#0b1b34\" />
-      <stop offset=\"100%\" stop-color=\"#12264b\" />
+      <stop offset=\"0%\" stop-color=\"#f7f1e6\" />
+      <stop offset=\"58%\" stop-color=\"#efe6d7\" />
+      <stop offset=\"100%\" stop-color=\"#dce7f1\" />
     </linearGradient>
-    <radialGradient id=\"glow\" cx=\"20%\" cy=\"15%\" r=\"80%\">
-      <stop offset=\"0%\" stop-color=\"rgba(125,211,252,0.45)\" />
-      <stop offset=\"100%\" stop-color=\"rgba(125,211,252,0)\" />
-    </radialGradient>
+    <linearGradient id=\"ink\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">
+      <stop offset=\"0%\" stop-color=\"#17314d\" />
+      <stop offset=\"100%\" stop-color=\"#245a8a\" />
+    </linearGradient>
   </defs>
   <rect width=\"1536\" height=\"1024\" fill=\"url(#bg)\" />
-  <circle cx=\"320\" cy=\"170\" r=\"420\" fill=\"url(#glow)\" />
-  <circle cx=\"1230\" cy=\"220\" r=\"320\" fill=\"rgba(96,165,250,0.11)\" />
-  <rect x=\"48\" y=\"48\" width=\"1440\" height=\"928\" rx=\"42\" fill=\"rgba(8,18,36,0.78)\" stroke=\"rgba(145,180,230,0.16)\" />
-  <text x=\"60\" y=\"114\" fill=\"#7dd3fc\" font-size=\"28\" font-family=\"Inter, Arial, sans-serif\" font-weight=\"700\" letter-spacing=\"3\">PROSPEKTLAB AUTOMATION</text>
-  <text x=\"60\" y=\"270\" fill=\"#f8fbff\" font-size=\"88\" font-family=\"Inter, Arial, sans-serif\" font-weight=\"800\">{title}</text>
-  <foreignObject x=\"60\" y=\"320\" width=\"1160\" height=\"240\"><div xmlns=\"http://www.w3.org/1999/xhtml\" style=\"color:#aab6cb;font:500 34px Inter,Arial,sans-serif;line-height:1.4;\">{subtitle}</div></foreignObject>
+  <circle cx=\"190\" cy=\"176\" r=\"220\" fill=\"#0d766e\" fill-opacity=\"0.10\" />
+  <circle cx=\"1330\" cy=\"164\" r=\"260\" fill=\"#1d4f91\" fill-opacity=\"0.11\" />
+  <rect x=\"54\" y=\"54\" width=\"1428\" height=\"916\" rx=\"44\" fill=\"#fffaf3\" fill-opacity=\"0.92\" stroke=\"#17314d\" stroke-opacity=\"0.10\" />
+  <rect x=\"862\" y=\"164\" width=\"528\" height=\"548\" rx=\"32\" fill=\"#17314d\" fill-opacity=\"0.96\" />
+  <path d=\"M910 618 C1018 468 1118 552 1212 430 C1274 350 1328 326 1364 318\" fill=\"none\" stroke=\"#66d2c4\" stroke-width=\"10\" stroke-linecap=\"round\" />
+  <path d=\"M910 654 C1010 596 1108 616 1210 534 C1280 478 1334 458 1364 452\" fill=\"none\" stroke=\"#f9bf71\" stroke-width=\"7\" stroke-linecap=\"round\" stroke-opacity=\"0.92\" />
+  <g fill=\"#fff2df\">
+    <rect x=\"930\" y=\"720\" width=\"32\" height=\"122\" rx=\"12\" />
+    <rect x=\"986\" y=\"664\" width=\"32\" height=\"178\" rx=\"12\" />
+    <rect x=\"1042\" y=\"610\" width=\"32\" height=\"232\" rx=\"12\" />
+    <rect x=\"1098\" y=\"674\" width=\"32\" height=\"168\" rx=\"12\" />
+    <rect x=\"1154\" y=\"564\" width=\"32\" height=\"278\" rx=\"12\" />
+    <rect x=\"1210\" y=\"706\" width=\"32\" height=\"136\" rx=\"12\" />
+  </g>
+  <text x=\"96\" y=\"132\" fill=\"#0d766e\" font-size=\"26\" font-family=\"IBM Plex Mono, monospace\" font-weight=\"600\" letter-spacing=\"4\">PROSPEKTLAB INSIGHT</text>
+  <text x=\"96\" y=\"250\" fill=\"url(#ink)\" font-size=\"94\" font-family=\"Newsreader, Georgia, serif\" font-weight=\"700\">{title_svg}</text>
+  <text x=\"96\" y=\"560\" fill=\"#5f6778\" font-size=\"30\" font-family=\"Manrope, Arial, sans-serif\" font-weight=\"600\">{subtitle_svg}</text>
+  <text x=\"96\" y=\"714\" fill=\"#17314d\" font-size=\"26\" font-family=\"IBM Plex Mono, monospace\" font-weight=\"500\" letter-spacing=\"3\">EDITORIAL REPORT</text>
   {''.join(chip_svg)}
 </svg>
 """
@@ -923,6 +2873,8 @@ async def generate_article_automation(req: ContentAutomationRequest, *, requeste
             _write_bytes(public_dir / image_name, image_bytes)
             public_mirror = str(public_dir)
             mirrored_sitemap = _upsert_sitemap(route_base, slug)
+            refresh_public_research_hub(route_base)
+            submit_sitemap()
         except Exception:
             logger.exception("Failed to mirror generated article into frontend public directory")
 
@@ -1065,3 +3017,71 @@ async def ingest_market_event_triggers(req: ContentEventIngestionRequest, *, req
         failures=failures,
         items=sorted(results, key=lambda item: item.generated_at, reverse=True),
     )
+
+
+# ── Publish / unpublish helpers (used by flash engine and API routes) ─────────
+
+def publish_article(slug: str, route_base: str = _DEFAULT_ARTICLE_ROUTE) -> dict[str, Any]:
+    """
+    Flip an article's publish_status to 'published', mirror HTML+image to the
+    frontend public directory, and upsert the sitemap.
+    Returns the updated manifest dict.
+    """
+    route_base = _safe_route_base(route_base)
+    json_path = _article_dir(route_base, slug) / "article.json"
+    if not json_path.is_file():
+        raise FileNotFoundError(f"Article not found: {route_base}/{slug}")
+
+    manifest: dict[str, Any] = json.loads(json_path.read_text(encoding="utf-8"))
+    manifest["publish_status"] = "published"
+    manifest["published_at"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+    # Mirror current HTML render
+    html_text = load_generated_article_html(slug, route_base=route_base)
+    if html_text:
+        pub_dir = _public_article_dir(route_base, slug)
+        _write_text(pub_dir / "index.html", html_text)
+
+        # Mirror image(s)
+        for img_file in _article_dir(route_base, slug).glob("cover.*"):
+            _write_bytes(pub_dir / img_file.name, img_file.read_bytes())
+
+        manifest["mirrored_public_path"] = str(pub_dir)
+
+    sitemap_path = _upsert_sitemap(route_base, slug)
+    manifest["mirrored_sitemap"] = sitemap_path
+    refresh_public_research_hub(route_base)
+    submit_sitemap()
+
+    _write_text(json_path, json.dumps(manifest, indent=2, ensure_ascii=True))
+    return manifest
+
+
+def unpublish_article(slug: str, route_base: str = _DEFAULT_ARTICLE_ROUTE) -> dict[str, Any]:
+    """
+    Flip an article's publish_status to 'draft' and remove the public mirror.
+    Returns the updated manifest dict.
+    """
+    route_base = _safe_route_base(route_base)
+    json_path = _article_dir(route_base, slug) / "article.json"
+    if not json_path.is_file():
+        raise FileNotFoundError(f"Article not found: {route_base}/{slug}")
+
+    manifest: dict[str, Any] = json.loads(json_path.read_text(encoding="utf-8"))
+    manifest["publish_status"] = "draft"
+    manifest["unpublished_at"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+    # Remove public mirror
+    pub_dir = _public_article_dir(route_base, slug)
+    if pub_dir.is_dir():
+        import shutil
+        try:
+            shutil.rmtree(pub_dir)
+        except Exception:
+            logger.exception("Failed to remove public mirror %s", pub_dir)
+    manifest["mirrored_public_path"] = None
+    refresh_public_research_hub(route_base)
+    submit_sitemap()
+
+    _write_text(json_path, json.dumps(manifest, indent=2, ensure_ascii=True))
+    return manifest

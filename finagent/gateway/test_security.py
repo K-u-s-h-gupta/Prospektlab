@@ -44,6 +44,13 @@ def test_security_headers_middleware():
     assert "Strict-Transport-Security" in response.headers
     assert "Content-Security-Policy" in response.headers
 
+def test_public_insights_csp_allows_inline_styles():
+    response = client.get("/insights/organic-traffic-platform/")
+    csp = response.headers["Content-Security-Policy"]
+    assert response.status_code == 200
+    assert "style-src 'self' 'unsafe-inline'" in csp
+    assert "style-src-attr 'unsafe-inline'" in csp
+
 def test_cors_options_rejection():
     # Current middleware is configured to allow cross-origin requests broadly.
     headers = {

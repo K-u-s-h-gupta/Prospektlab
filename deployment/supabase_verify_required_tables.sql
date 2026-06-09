@@ -1,17 +1,35 @@
 -- ProspektLab Supabase required table verification
--- Run after deployment/supabase_bootstrap.sql.
+-- Run after deployment/supabase_bootstrap.sql and deployment/ikg_db_bootstrap.sql.
 
 with required(table_name) as (
   values
     ('profiles'),
     ('portfolio_mirrors'),
-    ('facts'),
-    ('session_summaries'),
     ('rate_limits'),
     ('verification_codes'),
     ('pending_extractions'),
     ('revoked_tokens'),
-    ('token_usage')
+    ('token_usage'),
+    ('ikg_company_master'),
+    ('shp_raw'),
+    ('directors_raw'),
+    ('director_source_records'),
+    ('daily_prices'),
+    ('company_financials'),
+    ('enforcement_raw'),
+    ('sebi_corporate_filing_map'),
+    ('corporate_filings_raw'),
+    ('concall_transcripts_raw'),
+    ('annual_reports_raw'),
+    ('annual_report_chunks'),
+    ('document_sections'),
+    ('ikg_vertices'),
+    ('ikg_edges'),
+    ('ikg_canonical_entities'),
+    ('ikg_entity_aliases'),
+    ('ikg_facts'),
+    ('ikg_pipeline_runs'),
+    ('ikg_scheduler_locks')
 )
 select
   r.table_name,

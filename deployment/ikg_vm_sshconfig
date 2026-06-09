@@ -1,0 +1,10 @@
+
+Host PROSPEKTLAB-IKG-RG-prospektlab-ikg-vm
+	User ar2108925@gmail.com
+	HostName 4.213.112.2
+	CertificateFile "D:\PROSPEKTLAB\deployment\az_ssh_config\PROSPEKTLAB-IKG-RG-prospektlab-ikg-vm\id_rsa.pub-aadcert.pub"
+	IdentityFile "D:\PROSPEKTLAB\deployment\az_ssh_config\PROSPEKTLAB-IKG-RG-prospektlab-ikg-vm\id_rsa"
+Host 4.213.112.2
+	User ar2108925@gmail.com
+	CertificateFile "D:\PROSPEKTLAB\deployment\az_ssh_config\PROSPEKTLAB-IKG-RG-prospektlab-ikg-vm\id_rsa.pub-aadcert.pub"
+	IdentityFile "D:\PROSPEKTLAB\deployment\az_ssh_config\PROSPEKTLAB-IKG-RG-prospektlab-ikg-vm\id_rsa"

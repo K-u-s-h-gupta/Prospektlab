@@ -15,16 +15,18 @@ import asyncio
 import logging
 import os
 import re
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from finagent.analysis.conflicts import ConflictReport
+from finagent.ikg.service import IKGCompanyBundle
 from finagent.output.artifact_builder import build_answer_artifact
-from finagent.output.compliance import enforce_sebi_compliance
 from finagent.output.contracts import AnswerArtifact, OutputMode, ResponseDepth
 from finagent.output.intent_classifier import classify_output_mode, extract_finance_entities, normalize_depth
 from finagent.output.memo_formatter import MemoSection, format_memo
+from finagent.output.output_scrubber import scrub_and_comply
 from finagent.output.renderer import render_markdown, render_rich_json
 import finagent.rich_builder as teammate_rich_builder
 from finagent.router.intent_router import is_portfolio_scope_query
@@ -65,6 +67,7 @@ class EnrichmentBundle:
     wikipedia: WikipediaSummary | None = None
     fx: FxRate | None = None
     news: list[NewsItem] = field(default_factory=list)
+    ikg: IKGCompanyBundle | None = None
 
     def has_any(self) -> bool:
         return bool(
@@ -73,6 +76,7 @@ class EnrichmentBundle:
             or self.wikipedia
             or self.sebi_filing
             or self.news
+            or self.ikg
         )
 
     # Compatibility shim for older structured-data call sites
@@ -130,6 +134,11 @@ def _scrub_prose(text: str) -> str:
     cleaned = _SINGLE_EMPH.sub(r"\1", cleaned)
     cleaned = _LEADING_BULLET.sub("", cleaned)
     cleaned = cleaned.replace("\r\n", "\n").replace("\xa0", " ")
+    cleaned = re.sub(r"\[SOURCE:[^\]]+\]", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\[AS-OF:[^\]]+\]", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\[CONFIDENCE:\s*(?:HIGH|MEDIUM|LOW|DERIVED)\s*\]", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"(?im)^\s*Regulatory note:.*$", "", cleaned)
+    cleaned = re.sub(r"(?im)^\s*Sources consulted:\s*\d+\s*$", "", cleaned)
     # Compress noisy punctuation: ", , " -> ", "; "..." -> "."
     cleaned = re.sub(r",\s*,", ",", cleaned)
     cleaned = re.sub(r"\.{3,}", ".", cleaned)
@@ -278,6 +287,28 @@ def _build_facts_block(bundle: EnrichmentBundle) -> str:
     if fx:
         lines.append(f"FX rate USD/INR = {fx.rate:.4f} (source: {fx.source})")
         lines.append("All USD figures should be expressed with an INR equivalent in parentheses.")
+    if bundle.ikg:
+        ikg = bundle.ikg
+        entity = ikg.entity or {}
+        lines.append(
+            f"\nIKG grounding: status={ikg.status} | confidence={ikg.confidence:.2f} | as_of={ikg.as_of_date or 'unknown'}"
+        )
+        if entity.get("name") or entity.get("cin"):
+            lines.append(
+                f"  Canonical entity: {entity.get('name') or 'unknown'}"
+                + (f" | CIN {entity.get('cin')}" if entity.get("cin") else "")
+                + (f" | NSE {entity.get('nse_symbol')}" if entity.get("nse_symbol") else "")
+            )
+        if ikg.coverage:
+            coverage_bits = ", ".join(f"{k}={v}" for k, v in ikg.coverage.items())
+            lines.append(f"  Coverage: {coverage_bits}")
+        for fact in ikg.trusted_facts(limit=6):
+            lines.append(
+                f"  IKG fact [{fact.get('trust', 'supporting')}]: {fact.get('headline')} — {fact.get('detail')}"
+            )
+        if ikg.warnings:
+            for warning in ikg.warnings[:3]:
+                lines.append(f"  IKG warning: {warning}")
     if bundle.filing:
         f = bundle.filing
         lines.append(f"\nFiling narrative ({f.form} filed {f.filed_date}):")
@@ -520,7 +551,7 @@ Evaluate the active session intent state to determine your exact structural resp
   ## Operational Strengths & Strategic Tail Risks
   [Order-book execution visibility, promoter pledge loops, input-cost exposures, and SEBI regulatory actions]
   ## Bottom Line Summary
-  [Growth-quality synthesis and investment visibility verdict, concluded with a SEBI-compliant informational disclaimer]
+  [Growth-quality synthesis and investment visibility verdict focused strictly on the user objective]
 
 #### PROTOCOL B: INTENT IS 'conversational_chat' OR ANY SPECIFIC CONVERSATIONAL FOLLOW-UP
 - OBJECTIVE: Provide a direct, natural, and context-aware conversational response matching the exact scope of the latest user question.
@@ -556,14 +587,12 @@ Allowed fenced block types (emit ONLY when they genuinely aid comprehension; nev
 
 Do not wrap chart/kpi blocks inside paragraphs — place them on their own lines with blank lines above and below so Markdown parsing is clean.
 
-### INLINE VERIFICATION MARKERS & CITATIONS
-You must continuously anchor your prose by injecting these explicit tracking markers immediately following every single statistic, metric, calculation, or claim:
-- `[SOURCE: Domain/Filing]` — Cite the source document index or root domain (e.g., [SOURCE: NSE/Annual Report] or [SOURCE: Screener.in]).
-- `[AS-OF: FYXX / QX]` — Pinpoint the precise accounting or reporting time horizon.
-- `[ESTIMATE]` — Explicitly label any forward-looking calculation, valuation multiple projection, or statistical projection path.
-- `[CONFLICT]` — Highlight instances where independent sources show contradictory or mismatched figures.
-
-Conclude every major distinct text block or section with an explicit visibility confidence assessment tag: **[CONFIDENCE: HIGH | MEDIUM | LOW | DERIVED]**.
+### EVIDENCE GROUNDING AND READABILITY
+Anchor claims in the supplied facts and retrieved documents, but keep the final prose clean:
+- Do not print bracket-style trace tags such as `[SOURCE: ...]`, `[AS-OF: ...]`, `[CONFIDENCE: ...]`, or similar marker syntax.
+- Integrate time context naturally in prose when it materially affects the conclusion.
+- When evidence conflicts, state the contradiction plainly and explain how it changes confidence.
+- Do not list outlet names/domains in the narrative unless the user explicitly asks for source attribution.
 """
 
 
@@ -768,11 +797,13 @@ async def _openai_memo(
 
         focus_instruction = base_instruction + "\n"
     report_instruction = (
-        "Produce a focused, direct answer to the objective above. Use 2-3 sections max. "
+        "Produce a focused, professional, and in-depth answer to the objective above. Use 2-4 sections as needed. "
+        "Prioritize depth, concrete reasoning, and decision-useful detail over short summaries. "
         "Include kpi/chart blocks only if real numeric data is in the source facts. "
         "Skip visuals entirely for conversational or opinion-type questions.\n\n"
         if focused_output
-        else "Produce a balanced research response: 3-4 sections, dense prose, zero filler. "
+        else "Produce a detailed research response: 4-6 sections, dense professional prose, zero filler. "
+        "Keep every paragraph tied to the user's objective and remove generic/off-topic commentary. "
         "Only emit kpi blocks if actual financial metrics are retrieved from source data (never invent them). "
         "Only emit 1 chart block if time-series data exists that meaningfully illustrates a trend. "
         "Skip charts and tables for conversational questions. "
@@ -787,19 +818,25 @@ async def _openai_memo(
         f"{report_instruction}"
         "Requirements:\n"
         "- Use all available facts and source material provided below.\n"
-        "- Never hallucinate numbers or invent figures — cite every claim with [SOURCE].\n"
+        "- Never hallucinate numbers or invent figures.\n"
+        "- Ground claims in evidence, but do not print raw source markers or source names in the final prose unless explicitly requested.\n"
         "- Use Markdown structure: ## section headings, tables for metrics, bullet points for lists.\n"
         "- For missing data: omit from kpi/chart/table blocks; write 'N/A' inline in prose only if the metric is directly asked about.\n"
         "- For follow-up answers, do not summarize the earlier memo; answer the user's new request directly.\n"
+        "- Remove non-informative text that does not advance the user's objective.\n"
         "- Emit kpi blocks ONLY when actual financial metrics (price, PE, revenue, etc.) are present in the VERIFIED FACTS section.\n"
         "- Emit chart blocks ONLY when time-series numeric data (multiple data points across years/quarters) is present in VERIFIED FACTS.\n"
         "- For conversational questions or opinion queries: use prose only, no kpi/chart blocks.\n"
         "- For portfolio queries and comparison queries: ALWAYS include at least 1 chart + 1-3 kpi blocks whenever source data permits.\n\n"
-        "SEBI-safe answer rules:\n"
-        "- Do NOT provide buy, sell, hold, accumulate, exit, entry, target-price, or allocation instructions.\n"
-        "- Do NOT call anything a recommendation, tip, call, or advisory view.\n"
-        "- Present valuation as scenario-implied value ranges under stated assumptions, not as action guidance.\n"
-        "- Use neutral labels: Evidence-Based View, Key Takeaways, Scenario Read, Watchpoints, Risk Factors, Data Limitations.\n"
+        "SEBI-SAFE COMPLIANCE RULES (MANDATORY — zero tolerance for violations):\n"
+        "- NEVER use buy, sell, hold, accumulate, exit, entry, target-price, or allocation language.\n"
+        "- NEVER use verdict, rating, recommendation, tip, call, or advisory language.\n"
+        "- NEVER use 'undervalued', 'overvalued', 'fairly valued' as assessments.\n"
+        "- NEVER frame outputs as 'STRONG BUY', 'AVOID', or any actionable signal.\n"
+        "- ALWAYS present valuation as 'scenario-conditional under stated assumptions'.\n"
+        "- ALWAYS use neutral labels: Evidence-Based View, Key Takeaways, Scenario Analysis, Watchpoints, Risk Factors, Data Limitations.\n"
+        "- ALWAYS state WACC, growth rate, and terminal value assumptions explicitly when presenting DCF-based analysis.\n"
+        "- For intrinsic value: say 'model-implied value under stated assumptions' NOT 'intrinsic value is X therefore stock is undervalued'.\n"
         "- If the user asks what to buy/sell/hold, respond with objective evidence, suitability factors, and risks only.\n\n"
         f"=== VERIFIED FACTS ===\n{facts}\n\n"
         f"=== SOURCE DOCUMENTS ===\n{digest}\n\n"
@@ -866,9 +903,9 @@ async def _openai_memo(
         final = str(final).strip()
         if final:
             logger.info("[LLM-RESPONSE] Synthesis completed via FORCED NON-STREAM (retry) | model=%s | output_len=%d chars", model_to_use, len(final))
-            final = enforce_sebi_compliance(final)
+            final = scrub_and_comply(final, session_id=session_id)
             await _emit_token(on_token, final)
-        return enforce_sebi_compliance(final)
+        return scrub_and_comply(final, session_id=session_id)
 
     # Normal path: try streaming first (with internal empty-response fallback to non-stream)
     logger.info("[LLM-CALL] Starting OpenAI streaming call | model=%s | session_id=%s", model_to_use, "n/a-in-this-scope")
@@ -900,7 +937,7 @@ async def _openai_memo(
             chunks.append(text)
         full = "".join(chunks).strip()
         if full:
-            full = enforce_sebi_compliance(full)
+            full = scrub_and_comply(full, session_id=session_id)
             logger.info("[LLM-RESPONSE] Synthesis completed via streaming | model=%s | output_len=%d chars", model_to_use, len(full))
             if usage_data:
                 await _record_usage(usage_data)
@@ -929,9 +966,9 @@ async def _openai_memo(
         final = str(final).strip()
         if final:
             logger.info("[LLM-RESPONSE] Synthesis completed via NON-STREAM fallback | model=%s | output_len=%d chars", model_to_use, len(final))
-            final = enforce_sebi_compliance(final)
+            final = scrub_and_comply(final, session_id=session_id)
             await _emit_token(on_token, final)
-        return enforce_sebi_compliance(final)
+        return scrub_and_comply(final, session_id=session_id)
     finally:
         close = getattr(stream, "close", None)
         if close is not None:
@@ -1923,7 +1960,36 @@ async def synthesize_memo(
     elif peer_quotes:
         facts += "\n" + _build_peer_quotes_only_block(peer_quotes)
     if resolve_openai_config() is not None:
+        if (
+            mode == OutputMode.DIRECT_ANSWER
+            and bundle.ikg is not None
+            and not docs
+            and bundle.yahoo is None
+            and bundle.sec is None
+            and bundle.wikipedia is None
+            and not (specialist_findings or [])
+        ):
+            memo = render_markdown(artifact)
+            await _emit_token(on_token, memo)
+            rich = _attach_markdown_body(render_rich_json(artifact), memo)
+            await _emit_visuals_once()
+            return SynthesisResult(
+                memo=memo,
+                via="artifact:direct_answer_fastpath",
+                used_sources=used,
+                artifact=artifact,
+                rich=rich,
+            )
         memo: str | None = None
+        overall_deadline = time.perf_counter() + max(1.0, float(timeout_s))
+
+        def _remaining_llm_time() -> float:
+            return max(0.0, overall_deadline - time.perf_counter())
+
+        first_attempt_timeout = max(
+            2.5,
+            min(float(timeout_s) * 0.7, max(2.5, float(timeout_s) - 2.0)),
+        )
 
         # Attempt 1: prefer streaming for best UX
         try:
@@ -1942,40 +2008,45 @@ async def synthesize_memo(
                     user_email=user_email,
                     session_id=session_id,
                 ),
-                timeout=timeout_s,
+                timeout=first_attempt_timeout,
             )
         except asyncio.TimeoutError:
+            remaining_timeout = _remaining_llm_time()
             logger.warning(
-                "OpenAI synthesis timed out after %.0fs; retrying once with non-streaming call",
-                timeout_s,
+                "OpenAI synthesis timed out after %.1fs; remaining retry budget %.1fs",
+                first_attempt_timeout,
+                remaining_timeout,
             )
             # Attempt 2: non-streaming retry (often completes faster without SSE overhead)
-            try:
-                memo = await asyncio.wait_for(
-                    _openai_memo(
-                        target,
-                        objective,
-                        digest,
-                        facts,
-                        conflicts,
-                        on_token=on_token,
-                        synth_model=synth_model,
-                        chat_history=chat_history,
-                        output_mode=mode.value,
-                        response_depth=depth.value,
-                        force_non_stream=True,
-                        user_email=user_email,
-                        session_id=session_id,
-                    ),
-                    timeout=timeout_s,
-                )
-            except asyncio.TimeoutError:
-                logger.warning(
-                    "OpenAI synthesis timed out again after %.0fs (non-stream retry); falling back to structured prose builder",
-                    timeout_s,
-                )
-            except Exception as exc:
-                logger.warning("OpenAI synthesis retry failed (%s); using structured prose builder", exc)
+            if remaining_timeout >= 2.0:
+                try:
+                    memo = await asyncio.wait_for(
+                        _openai_memo(
+                            target,
+                            objective,
+                            digest,
+                            facts,
+                            conflicts,
+                            on_token=None,
+                            synth_model=synth_model,
+                            chat_history=chat_history,
+                            output_mode=mode.value,
+                            response_depth=depth.value,
+                            force_non_stream=True,
+                            user_email=user_email,
+                            session_id=session_id,
+                        ),
+                        timeout=remaining_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "OpenAI synthesis exhausted the remaining %.1fs retry budget; falling back to structured prose builder",
+                        remaining_timeout,
+                    )
+                except Exception as exc:
+                    logger.warning("OpenAI synthesis retry failed (%s); using structured prose builder", exc)
+            else:
+                logger.warning("Skipping OpenAI synthesis retry because remaining budget is too small")
         except Exception as exc:
             logger.warning("OpenAI synthesis failed (%s); using structured prose builder", exc)
 

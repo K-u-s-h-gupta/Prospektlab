@@ -1,8 +1,9 @@
 # ==============================================
 # Start ProspektLab v3 MCP Servers
 # ==============================================
-# This script starts only the v3 two-server topology:
+# This script starts the current MCP topology:
 #   - discovery_server.py on :8003
+#   - ikg_server.py on :8007
 #   - quant_server.py on :8005
 
 $ErrorActionPreference = "Stop"
@@ -18,7 +19,10 @@ if (!(Test-Path $python)) {
 Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "cd '$repoRoot'; & '$python' -m finagent.tools.mcp_servers.quant_server"
 Start-Sleep -Seconds 1
 
+Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "cd '$repoRoot'; & '$python' -m finagent.tools.mcp_servers.ikg_server"
+Start-Sleep -Seconds 1
+
 Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "cd '$repoRoot'; & '$python' -m finagent.tools.mcp_servers.discovery_server"
 
-Write-Host "`nQuant (:8005) and Discovery (:8003) servers are starting." -ForegroundColor Green
+Write-Host "`nQuant (:8005), IKG (:8007), and Discovery (:8003) servers are starting." -ForegroundColor Green
 Write-Host "You can now run the main API server." -ForegroundColor Yellow

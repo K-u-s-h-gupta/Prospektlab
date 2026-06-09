@@ -41,6 +41,11 @@ _TIER1_HOST_HINTS = (
     "federalreserve.gov",
     "ir.",
     "investor.",
+    "nseindia.com",
+    "bseindia.com",
+    "mca.gov.in",
+    "sebi.gov.in",
+    "rbi.org.in",
 )
 
 
@@ -80,6 +85,7 @@ class Verifier:
         *,
         findings: list[Finding],
         docs: list[ScrapedDoc],
+        extra_metric_observations: list | None = None,
         emit: Callable[..., None] | None = None,
     ) -> VerifierReport:
         emit = emit or (lambda *_a, **_kw: None)
@@ -134,7 +140,7 @@ class Verifier:
 
         # 3) Numeric conflicts across the doc pool
         try:
-            conflicts = detect_conflicts(docs)
+            conflicts = detect_conflicts(docs, external_observations=extra_metric_observations or [])
         except Exception as exc:
             logger.warning("conflict detection failed: %s", exc)
             conflicts = []

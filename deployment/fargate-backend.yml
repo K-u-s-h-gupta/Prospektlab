@@ -217,16 +217,32 @@ Resources:
             - Name: OPENAI_API_KEY
               Value: "REPLACE_WITH_YOUR_OPENAI_KEY"
             - Name: APPINSIGHTS_ENABLED
-              Value: "true"
+              Value: "false"
             - Name: APPINSIGHTS_CONNECTION_STRING
-              Value: "InstrumentationKey=b4797745-6b7f-4d72-894f-768bdc808d3d;IngestionEndpoint=https://centralindia-0.in.applicationinsights.azure.com/;LiveEndpoint=https://centralindia.livediagnostics.monitor.azure.com/;ApplicationId=980e7ddb-6ef5-46e2-b7ae-bb833f3fc8c8"
+              Value: ""
             - Name: APPINSIGHTS_ROLE_NAME
               Value: "prospektlab-backend"
-            - Name: TAVILY_API_KEY
-              Value: ""
+            - Name: TELEMETRY_BURNER_ENABLED
+              Value: "false"
+            - Name: TELEMETRY_BURNER_INTERVAL_S
+              Value: "5"
+            - Name: TELEMETRY_BURNER_BURST_SIZE
+              Value: "12"
+            - Name: TELEMETRY_BURNER_PAYLOAD_KB
+              Value: "12"
+            - Name: TELEMETRY_BURNER_SESSION_FANOUT
+              Value: "3"
+            - Name: TELEMETRY_BURNER_EXCEPTION_EVERY
+              Value: "5"
+            - Name: TELEMETRY_BURNER_REPLAY_LIMIT
+              Value: "5000"
+            - Name: TELEMETRY_BURNER_ROTATE_AFTER_CYCLES
+              Value: "60"
             - Name: SUPABASE_URL
               Value: ""
             - Name: SUPABASE_KEY
+              Value: ""
+            - Name: TAVILY_API_KEY
               Value: ""
             - Name: ACS_EMAIL_CONNECTION_STRING
               Value: ""
@@ -242,12 +258,102 @@ Resources:
               Value: ""
             - Name: AUTH_SMS_DEFAULT_COUNTRY_CODE
               Value: "+91"
+            - Name: SUPABASE_JWT_SECRET
+              Value: ""
+            - Name: SUPABASE_DB_URL
+              Value: ""
+            - Name: IKG_BACKEND
+              Value: "postgres"
+            - Name: IKG_DATABASE_URL
+              Value: ""
+            - Name: DATABASE_URL
+              Value: ""
+            - Name: AZURE_DI_ENDPOINT
+              Value: ""
+            - Name: AZURE_DI_KEY
+              Value: ""
+            - Name: FINAGENT_PIPELINE_LOG_DIR
+              Value: "/tmp/pipeline_logs"
+            - Name: FINAGENT_REPORT_CACHE_DIR
+              Value: "/tmp/annual_reports"
+            - Name: FINAGENT_ANNUAL_REPORT_EXTRACT_MODE
+              Value: "metadata_only"
+            - Name: FINAGENT_GRAPHRAG_CACHE
+              Value: "/tmp/graphrag"
+            - Name: IKG_SCHEDULER_LOCK_TTL_MINUTES
+              Value: "240"
+            - Name: MEMORY_BACKEND
+              Value: "prospekt_tiered"
+            - Name: MEMORY_DATABASE_URL
+              Value: ""  # Set to the dedicated private Postgres memory database URL.
+            - Name: MEMORY_VECTOR_DIM
+              Value: "1536"
+            - Name: MEMORY_EMBEDDINGS_ENABLED
+              Value: "false"
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: !Ref CloudWatchLogsGroup
               awslogs-region: !Ref 'AWS::Region'
               awslogs-stream-prefix: ecs
+
+  ECSSchedulerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${ProjectName}-ikg-scheduler'
+      Cpu: '1024'
+      Memory: '2048'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: !Ref ECSTaskRole
+      ContainerDefinitions:
+        - Name: ikg-scheduler
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}:latest'
+          Command:
+            - python
+            - -m
+            - finagent.ikg.pipeline.scheduler
+          Environment:
+            - Name: PROSPEKTLAB_ENV
+              Value: production
+            - Name: SUPABASE_URL
+              Value: ""
+            - Name: SUPABASE_KEY
+              Value: ""
+            - Name: SUPABASE_JWT_SECRET
+              Value: ""
+            - Name: SUPABASE_DB_URL
+              Value: ""
+            - Name: IKG_BACKEND
+              Value: "postgres"
+            - Name: IKG_DATABASE_URL
+              Value: ""
+            - Name: DATABASE_URL
+              Value: ""
+            - Name: AZURE_DI_ENDPOINT
+              Value: ""
+            - Name: AZURE_DI_KEY
+              Value: ""
+            - Name: MCA_COMPANY_MASTER_CSV
+              Value: "data/company_master_data_2026-06-01.csv"
+            - Name: FINAGENT_PIPELINE_LOG_DIR
+              Value: "/tmp/pipeline_logs"
+            - Name: FINAGENT_REPORT_CACHE_DIR
+              Value: "/tmp/annual_reports"
+            - Name: FINAGENT_ANNUAL_REPORT_EXTRACT_MODE
+              Value: "metadata_only"
+            - Name: FINAGENT_GRAPHRAG_CACHE
+              Value: "/tmp/graphrag"
+            - Name: IKG_SCHEDULER_LOCK_TTL_MINUTES
+              Value: "240"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogsGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: ikg-scheduler
 
   CloudWatchLogsGroup:
     Type: AWS::Logs::LogGroup
@@ -276,6 +382,23 @@ Resources:
         - ContainerName: backend
           ContainerPort: 8080
           TargetGroupArn: !Ref ALBTargetGroup
+
+  ECSSchedulerService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub '${ProjectName}-ikg-scheduler'
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref ECSSchedulerTaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+          Subnets:
+            - !Ref SubnetA
+            - !Ref SubnetB
 
   # --- CodeBuild Setup ---
   CodeBuildRole:

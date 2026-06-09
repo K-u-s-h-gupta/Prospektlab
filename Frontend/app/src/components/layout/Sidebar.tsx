@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  MessageSquarePlus, 
-  Trash2, 
-  ArrowUpRight, 
-  ShieldCheck, 
-  Compass, 
+import {
+  MessageSquarePlus,
+  Trash2,
+  ArrowUpRight,
+  ShieldCheck,
+  Compass,
   LogOut,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  Newspaper
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAuth } from '../../context/AuthContext';
+import { deletePortfolioMirror } from '../../api/client';
 
 interface SidebarProps {
   conversations: Array<{ id: string; title: string; date: string }>;
@@ -41,7 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   tokenUsage
 }) => {
   const navigate = useNavigate();
-  const { user, logout, setOnboarded } = useAuth();
+  const { user, logout, setOnboarded, showToast } = useAuth();
   
   // Drag-to-resize state
   const [width, setWidth] = useState<number>(() => {
@@ -49,6 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return saved ? parseInt(saved, 10) : 260;
   });
   const [isDragging, setIsDragging] = useState(false);
+  const [isResettingSetup, setIsResettingSetup] = useState(false);
   const dragRef = useRef<HTMLDivElement>(null);
 
   const isCollapsed = width <= 120;
@@ -112,6 +114,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
     dismissSidebarOnMobile();
     await logout();
     navigate('/login');
+  };
+
+  const clearPortfolioWorkspace = () => {
+    localStorage.removeItem('prospektlab_portfolio');
+    localStorage.removeItem('prospektlab_conversations');
+    localStorage.removeItem('prospektlab_onboarding_step');
+
+    const messageKeys: string[] = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (key && key.startsWith('prospektlab_messages_')) {
+        messageKeys.push(key);
+      }
+    }
+    messageKeys.forEach((key) => localStorage.removeItem(key));
+  };
+
+  const handleRerunSetup = async () => {
+    if (isResettingSetup) return;
+    setIsResettingSetup(true);
+    dismissSidebarOnMobile();
+
+    try {
+      await deletePortfolioMirror();
+      clearPortfolioWorkspace();
+      setOnboarded(false);
+      showToast('Setup reset. Upload the new holdings file to rebuild the dashboard.', 'success');
+      navigate('/onboarding');
+    } catch (error: any) {
+      console.error('Failed to reset synced portfolio before rerun', error);
+      showToast(error?.message || 'Could not reset the current holdings. Please retry rerun.', 'error');
+    } finally {
+      setIsResettingSetup(false);
+    }
   };
 
   // Initials for avatar
@@ -246,7 +282,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* New Chat Button */}
-        <div style={{ padding: isCollapsed ? '16px 8px' : '16px 20px', flexShrink: 0 }}>
+        <div style={{ padding: isCollapsed ? '16px 8px' : '16px 20px 8px', flexShrink: 0 }}>
           <button
             onClick={handleNewChatClick}
             className="glass-interactive"
@@ -270,40 +306,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* Navigation */}
-        <div style={{
-          padding: isCollapsed ? '0 8px 12px' : '0 20px 16px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px',
-          flexShrink: 0
-        }}>
-          <button
-            onClick={() => {
-              dismissSidebarOnMobile();
-              navigate('/dashboard');
-            }}
-            title="Dashboard"
-            style={{
-              width: '100%',
-              background: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(56, 189, 248, 0.1)',
-              color: 'var(--accent-cyan)',
-              padding: '10px',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: isCollapsed ? 'center' : 'flex-start',
-              gap: '10px',
-              fontSize: '13px',
-              fontWeight: 600,
-              textAlign: 'left'
-            }}
-          >
-            <LayoutDashboard size={16} />
-            {!isCollapsed && <span className="nav-text">Dashboard</span>}
-          </button>
-        </div>
+        {/* Insights Studio Nav Link */}
+        {user && (
+          <div style={{ padding: isCollapsed ? '0 8px 12px' : '0 20px 12px', flexShrink: 0 }}>
+            <button
+              onClick={() => { dismissSidebarOnMobile(); navigate('/insights-studio'); }}
+              className="glass-interactive"
+              title="Insights Studio"
+              style={{
+                width: '100%',
+                color: 'var(--text-secondary)',
+                padding: '10px 8px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                fontWeight: 500,
+                fontSize: '13px',
+                border: '1px solid rgba(255,255,255,0.05)',
+                background: 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              <Newspaper size={15} color="var(--accent-cyan)" />
+              {!isCollapsed && <span className="nav-text">Insights Studio</span>}
+            </button>
+          </div>
+        )}
 
         {/* Conversation List */}
         {!isCollapsed && (
@@ -383,25 +413,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (conversations.length <= 1) return;
                               onDeleteConversation(chat.id);
                             }}
+                            disabled={conversations.length <= 1}
                             style={{
                               position: 'absolute',
                               right: '8px',
                               background: 'transparent',
                               border: 'none',
                               color: 'var(--loss)',
-                              opacity: isActive ? 0.8 : 0.4,
+                              opacity: conversations.length <= 1 ? 0.2 : (isActive ? 0.8 : 0.4),
                               padding: '4px',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              cursor: 'pointer',
+                              cursor: conversations.length <= 1 ? 'not-allowed' : 'pointer',
                               transition: 'opacity 0.2s ease'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                            onMouseLeave={(e) => e.currentTarget.style.opacity = isActive ? '0.8' : '0.4'}
-                            title="Delete session"
+                            onMouseEnter={(e) => {
+                              if (conversations.length > 1) e.currentTarget.style.opacity = '1';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.opacity = conversations.length <= 1 ? '0.2' : (isActive ? '0.8' : '0.4');
+                            }}
+                            title={conversations.length <= 1 ? 'At least one session must remain' : 'Delete session'}
                           >
                             <Trash2 size={12} />
                           </button>
@@ -618,28 +654,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 href="/"
                 onClick={(e) => {
                   e.preventDefault();
-                  setOnboarded(false);
-                  dismissSidebarOnMobile();
-                  navigate('/onboarding');
+                  void handleRerunSetup();
                 }}
                 style={{
                   marginLeft: 'auto',
                   color: 'var(--accent-cyan)',
                   textDecoration: 'none',
-                  fontWeight: 600
+                  fontWeight: 600,
+                  pointerEvents: isResettingSetup ? 'none' : 'auto',
+                  opacity: isResettingSetup ? 0.65 : 1,
                 }}
               >
-                Re-run
+                {isResettingSetup ? 'Resetting...' : 'Re-run'}
               </a>
             </div>
           ) : (
             <button
               title="Re-run Setup"
               onClick={() => {
-                setOnboarded(false);
-                dismissSidebarOnMobile();
-                navigate('/onboarding');
+                void handleRerunSetup();
               }}
+              disabled={isResettingSetup}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -648,7 +683,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '4px'
+                padding: '4px',
+                opacity: isResettingSetup ? 0.65 : 1,
               }}
             >
               <Compass size={14} />

@@ -77,9 +77,18 @@ def _parse_payload_json(raw: object) -> dict:
     except Exception:
         return {}
 
-async def create_admin_user(email: str, password: str, full_name: str, mobile: str = "", avatar_url: str = "", auth_provider: str = "email"):
+async def create_admin_user(
+    email: str,
+    password: str,
+    full_name: str,
+    mobile: str = "",
+    avatar_url: str = "",
+    auth_provider: str = "email",
+    referral_source: str = "",
+):
     """Create a user via Supabase Admin API. This skips email confirmation checks."""
     mobile_clean = str(mobile or "").strip()
+    referral_source_clean = str(referral_source or "").strip()
     url = f"{_get_supabase_url()}/auth/v1/admin/users"
     base_payload = {
         "email": email,
@@ -90,7 +99,8 @@ async def create_admin_user(email: str, password: str, full_name: str, mobile: s
             "mobile": mobile_clean,
             "phone": mobile_clean,
             "avatar_url": avatar_url,
-            "auth_provider": auth_provider
+            "auth_provider": auth_provider,
+            "referral_source": referral_source_clean,
         }
     }
     payload = {**base_payload, "phone": mobile_clean} if mobile_clean else base_payload
@@ -143,21 +153,30 @@ async def update_admin_user_password(user_id: str, new_password: str):
         raise HTTPException(status_code=res.status_code, detail="Failed to update password in Supabase.")
     return res.json()
 
-async def upsert_profile(user_id: str, email: str, full_name: str, auth_provider: str, mobile: str = "", avatar_url: str = ""):
+async def upsert_profile(
+    user_id: str,
+    email: str,
+    full_name: str,
+    auth_provider: str,
+    mobile: str = "",
+    avatar_url: str = "",
+    referral_source: str = "",
+):
     """Upserts the user profile into the public.profiles table.
 
     Returns the saved profile row. Raises HTTPException on failure.
     """
     url = f"{_get_supabase_url()}/rest/v1/profiles"
     mobile_clean = str(mobile or "").strip()
+    referral_source_clean = str(referral_source or "").strip()
     base_payload = {
         "id": user_id,
         "email": email,
         "full_name": full_name,
         "auth_provider": auth_provider,
-        "avatar_url": avatar_url
+        "avatar_url": avatar_url,
     }
-    
+
     headers = get_headers()
     headers["Prefer"] = "resolution=merge-duplicates,return=representation"
     params = {"on_conflict": "id"}
@@ -165,17 +184,44 @@ async def upsert_profile(user_id: str, email: str, full_name: str, auth_provider
     async def _post_profile(payload: dict) -> httpx.Response:
         async with _supabase_async_client() as client:
             return await client.post(url, json=payload, headers=headers, params=params)
-    
-    try:
-        res = await _post_profile({**base_payload, "mobile": mobile_clean})
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Profile save timed out. Please retry.")
 
-    if not res.is_success and "column profiles.mobile does not exist" in (res.text or ""):
+    candidate_payloads = []
+    if mobile_clean and referral_source_clean:
+        candidate_payloads.extend([
+            {**base_payload, "mobile": mobile_clean, "referral_source": referral_source_clean},
+            {**base_payload, "phone": mobile_clean, "referral_source": referral_source_clean},
+            {**base_payload, "mobile": mobile_clean},
+            {**base_payload, "phone": mobile_clean},
+        ])
+    elif mobile_clean:
+        candidate_payloads.extend([
+            {**base_payload, "mobile": mobile_clean},
+            {**base_payload, "phone": mobile_clean},
+        ])
+    elif referral_source_clean:
+        candidate_payloads.append({**base_payload, "referral_source": referral_source_clean})
+    candidate_payloads.append(base_payload)
+
+    res = None
+    last_error_text = ""
+    for payload in candidate_payloads:
         try:
-            res = await _post_profile({**base_payload, "phone": mobile_clean})
+            res = await _post_profile(payload)
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="Profile save timed out. Please retry.")
+
+        if res.is_success:
+            break
+
+        last_error_text = res.text or ""
+        missing_mobile = "column profiles.mobile does not exist" in last_error_text
+        missing_phone = "column profiles.phone does not exist" in last_error_text
+        missing_referral = "column profiles.referral_source does not exist" in last_error_text
+        if not (missing_mobile or missing_phone or missing_referral):
+            break
+
+    if res is None:
+        raise HTTPException(status_code=500, detail="Profile save did not return a response.")
 
     if not res.is_success:
         detail = "Failed to save profile details in Supabase."

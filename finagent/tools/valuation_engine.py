@@ -173,7 +173,9 @@ def graham_valuation(
         upside = ((intrinsic_value - current_price) / current_price) * 100
         result["current_price"] = current_price
         result["upside_pct"] = round(upside, 2)
-        result["verdict"] = "UNDERVALUED" if upside > 0 else "OVERVALUED"
+        result["position_vs_model"] = (
+            "below_model_implied_value" if upside > 0 else "above_model_implied_value"
+        )
 
     return result
 
@@ -235,7 +237,10 @@ def pe_valuation(
             "fair_pe_at_peg_1": round(fair_pe_peg, 2),
             "fair_value": round(fair_value_peg, 2),
             "upside_pct": round(((fair_value_peg - current_price) / current_price) * 100, 2),
-            "peg_verdict": "UNDERVALUED" if peg_ratio < 1 else ("FAIRLY VALUED" if peg_ratio < 1.5 else "OVERVALUED"),
+            "peg_scenario": (
+                "below_peg_1_threshold" if peg_ratio < 1
+                else ("near_peg_1_threshold" if peg_ratio < 1.5 else "above_peg_1_threshold")
+            ),
         }
 
     avg_fair = (fair_value_sector + fair_value_historical) / 2
@@ -437,17 +442,21 @@ def calculate_piotroski_score(
     total = sum(scores.values())
 
     if total >= 8:
-        verdict = "STRONG — High quality value stock"
+        quality_tier = "strong"
+        quality_note = "Strong financial discipline signals across profitability, leverage, and efficiency"
     elif total >= 5:
-        verdict = "MODERATE — Mixed signals"
+        quality_tier = "moderate"
+        quality_note = "Mixed financial signals — individual criterion review recommended"
     else:
-        verdict = "WEAK — Potential value trap"
+        quality_tier = "weak"
+        quality_note = "Weak financial signals — elevated monitoring warranted under stated assumptions"
 
     return {
         "model": "Piotroski F-Score",
         "total_score": total,
         "max_score": 9,
-        "verdict": verdict,
+        "quality_tier": quality_tier,
+        "quality_note": quality_note,
         "breakdown": {
             "profitability": {
                 "positive_net_income": scores["positive_net_income"],
@@ -794,22 +803,28 @@ def analyze_ratios(
 
     total_score = sum(s["score"] for s in scores.values())
     max_score = len(scores) * 2
+    score_pct = round((total_score / max_score) * 100, 1)
 
     if total_score >= 13:
-        overall = "STRONG BUY — Excellent fundamentals"
+        quality_tier = "strong"
+        scenario_assessment = "Model outputs are favorable under stated assumptions — strong fundamental signals across multiple metrics"
     elif total_score >= 10:
-        overall = "BUY — Good fundamentals"
+        quality_tier = "moderate_positive"
+        scenario_assessment = "Model outputs are moderately favorable under stated assumptions — good fundamental signals"
     elif total_score >= 7:
-        overall = "HOLD — Mixed signals"
+        quality_tier = "moderate"
+        scenario_assessment = "Model outputs show mixed signals under stated assumptions — monitor against thesis criteria"
     else:
-        overall = "AVOID — Weak fundamentals"
+        quality_tier = "weak"
+        scenario_assessment = "Model outputs are unfavorable under stated assumptions — weak fundamental signals warrant caution"
 
     return {
         "model": "Fundamental Ratio Scorecard",
         "total_score": total_score,
         "max_score": max_score,
-        "score_pct": round((total_score / max_score) * 100, 1),
-        "verdict": overall,
+        "score_pct": score_pct,
+        "quality_tier": quality_tier,
+        "scenario_assessment": scenario_assessment,
         "sector": sector,
         "metrics": scores,
     }
@@ -947,17 +962,24 @@ def full_valuation(
 
     if intrinsic_values:
         avg_intrinsic = sum(intrinsic_values.values()) / len(intrinsic_values)
+        upside_pct = round(((avg_intrinsic - current_price) / current_price) * 100, 2)
+        if avg_intrinsic > current_price * 1.15:
+            position_vs_model = "below_model_implied_value"
+            scenario_assessment = "Model outputs are favorable under stated assumptions — current price below average model-implied value"
+        elif avg_intrinsic > current_price * 0.85:
+            position_vs_model = "near_model_implied_value"
+            scenario_assessment = "Model outputs show near-fair value under stated assumptions — current price within model range"
+        else:
+            position_vs_model = "above_model_implied_value"
+            scenario_assessment = "Model outputs are unfavorable under stated assumptions — current price above average model-implied value"
         results["summary"] = {
             "intrinsic_values_by_model": intrinsic_values,
             "average_intrinsic_value": round(avg_intrinsic, 2),
             "current_price": current_price,
-            "upside_pct": round(((avg_intrinsic - current_price) / current_price) * 100, 2),
+            "upside_pct": upside_pct,
             "margin_of_safety_25pct": round(avg_intrinsic * 0.75, 2),
-            "verdict": (
-                "UNDERVALUED" if avg_intrinsic > current_price * 1.15
-                else "FAIRLY VALUED" if avg_intrinsic > current_price * 0.85
-                else "OVERVALUED"
-            ),
+            "position_vs_model": position_vs_model,
+            "scenario_assessment": scenario_assessment,
         }
 
     return results

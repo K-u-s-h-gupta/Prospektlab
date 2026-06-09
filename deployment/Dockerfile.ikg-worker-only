@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential curl git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY deployment/requirements.ikg-worker.txt ./requirements.ikg-worker.txt
+COPY finagent ./finagent
+COPY deployment ./deployment
+
+RUN pip install --no-cache-dir -r requirements.ikg-worker.txt
+
+CMD ["python", "-m", "finagent.ikg.pipeline.scheduler"]

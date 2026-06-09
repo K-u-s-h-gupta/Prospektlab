@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from finagent.output.contracts import AnswerArtifact, ResponseDepth
-from finagent.output.compliance import SEBI_COMPLIANCE_NOTE, enforce_sebi_compliance
+from finagent.output.compliance import enforce_sebi_compliance
 
 _MISSING_VALUES = {"", "n/a", "na", "none", "null", "-", "\u2014"}
 
@@ -36,8 +36,8 @@ def render_markdown(artifact: AnswerArtifact) -> str:
     """
     lines: list[str] = []
 
-    safe_title = enforce_sebi_compliance(artifact.title).splitlines()[0]
-    safe_summary = enforce_sebi_compliance(artifact.summary).replace(SEBI_COMPLIANCE_NOTE, "").strip()
+    safe_title = enforce_sebi_compliance(artifact.title, include_regulatory_note=False).splitlines()[0]
+    safe_summary = enforce_sebi_compliance(artifact.summary, include_regulatory_note=False).strip()
 
     if artifact.depth == ResponseDepth.DEEP:
         lines.extend([f"# {safe_title}", "", safe_summary, ""])
@@ -50,7 +50,7 @@ def render_markdown(artifact: AnswerArtifact) -> str:
         rows = _table_rows_with_values(table)
         if not rows:
             continue
-        lines.append(f"#### {enforce_sebi_compliance(table.title).splitlines()[0]}")
+        lines.append(f"#### {enforce_sebi_compliance(table.title, include_regulatory_note=False).splitlines()[0]}")
         lines.append("| " + " | ".join(table.columns) + " |")
         lines.append("|" + "|".join("---" for _ in table.columns) + "|")
         for row in rows:
@@ -60,8 +60,8 @@ def render_markdown(artifact: AnswerArtifact) -> str:
     for section in artifact.sections:
         if not section.body:
             continue
-        lines.append(f"#### {enforce_sebi_compliance(section.title).splitlines()[0]}")
-        lines.append(enforce_sebi_compliance(section.body.strip()))
+        lines.append(f"#### {enforce_sebi_compliance(section.title, include_regulatory_note=False).splitlines()[0]}")
+        lines.append(enforce_sebi_compliance(section.body.strip(), include_regulatory_note=False))
         if section.confidence:
             lines.append(f"\nConfidence: {section.confidence}")
         lines.append("")
@@ -78,28 +78,22 @@ def render_markdown(artifact: AnswerArtifact) -> str:
             lines.append(f"- {item}")
         lines.append("")
 
-    if artifact.citations:
-        lines.append("#### Sources")
-        for i, citation in enumerate(artifact.citations[:20], 1):
-            label = citation.title or citation.domain or citation.url
-            lines.append(f"{i}. [{label}]({citation.url})")
-
-    return enforce_sebi_compliance("\n".join(lines).strip()) + "\n"
+    return enforce_sebi_compliance("\n".join(lines).strip(), include_regulatory_note=False) + "\n"
 
 
 def render_rich_json(artifact: AnswerArtifact) -> dict:
     """Return a backend/frontend-friendly structured payload."""
     return {
         "mode": getattr(artifact.mode, "value", str(artifact.mode)),
-        "title": enforce_sebi_compliance(artifact.title).splitlines()[0],
-        "subtitle": enforce_sebi_compliance(artifact.summary).replace(SEBI_COMPLIANCE_NOTE, "").strip(),
+        "title": enforce_sebi_compliance(artifact.title, include_regulatory_note=False).splitlines()[0],
+        "subtitle": enforce_sebi_compliance(artifact.summary, include_regulatory_note=False).strip(),
         "metric_cards": [
             {
-                "label": enforce_sebi_compliance(c.label).splitlines()[0],
+                "label": enforce_sebi_compliance(c.label, include_regulatory_note=False).splitlines()[0],
                 "value": c.value,
                 "change": c.change,
                 "change_type": c.change_type,
-                "tooltip": enforce_sebi_compliance(c.tooltip).replace(SEBI_COMPLIANCE_NOTE, "").strip(),
+                "tooltip": enforce_sebi_compliance(c.tooltip, include_regulatory_note=False).strip(),
                 "icon": c.icon,
                 "is_partial": c.is_partial,
             }
@@ -109,8 +103,8 @@ def render_rich_json(artifact: AnswerArtifact) -> dict:
         "charts": [
             {
                 "id": ch.id,
-                "title": enforce_sebi_compliance(ch.title).splitlines()[0],
-                "subtitle": enforce_sebi_compliance(ch.subtitle).replace(SEBI_COMPLIANCE_NOTE, "").strip(),
+                "title": enforce_sebi_compliance(ch.title, include_regulatory_note=False).splitlines()[0],
+                "subtitle": enforce_sebi_compliance(ch.subtitle, include_regulatory_note=False).strip(),
                 "kind": ch.chart_type,
                 "x_labels": ch.labels,
                 "series": [
@@ -130,7 +124,7 @@ def render_rich_json(artifact: AnswerArtifact) -> dict:
         ],
         "comparison_rows": [
             {
-                "metric": enforce_sebi_compliance(r.metric).splitlines()[0],
+                "metric": enforce_sebi_compliance(r.metric, include_regulatory_note=False).splitlines()[0],
                 "primary_value": r.primary_value,
                 "secondary_value": r.secondary_value,
                 "winner": r.winner,
@@ -139,6 +133,6 @@ def render_rich_json(artifact: AnswerArtifact) -> dict:
             for r in artifact.comparison_results
             if _has_display_value(r.primary_value) and _has_display_value(r.secondary_value)
         ],
-        "data_sources": [{"label": c.title, "url": c.url} for c in artifact.citations],
-        "disclaimer": SEBI_COMPLIANCE_NOTE,
+        "data_sources": [{"label": f"Reference {i}", "url": c.url} for i, c in enumerate(artifact.citations, 1)],
+        "disclaimer": "",
     }

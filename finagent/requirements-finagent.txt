@@ -6,11 +6,17 @@ uvicorn>=0.23.0
 fastmcp>=2.0.0
 httpx>=0.24.0
 aiohttp>=3.8.0
+psycopg[binary]>=3.1.0
+apscheduler>=3.10.0
 
 # LLM + tools
 openai>=1.0.0
 langchain>=0.2.0
 langgraph>=0.1.0
+google-api-python-client>=2.0.0
+google-auth>=2.0.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
 
 # Data & finance
 yfinance>=0.2.40
@@ -25,6 +31,7 @@ PyJWT>=2.0.0
 casparser>=0.9.0  # CAS/eCAS PDF parsing (CAMS/KFintech/CDSL/NSDL) - optional pymupdf backend
 pypdf>=4.0.0      # PDF encryption/decryption
 msoffcrypto-tool>=5.4.0  # Excel encryption/decryption
+azure-ai-documentintelligence>=1.0.0
 
 # PDF layout extraction (required for broker PDFs and casparser mupdf backend)
 pymupdf>=1.24.0   # PyMuPDF / fitz - provides the 'fitz' module for high-quality PDF parsing

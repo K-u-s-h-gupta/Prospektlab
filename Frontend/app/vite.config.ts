@@ -18,6 +18,15 @@ export default defineConfig({
       '/memos': 'http://localhost:8000',
       '/market': 'http://localhost:8000',
       '/user': 'http://localhost:8000',
+      // Proxy public insights content routes to the backend.
+      // The rewrite strips a trailing slash so the backend receives
+      // /insights/slug (no slash) directly — avoiding a 307 redirect
+      // that would break the browser out of the Vite proxy.
+      '^/insights(?:/|$)': {
+        target: 'http://localhost:8000',
+        changeOrigin: false,
+        rewrite: (path) => path.replace(/\/+$/, '') || '/',
+      },
     }
   }
 })

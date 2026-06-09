@@ -901,6 +901,7 @@ async def search_web(
     entity: ResolvedEntity | None = None,
     query_cache: dict[str, list[ScrapedDoc]] | None = None,
     bypass_crawl4ai: bool = False,
+    lite_crawl: bool = False,
 ) -> list[ScrapedDoc]:
     """Search with **Crawl4AI as the PRIMARY heavy content extraction engine**.
 
@@ -930,6 +931,9 @@ async def search_web(
 
     stage1_target = min(60, max(40, max_results * 12))
     crawl_budget = min(30, max(6, max_results * 2))
+    if lite_crawl:
+        stage1_target = min(stage1_target, max(24, max_results * 6))
+        crawl_budget = min(crawl_budget, 3)
 
     logger.info("SEARCH-STEP:01 targets_computed stage1_target=%d crawl_budget=%d", stage1_target, crawl_budget)
 
@@ -966,7 +970,7 @@ async def search_web(
     # Use DDG/Bing only as backup when combined results are weak
     # Skip DDG/Bing direct scraping backup if bypass_crawl4ai is True and we already have sufficient candidates
     need_backup = len(combined_results) < (stage1_target // 2)
-    if bypass_crawl4ai and len(combined_results) >= 3:
+    if (bypass_crawl4ai or lite_crawl) and len(combined_results) >= 3:
         need_backup = False
 
     if need_backup:
@@ -1038,13 +1042,16 @@ async def search_web(
 
     # ── Phase 3: Crawl4AI batch — browser-render candidate URLs ──────────────
     if bypass_crawl4ai:
-        # For fast standard/chat modes, minimize slow HTTP page fetches.
+        # For fast bypass modes, minimize slow HTTP page fetches.
         # If we already have >=4 combined docs from Tavily/SearXNG, skip scraping entirely.
         # Otherwise, restrict full page scraping to at most 2 candidate URLs.
         if len(combined_docs) >= 4:
             crawl_budget = 0
         else:
             crawl_budget = min(2, crawl_budget)
+    elif lite_crawl:
+        # Keep standard mode fresh without the full deep crawl cost.
+        crawl_budget = min(2, crawl_budget)
 
     crawl_urls = [
         h for h, _ in candidates[:crawl_budget]
@@ -1059,6 +1066,11 @@ async def search_web(
         if bypass_crawl4ai:
             logger.info(
                 "[SEARCH] Bypassing Crawl4AI browser crawl; fetching %d URL(s) via parallel httpx",
+                len(crawl_urls)
+            )
+        elif lite_crawl:
+            logger.info(
+                "[SEARCH] Standard-mode lite crawl enabled; running Crawl4AI on %d prioritized URL(s)",
                 len(crawl_urls)
             )
         else:
@@ -1098,7 +1110,7 @@ async def search_web(
             crawl_urls,
             query=query,
             title_by_url=title_by_url,
-            timeout_s=25.0,
+            timeout_s=12.0 if lite_crawl else 25.0,
         )
 
     logger.info("SEARCH-STEP:09 crawl4ai_batch_returned docs=%d", len(crawl4ai_docs))
@@ -1152,6 +1164,7 @@ async def search_layered(
     entity: ResolvedEntity | None = None,
     timeout_s: float | None = None,
     bypass_crawl4ai: bool = False,
+    lite_crawl: bool = False,
 ) -> list[ScrapedDoc]:
     """Section 4.3 layered queries: authoritative / news / competitive / narrative.
 
@@ -1178,6 +1191,7 @@ async def search_layered(
                 preferred_domains=preferred_domains,
                 entity=entity,
                 bypass_crawl4ai=bypass_crawl4ai,
+                lite_crawl=lite_crawl,
             )
             if on_query:
                 on_query(q, "done", len(docs))

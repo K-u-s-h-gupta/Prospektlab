@@ -61,7 +61,7 @@ _DIRECTIVE_SENTENCE_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 
-def enforce_sebi_compliance(text: str) -> str:
+def enforce_sebi_compliance(text: str, *, include_regulatory_note: bool = True) -> str:
     """Return a safer, research-only version of generated finance prose."""
     if not text:
         return text
@@ -84,6 +84,10 @@ def enforce_sebi_compliance(text: str) -> str:
         out = pattern.sub(replacement, out)
 
     out = re.sub(r"\n{3,}", "\n\n", out).strip()
-    if "not investment advice" not in out.lower() and "educational, evidence-based research summary" not in out.lower():
+    if (
+        include_regulatory_note
+        and "not investment advice" not in out.lower()
+        and "educational, evidence-based research summary" not in out.lower()
+    ):
         out = f"{out}\n\n---\n{SEBI_COMPLIANCE_NOTE}"
     return out
