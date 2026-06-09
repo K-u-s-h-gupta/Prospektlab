@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024" role="img" aria-label="Infosys Q3 FY25 results overview">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#03101f" />
+      <stop offset="55%" stop-color="#0b1b34" />
+      <stop offset="100%" stop-color="#12264b" />
+    </linearGradient>
+    <radialGradient id="glow" cx="20%" cy="15%" r="80%">
+      <stop offset="0%" stop-color="rgba(125,211,252,0.45)" />
+      <stop offset="100%" stop-color="rgba(125,211,252,0)" />
+    </radialGradient>
+  </defs>
+  <rect width="1536" height="1024" fill="url(#bg)" />
+  <circle cx="320" cy="170" r="420" fill="url(#glow)" />
+  <circle cx="1230" cy="220" r="320" fill="rgba(96,165,250,0.11)" />
+  <rect x="48" y="48" width="1440" height="928" rx="42" fill="rgba(8,18,36,0.78)" stroke="rgba(145,180,230,0.16)" />
+  <text x="60" y="114" fill="#7dd3fc" font-size="28" font-family="Inter, Arial, sans-serif" font-weight="700" letter-spacing="3">PROSPEKTLAB RESEARCH</text>
+  <text x="60" y="270" fill="#f8fbff" font-size="88" font-family="Inter, Arial, sans-serif" font-weight="800">Infosys Q3 FY25 results overview</text>
+  <foreignObject x="60" y="320" width="1160" height="240"><div xmlns="http://www.w3.org/1999/xhtml" style="color:#aab6cb;font:500 34px Inter,Arial,sans-serif;line-height:1.4;">In-depth financial insight on Infosys Q3 FY25 results from official filings, exchange disclosures, and management commentary.</div></foreignObject>
+  <g><rect x="60" y="760" rx="22" ry="22" width="260" height="52" fill="rgba(255,255,255,0.08)" stroke="rgba(125,211,252,0.22)"/><text x="80" y="792" fill="#dbeafe" font-size="24" font-family="Inter, Arial, sans-serif">Infosys Q3 FY25 results </text></g><g><rect x="338" y="760" rx="22" ry="22" width="190" height="52" fill="rgba(255,255,255,0.08)" stroke="rgba(125,211,252,0.22)"/><text x="358" y="792" fill="#dbeafe" font-size="24" font-family="Inter, Arial, sans-serif">Financial Insight</text></g><g><rect x="546" y="760" rx="22" ry="22" width="150" height="52" fill="rgba(255,255,255,0.08)" stroke="rgba(125,211,252,0.22)"/><text x="566" y="792" fill="#dbeafe" font-size="24" font-family="Inter, Arial, sans-serif">India markets</text></g><g><rect x="714" y="760" rx="22" ry="22" width="130" height="52" fill="rgba(255,255,255,0.08)" stroke="rgba(125,211,252,0.22)"/><text x="734" y="792" fill="#dbeafe" font-size="24" font-family="Inter, Arial, sans-serif">ProspektLab</text></g>
+</svg>
