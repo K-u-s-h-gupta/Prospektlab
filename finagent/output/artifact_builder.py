@@ -39,8 +39,6 @@ _ANALYTICAL_VISUAL_TERMS = (
     "compare", "comparison", "vs", "peer",
 )
 _MISSING_DISPLAY_VALUES = {"", "n/a", "na", "none", "null", "-", "\u2014", "n/a - n/a"}
-_OWNERSHIP_QUERY_TERMS = ("shareholding", "shareholding pattern", "promoter", "pledge", "pledged", "ownership", "fii", "dii")
-_GOVERNANCE_QUERY_TERMS = ("governance", "board", "director", "directors", "auditor", "auditors", "management")
 
 
 def _has_real_value(value: Any) -> bool:
@@ -91,17 +89,14 @@ def _clean_artifact_payload(artifact: AnswerArtifact) -> None:
     ]
 
 
-def _objective_has_any(objective: str, terms: tuple[str, ...]) -> bool:
-    lower = (objective or "").lower()
-    return any(term in lower for term in terms)
-
-
 def _objective_wants_visuals(objective: str, mode: OutputMode) -> bool:
     lower = (objective or "").lower()
     if mode == OutputMode.COMPANY_COMPARISON:
         return True
     if mode in {OutputMode.NEWS_BRIEF, OutputMode.CONVERSATIONAL_CHAT, OutputMode.FILING_ANALYSIS}:
         return False
+    if mode == OutputMode.DIRECT_ANSWER:
+        return any(term.lower() in lower for term in _VISUAL_QUERY_TERMS)
     if mode in {OutputMode.VALUATION_MODEL, OutputMode.VALUATION_INSIGHTS, OutputMode.FORENSIC_INSIGHTS}:
         return True
     if any(term.lower() in lower for term in _VISUAL_QUERY_TERMS):
@@ -969,7 +964,7 @@ def build_answer_artifact(
     elif mode in {OutputMode.FILING_ANALYSIS, OutputMode.DOCUMENT_VERSION_COMPARISON}:
         _fill_filing(artifact, bundle, docs, mode)
     elif mode == OutputMode.INVESTMENT_VIEW:
-        _fill_investment_view(artifact, objective, bundle, specialist_findings or [], docs)
+        _fill_investment_view(artifact, bundle, specialist_findings or [], docs)
     elif mode == OutputMode.MARKET_EXPLAINER:
         _fill_market_explainer(artifact, objective, docs, specialist_findings or [])
     elif mode == OutputMode.DEEP_RESEARCH_REPORT:
@@ -1158,12 +1153,11 @@ def _fill_filing(artifact: AnswerArtifact, bundle, docs, mode: OutputMode) -> No
     )
 
 
-def _fill_investment_view(artifact: AnswerArtifact, objective: str, bundle, findings, docs) -> None:
+def _fill_investment_view(artifact: AnswerArtifact, bundle, findings, docs) -> None:
     artifact.tables.append(_metrics_table(bundle))
-    view_text = _investment_text(bundle, findings, objective)
     artifact.sections.extend(
         [
-            ResponseSection("View", view_text, "MEDIUM"),
+            ResponseSection("View", _investment_text(bundle, findings), "MEDIUM"),
             ResponseSection("Bear Case", _risk_text(bundle, docs, findings), "MEDIUM"),
             ResponseSection("What Would Change The View", "Watch earnings revisions, margin trend, valuation versus peers, management commentary, governance events, and sector/macroeconomic changes.", "MEDIUM"),
         ]
@@ -1210,9 +1204,8 @@ def _fill_direct_answer(artifact: AnswerArtifact, objective: str, bundle, docs) 
     if any(term in (objective or "").lower() for term in ("historical price", "price history", "stock history", "share price history", "past price")):
         artifact.sections.append(ResponseSection("Historical Price View", _price_history_text(bundle, docs), "MEDIUM"))
         return
-    ikg_body = _ikg_targeted_text(bundle, objective)
-    body = ikg_body or _doc_snippets(docs) or _business_text(bundle)
-    artifact.sections.append(ResponseSection("Answer", body, "HIGH" if ikg_body else ("MEDIUM" if body else "LOW")))
+    body = _doc_snippets(docs) or _business_text(bundle)
+    artifact.sections.append(ResponseSection("Answer", body, "MEDIUM" if body else "LOW"))
 
 
 def _metrics_table(bundle) -> AnswerTable:
@@ -1372,15 +1365,6 @@ def _risk_text(bundle, docs, findings) -> str:
         return _findings_text(risk_findings)
     if getattr(bundle, "filing", None) and getattr(bundle.filing, "risk_factors", None):
         return bundle.filing.risk_factors[:1200]
-    if getattr(bundle, "ikg", None):
-        pledge = ((bundle.ikg.ownership or {}).get("pledge_summary") or {})
-        if pledge.get("pledged_promoters"):
-            return (
-                f"IKG shows promoter pledging exposure as of {pledge.get('as_of_date') or bundle.ikg.as_of_date or 'latest available date'}: "
-                f"total promoter holding {pledge.get('total_promoter_holding_pct', 'n/a')}%, "
-                f"pledged portion {pledge.get('total_pledge_pct', 'n/a')}%, "
-                f"flag {pledge.get('pledge_flag', 'unknown')}. This should be cross-checked against the latest exchange shareholding filing."
-            )
     return _doc_snippets(docs, terms=("risk", "headwind", "regulatory", "margin pressure", "debt")) or "Specific risk-factor evidence was limited in this run."
 
 
@@ -1397,78 +1381,10 @@ def _filing_text(bundle, docs) -> str:
     return _doc_snippets(docs, terms=("drhp", "rhp", "prospectus", "risk factors", "objects of the issue")) or "No filing narrative was extracted in this run."
 
 
-def _investment_text(bundle, findings, objective: str = "") -> str:
+def _investment_text(bundle, findings) -> str:
     financials = _financial_text(bundle)
     found = _findings_text(findings[:4])
-    ikg_body = _ikg_targeted_text(bundle, objective)
-    if financials.startswith("Financial data was not available") and ikg_body:
-        return f"{ikg_body}\n\n{found}" if found else ikg_body
     return f"{financials}\n\n{found}" if found else financials
-
-
-def _ikg_targeted_text(bundle, objective: str) -> str:
-    ikg = getattr(bundle, "ikg", None)
-    if not ikg:
-        return ""
-    entity = ikg.entity or {}
-    ownership = ikg.ownership or {}
-    governance = ikg.governance or {}
-    q = (objective or "").lower()
-    wants_ownership = _objective_has_any(q, _OWNERSHIP_QUERY_TERMS)
-    wants_governance = _objective_has_any(q, _GOVERNANCE_QUERY_TERMS)
-    lines: list[str] = []
-
-    if wants_ownership:
-        pledge = ownership.get("pledge_summary") or {}
-        if pledge:
-            lines.append(
-                f"IKG resolves the company as {entity.get('name') or 'the target'}"
-                + (f" (CIN {entity.get('cin')})" if entity.get("cin") else "")
-                + f". As of {pledge.get('as_of_date') or ikg.as_of_date or 'the latest available date'}, "
-                f"the promoter holding captured in IKG is {pledge.get('total_promoter_holding_pct', 'n/a')}%, "
-                f"with an implied pledged portion of {pledge.get('total_pledge_pct', 'n/a')}% "
-                f"and an internal flag of {pledge.get('pledge_flag', 'unknown')}."
-            )
-            pledged = pledge.get("pledged_promoters") or []
-            if pledged:
-                top = []
-                for row in pledged[:5]:
-                    top.append(
-                        f"{row.get('promoter', 'unknown promoter')} "
-                        f"({row.get('holding_pct', 'n/a')}% holding; {row.get('pledge_pct_of_holding', 'n/a')}% of that holding pledged)"
-                    )
-                lines.append("Largest pledged holders in the IKG snapshot: " + "; ".join(top) + ".")
-
-    if wants_governance:
-        directors = governance.get("director_history") or governance.get("directors") or []
-        auditors = governance.get("auditors") or []
-        if directors:
-            lines.append(f"IKG also carries {len(directors)} director relationship record(s) for governance context.")
-        auditor_name = _best_auditor_name(auditors)
-        if auditor_name:
-            lines.append(f"The most usable auditor history signal in the current IKG snapshot points to {auditor_name}.")
-
-    if not lines:
-        facts = ikg.trusted_facts(limit=3)
-        if facts:
-            lines.extend(f"{fact.get('headline')}: {fact.get('detail')}" for fact in facts)
-    if ikg.warnings:
-        lines.append("Coverage caveat: " + "; ".join(ikg.warnings[:2]))
-    return "\n\n".join(lines)
-
-
-def _best_auditor_name(rows) -> str:
-    for row in rows or []:
-        name = str((row or {}).get("auditor_name") or "").strip()
-        if not name:
-            continue
-        lowered = name.lower()
-        if lowered in {"chartered accountants", "co. llp", "co", "llp"}:
-            continue
-        if len(name) < 6:
-            continue
-        return name
-    return ""
 
 
 def _findings_text(findings) -> str:

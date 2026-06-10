@@ -77,7 +77,13 @@ def normalize_symbol(symbol: str, exchange: str | None = None) -> str:
             value = value[: -len(suffix)]
     value = value.rstrip(",.")  # trailing junk
 
-    if not value or len(value) > 16:
+    if not value:
+        return ""
+    # Non-traded asset kinds (physical gold, SGB) may have long symbols or ISINs
+    if exchange_norm in {"AMFI", "MF"}:
+        if len(value) > 32:
+            return ""
+    elif len(value) > 16:
         return ""
 
     # Reject anything still containing commas or double-dots (corruption markers)

@@ -6,6 +6,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import inspect
 import json
 import logging
 import os
@@ -55,7 +56,7 @@ except ImportError:
     pass  # python-dotenv not installed; keys must come from environment
 
 from fastapi import FastAPI, HTTPException, Header, Depends, Request, Response, UploadFile, File, Form
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, field_validator
 
@@ -83,19 +84,8 @@ from finagent.content_automation import (
     is_generated_article_published,
     list_generated_articles,
     load_generated_article,
-    load_generated_article_asset,
     load_generated_article_html,
-    publish_article as _publish_article,
-    unpublish_article as _unpublish_article,
 )
-from finagent.content.flash_engine import (
-    FlashGenerationRequest,
-    FlashIngestRequest,
-    generate_flash_article,
-    ingest_events_flash,
-    build_insights_hub_html,
-)
-from finagent.content.official_monitor import get_monitor_status, run_official_monitor
 from finagent.portfolio_mirrors import load_active_positions, replace_active_positions, summarize_positions, delete_positions
 from finagent.portfolio.analytics import compute_portfolio_analytics
 from finagent.portfolio.news import fetch_portfolio_news
@@ -105,7 +95,6 @@ from finagent.gateway.sms_delivery import send_sms_message
 from finagent.gateway import supabase_client as supabase
 from finagent.gateway.auth_guard import decode_current_user_token
 from finagent.telemetry import TELEMETRY, TelemetryUserContext, telemetry_request_context, telemetry_user_from_authorization_header, telemetry_user_from_request_user
-from finagent.telemetry_burner import create_telemetry_burner_task, get_telemetry_burner
 from finagent.tools.data import fetch_news, fetch_yahoo_quote, fetch_india_snapshot, fetch_nse_snapshot
 import time
 
@@ -150,8 +139,7 @@ VALID_MAGIC_BYTES = {
     b"%PDF": (".pdf",),
     b"\x89PNG": (".png",),
     b"\xff\xd8\xff": (".jpg", ".jpeg"),
-    b"PK\x03\x04": (".xlsx",),         # ZIP container — modern Excel only
-    b"\xD0\xCF\x11\xE0": (".xls",),   # OLE2 compound document — legacy Excel
+    b"PK\x03\x04": (".xlsx", ".xls"),
 }
 
 PROMPT_INJECTION_PATTERNS = re.compile(
@@ -464,12 +452,10 @@ async def lifespan(app: FastAPI):
     )
     if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_KEY"):
         logger.warning(
-            "SUPABASE_URL or SUPABASE_KEY is not set. User-operational stores will use in-memory fallbacks. "
-            "Long-term memory is handled separately by Prospekt tiered memory. "
-            "Set Supabase environment variables for production user workflows."
+            "SUPABASE_URL or SUPABASE_KEY is not set. The application will use in-memory fallback stores. "
+            "Data will not persist across restarts. Set these environment variables for production use."
         )
     cleanup_task = asyncio.create_task(_periodic_cleanup())
-    create_telemetry_burner_task()
     yield
     # Shutdown
     cleanup_task.cancel()
@@ -477,8 +463,6 @@ async def lifespan(app: FastAPI):
         await cleanup_task
     except asyncio.CancelledError:
         pass
-    burner = get_telemetry_burner()
-    await burner.stop()
     for task in list(_TASKS.values()):
         task.cancel()
     await aclose_shared_client()
@@ -579,49 +563,6 @@ async def telemetry_middleware(request: Request, call_next):
     return response
 
 # ── Global Security Headers Middleware ────────────────────────────────────
-def _content_security_policy_for_path(path: str) -> str:
-    if path.startswith("/ops"):
-        return (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
-            "style-src-attr 'unsafe-inline'; "
-            "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
-            "font-src 'self' data: https://fonts.gstatic.com; "
-            "img-src 'self' data: https://*.googleusercontent.com; "
-            "frame-src 'self' https://accounts.google.com; "
-            "connect-src 'self' https: wss: https://oauth2.googleapis.com https://*.supabase.co https://*.execute-api.us-east-1.amazonaws.com https://*.amplifyapp.com;"
-        )
-
-    # Public insights pages are rendered as standalone HTML documents with
-    # inline styles, so they need a looser style policy than the SPA shell.
-    if path.startswith("/insights"):
-        return (
-            "default-src 'self'; "
-            "script-src 'self' https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
-            "style-src-attr 'unsafe-inline'; "
-            "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
-            "font-src 'self' data: https://fonts.gstatic.com; "
-            "img-src 'self' data: https://*.googleusercontent.com; "
-            "frame-src 'self' https://accounts.google.com; "
-            "connect-src 'self' https: wss: https://oauth2.googleapis.com https://*.supabase.co https://*.execute-api.us-east-1.amazonaws.com https://*.amplifyapp.com;"
-        )
-
-    # Hardened CSP: unsafe-inline and unsafe-eval remain blocked for the main app.
-    # Google Identity Services is loaded via a separate script file or
-    # CSP nonce (recommended). For now, specific external domains are allowed.
-    return (
-        "default-src 'self'; "
-        "script-src 'self' https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; "
-        "style-src 'self' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
-        "font-src 'self' data: https://fonts.gstatic.com; "
-        "img-src 'self' data: https://*.googleusercontent.com; "
-        "frame-src 'self' https://accounts.google.com; "
-        "connect-src 'self' https: wss: https://oauth2.googleapis.com https://*.supabase.co https://*.execute-api.us-east-1.amazonaws.com https://*.amplifyapp.com;"
-    )
-
-
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -629,7 +570,29 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Content-Security-Policy"] = _content_security_policy_for_path(request.url.path)
+    if request.url.path.startswith("/ops"):
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "img-src 'self' data: https://*.googleusercontent.com; "
+            "frame-src 'self' https://accounts.google.com; "
+            "connect-src 'self' https: wss: https://oauth2.googleapis.com https://*.supabase.co https://*.execute-api.us-east-1.amazonaws.com https://*.amplifyapp.com;"
+        )
+    else:
+        # Hardened CSP: unsafe-inline and unsafe-eval remain blocked for the main app.
+        # Google Identity Services is loaded via a separate script file or
+        # CSP nonce (recommended). For now, specific external domains are allowed.
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; "
+            "style-src 'self' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "img-src 'self' data: https://*.googleusercontent.com; "
+            "frame-src 'self' https://accounts.google.com; "
+            "connect-src 'self' https: wss: https://oauth2.googleapis.com https://*.supabase.co https://*.execute-api.us-east-1.amazonaws.com https://*.amplifyapp.com;"
+        )
     return response
 
 # ── Unified get_current_user Dependency for JWT and BOLA checks ──────────
@@ -766,37 +729,59 @@ def _control_tower_shared_challenge() -> HTMLResponse:
     )
 
 
+_OUTREACH_TEMPLATE_PATH = repo_root() / "outreach" / "templates" / "prospektlab_feedback.md"
+
+
+def _load_outreach_template_text() -> dict[str, Any]:
+    path = _OUTREACH_TEMPLATE_PATH
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Outreach template file was not found.")
+
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    if not lines or not lines[0].lower().startswith("subject:"):
+        raise HTTPException(status_code=422, detail="Template must start with `Subject: ...`.")
+
+    subject = lines[0].split(":", 1)[1].strip()
+    body = "\n".join(lines[1:]).strip()
+    stat = path.stat()
+    return {
+        "path": str(path),
+        "subject": subject,
+        "body": body,
+        "template_text": text,
+        "line_count": len(lines),
+        "updated_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+    }
+
+
+def _save_outreach_template_text(template_text: str) -> dict[str, Any]:
+    path = _OUTREACH_TEMPLATE_PATH
+    text = (template_text or "").replace("\r\n", "\n").strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="Template text cannot be empty.")
+    lines = text.splitlines()
+    if not lines or not lines[0].lower().startswith("subject:"):
+        raise HTTPException(status_code=422, detail="Template must start with `Subject: ...`.")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text + "\n", encoding="utf-8")
+    return _load_outreach_template_text()
+
+
 def _decode_current_user(actual_token: str) -> dict:
     return decode_current_user_token(actual_token, local_jwt_secret=JWT_SECRET)
-
-
-def _extract_request_token(
-    request: Request,
-    authorization: str | None,
-) -> str | None:
-    if authorization and authorization.startswith("Bearer "):
-        return authorization.split(" ", 1)[1]
-
-    cookie_token = request.cookies.get(AUTH_COOKIE_NAME)
-    if cookie_token:
-        return cookie_token
-
-    # Native EventSource cannot attach Authorization headers. Accept a
-    # query-token fallback for read-only requests so SSE and memo views can
-    # authenticate without widening POST/PUT/DELETE auth surfaces.
-    if request.method.upper() in {"GET", "HEAD"}:
-        query_token = (request.query_params.get("token") or "").strip()
-        if query_token:
-            return query_token
-
-    return None
 
 
 async def get_current_user(
     request: Request,
     authorization: str = Header(None),
 ) -> dict:
-    actual_token = _extract_request_token(request, authorization)
+    actual_token = None
+    if authorization and authorization.startswith("Bearer "):
+        actual_token = authorization.split(" ")[1]
+    else:
+        actual_token = request.cookies.get(AUTH_COOKIE_NAME)
     return _decode_current_user(actual_token)
 
 
@@ -804,7 +789,11 @@ async def get_current_user_optional(
     request: Request,
     authorization: str = Header(None),
 ) -> dict[str, Any] | None:
-    actual_token = _extract_request_token(request, authorization)
+    actual_token = None
+    if authorization and authorization.startswith("Bearer "):
+        actual_token = authorization.split(" ")[1]
+    else:
+        actual_token = request.cookies.get(AUTH_COOKIE_NAME)
     if not actual_token:
         return None
     try:
@@ -1095,7 +1084,7 @@ def _frontend_base_url() -> str:
         return raw.rstrip("/")
     if _allow_origins and _allow_origins[0] != "*":
         return _allow_origins[0].rstrip("/")
-    return "http://localhost:3000"
+    return "http://localhost:5173"
 
 
 def _frontend_url(route: str = "", query: dict[str, Any] | None = None) -> str:
@@ -1111,12 +1100,6 @@ def _frontend_url(route: str = "", query: dict[str, Any] | None = None) -> str:
 
 def _frontend_hash_url(route: str = "") -> str:
     return _frontend_url(route)
-
-
-def _frontend_static_url(path: str = "") -> str:
-    cleaned = (path or "").lstrip("/")
-    base = _frontend_base_url()
-    return f"{base}/{cleaned}" if cleaned else f"{base}/"
 
 
 class StartResearchRequest(BaseModel):
@@ -1205,7 +1188,7 @@ class PositionMirrorInput(BaseModel):
     name: str = Field(default="", max_length=180)
     isin: str = Field(default="", max_length=16)
     amfi: str = Field(default="", max_length=24)
-    kind: str = Field(default="equity", max_length=12)
+    kind: str = Field(default="equity", max_length=16)
     sector: str = Field(default="", max_length=80)
     industry: str = Field(default="", max_length=120)
     avg_cost: float = Field(default=0.0, ge=0)
@@ -1233,7 +1216,6 @@ class SignupRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=160)
     password: str = Field(..., min_length=8, max_length=200)
     mobile: str = Field(..., min_length=5, max_length=30)
-    referral_source: str = Field(..., min_length=2, max_length=80)
     verification_code: str = Field(..., min_length=6, max_length=6)
 
     @field_validator("email")
@@ -1317,6 +1299,42 @@ class OutreachUnsubscribeRequest(BaseModel):
         return (v or "").strip()
 
 
+class OutreachEventIngestionRequest(BaseModel):
+    owner_email: str = Field(..., min_length=3, max_length=160)
+    event_type: str = Field(..., min_length=2, max_length=40)
+    provider: str = Field(default="azure_communication_services", min_length=2, max_length=80)
+    message_id: int | None = Field(default=None, ge=1)
+    provider_message_id: str = Field(default="", max_length=120)
+    source: str = Field(default="provider_webhook", min_length=3, max_length=80)
+    note: str = Field(default="", max_length=500)
+    event_payload: dict[str, Any] = Field(default_factory=dict)
+    occurred_at: datetime | None = None
+
+    @field_validator("owner_email")
+    @classmethod
+    def _owner_email(cls, v: str) -> str:
+        return _validate_email(v)
+
+    @field_validator("event_type", "provider", "source", "provider_message_id", "note")
+    @classmethod
+    def _strip_text(cls, v: str) -> str:
+        return (v or "").strip()
+
+    @field_validator("event_type")
+    @classmethod
+    def _event_type(cls, v: str) -> str:
+        return (v or "").strip().lower()
+
+
+class OutreachTemplateUpdateRequest(BaseModel):
+    template_text: str = Field(..., min_length=20, max_length=50000)
+
+    @field_validator("template_text")
+    @classmethod
+    def _template_text(cls, v: str) -> str:
+        return (v or "").replace("\r\n", "\n").strip()
+
+
 class ForgotPasswordRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=160)
     channel: str = Field(default="email", min_length=3, max_length=16)
@@ -1333,28 +1351,6 @@ class ForgotPasswordRequest(BaseModel):
         if value not in {"email", "sms"}:
             raise ValueError("Channel must be email or sms.")
         return value
-
-
-class OutreachUnsubscribeRequest(BaseModel):
-    email: str = Field(..., min_length=3, max_length=160)
-    reason: str = Field(default="unsubscribe", min_length=3, max_length=80)
-    source: str = Field(default="public_page", min_length=3, max_length=80)
-    note: str = Field(default="", max_length=500)
-
-    @field_validator("email")
-    @classmethod
-    def _email(cls, v: str) -> str:
-        return _validate_email(v)
-
-    @field_validator("reason", "source")
-    @classmethod
-    def _label(cls, v: str) -> str:
-        return (v or "").strip().lower()
-
-    @field_validator("note")
-    @classmethod
-    def _note(cls, v: str) -> str:
-        return (v or "").strip()
 
 
 class ResetPasswordRequest(BaseModel):
@@ -1452,10 +1448,7 @@ def _clear_session_memo(session_id: str) -> None:
 
 
 def _event_payload(idx: int, event) -> dict[str, Any]:
-    ts = event.timestamp
-    if isinstance(ts, datetime):
-        ts = ts.isoformat()
-    return {"id": idx, "type": event.type, "timestamp": ts, **event.payload}
+    return {"id": idx, "type": event.type, "timestamp": event.timestamp, **event.payload}
 
 
 def _latest_event(session_id: str, event_type: str) -> dict[str, Any] | None:
@@ -1546,6 +1539,59 @@ async def outreach_unsubscribe(req: OutreachUnsubscribeRequest, request: Request
         },
         headers={"Cache-Control": "no-store"},
     )
+
+
+@app.post("/api/outreach/events/ingest", dependencies=[Depends(default_rate_limiter)])
+async def ingest_outreach_event(
+    req: OutreachEventIngestionRequest,
+    authorization: str | None = Header(default=None),
+    x_outreach_webhook_secret: str | None = Header(default=None, alias="X-Outreach-Webhook-Secret"),
+):
+    webhook_secret = os.getenv("OUTREACH_EVENT_WEBHOOK_SECRET", "").strip()
+    current_user: dict[str, Any] | None = None
+    if webhook_secret and x_outreach_webhook_secret and secrets.compare_digest(x_outreach_webhook_secret.strip(), webhook_secret):
+        pass
+    else:
+        current_user = decode_current_user_token(
+            (authorization or "").split(" ", 1)[1].strip() if authorization and authorization.startswith("Bearer ") else None,
+            local_jwt_secret=os.getenv("JWT_SECRET", ""),
+        )
+        if current_user["email"].lower().strip() != req.owner_email.lower().strip():
+            raise HTTPException(status_code=403, detail="You can only ingest events for your own owner email.")
+
+    row = await supabase.store_outreach_event(
+        req.owner_email,
+        req.event_type,
+        provider=req.provider,
+        message_id=req.message_id,
+        event_payload={
+            **(req.event_payload or {}),
+            "provider_message_id": req.provider_message_id,
+            "source": req.source,
+            "note": req.note,
+        },
+        occurred_at=req.occurred_at,
+    )
+    TELEMETRY.emit_event(
+        "outreach_event_ingested",
+        user=telemetry_user_from_request_user(current_user),
+        properties={
+            "owner_email": req.owner_email,
+            "event_type": req.event_type,
+            "provider": req.provider,
+        },
+    )
+    return JSONResponse({"status": "ok", "event": row}, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/outreach/events", dependencies=[Depends(default_rate_limiter)])
+async def list_outreach_events(
+    current_user: dict = Depends(get_current_user),
+):
+    rows = await supabase.list_outreach_events()
+    owner_email = current_user["email"].lower().strip()
+    filtered = [row for row in rows if str(row.get("owner_email") or "").lower().strip() == owner_email]
+    return JSONResponse({"count": len(filtered), "items": filtered[:250]}, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/auth/me")
@@ -2271,6 +2317,26 @@ async def upload_portfolio_document(
                 "message": "Your holdings were extracted, but saving them to your account failed. Please retry in a moment.",
             },
         )
+
+    # Persist transactions (non-blocking — failure is logged but not surfaced)
+    if extraction.transactions:
+        try:
+            from finagent.storage.supabase_store import get_transaction_store, get_sip_store
+            from finagent.portfolio.sip import detect_and_auto_register_sips
+            txn_store = get_transaction_store()
+            txn_dicts = [t.model_dump() for t in extraction.transactions]
+            n_inserted = await txn_store.upsert_transactions(tenant_id, txn_dicts)
+            logger.info("Persisted %d transactions for tenant %s", n_inserted, tenant_id)
+
+            # Auto-detect and register SIPs
+            detected_sips = detect_and_auto_register_sips(txn_dicts)
+            if detected_sips:
+                sip_store = get_sip_store()
+                n_sips = await sip_store.upsert_sips(tenant_id, detected_sips)
+                logger.info("Auto-registered %d SIPs for tenant %s", n_sips, tenant_id)
+        except Exception as exc:
+            logger.warning("Transaction/SIP persistence failed (non-fatal): %s", exc)
+
     summary = summarize_positions(positions)
     _set_ingestion_state(tenant_id, "MIRROR_SYNCHRONIZED", f"{summary['count']} holdings synchronized.")
     summary["ok"] = True
@@ -2663,6 +2729,125 @@ async def get_portfolio_brief(current_user: dict = Depends(get_current_user)):
     return {"brief": brief_text}
 
 
+# ── SIP Analytics ──────────────────────────────────────────────────────────
+
+class SipRegisterRequest(BaseModel):
+    name: str
+    amfi: str = ""
+    isin: str = ""
+    symbol: str = ""
+    monthly_amount: float
+    start_date: str = ""
+    end_date: str = ""
+    next_due_day: int = 1
+    status: str = "active"
+
+
+class SipDeleteRequest(BaseModel):
+    sip_id: int
+
+
+@app.get("/portfolio/sips")
+async def get_sip_analytics(current_user: dict = Depends(get_current_user)):
+    """SIP analytics: invested totals, XIRR, monthly series, per-scheme breakdown."""
+    tenant_id = current_user.get("tenant_id")
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/sips")
+    try:
+        from finagent.storage.supabase_store import get_transaction_store, get_sip_store
+        from finagent.portfolio.sip import compute_sip_analytics
+        txn_store = get_transaction_store()
+        sip_store = get_sip_store()
+        transactions = await txn_store.get_transactions(tenant_id, limit=2000)
+        registered_sips = await sip_store.get_sips(tenant_id)
+        result = compute_sip_analytics(transactions, positions, registered_sips)
+        result["store_unavailable"] = store_unavailable
+        return result
+    except Exception as exc:
+        logger.warning("SIP analytics failed: %s", exc)
+        return {"status": "ERROR", "error": str(exc), "store_unavailable": store_unavailable}
+
+
+@app.post("/portfolio/sips")
+async def register_sip(body: SipRegisterRequest, current_user: dict = Depends(get_current_user)):
+    """Manually register or update a SIP entry."""
+    tenant_id = current_user.get("tenant_id")
+    try:
+        from finagent.storage.supabase_store import get_sip_store
+        sip_store = get_sip_store()
+        sip_dict = {
+            "name": body.name,
+            "amfi": body.amfi,
+            "isin": body.isin,
+            "symbol": body.symbol,
+            "monthly_amount": body.monthly_amount,
+            "start_date": body.start_date or None,
+            "end_date": body.end_date or None,
+            "next_due_day": body.next_due_day,
+            "status": body.status,
+            "source": "manual",
+        }
+        n = await sip_store.upsert_sips(tenant_id, [sip_dict])
+        return {"ok": True, "inserted": n}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/portfolio/sips/{sip_id}")
+async def delete_sip(sip_id: int, current_user: dict = Depends(get_current_user)):
+    """Delete a manually registered SIP entry."""
+    tenant_id = current_user.get("tenant_id")
+    try:
+        from finagent.storage.supabase_store import get_sip_store
+        sip_store = get_sip_store()
+        ok = await sip_store.delete_sip(tenant_id, sip_id)
+        return {"ok": ok}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── Transaction History ─────────────────────────────────────────────────────
+
+@app.get("/portfolio/transactions")
+async def get_portfolio_transactions(
+    isin: str = "",
+    amfi: str = "",
+    limit: int = 500,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return raw transaction history for the portfolio (or a single scheme)."""
+    tenant_id = current_user.get("tenant_id")
+    try:
+        from finagent.storage.supabase_store import get_transaction_store
+        txn_store = get_transaction_store()
+        txns = await txn_store.get_transactions(
+            tenant_id,
+            isin=isin or None,
+            amfi=amfi or None,
+            limit=min(limit, 2000),
+        )
+        return {"count": len(txns), "transactions": txns}
+    except Exception as exc:
+        logger.warning("Portfolio transactions fetch failed: %s", exc)
+        return {"count": 0, "transactions": [], "error": str(exc)}
+
+
+# ── Metals Analytics ────────────────────────────────────────────────────────
+
+@app.get("/portfolio/metals")
+async def get_metals_analytics(current_user: dict = Depends(get_current_user)):
+    """Gold & Silver analytics: ETF, MF, SGB, physical across the portfolio."""
+    tenant_id = current_user.get("tenant_id")
+    positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/metals")
+    try:
+        from finagent.portfolio.metals import compute_metals_analytics
+        result = compute_metals_analytics(positions)
+        result["store_unavailable"] = store_unavailable
+        return result
+    except Exception as exc:
+        logger.warning("Metals analytics failed: %s", exc)
+        return {"status": "ERROR", "error": str(exc), "store_unavailable": store_unavailable}
+
+
 from finagent.memory import get_memory_store
 from finagent.memory.store import normalize_target
 
@@ -2678,8 +2863,7 @@ async def memory_stats(current_user: dict = Depends(get_current_user)):
     return {
         "total_facts": total,
         "total_sessions": sessions,
-        "memory_backend": store.backend_name,
-        "db_path": store.location,
+        "db_path": "<redacted>",
         "targets": [{"target": t["target"], "facts": t["facts"]} for t in targets],
     }
 
@@ -2763,15 +2947,6 @@ def landing() -> RedirectResponse:
     return RedirectResponse(url=_frontend_hash_url(""), status_code=302)
 
 
-@app.get("/unsubscribe")
-@app.get("/unsubscribe/")
-def unsubscribe_page(request: Request) -> RedirectResponse:
-    target = _frontend_static_url("unsubscribe/")
-    if request.url.query:
-        target = f"{target}?{request.url.query}"
-    return RedirectResponse(url=target, status_code=302)
-
-
 @app.get("/login")
 def login_page() -> RedirectResponse:
     return RedirectResponse(url=_frontend_hash_url("login"), status_code=302)
@@ -2780,24 +2955,6 @@ def login_page() -> RedirectResponse:
 @app.get("/signup")
 def signup_page() -> RedirectResponse:
     return RedirectResponse(url=_frontend_hash_url("signup"), status_code=302)
-
-
-@app.get("/onboarding")
-@app.get("/onboarding/")
-def onboarding_page() -> RedirectResponse:
-    return RedirectResponse(url=_frontend_hash_url("onboarding"), status_code=302)
-
-
-@app.get("/dashboard")
-@app.get("/dashboard/")
-def dashboard_page() -> RedirectResponse:
-    return RedirectResponse(url=_frontend_hash_url("dashboard"), status_code=302)
-
-
-@app.get("/insights-studio")
-@app.get("/insights-studio/")
-def insights_studio_page() -> RedirectResponse:
-    return RedirectResponse(url=_frontend_hash_url("insights-studio"), status_code=302)
 
 
 @app.get("/profile")
@@ -2945,6 +3102,36 @@ async def ops_control_tower_snapshot(
         raise HTTPException(status_code=403, detail="Access denied")
     snapshot = await build_control_tower_snapshot(range)
     return JSONResponse(snapshot, headers={"Cache-Control": "no-store, max-age=0"})
+
+
+@app.get("/api/ops/outreach/template")
+async def ops_outreach_template_get(
+    request: Request,
+    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+) -> JSONResponse:
+    if _control_tower_requires_auth() and current_user is None:
+        raise HTTPException(status_code=401, detail="Missing or invalid authentication credentials")
+    if not _control_tower_can_access(current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return JSONResponse(_load_outreach_template_text(), headers={"Cache-Control": "no-store, max-age=0"})
+
+
+@app.put("/api/ops/outreach/template")
+async def ops_outreach_template_put(
+    req: OutreachTemplateUpdateRequest,
+    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+) -> JSONResponse:
+    if _control_tower_requires_auth() and current_user is None:
+        raise HTTPException(status_code=401, detail="Missing or invalid authentication credentials")
+    if not _control_tower_can_access(current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+    updated = _save_outreach_template_text(req.template_text)
+    TELEMETRY.emit_event(
+        "outreach_template_updated",
+        user=telemetry_user_from_request_user(current_user),
+        properties={"path": updated["path"], "line_count": updated["line_count"]},
+    )
+    return JSONResponse({"status": "ok", "template": updated}, headers={"Cache-Control": "no-store, max-age=0"})
 
 
 @app.post("/auth/logout")
@@ -3162,27 +3349,11 @@ async def auth_signup(req: SignupRequest, request: Request):
         raise HTTPException(status_code=400, detail="Invalid or expired verification code.")
         
     name_clean = req.name.strip()
-    mobile_clean = req.mobile.strip()
-    referral_source_clean = req.referral_source.strip()
     
     # Create via Supabase
-    res = await supabase.create_admin_user(
-        email_clean,
-        req.password,
-        name_clean,
-        mobile=mobile_clean,
-        auth_provider="email",
-        referral_source=referral_source_clean,
-    )
+    res = await supabase.create_admin_user(email_clean, req.password, name_clean, mobile=mobile_clean, auth_provider="email")
     user_id = res.get("id")
-    saved_profile = await supabase.upsert_profile(
-        user_id,
-        email_clean,
-        name_clean,
-        "email",
-        mobile=mobile_clean,
-        referral_source=referral_source_clean,
-    )
+    saved_profile = await supabase.upsert_profile(user_id, email_clean, name_clean, "email", mobile=mobile_clean)
     saved_mobile = _profile_mobile(saved_profile) or mobile_clean
         
     # Generate a JWT for immediate login after signup
@@ -3196,7 +3367,6 @@ async def auth_signup(req: SignupRequest, request: Request):
             "plan": "free",
             "mobile": saved_mobile,
             "require_mobile": not bool(saved_mobile),
-            "referral_source": referral_source_clean,
         },
     })
     _set_auth_cookie(response, token, request)
@@ -3483,257 +3653,96 @@ async def start_research(req: StartResearchRequest, current_user: dict = Depends
 
 # ── Deep Research: multi-pass long-chain reasoning ──────────────────────
 
-# Each entry maps to a deep-research evidence or synthesis pass. The runtime
-# keeps the public deep mode unchanged but now chooses a smaller intent-driven
-# subset of these passes per request.
-_DEEP_PASS_DEFINITIONS = [
+# Each entry maps to a deep-research evidence pass. The runtime uses a fixed
+# 8-pass layout: seven evidence passes plus one serial synthesis pass.
+_DEEP_PASS_OBJECTIVES = [
+    # Pass 0 — Financials foundation
     (
-        "financials",
         "Core financials: 5-year revenue CAGR, EBITDA margin trend, net profit margins, EPS growth, "
         "free cash flow yield, return on capital employed (ROCE), debt-to-equity, interest coverage ratio, "
-        "working capital cycle. Source from Screener.in, NSE filings, annual reports.",
+        "working capital cycle. Source from Screener.in, NSE filings, annual reports."
     ),
+    # Pass 1 — Competitive moat
     (
-        "competitive_moat",
         "Competitive moat and market position: market share vs top 5 peers, pricing power evidence, "
         "switching costs, network effects, proprietary IP or patents, brand valuation, client concentration "
-        "risk (top-10 clients as % of revenue), order-book or deal pipeline size and TCV.",
+        "risk (top-10 clients as % of revenue), order-book or deal pipeline size and TCV."
     ),
+    # Pass 2 — Management and governance
     (
-        "governance",
         "Management quality and corporate governance: CEO/MD track record and tenure, promoter pledge "
         "percentage and trend, related-party transactions (RPTs) and their materiality, board independence "
         "ratio, auditor tenure and any qualifications, SEBI/stock-exchange show-cause notices or penalties, "
-        "insider buying/selling patterns over the last 12 months.",
+        "insider buying/selling patterns over the last 12 months."
     ),
+    # Pass 3 — Valuation
     (
-        "valuation",
         "Valuation deep-dive: trailing and forward P/E vs sector median, EV/EBITDA vs global peers, "
         "PEG ratio, DCF implied price at WACC 10-12%, Graham number, price-to-free-cash-flow, "
         "dividend yield and payout sustainability, and source-attributed valuation scenario ranges. "
-        "Do not produce buy/sell/hold labels, target prices, or trading calls.",
+        "Do not produce buy/sell/hold labels, target prices, or trading calls."
     ),
+    # Pass 4 — Risk and red flags
     (
-        "risk",
         "Risk and red flag scan: regulatory investigations, pending litigation with financial exposure, "
         "environmental/ESG controversies, customer attrition or large contract losses, forex hedging "
         "policy and un-hedged exposure, commodity or input cost sensitivity, key-man dependency, "
-        "technology disruption risk, recent management exits, any going-concern qualifications.",
+        "technology disruption risk, recent management exits, any going-concern qualifications."
     ),
+    # Pass 5 — Macro and sector tailwinds/headwinds
     (
-        "macro_sector",
         "Macro and sector overlay: government policy tailwinds (PLI schemes, budget allocations, "
         "infrastructure spend), RBI/interest-rate sensitivity, USD-INR impact on margins, crude oil "
         "or energy cost linkage, global demand cycle for the sector, peer capex plans, new entrants "
-        "or foreign competition, import/export duties that affect the business model.",
+        "or foreign competition, import/export duties that affect the business model."
     ),
+    # Pass 6 — Institutional and shareholding intelligence
     (
-        "shareholding",
         "Shareholding and smart-money signals: latest FII/DII/promoter holding changes (QoQ), "
         "mutual fund entry/exit (top AMFs buying or trimming), bulk and block deal activity, "
         "promoter pledge creation or release, ESOP grants and dilution pipeline, ADR/GDR premium "
-        "or discount, short interest data from F&O segment if available.",
+        "or discount, short interest data from F&O segment if available."
     ),
+    # Pass 7 — Hidden catalysts and growth drivers
     (
-        "hidden_catalysts",
         "Hidden catalysts and growth optionality: new product lines or business segments under "
         "development, M&A pipeline or recent acquisitions and integration status, geographic "
         "expansion plans (new markets, international revenue mix), R&D pipeline and patent filings, "
         "digital transformation initiatives, capacity expansion capex with expected COD dates, "
-        "recently-won mega-contracts or government tenders.",
+        "recently-won mega-contracts or government tenders."
     ),
+    # Pass 8 — News, sentiment and narrative
     (
-        "news_narrative",
         "Recent news, analyst commentary and market narrative: last 90-day earnings call key "
         "management guidance, analyst upgrades/downgrades with reasoning, negative investigative "
         "journalism or short-seller reports, Reddit/StockTwits retail sentiment trend, any "
-        "Hacker News / tech community mentions, social media buzz or viral concerns.",
+        "Hacker News / tech community mentions, social media buzz or viral concerns."
     ),
+    # Pass 9 — Peer comparison deep-dive
     (
-        "peer_comparison",
         "Peer comparison deep-dive: side-by-side financial metrics vs 4-6 named peers (revenue "
         "growth, margins, valuation multiples, return ratios, debt levels), market-share trajectory "
         "over 3 years, relative stock performance YTD and 3-year CAGR, who is gaining vs losing "
-        "share and why, pricing strategy differences, talent/attrition comparison if available.",
+        "share and why, pricing strategy differences, talent/attrition comparison if available."
     ),
+    # Pass 10 — Capital allocation and future returns
     (
-        "capital_allocation",
         "Capital allocation quality and future return potential: historical capex efficiency (asset "
         "turns trend), dividend history and special dividend probability, buyback activity and "
         "its accretive/dilutive impact, reinvestment rate and incremental ROCE, management's "
         "stated capital allocation framework, balance sheet optionality (net cash or net debt), "
-        "potential for re-rating if key milestones are met.",
+        "potential for re-rating if key milestones are met."
     ),
+    # Pass 11 (synthesis) — Investment-grade thesis
     (
-        "synthesis",
         "Final synthesis: integrate all prior pass findings into a structured investment-grade "
         "research report. Resolve any data contradictions. Produce: (1) executive summary with "
         "clear bull/bear/base case, (2) key financial metrics dashboard, (3) top 5 risk factors "
         "with probability/impact matrix, (4) competitive positioning verdict, (5) valuation "
         "summary as scenario-implied ranges only, and (6) key monitorables. Keep it SEBI-safe: "
-        "no buy, sell, hold, accumulate, exit, entry, position-size, target-price, or rebalancing instruction.",
+        "no buy, sell, hold, accumulate, exit, entry, position-size, target-price, or rebalancing instruction."
     ),
 ]
-_DEEP_PASS_OBJECTIVES = [objective for _, objective in _DEEP_PASS_DEFINITIONS]
-_DEEP_PASS_OBJECTIVES_BY_ID = {pass_id: objective for pass_id, objective in _DEEP_PASS_DEFINITIONS}
-_DEEP_DEFAULT_PASS_IDS = ("competitive_moat", "valuation", "risk")
-_DEEP_PORTFOLIO_PASS_IDS = ("risk", "macro_sector", "capital_allocation")
-_DEEP_FRESHNESS_TERMS = (
-    "latest",
-    "today",
-    "recent",
-    "current",
-    "headline",
-    "headlines",
-    "news",
-    "sentiment",
-    "commentary",
-    "90-day",
-    "90 day",
-)
-
-
-def _contains_any_term(text: str, terms: tuple[str, ...]) -> bool:
-    return any(term in text for term in terms)
-
-
-def _dedupe_pass_ids(pass_ids: list[str], *, limit: int | None = None) -> list[str]:
-    out: list[str] = []
-    seen: set[str] = set()
-    for pass_id in pass_ids:
-        if pass_id in seen:
-            continue
-        seen.add(pass_id)
-        out.append(pass_id)
-        if limit is not None and len(out) >= limit:
-            break
-    return out
-
-
-def _is_broad_deep_objective(text: str) -> bool:
-    return _contains_any_term(
-        text,
-        (
-            "deep research",
-            "deep-dive",
-            "deep dive",
-            "comprehensive",
-            "full-scale",
-            "investment-grade",
-            "thesis",
-            "report",
-        ),
-    )
-
-
-def _is_freshness_sensitive_objective(text: str) -> bool:
-    return _contains_any_term(text, _DEEP_FRESHNESS_TERMS)
-
-
-def _select_deep_evidence_pass_ids(
-    objective: str,
-    raw_query: str,
-    *,
-    is_comparison_query: bool,
-    portfolio_scope: bool,
-) -> list[str]:
-    combined = f"{raw_query}\n{objective}".lower()
-    selected = ["financials"]
-    intent_matches: list[str] = []
-
-    if is_comparison_query or _contains_any_term(combined, ("compare", "versus", "vs ", "peer", "competitor")):
-        intent_matches.extend(["peer_comparison", "competitive_moat"])
-    if _contains_any_term(combined, ("valuation", "dcf", "multiple", "pe ", "p/e", "ev/ebitda", "price-to-book", "pb ")):
-        intent_matches.append("valuation")
-    if _contains_any_term(combined, ("risk", "red flag", "litigation", "investigation", "lawsuit", "hedging", "going concern")):
-        intent_matches.append("risk")
-    if _contains_any_term(combined, ("governance", "board", "auditor", "management", "insider", "related-party", "rpt")):
-        intent_matches.append("governance")
-    if _contains_any_term(combined, ("ownership", "shareholding", "promoter", "pledge", "fii", "dii", "institutional holding")):
-        intent_matches.append("shareholding")
-    if portfolio_scope or _contains_any_term(combined, ("macro", "sector", "policy", "rbi", "budget", "tailwind", "headwind", "usd-inr", "crude")):
-        intent_matches.append("macro_sector")
-    if _contains_any_term(combined, ("growth", "catalyst", "optionality", "new product", "m&a", "acquisition", "capacity", "tender", "pipeline")):
-        intent_matches.append("hidden_catalysts")
-    if _contains_any_term(combined, ("capital allocation", "buyback", "dividend", "capex", "reinvestment", "roce", "net cash", "net debt")):
-        intent_matches.append("capital_allocation")
-    if _contains_any_term(combined, ("moat", "market share", "pricing power", "switching costs", "network effects")):
-        intent_matches.append("competitive_moat")
-    if _contains_any_term(combined, ("news", "headline", "sentiment", "analyst", "short-seller", "retail sentiment")):
-        intent_matches.append("news_narrative")
-
-    if not intent_matches and _is_broad_deep_objective(combined):
-        intent_matches.extend(_DEEP_PORTFOLIO_PASS_IDS if portfolio_scope else _DEEP_DEFAULT_PASS_IDS)
-
-    selected.extend(_dedupe_pass_ids(intent_matches, limit=3))
-    return selected
-
-
-def _should_stop_deep_evidence(
-    runtime_meta: dict[str, Any] | None,
-    *,
-    objective: str,
-    raw_query: str,
-    required_pass_ids: list[str],
-    completed_pass_ids: list[str],
-    is_comparison_query: bool,
-) -> bool:
-    if not runtime_meta:
-        return False
-    if "financials" not in completed_pass_ids:
-        return False
-    if is_comparison_query and "peer_comparison" not in completed_pass_ids:
-        return False
-    if int(runtime_meta.get("conflict_count") or 0) > 0:
-        return False
-
-    combined = f"{raw_query}\n{objective}".lower()
-    if _is_freshness_sensitive_objective(combined):
-        if int(runtime_meta.get("news_item_count") or 0) <= 0:
-            return False
-        return bool(
-            runtime_meta.get("ikg_sufficient")
-            or runtime_meta.get("can_answer_objective")
-            or int(runtime_meta.get("doc_count") or 0) >= 3
-        )
-
-    if runtime_meta.get("ikg_sufficient") and not runtime_meta.get("objective_needs_fresh_web"):
-        return True
-    if runtime_meta.get("can_answer_objective") and int(runtime_meta.get("doc_count") or 0) >= 2:
-        return True
-    return bool(
-        int(runtime_meta.get("primary_citations") or 0) >= 2
-        and int(runtime_meta.get("doc_count") or 0) >= 4
-    )
-
-
-def _select_deep_guardrail_pass_id(
-    runtime_meta: dict[str, Any] | None,
-    *,
-    objective: str,
-    raw_query: str,
-    completed_pass_ids: list[str],
-    is_comparison_query: bool,
-    portfolio_scope: bool,
-) -> str | None:
-    combined = f"{raw_query}\n{objective}".lower()
-    if not runtime_meta:
-        return "news_narrative" if _is_freshness_sensitive_objective(combined) else None
-
-    if int(runtime_meta.get("conflict_count") or 0) > 0:
-        for candidate in ("risk", "valuation", "governance", "news_narrative"):
-            if candidate not in completed_pass_ids:
-                return candidate
-
-    if _is_freshness_sensitive_objective(combined) and "news_narrative" not in completed_pass_ids:
-        return "news_narrative"
-    if is_comparison_query and "peer_comparison" not in completed_pass_ids:
-        return "peer_comparison"
-    if portfolio_scope and "macro_sector" not in completed_pass_ids:
-        return "macro_sector"
-    if _is_broad_deep_objective(combined) and not runtime_meta.get("ikg_sufficient") and "competitive_moat" not in completed_pass_ids:
-        return "competitive_moat"
-    return None
 
 
 @app.post("/research/deep", dependencies=[Depends(research_rate_limiter)])
@@ -3792,21 +3801,13 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
         target = primary_target_from_query(raw_query)
 
     objective_scope_query = _strip_frontend_portfolio_context(objective_for_deep) or raw_query
-    portfolio_scope_query = is_portfolio_scope_query(objective_scope_query)
-    if portfolio_scope_query:
+    if is_portfolio_scope_query(objective_scope_query):
         await _require_synchronized_portfolio(tenant_id, allow_empty=True)
 
     from finagent.output.query_guards import is_portfolio_comparison_query
     is_comparison_query = _is_comparison(raw_query) and not is_portfolio_comparison_query(raw_query)
     comparison_targets = _extract_comparison_targets(raw_query) if is_comparison_query else []
     peer_targets_list = comparison_targets[1:] if len(comparison_targets) >= 2 else []
-    evidence_pass_ids = _select_deep_evidence_pass_ids(
-        objective_for_deep,
-        raw_query,
-        is_comparison_query=is_comparison_query,
-        portfolio_scope=portfolio_scope_query,
-    )
-    planned_total_passes = min(6, len(evidence_pass_ids) + 2)
 
     BUS.open(master_session, reset=True)
     _clear_session_memo(master_session)
@@ -3825,47 +3826,34 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
     )
 
     async def _deep_runner() -> None:
+        total_passes = 8
         completed_passes = 0
         started_at = asyncio.get_running_loop().time()
         chat_history = _MEMORY_MANAGER.get_history(user_email, master_session)
-        completed_pass_ids: list[str] = []
-        last_runtime_meta: dict[str, Any] = {}
-
+        
         try:
-            async def _run_pass(
-                pass_number: int,
-                *,
-                pass_id: str,
-                emit_memo: bool,
-                enable_memory: bool,
-            ) -> tuple[bool, dict[str, Any]]:
+            async def _run_pass(i: int) -> bool:
                 async with _DEEP_RESEARCH_SEMAPHORE:
                     if req.max_wall_seconds is not None:
                         remaining = req.max_wall_seconds - (asyncio.get_running_loop().time() - started_at)
                         if remaining <= 0:
-                            return False, {}
+                            return False
                     
-                    is_last = pass_id == "synthesis"
-                    objective = _DEEP_PASS_OBJECTIVES_BY_ID[pass_id]
-                    pass_label = f"Synthesis Pass {pass_number}/{planned_total_passes}" if is_last else f"Pass {pass_number}/{planned_total_passes}"
+                    is_last = (i == total_passes - 1)
+                    if is_last:
+                        objective = _DEEP_PASS_OBJECTIVES[-1]  # always "Final synthesis" (index 11)
+                    else:
+                        objective = _DEEP_PASS_OBJECTIVES[i % (len(_DEEP_PASS_OBJECTIVES) - 1)]
+                    pass_label = f"Synthesis Pass {i+1}/{total_passes}" if is_last else f"Pass {i+1}/{total_passes}"
                     
                     BUS.emit(master_session, "phase", phase="deep_research", note=f"{pass_label}: {objective[:60]}…")
-                    BUS.emit(
-                        master_session,
-                        "deep_pass",
-                        pass_number=pass_number,
-                        total_passes=planned_total_passes,
-                        objective=objective,
-                        deep_pass_label=pass_label,
-                        pass_id=pass_id,
-                        status="running",
-                    )
+                    BUS.emit(master_session, "deep_pass", pass_number=i+1, total_passes=total_passes, objective=objective, deep_pass_label=pass_label, status="running")
                     
                     pass_objective = f"{objective_for_deep}\n\n{pass_label} - {objective}"
                     # For comparison queries, force comparison output mode on synthesis pass
                     effective_output_mode = "company_comparison" if (is_comparison_query and is_last) else ("deep_research_report" if is_last else None)
 
-                    _, checkpoint = await run_research_session(
+                    await run_research_session(
                         target,
                         pass_objective,
                         is_followup=is_followup_deep,
@@ -3873,8 +3861,8 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                             max_steps=(req.pass_depth if is_last else min(req.pass_depth, 12)),
                             session_id=master_session,
                             auto_depth=False,
-                            enable_memory=enable_memory,
-                            reflection_max_rounds=(1 if is_last else 0),
+                            enable_memory=True,
+                            reflection_max_rounds=(2 if is_last else 0),
                             quality_threshold=(72.0 if is_last else 65.0),
                             reflection_per_query_limit=(4 if is_last else 0),
                             reflection_max_new_docs=(32 if is_last else 0),
@@ -3885,9 +3873,9 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                             synth_model=os.getenv("FINAGENT_SYNTH_MODEL") or ("gpt-4o" if is_last else "gpt-4o-mini"),
                             response_depth=("deep" if is_last else "standard"),
                             output_mode=effective_output_mode,
-                            emit_memo=emit_memo,
+                            emit_memo=is_last,
                             close_bus_on_finish=False,
-                            chat_history=chat_history if (enable_memory or is_last) else None,
+                            chat_history=chat_history if (i == 0 or is_last) else None,
                             breadth_search_timeout=(75.0 if is_last else 20.0),
                             followup_search_timeout=(35.0 if is_last else 8.0),
                             reflection_per_query_timeout=(18.0 if is_last else 0.0),
@@ -3901,95 +3889,27 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
                             tenant_id=tenant_id,
                         ),
                     )
+                    
+                    BUS.emit(master_session, "deep_pass", pass_number=i+1, total_passes=total_passes, objective=objective, deep_pass_label=pass_label, status="done")
+                    return True
 
-                    BUS.emit(
-                        master_session,
-                        "deep_pass",
-                        pass_number=pass_number,
-                        total_passes=planned_total_passes,
-                        objective=objective,
-                        deep_pass_label=pass_label,
-                        pass_id=pass_id,
-                        status="done",
-                    )
-                    return True, dict(getattr(checkpoint, "runtime_meta", {}) or {})
-
-            BUS.emit(
-                master_session,
-                "phase",
-                phase="deep_research",
-                note=f"Executing adaptive deep plan with {len(evidence_pass_ids)} evidence pass(es) before synthesis",
-            )
-
-            for pass_id in evidence_pass_ids:
-                pass_number = len(completed_pass_ids) + 1
-                ok, runtime_meta = await _run_pass(
-                    pass_number,
-                    pass_id=pass_id,
-                    emit_memo=False,
-                    enable_memory=(pass_number == 1),
-                )
-                if not ok:
-                    continue
+            # All enrichment passes parallel + final synthesis (bounded by semaphore)
+            BUS.emit(master_session, "phase", phase="deep_research", note=f"Executing passes 1 to {total_passes-1} in parallel")
+            parallel_tasks = [
+                asyncio.create_task(_run_pass(i))
+                for i in range(total_passes - 1)
+            ]
+            results = await asyncio.gather(*parallel_tasks, return_exceptions=True)
+            for res in results:
+                if res is True:
+                    completed_passes += 1
+            
+            await asyncio.sleep(0.5)
+            
+            if await _run_pass(total_passes - 1):
                 completed_passes += 1
-                completed_pass_ids.append(pass_id)
-                last_runtime_meta = runtime_meta
-                if _should_stop_deep_evidence(
-                    runtime_meta,
-                    objective=objective_for_deep,
-                    raw_query=raw_query,
-                    required_pass_ids=evidence_pass_ids,
-                    completed_pass_ids=completed_pass_ids,
-                    is_comparison_query=is_comparison_query,
-                ):
-                    logger.info(
-                        "Deep research %s stopping evidence passes early after %d pass(es)",
-                        master_session,
-                        len(completed_pass_ids),
-                    )
-                    break
-            guardrail_id = None
-            if len(completed_pass_ids) < 5 and not _should_stop_deep_evidence(
-                last_runtime_meta,
-                objective=objective_for_deep,
-                raw_query=raw_query,
-                required_pass_ids=evidence_pass_ids,
-                completed_pass_ids=completed_pass_ids,
-                is_comparison_query=is_comparison_query,
-            ):
-                guardrail_id = _select_deep_guardrail_pass_id(
-                    last_runtime_meta,
-                    objective=objective_for_deep,
-                    raw_query=raw_query,
-                    completed_pass_ids=completed_pass_ids,
-                    is_comparison_query=is_comparison_query,
-                    portfolio_scope=portfolio_scope_query,
-                )
-            if guardrail_id and guardrail_id not in completed_pass_ids:
-                pass_number = len(completed_pass_ids) + 1
-                ok, runtime_meta = await _run_pass(
-                    pass_number,
-                    pass_id=guardrail_id,
-                    emit_memo=False,
-                    enable_memory=False,
-                )
-                if ok:
-                    completed_passes += 1
-                    completed_pass_ids.append(guardrail_id)
-                    last_runtime_meta = runtime_meta
-
-            if req.max_wall_seconds is None or (req.max_wall_seconds - (asyncio.get_running_loop().time() - started_at)) > 0:
-                pass_number = len(completed_pass_ids) + 1
-                ok, _ = await _run_pass(
-                    pass_number,
-                    pass_id="synthesis",
-                    emit_memo=True,
-                    enable_memory=True,
-                )
-                if ok:
-                    completed_passes += 1
-
-            BUS.emit(master_session, "deep_complete", passes=completed_passes, requested_passes=planned_total_passes)
+            
+            BUS.emit(master_session, "deep_complete", passes=completed_passes, requested_passes=total_passes)
         except asyncio.CancelledError:
             logger.warning("deep research %s cancelled before final synthesis", master_session)
             if not BUS.is_closed(master_session):
@@ -4012,7 +3932,7 @@ async def start_deep_research(req: DeepResearchRequest, current_user: dict = Dep
         "events": f"/sessions/{master_session}/events",
         "result": f"/sessions/{master_session}/result",
         "mode": "deep",
-        "passes": req.passes,
+        "passes": 8,
     })
 
 
@@ -4190,23 +4110,37 @@ def get_memo(session_id: str, current_user: dict = Depends(get_current_user)):
     )
 
 
+async def _model_dump_payload(result: Any) -> Any:
+    dump = getattr(result, "model_dump", None)
+    if not callable(dump):
+        return result
+    try:
+        payload = dump(mode="json")
+    except TypeError:
+        payload = dump()
+    if inspect.isawaitable(payload):
+        payload = await payload
+    return payload
+
+
 @app.post("/api/content/articles/generate", dependencies=[Depends(default_rate_limiter)])
 async def generate_content_article(
     req: ContentAutomationRequest,
     current_user: dict = Depends(enforce_token_limit),
 ):
     result = await generate_article_automation(req, requested_by=current_user["email"])
+    payload = await _model_dump_payload(result)
     TELEMETRY.emit_event(
         "content_article_generated",
         user=telemetry_user_from_request_user(current_user),
         properties={
             "source": "backend",
-            "slug": result.slug,
-            "route_base": result.route_base,
-            "mirrored_public": bool(result.mirrored_public_path),
+            "slug": payload.get("slug") if isinstance(payload, dict) else getattr(result, "slug", None),
+            "route_base": payload.get("route_base") if isinstance(payload, dict) else getattr(result, "route_base", None),
+            "mirrored_public": bool(payload.get("mirrored_public_path") if isinstance(payload, dict) else getattr(result, "mirrored_public_path", None)),
         },
     )
-    return JSONResponse(result.model_dump())
+    return JSONResponse(payload)
 
 
 @app.post("/api/content/articles/generate-batch", dependencies=[Depends(default_rate_limiter)])
@@ -4215,18 +4149,19 @@ async def generate_content_article_batch(
     current_user: dict = Depends(enforce_token_limit),
 ):
     result = await generate_article_batch(req, requested_by=current_user["email"])
+    payload = await _model_dump_payload(result)
     TELEMETRY.emit_event(
         "content_article_batch_generated",
         user=telemetry_user_from_request_user(current_user),
         properties={
             "source": "backend",
-            "route_base": result.route_base,
-            "requested": result.total_requested,
-            "completed": result.total_completed,
-            "failed": result.total_failed,
+            "route_base": payload.get("route_base") if isinstance(payload, dict) else getattr(result, "route_base", None),
+            "requested": payload.get("total_requested") if isinstance(payload, dict) else getattr(result, "total_requested", None),
+            "completed": payload.get("total_completed") if isinstance(payload, dict) else getattr(result, "total_completed", None),
+            "failed": payload.get("total_failed") if isinstance(payload, dict) else getattr(result, "total_failed", None),
         },
     )
-    return JSONResponse(result.model_dump())
+    return JSONResponse(payload)
 
 
 @app.post("/api/content/events/ingest", dependencies=[Depends(default_rate_limiter)])
@@ -4235,51 +4170,29 @@ async def ingest_content_events(
     current_user: dict = Depends(enforce_token_limit),
 ):
     result = await ingest_market_event_triggers(req, requested_by=current_user["email"])
+    payload = await _model_dump_payload(result)
     TELEMETRY.emit_event(
         "content_events_ingested",
         user=telemetry_user_from_request_user(current_user),
         properties={
             "source": "backend",
-            "route_base": result.route_base,
-            "discovered_events": result.discovered_events,
-            "generated_articles": result.generated_articles,
-            "auto_published": result.auto_published,
-            "drafts": result.drafts,
+            "route_base": payload.get("route_base") if isinstance(payload, dict) else getattr(result, "route_base", None),
+            "discovered_events": payload.get("discovered_events") if isinstance(payload, dict) else getattr(result, "discovered_events", None),
+            "generated_articles": payload.get("generated_articles") if isinstance(payload, dict) else getattr(result, "generated_articles", None),
+            "auto_published": payload.get("auto_published") if isinstance(payload, dict) else getattr(result, "auto_published", None),
+            "drafts": payload.get("drafts") if isinstance(payload, dict) else getattr(result, "drafts", None),
         },
     )
-    return JSONResponse(result.model_dump())
-
-
-def _relativise_public_url(entry: dict) -> dict:
-    """Replace the absolute production public_url with a relative path.
-
-    The canonical public_url stored in article.json is always
-    https://prospektlab.com/... (baked from _SITE_URL).  That value is
-    correct for production SEO but breaks local dev links because clicking
-    it navigates the browser to the live site.  We override it here so
-    every API consumer receives a root-relative path that works on any
-    host (Vite dev proxy, staging, prod Amplify rewrite, etc.).
-    """
-    rb = entry.get("route_base") or "insights"
-    sl = entry.get("slug") or ""
-    if sl:
-        entry = dict(entry)  # shallow copy — don't mutate the cached dict
-        entry["public_url"] = f"/{rb}/{sl}/"
-    return entry
+    return JSONResponse(payload)
 
 
 @app.get("/api/content/articles")
 async def list_content_articles(
     route_base: str | None = None,
     limit: int = 50,
-    current_user: dict | None = Depends(get_current_user_optional),
+    current_user: dict = Depends(get_current_user),
 ):
     entries = list_generated_articles(route_base=route_base, limit=limit)
-    # Anonymous visitors (hub public page) only see published articles
-    if current_user is None:
-        entries = [e for e in entries if e.get("publish_status") == "published"]
-    # Override public_url to be a relative path so links work on local dev
-    entries = [_relativise_public_url(e) for e in entries]
     return JSONResponse({"items": entries, "count": len(entries)})
 
 
@@ -4288,7 +4201,7 @@ async def get_content_article(slug: str, route_base: str = "insights", current_u
     article = load_generated_article(slug, route_base=route_base)
     if not article:
         raise HTTPException(status_code=404, detail="Generated article not found")
-    return JSONResponse(_relativise_public_url(article))
+    return JSONResponse(article)
 
 
 @app.get("/api/content/articles/{slug}/html")
@@ -4299,42 +4212,8 @@ async def get_content_article_html(slug: str, route_base: str = "insights"):
     return HTMLResponse(article_html, headers={"Cache-Control": "public, max-age=300"})
 
 
-_PUBLIC_RESEARCH_HUB_PATH = repo_root() / "Frontend" / "app" / "public" / "insights" / "research" / "index.html"
-
-
-def _render_public_research_hub() -> HTMLResponse:
-    """Serve the curated public research hub without falling into slug routing."""
-    try:
-        hub_html = build_insights_hub_html(route_base="insights")
-    except Exception:
-        logger.exception("Failed to build live public research hub; falling back to static file")
-        if _PUBLIC_RESEARCH_HUB_PATH.is_file():
-            try:
-                return HTMLResponse(
-                    _PUBLIC_RESEARCH_HUB_PATH.read_text(encoding="utf-8"),
-                    headers={"Cache-Control": "public, max-age=120"},
-                )
-            except OSError:
-                logger.exception("Failed to read public research hub at %s", _PUBLIC_RESEARCH_HUB_PATH)
-        raise
-    return HTMLResponse(hub_html, headers={"Cache-Control": "public, max-age=120"})
-
-
-@app.get("/insights/research/", include_in_schema=False)
-@app.get("/insights/research", include_in_schema=False)
-async def insights_research_hub():
-    """Public research hub — declared before /insights/{slug} to avoid slug capture."""
-    return _render_public_research_hub()
-
-
-@app.get("/insights/organic-traffic-platform/", include_in_schema=False)
-@app.get("/insights/organic-traffic-platform", include_in_schema=False)
-async def insights_hub_legacy_redirect():
-    return RedirectResponse(url="/insights/research/", status_code=308)
-
-
-async def _serve_generated_insight(slug: str) -> HTMLResponse:
-    """Shared handler for /insights/{slug} and /insights/{slug}/."""
+@app.get("/insights/{slug}", include_in_schema=False)
+async def public_generated_insight(slug: str):
     if not is_generated_article_published(slug):
         raise HTTPException(status_code=404, detail="Generated article not found")
     article_html = load_generated_article_html(slug)
@@ -4343,251 +4222,37 @@ async def _serve_generated_insight(slug: str) -> HTMLResponse:
     return HTMLResponse(article_html, headers={"Cache-Control": "public, max-age=300"})
 
 
-async def _serve_generated_insight_asset(slug: str, asset_name: str) -> FileResponse:
-    """Serve generated asset files such as cover.svg for public insight pages."""
-    if not is_generated_article_published(slug):
-        raise HTTPException(status_code=404, detail="Generated article not found")
-    asset_path = load_generated_article_asset(slug, asset_name)
-    if asset_path is None:
-        raise HTTPException(status_code=404, detail="Generated article asset not found")
-    return FileResponse(str(asset_path), headers={"Cache-Control": "public, max-age=300"})
-
-
-@app.get("/insights/{slug}/{asset_name}", include_in_schema=False)
-async def public_generated_insight_asset(slug: str, asset_name: str):
-    return await _serve_generated_insight_asset(slug, asset_name)
-
-
-@app.get("/insights/{slug}", include_in_schema=False)
-async def public_generated_insight(slug: str):
-    return await _serve_generated_insight(slug)
-
-
-@app.get("/insights/{slug}/", include_in_schema=False)
-async def public_generated_insight_slash(slug: str):
-    return await _serve_generated_insight(slug)
-
-
-# ── Flash Content Engine routes (additive — no existing routes modified) ──────
-
-_FLASH_JOBS: dict[str, asyncio.Task] = {}  # job_id → background task
-
-
-@app.post("/api/content/flash/generate", dependencies=[Depends(default_rate_limiter)])
-async def flash_generate(req: FlashGenerationRequest, current_user: dict = Depends(enforce_token_limit)):
-    """Start an async Flash/Deep content generation job. Returns job_id + stream URL."""
-    req = req.model_copy(update={"mode": "research", "force_publish": False})
-    job_id = uuid.uuid4().hex[:12]
-    user_email = current_user["email"]
-    tenant_id = current_user["tenant_id"]
-
-    BUS.open(job_id, reset=True)
-    _session_record(job_id, mode=f"content_{req.mode}", target=req.target,
-                    objective=req.objective or req.content_type,
-                    user_email=user_email, tenant_id=tenant_id)
-
-    async def _runner() -> None:
-        try:
-            result = await generate_flash_article(req, job_id=job_id, requested_by=user_email)
-            BUS.emit(job_id, "log", source="gateway", level="info",
-                     message=f"Article complete: {result.slug} ({result.publish_status})")
-        except asyncio.CancelledError:
-            BUS.emit(job_id, "error", message="Generation job cancelled")
-        except Exception as exc:
-            logger.exception("Flash generation job %s failed", job_id)
-            BUS.emit(job_id, "error", message=f"Generation failed: {exc}")
-        finally:
-            _FLASH_JOBS.pop(job_id, None)
-            BUS.close(job_id)
-
-    _FLASH_JOBS[job_id] = asyncio.create_task(_runner())
-    TELEMETRY.emit_event(
-        "flash_content_started",
-        user=telemetry_user_from_request_user(current_user),
-        properties={"source": "backend", "job_id": job_id, "mode": req.mode,
-                    "content_type": req.content_type},
-    )
-    return JSONResponse({
-        "job_id": job_id,
-        "stream": f"/sessions/{job_id}/stream",
-        "status": f"/sessions/{job_id}/status",
-        "events": f"/sessions/{job_id}/events",
-        "result": f"/sessions/{job_id}/result",
-        "mode": req.mode,
-        "content_type": req.content_type,
-    })
-
-
-@app.post("/api/content/flash/ingest-events", dependencies=[Depends(default_rate_limiter)])
-async def flash_ingest_events(req: FlashIngestRequest, current_user: dict = Depends(enforce_token_limit)):
-    """Discover SEBI/BSE/NSE events and generate articles via the flash pipeline."""
-    req = req.model_copy(update={"mode": "research"})
-    job_id = uuid.uuid4().hex[:12]
-    user_email = current_user["email"]
-    tenant_id = current_user["tenant_id"]
-
-    BUS.open(job_id, reset=True)
-    _session_record(job_id, mode="content_ingest", target=req.content_type,
-                    user_email=user_email, tenant_id=tenant_id)
-
-    async def _ingest_runner() -> None:
-        try:
-            result = await ingest_events_flash(req, requested_by=user_email, job_id=job_id)
-            BUS.emit(job_id, "ingest_done",
-                     discovered=result.discovered_events,
-                     generated=result.generated_articles,
-                     published=result.auto_published,
-                     drafts=result.drafts,
-                     skipped=result.skipped_seen)
-        except Exception as exc:
-            logger.exception("Flash ingest job %s failed", job_id)
-            BUS.emit(job_id, "error", message=f"Ingest failed: {exc}")
-        finally:
-            _FLASH_JOBS.pop(job_id, None)
-            BUS.close(job_id)
-
-    _FLASH_JOBS[job_id] = asyncio.create_task(_ingest_runner())
-    TELEMETRY.emit_event(
-        "flash_ingest_started",
-        user=telemetry_user_from_request_user(current_user),
-        properties={"source": "backend", "job_id": job_id, "content_type": req.content_type},
-    )
-    return JSONResponse({
-        "job_id": job_id,
-        "stream": f"/sessions/{job_id}/stream",
-        "status": f"/sessions/{job_id}/status",
-    })
-
-
-@app.get("/api/content/automation/status")
-async def content_automation_status(current_user: dict = Depends(get_current_user)):
-    return JSONResponse(get_monitor_status())
-
-
-@app.post("/api/content/automation/run-now", dependencies=[Depends(default_rate_limiter)])
-async def content_automation_run_now(current_user: dict = Depends(enforce_token_limit)):
-    """Run one immediate official-source monitoring sweep in the background."""
-    job_id = uuid.uuid4().hex[:12]
-    user_email = current_user["email"]
-    tenant_id = current_user["tenant_id"]
-
-    BUS.open(job_id, reset=True)
-    _session_record(job_id, mode="content_monitor", target="official_sources",
-                    objective="official-monitor-sweep",
-                    user_email=user_email, tenant_id=tenant_id)
-
-    async def _runner() -> None:
-        try:
-            result = await run_official_monitor(requested_by=user_email, job_id=job_id)
-            BUS.emit(job_id, "log", source="gateway", level="info",
-                     message=f"Official monitor finished: generated={result.get('generated', 0)} published={result.get('published', 0)}")
-        except asyncio.CancelledError:
-            BUS.emit(job_id, "error", message="Official monitor job cancelled")
-        except Exception as exc:
-            logger.exception("Official monitor job %s failed", job_id)
-            BUS.emit(job_id, "error", message=f"Official monitor failed: {exc}")
-        finally:
-            _FLASH_JOBS.pop(job_id, None)
-            BUS.close(job_id)
-
-    _FLASH_JOBS[job_id] = asyncio.create_task(_runner())
-    return JSONResponse({
-        "job_id": job_id,
-        "stream": f"/sessions/{job_id}/stream",
-        "status": f"/sessions/{job_id}/status",
-    })
-
-
-@app.post("/api/content/articles/{slug}/publish")
-async def publish_content_article(
-    slug: str,
-    route_base: str = "insights",
-    current_user: dict = Depends(enforce_token_limit),
-):
-    """Publish a draft article — mirrors to public dir and adds to sitemap."""
-    manifest = load_generated_article(slug, route_base=route_base)
-    if not manifest:
-        raise HTTPException(status_code=404, detail=f"Article '{slug}' not found")
-    editorial_review = manifest.get("editorial_review") if isinstance(manifest, dict) else None
-    if isinstance(editorial_review, dict) and not editorial_review.get("ready_to_publish", False):
-        raise HTTPException(status_code=409, detail="Editorial review has not approved this draft for publication yet")
-    try:
-        updated = _publish_article(slug, route_base=route_base)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Article '{slug}' not found")
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-    TELEMETRY.emit_event(
-        "content_article_published",
-        user=telemetry_user_from_request_user(current_user),
-        properties={"source": "backend", "slug": slug, "route_base": route_base},
-    )
-    rb = updated.get("route_base") or route_base
-    return JSONResponse({
-        "slug": slug,
-        "publish_status": updated.get("publish_status"),
-        "public_url": f"/{rb}/{slug}/",
-        "mirrored_public_path": updated.get("mirrored_public_path"),
-    })
-
-
-@app.post("/api/content/articles/{slug}/unpublish")
-async def unpublish_content_article(
-    slug: str,
-    route_base: str = "insights",
-    current_user: dict = Depends(enforce_token_limit),
-):
-    """Retract a published article — removes public mirror and sets status to draft."""
-    try:
-        updated = _unpublish_article(slug, route_base=route_base)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Article '{slug}' not found")
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-    TELEMETRY.emit_event(
-        "content_article_unpublished",
-        user=telemetry_user_from_request_user(current_user),
-        properties={"source": "backend", "slug": slug, "route_base": route_base},
-    )
-    return JSONResponse({"slug": slug, "publish_status": updated.get("publish_status")})
-
-
-
-
 @app.get("/sessions/{session_id}/status")
-def session_status(session_id: str, current_user: dict = Depends(get_current_user)) -> Response:
+def session_status(session_id: str, current_user: dict = Depends(get_current_user)) -> JSONResponse:
     verify_session_ownership(session_id, current_user)
-    body = json.dumps(_session_status(session_id), default=str)
-    return Response(content=body, media_type="application/json")
+    return JSONResponse(_session_status(session_id))
 
 
 @app.get("/sessions/{session_id}/events")
-def session_events(session_id: str, after: int = 0, limit: int = 250, current_user: dict = Depends(get_current_user)) -> Response:
+def session_events(session_id: str, after: int = 0, limit: int = 250, current_user: dict = Depends(get_current_user)) -> JSONResponse:
     verify_session_ownership(session_id, current_user)
     if not BUS.known(session_id):
         raise HTTPException(status_code=404, detail="Unknown session")
     events = [_event_payload(idx, event) for idx, event in BUS.history(session_id, after=after, limit=limit)]
-    body = json.dumps({
+    return JSONResponse({
         "session_id": session_id,
         "events": events,
         "next_after": (events[-1]["id"] + 1 if events else after),
         "closed": BUS.is_closed(session_id),
-    }, default=str)
-    return Response(content=body, media_type="application/json")
+    })
 
 
 @app.get("/chat/history")
-def chat_history(session_id: str, current_user: dict = Depends(get_current_user)) -> Response:
+def chat_history(session_id: str, current_user: dict = Depends(get_current_user)) -> JSONResponse:
     """Retrieve chat history for a session."""
     verify_session_ownership(session_id, current_user)
     user_email = current_user["email"]
     history = _MEMORY_MANAGER.get_history(user_email, session_id)
-    body = json.dumps({"session_id": session_id, "history": history}, default=str)
-    return Response(content=body, media_type="application/json")
+    return JSONResponse({"session_id": session_id, "history": history})
 
 
 @app.get("/sessions/{session_id}/result")
-def session_result(session_id: str, current_user: dict = Depends(get_current_user)) -> Response:
+def session_result(session_id: str, current_user: dict = Depends(get_current_user)) -> JSONResponse:
     verify_session_ownership(session_id, current_user)
     status = _session_status(session_id)
     memo_path = _MEMOS_DIR / f"{session_id}.md"
@@ -4595,18 +4260,8 @@ def session_result(session_id: str, current_user: dict = Depends(get_current_use
     final_payload = status.get("final") or {}
     memo_event = status.get("memo") or {}
     if memo_text is None:
-        memo_text = (
-            final_payload.get("memo")
-            or final_payload.get("memo_preview")
-            or final_payload.get("answer")
-            or final_payload.get("text")
-            or final_payload.get("content")
-            or final_payload.get("markdown")
-            or memo_event.get("preview")
-            or memo_event.get("memo")
-            or memo_event.get("answer")
-        )
-    body = json.dumps({
+        memo_text = final_payload.get("memo") or final_payload.get("memo_preview") or memo_event.get("preview")
+    return JSONResponse({
         "session_id": session_id,
         "status": status["status"],
         "target": status.get("target"),
@@ -4615,8 +4270,7 @@ def session_result(session_id: str, current_user: dict = Depends(get_current_use
         "memo": memo_text,
         "memo_event": memo_event or None,
         "error": status.get("error"),
-    }, default=str)
-    return Response(content=body, media_type="application/json")
+    })
 
 
 @app.get("/sessions/{session_id}/stream")

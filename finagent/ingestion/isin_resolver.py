@@ -34,7 +34,7 @@ class ISINResolution:
         symbol: str = "",
         name: str = "",
         exchange: str = "NSE",
-        kind: Literal["equity", "mf", "etf", "bond", "other"] = "equity",
+        kind: Literal["equity", "mf", "etf", "bond", "gold", "silver", "sgb", "other"] = "equity",
         sector: str = "",
         source: str = "unknown",
     ):

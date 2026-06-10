@@ -11,7 +11,7 @@ import logging
 from decimal import Decimal
 from typing import Any
 
-from finagent.ingestion.portfolio_schema import PortfolioExtractionSchema, PortfolioPositionSchema
+from finagent.ingestion.portfolio_schema import PortfolioExtractionSchema, PortfolioPositionSchema, PortfolioTransactionSchema
 
 logger = logging.getLogger("finagent.ingestion.cas_adapter")
 
@@ -87,6 +87,7 @@ def cas_adapter(
         )
 
     positions: list[PortfolioPositionSchema] = []
+    transactions: list[PortfolioTransactionSchema] = []
     investor_info: dict[str, str | None] = {}
     warnings: list[str] = []
     diagnostics: dict[str, Any] = {
@@ -115,13 +116,14 @@ def cas_adapter(
 
             # Process MF schemes in this folio
             for scheme in folio.schemes or []:
-                pos = _scheme_to_position(
+                pos, txns = _scheme_to_position(
                     scheme=scheme,
                     folio_num=folio_num,
                     diagnostics=diagnostics,
                 )
                 if pos:
                     positions.append(pos)
+                transactions.extend(txns)
 
             # Process equities in this folio (if any)
             for equity in folio.equities or []:
@@ -166,13 +168,14 @@ def cas_adapter(
 
             # Process MF
             for mf in account.mutual_funds or []:
-                pos = _nsdl_mf_to_position(
+                pos, txns = _nsdl_mf_to_position(
                     mf=mf,
                     account_id=account_id,
                     diagnostics=diagnostics,
                 )
                 if pos:
                     positions.append(pos)
+                transactions.extend(txns)
 
         diagnostics["account_count"] = len(cas_data.accounts or [])
 
@@ -182,6 +185,7 @@ def cas_adapter(
             status="INGESTION_FAILED",
             source_type="pdf",
             positions=[],
+            transactions=[],
             warnings=["casparser returned unexpected data structure."],
             confidence=0.0,
             diagnostics={"code": "UNEXPECTED_CASPARSER_TYPE", "type": str(type(cas_data))},
@@ -199,8 +203,9 @@ def cas_adapter(
         confidence = sum(p.confidence for p in positions) / len(positions)
 
     logger.info(
-        "casparser adapter complete: %d positions, status=%s, confidence=%.2f",
+        "casparser adapter complete: %d positions, %d transactions, status=%s, confidence=%.2f",
         len(positions),
+        len(transactions),
         status,
         confidence,
     )
@@ -211,20 +216,24 @@ def cas_adapter(
         broker_or_vendor="CAS",
         investor=investor_info,
         positions=positions,
+        transactions=transactions,
         warnings=warnings,
         confidence=confidence,
         diagnostics=diagnostics,
     )
 
 
+_BUY_TYPES = {"PURCHASE", "PURCHASE_SIP", "SWITCH_IN", "DIVIDEND_REINVESTMENT"}
+
+
 def _scheme_to_position(
     scheme: Any,
     folio_num: str,
     diagnostics: dict[str, Any],
-) -> PortfolioPositionSchema | None:
-    """Convert a casparser MF Scheme to PortfolioPositionSchema."""
+) -> tuple[PortfolioPositionSchema | None, list[PortfolioTransactionSchema]]:
+    """Convert a casparser MF Scheme to PortfolioPositionSchema + transaction list."""
     if not scheme:
-        return None
+        return None, []
 
     # Determine name and symbol
     name = (scheme.scheme or "").strip()
@@ -233,7 +242,7 @@ def _scheme_to_position(
     amfi = (scheme.amfi or "").strip().upper()
 
     if not name and not isin and not amfi:
-        return None
+        return None, []
 
     quantity = float(scheme.close or scheme.open or 0)
     if quantity == 0:
@@ -246,16 +255,40 @@ def _scheme_to_position(
 
     # Cost basis: sum of all buy transactions
     cost_basis = 0.0
+    total_buy_units = 0.0
+    transactions: list[PortfolioTransactionSchema] = []
     if scheme.transactions:
         for txn in scheme.transactions:
-            if txn.type and "buy" in str(txn.type).lower():
+            txn_type_str = str(txn.type).strip().upper()
+            if txn_type_str in _BUY_TYPES:
                 cost_basis += float(txn.amount or 0)
+                total_buy_units += float(txn.units or 0)
+            # Capture every transaction for SIP detection / XIRR
+            transactions.append(
+                PortfolioTransactionSchema(
+                    date=str(txn.date or ""),
+                    txn_type=txn_type_str,
+                    amount=float(txn.amount or 0),
+                    units=float(txn.units or 0),
+                    nav=float(txn.nav or 0),
+                    isin=isin,
+                    amfi=amfi,
+                    symbol=symbol,
+                    name=name,
+                    scheme_type=str(scheme.type or "").strip().upper(),
+                    kind="mf",
+                    raw_evidence=f"folio={folio_num}",
+                )
+            )
 
     avg_cost = cost_basis / quantity if quantity > 0 else 0.0
+    # Also derive from total_buy_units if CAS statement cost is inconsistent
+    if avg_cost == 0.0 and total_buy_units > 0 and cost_basis > 0:
+        avg_cost = cost_basis / total_buy_units
 
     confidence = 0.95 if isin and name else 0.85 if isin or name else 0.5
 
-    return PortfolioPositionSchema(
+    pos = PortfolioPositionSchema(
         symbol=symbol,
         name=name,
         isin=isin,
@@ -271,6 +304,7 @@ def _scheme_to_position(
         confidence=confidence,
         raw_evidence=f"folio={folio_num}",
     )
+    return pos, transactions
 
 
 def _equity_to_position(
@@ -357,17 +391,17 @@ def _nsdl_mf_to_position(
     mf: Any,
     account_id: str,
     diagnostics: dict[str, Any],
-) -> PortfolioPositionSchema | None:
-    """Convert an NSDL MF (from NSDLCASData) to PortfolioPositionSchema."""
+) -> tuple[PortfolioPositionSchema | None, list[PortfolioTransactionSchema]]:
+    """Convert an NSDL MF (from NSDLCASData) to PortfolioPositionSchema + transactions."""
     if not mf:
-        return None
+        return None, []
 
     name = (mf.name or "").strip()
     isin = (mf.isin or "").strip().upper()
     amfi = (mf.amfi or "").strip().upper() if hasattr(mf, "amfi") else ""
 
     if not name and not isin and not amfi:
-        return None
+        return None, []
 
     quantity = float(mf.balance or 0)
     nav = float(mf.nav or 0)
@@ -377,7 +411,28 @@ def _nsdl_mf_to_position(
 
     confidence = 0.95 if isin and name else 0.85 if isin or name else 0.6
 
-    return PortfolioPositionSchema(
+    transactions: list[PortfolioTransactionSchema] = []
+    if hasattr(mf, "transactions") and mf.transactions:
+        for txn in mf.transactions:
+            txn_type_str = str(txn.type).strip().upper()
+            transactions.append(
+                PortfolioTransactionSchema(
+                    date=str(txn.date or ""),
+                    txn_type=txn_type_str,
+                    amount=float(txn.amount or 0),
+                    units=float(txn.units or 0),
+                    nav=float(txn.nav or 0),
+                    isin=isin,
+                    amfi=amfi,
+                    symbol="",
+                    name=name,
+                    scheme_type="",
+                    kind="mf",
+                    raw_evidence=f"account={account_id}",
+                )
+            )
+
+    pos = PortfolioPositionSchema(
         symbol="",  # Will be resolved by ISIN resolver
         name=name,
         isin=isin,
@@ -393,3 +448,4 @@ def _nsdl_mf_to_position(
         confidence=confidence,
         raw_evidence=f"account={account_id}",
     )
+    return pos, transactions

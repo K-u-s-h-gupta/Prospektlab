@@ -7,6 +7,9 @@ def zipdir(path, ziph):
         # Skip __pycache__ and hidden folders
         dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__pycache__']
         for file in files:
+            # Skip hidden files and local state that should never be baked into the image.
+            if file.startswith('.'):
+                continue
             # Skip database files or other zip files
             if file.endswith('.db') or file.endswith('.sqlite') or file.endswith('.zip') or file.endswith('.log'):
                 continue

@@ -4,216 +4,269 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ProspektLab Control Tower</title>
-  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #06111d;
-      --bg-2: #0a1727;
-      --card: rgba(11, 21, 34, 0.82);
-      --card-strong: rgba(10, 17, 29, 0.94);
-      --line: rgba(153, 186, 214, 0.16);
-      --line-strong: rgba(153, 186, 214, 0.28);
-      --text: #eaf2fb;
-      --muted: #8ea5b9;
-      --soft: #c8d6e3;
-      --cyan: #55d6ff;
-      --green: #7cf2b6;
-      --amber: #ffbf69;
-      --rose: #ff7ea8;
-      --violet: #8da8ff;
-      --shadow: 0 24px 90px rgba(0, 0, 0, 0.36);
-      --radius-xl: 28px;
-      --radius-lg: 20px;
+      --bg: #0a0a0b;
+      --bg-soft: #131314;
+      --panel: rgba(19, 19, 20, 0.92);
+      --panel-strong: rgba(20, 20, 22, 0.97);
+      --line: rgba(0, 245, 255, 0.12);
+      --line-strong: rgba(0, 245, 255, 0.22);
+      --text: #eef8fb;
+      --muted: #8d9ca3;
+      --soft: #cad7dd;
+      --cyan: #00f5ff;
+      --green: #7df2ba;
+      --amber: #ffbc67;
+      --rose: #ff7d98;
+      --indigo: #60a5fa;
+      --gold: #f8e27a;
+      --shadow: 0 30px 90px rgba(0, 0, 0, 0.38);
+      --radius-xl: 30px;
+      --radius-lg: 22px;
       --radius-md: 16px;
       --radius-sm: 12px;
     }
 
-    * { box-sizing: border-box; }
-    html, body { min-height: 100%; }
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      min-height: 100%;
+    }
+
     body {
       margin: 0;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
       color: var(--text);
-      font-family: "Inter", system-ui, -apple-system, Segoe UI, sans-serif;
       background:
-        radial-gradient(circle at top left, rgba(85, 214, 255, 0.14), transparent 35%),
-        radial-gradient(circle at 82% 16%, rgba(124, 242, 182, 0.12), transparent 28%),
-        radial-gradient(circle at 20% 88%, rgba(255, 191, 105, 0.10), transparent 32%),
-        linear-gradient(180deg, #041019 0%, #06111d 45%, #091726 100%);
+        radial-gradient(circle at top left, rgba(0, 245, 255, 0.14), transparent 28%),
+        radial-gradient(circle at 82% 14%, rgba(96, 165, 250, 0.12), transparent 26%),
+        radial-gradient(circle at 18% 85%, rgba(125, 242, 186, 0.08), transparent 22%),
+        linear-gradient(180deg, #050506 0%, #090b10 45%, #111214 100%);
       overflow-x: hidden;
     }
+
     body::before {
       content: "";
       position: fixed;
       inset: 0;
       pointer-events: none;
       background-image:
-        linear-gradient(rgba(255, 255, 255, 0.034) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.034) 1px, transparent 1px);
-      background-size: 72px 72px;
-      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent 92%);
-      opacity: 0.35;
-    }
-    body::after {
-      content: "";
-      position: fixed;
-      inset: -10%;
-      pointer-events: none;
-      background:
-        radial-gradient(circle at 18% 22%, rgba(85, 214, 255, 0.08), transparent 20%),
-        radial-gradient(circle at 74% 46%, rgba(124, 242, 182, 0.08), transparent 22%),
-        radial-gradient(circle at 50% 85%, rgba(255, 191, 105, 0.06), transparent 18%);
-      filter: blur(18px);
-      opacity: 0.8;
-      z-index: -1;
-      animation: drift 18s ease-in-out infinite alternate;
-    }
-    @keyframes drift {
-      from { transform: translate3d(-1%, -1%, 0) scale(1); }
-      to { transform: translate3d(1.2%, 0.8%, 0) scale(1.03); }
+        linear-gradient(rgba(255, 255, 255, 0.032) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.032) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.82), transparent 94%);
+      opacity: 0.32;
     }
 
-    h1, h2, h3, .metric-value, .section-title {
-      font-family: "Space Grotesk", "Inter", sans-serif;
-      letter-spacing: -0.03em;
+    h1, h2, h3, h4, .metric-value, .eyebrow, .section-title, .score-value {
+      font-family: "Sora", "IBM Plex Sans", sans-serif;
+      letter-spacing: -0.04em;
     }
 
     .shell {
-      width: min(1540px, calc(100vw - 28px));
+      width: min(1600px, calc(100vw - 28px));
       margin: 0 auto;
       padding: 26px 0 40px;
       position: relative;
       z-index: 1;
     }
+
     .hero,
     .panel,
-    .card {
-      background: linear-gradient(180deg, rgba(13, 24, 38, 0.92), rgba(7, 14, 24, 0.88));
+    .kpi-card {
+      background: linear-gradient(180deg, rgba(20, 20, 22, 0.96), rgba(14, 14, 15, 0.94));
       border: 1px solid var(--line);
-      border-radius: var(--radius-xl);
       box-shadow: var(--shadow);
-      backdrop-filter: blur(18px);
+      backdrop-filter: blur(16px);
     }
+
     .hero {
-      padding: 26px 28px 28px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(320px, 440px);
+      gap: 22px;
+      border-radius: var(--radius-xl);
+      padding: 28px;
       position: relative;
       overflow: hidden;
     }
+
     .hero::before {
       content: "";
       position: absolute;
       inset: 0;
       background:
-        linear-gradient(135deg, rgba(85, 214, 255, 0.14), transparent 25%),
-        linear-gradient(315deg, rgba(124, 242, 182, 0.11), transparent 20%);
+        linear-gradient(130deg, rgba(0, 245, 255, 0.12), transparent 32%),
+        linear-gradient(320deg, rgba(96, 165, 250, 0.08), transparent 24%);
       pointer-events: none;
     }
+
     .eyebrow {
       display: inline-flex;
       align-items: center;
       gap: 10px;
       padding: 8px 12px;
       border-radius: 999px;
-      background: rgba(85, 214, 255, 0.11);
-      border: 1px solid rgba(85, 214, 255, 0.18);
-      color: #d9f6ff;
+      border: 1px solid rgba(86, 215, 255, 0.2);
+      background: rgba(86, 215, 255, 0.1);
+      color: #dff8ff;
       font-size: 12px;
       font-weight: 800;
       letter-spacing: 0.1em;
       text-transform: uppercase;
       margin-bottom: 16px;
-      position: relative;
-      z-index: 1;
     }
+
     .hero h1 {
       margin: 0 0 12px;
-      font-size: clamp(2.2rem, 4vw, 4.15rem);
+      font-size: clamp(2.1rem, 4vw, 4rem);
       line-height: 0.98;
+      max-width: 14ch;
       position: relative;
       z-index: 1;
-      max-width: 15ch;
     }
+
     .hero-copy {
       margin: 0;
-      max-width: 78ch;
+      max-width: 72ch;
       color: var(--soft);
-      font-size: 1rem;
-      line-height: 1.68;
+      line-height: 1.7;
       position: relative;
       z-index: 1;
     }
-    .meta-row {
+
+    .hero-meta {
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
-      margin-top: 20px;
+      margin-top: 18px;
       position: relative;
       z-index: 1;
     }
+
     .meta-chip {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       padding: 10px 14px;
       border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.10);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       background: rgba(255, 255, 255, 0.03);
-      color: #dce8f2;
-      font-size: 0.92rem;
+      font-size: 0.93rem;
+      color: #dbe8f3;
+    }
+
+    .meta-chip strong {
+      color: white;
       font-weight: 700;
     }
-    .meta-chip strong { color: white; }
-    .status-panel {
+
+    .hero-side {
+      position: relative;
+      z-index: 1;
+      border-radius: calc(var(--radius-xl) - 6px);
+      background: linear-gradient(180deg, rgba(13, 13, 15, 0.98), rgba(18, 19, 20, 0.96));
+      border: 1px solid rgba(255, 255, 255, 0.08);
       padding: 22px;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
       gap: 18px;
     }
-    .status-top {
+
+    .hero-row {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
-      gap: 14px;
+      gap: 16px;
     }
-    .panel-label {
+
+    .hero-label {
       margin: 0 0 8px;
-      color: #d8f4ff;
-      font-size: 0.82rem;
+      color: #dff7ff;
+      font-size: 0.8rem;
       font-weight: 800;
       letter-spacing: 0.12em;
       text-transform: uppercase;
     }
-    .panel-title {
-      margin: 0 0 8px;
-      font-size: 1.5rem;
-      line-height: 1.08;
-    }
-    .panel-copy {
+
+    .hero-title {
       margin: 0;
-      color: var(--muted);
-      line-height: 1.58;
-      font-size: 0.96rem;
+      font-size: 1.45rem;
+      line-height: 1.1;
     }
-    .range-group {
+
+    .hero-note {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .score-ring {
+      width: 132px;
+      height: 132px;
+      border-radius: 50%;
+      padding: 16px;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, rgba(7, 18, 31, 0.96) 0 54%, transparent 55%),
+        conic-gradient(from 180deg, rgba(86, 215, 255, 0.96), rgba(125, 242, 186, 0.96), rgba(255, 188, 103, 0.96), rgba(86, 215, 255, 0.96));
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+    }
+
+    .score-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle, rgba(9, 17, 29, 0.98), rgba(5, 10, 18, 0.98));
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .score-inner span {
+      display: block;
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .score-value {
+      margin-top: 6px;
+      font-size: 2.1rem;
+      font-weight: 800;
+      color: white;
+    }
+
+    .segmented {
       display: inline-flex;
+      flex-wrap: wrap;
       gap: 8px;
       padding: 7px;
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.03);
       border: 1px solid rgba(255, 255, 255, 0.08);
-      width: fit-content;
     }
-    .range-btn,
-    .action-btn {
+
+    .segment-btn,
+    .action-btn,
+    .view-btn {
       appearance: none;
       border: 0;
       cursor: pointer;
-      transition: transform 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+      transition: transform 160ms ease, background 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
     }
-    .range-btn {
+
+    .segment-btn,
+    .view-btn {
       border-radius: 999px;
       background: transparent;
       color: var(--muted);
@@ -221,35 +274,388 @@
       font-size: 0.92rem;
       font-weight: 800;
     }
-    .range-btn:hover { transform: translateY(-1px); color: var(--text); }
-    .range-btn.active {
-      color: #06111d;
-      background: linear-gradient(135deg, #89efff 0%, #7cf2b6 100%);
-      box-shadow: 0 10px 26px rgba(85, 214, 255, 0.22);
+
+    .segment-btn.active,
+    .view-btn.active {
+      color: #041316;
+      background: linear-gradient(135deg, #00f5ff 0%, #7df2ba 100%);
+      box-shadow: 0 12px 30px rgba(0, 245, 255, 0.22);
     }
+
+    .segment-btn:hover,
+    .view-btn:hover,
+    .action-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
     .action-btn {
       border-radius: 12px;
       padding: 10px 14px;
       background: rgba(255, 255, 255, 0.03);
       color: var(--text);
       border: 1px solid rgba(255, 255, 255, 0.08);
-      font-weight: 700;
       font-size: 0.92rem;
+      font-weight: 700;
     }
-    .action-btn:hover { transform: translateY(-1px); border-color: rgba(85, 214, 255, 0.35); }
-    .status-pill {
+
+    .quick-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .quick-stat {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .quick-stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-bottom: 6px;
+    }
+
+    .quick-stat strong {
+      display: block;
+      font-size: 1.25rem;
+      color: white;
+      font-weight: 700;
+    }
+
+    .quick-stat small {
+      display: block;
+      margin-top: 6px;
+      color: var(--soft);
+      font-size: 0.82rem;
+    }
+
+    .section {
+      margin-top: 22px;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .verification-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .kpi-card {
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      min-height: 142px;
+    }
+
+    .kpi-label {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 600;
+    }
+
+    .metric-value {
+      margin: 10px 0 8px;
+      font-size: clamp(1.6rem, 2.4vw, 2.5rem);
+      line-height: 1;
+    }
+
+    .metric-value.unavailable {
+      color: rgba(238, 248, 251, 0.44);
+    }
+
+    .metric-meta {
+      color: var(--soft);
+      font-size: 0.93rem;
+      line-height: 1.5;
+    }
+
+    .metric-trend {
+      margin-top: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .metric-trend.up { color: #aef8cc; }
+    .metric-trend.down { color: #ffb0c0; }
+    .metric-trend.neutral { color: #a7c8d1; }
+
+    .panel {
+      border-radius: var(--radius-xl);
+      padding: 22px;
+    }
+
+    .section-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .section-title {
+      margin: 0;
+      font-size: 1.55rem;
+      line-height: 1.08;
+    }
+
+    .section-copy {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 0.96rem;
+      line-height: 1.65;
+      max-width: 70ch;
+    }
+
+    .chart-shell {
+      padding-bottom: 14px;
+    }
+
+    .chart-area {
+      width: 100%;
+      min-height: 410px;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
+        radial-gradient(circle at top, rgba(86, 215, 255, 0.1), transparent 40%);
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .chart-svg {
+      width: 100%;
+      height: 360px;
+      display: block;
+    }
+
+    .legend-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .legend-chip {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 12px;
+      padding: 8px 10px;
       border-radius: 999px;
-      font-size: 0.8rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 0.84rem;
+      color: var(--soft);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .split-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+    }
+
+    .domain-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .tracking-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .tracking-card,
+    .supabase-card,
+    .micro-card {
+      padding: 16px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .verification-card {
+      padding: 18px;
+      border-radius: 20px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
+        radial-gradient(circle at top right, rgba(0, 245, 255, 0.08), transparent 42%);
+      border: 1px solid rgba(0, 245, 255, 0.12);
+    }
+
+    .verification-label {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+
+    .verification-value {
+      margin: 10px 0 6px;
+      font-family: "Sora", "IBM Plex Sans", sans-serif;
+      font-size: clamp(1.6rem, 2.2vw, 2.35rem);
+      color: white;
+    }
+
+    .verification-note {
+      margin: 0;
+      color: var(--soft);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .gap-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .gap-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 188, 103, 0.2);
+      background: rgba(255, 188, 103, 0.08);
+      color: #ffd8a7;
+      font-size: 0.88rem;
+    }
+
+    .tracking-card h3,
+    .supabase-card h3,
+    .panel h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .tracking-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.55;
+    }
+
+    .tracking-value {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 14px 0 10px;
+    }
+
+    .tracking-value strong {
+      font-size: 1.8rem;
+      color: white;
+    }
+
+    .tracking-value span {
+      font-size: 0.9rem;
+      color: var(--soft);
+    }
+
+    .meter {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+    }
+
+    .meter-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, rgba(86, 215, 255, 0.95), rgba(125, 242, 186, 0.95));
+    }
+
+    .tracking-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+      color: var(--soft);
+      font-size: 0.84rem;
+    }
+
+    .catalog-grid,
+    .source-list,
+    .stack-list,
+    .alert-list,
+    .page-list,
+    .event-list,
+    .detail-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .catalog-item,
+    .source-row,
+    .stack-row,
+    .alert-row,
+    .page-row,
+    .event-row,
+    .detail-row {
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .catalog-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      max-height: 380px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .status-pill,
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 0.77rem;
       font-weight: 800;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      white-space: nowrap;
       border: 1px solid transparent;
     }
+
     .status-pill::before {
       content: "";
       width: 8px;
@@ -258,730 +664,742 @@
       background: currentColor;
       box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
     }
-    .status-pill.healthy { color: #8cf2b6; background: rgba(124, 242, 182, 0.08); border-color: rgba(124, 242, 182, 0.16); }
-    .status-pill.watch { color: #ffcf75; background: rgba(255, 202, 99, 0.08); border-color: rgba(255, 202, 99, 0.16); }
-    .status-pill.stale { color: #ff8296; background: rgba(255, 109, 125, 0.08); border-color: rgba(255, 109, 125, 0.16); }
 
-    .section { margin-top: 18px; }
-    .section-head {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 14px;
-    }
-    .section-title {
-      margin: 0;
-      font-size: 1.2rem;
-    }
-    .section-note {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.93rem;
-      line-height: 1.5;
-      max-width: 64ch;
+    .healthy {
+      color: #b1f8d0;
+      background: rgba(125, 242, 186, 0.1);
+      border-color: rgba(125, 242, 186, 0.16);
     }
 
-    .kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-      gap: 14px;
+    .watch {
+      color: #ffe0a7;
+      background: rgba(255, 188, 103, 0.12);
+      border-color: rgba(255, 188, 103, 0.18);
     }
-    .kpi-card {
-      position: relative;
-      overflow: hidden;
-      padding: 18px 18px 16px;
-      min-height: 156px;
+
+    .stale {
+      color: #ffb7c6;
+      background: rgba(255, 125, 152, 0.12);
+      border-color: rgba(255, 125, 152, 0.18);
     }
-    .kpi-card::after {
-      content: "";
-      position: absolute;
-      inset: auto -18% -32% auto;
-      width: 150px;
-      height: 150px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(85, 214, 255, 0.10), transparent 66%);
-      pointer-events: none;
-    }
-    .kpi-label {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      color: var(--muted);
-      font-size: 0.81rem;
-      font-weight: 800;
-      letter-spacing: 0.11em;
-      text-transform: uppercase;
-      margin-bottom: 12px;
-    }
-    .metric-value {
-      margin: 0 0 8px;
-      font-size: clamp(1.6rem, 2vw, 2.15rem);
-      letter-spacing: -0.04em;
-    }
-    .metric-trend {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 7px 10px;
-      border-radius: 999px;
+
+    .badge {
+      background: rgba(142, 168, 255, 0.12);
+      border-color: rgba(142, 168, 255, 0.16);
+      color: #dce6ff;
+      text-transform: none;
+      letter-spacing: 0;
       font-size: 0.82rem;
-      font-weight: 800;
-      margin-bottom: 8px;
-    }
-    .metric-trend.up { color: #a6f7c9; background: rgba(124, 242, 182, 0.10); }
-    .metric-trend.down { color: #ff96a7; background: rgba(255, 109, 125, 0.10); }
-    .metric-foot {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.9rem;
-      line-height: 1.45;
-      position: relative;
-      z-index: 1;
+      font-weight: 700;
     }
 
-    .grid-2 {
-      display: grid;
-      grid-template-columns: minmax(0, 1.55fr) minmax(340px, 0.95fr);
-      gap: 14px;
-    }
-    .grid-3 {
-      display: grid;
-      grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.92fr) minmax(0, 0.92fr);
-      gap: 14px;
-    }
-    .card {
-      padding: 20px;
-    }
-    .card-head {
+    .row-head {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 14px;
-      margin-bottom: 16px;
-    }
-    .card-title {
-      margin: 0 0 6px;
-      font-size: 1.05rem;
-    }
-    .card-subtitle {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.92rem;
-      line-height: 1.48;
-      max-width: 68ch;
-    }
-    .chart-wrap {
-      border-radius: 22px;
-      overflow: hidden;
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.022), rgba(255, 255, 255, 0.008)),
-        rgba(255, 255, 255, 0.012);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      min-height: 390px;
-      position: relative;
-    }
-    .chart-note {
-      position: absolute;
-      right: 18px;
-      top: 16px;
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 999px;
-      background: rgba(85, 214, 255, 0.08);
-      border: 1px solid rgba(85, 214, 255, 0.16);
-      color: #d7f6ff;
-      font-size: 0.85rem;
-      font-weight: 700;
-      z-index: 2;
-    }
-    .chart-note span {
-      color: white;
-      font-family: "Space Grotesk", sans-serif;
-      font-size: 1rem;
-    }
-    .svg-chart {
-      display: block;
-      width: 100%;
-      height: 100%;
-      min-height: 320px;
-    }
-    .legend-row {
-      display: flex;
-      flex-wrap: wrap;
       gap: 12px;
-      margin-top: 14px;
-    }
-    .legend-item {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--soft);
-      font-size: 0.9rem;
-      font-weight: 700;
-    }
-    .legend-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      flex: 0 0 auto;
+      margin-bottom: 10px;
     }
 
-    .funnel-wrap {
-      display: grid;
-      gap: 12px;
-    }
-    .funnel-row {
-      display: grid;
-      grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) auto;
-      gap: 12px;
-      align-items: center;
-    }
-    .funnel-label {
-      display: grid;
-      gap: 4px;
-    }
-    .funnel-name {
+    .row-title {
       margin: 0;
-      font-weight: 800;
+      font-size: 0.98rem;
+      color: white;
+      font-weight: 700;
+    }
+
+    .row-meta {
+      margin: 4px 0 0;
+      font-size: 0.86rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .row-value {
+      color: white;
+      font-size: 1rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .mini-grid .micro-card strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 1.2rem;
+      color: white;
+    }
+
+    .micro-card span {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .detail-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .detail-row strong {
+      color: white;
       font-size: 0.95rem;
     }
-    .funnel-meta {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.88rem;
-      line-height: 1.45;
-    }
-    .funnel-bar {
-      height: 16px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      overflow: hidden;
-    }
-    .funnel-bar > span {
+
+    .detail-row small {
       display: block;
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, rgba(85, 214, 255, 0.95), rgba(124, 242, 182, 0.92));
-      box-shadow: 0 0 20px rgba(85, 214, 255, 0.16);
-    }
-    .funnel-count {
-      font-family: "Space Grotesk", sans-serif;
-      font-size: 1.08rem;
-      white-space: nowrap;
-    }
-    .callout {
-      margin-top: 10px;
-      padding: 14px 16px;
-      border-radius: 18px;
-      background: linear-gradient(135deg, rgba(85, 214, 255, 0.08), rgba(124, 242, 182, 0.07));
-      border: 1px solid rgba(85, 214, 255, 0.16);
-      color: #dff8ff;
-      font-size: 0.94rem;
-      line-height: 1.6;
-    }
-    .callout strong { color: white; }
-    .source-list,
-    .stack-list,
-    .alert-list,
-    .segment-list,
-    .page-list,
-    .event-list {
-      display: grid;
-      gap: 10px;
-    }
-    .source-row,
-    .stack-row,
-    .alert-row,
-    .segment-row,
-    .page-row,
-    .event-row {
-      display: grid;
-      gap: 8px;
-      padding: 14px 14px 14px 16px;
-      border-radius: 18px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.07);
-    }
-    .source-row {
-      grid-template-columns: minmax(0, 1.1fr) auto;
-      align-items: center;
-    }
-    .source-name,
-    .stack-name,
-    .alert-title,
-    .segment-name,
-    .page-name,
-    .event-name {
-      margin: 0;
-      font-weight: 800;
-      font-size: 0.98rem;
-    }
-    .source-meta,
-    .stack-meta,
-    .alert-meta,
-    .segment-meta,
-    .page-meta,
-    .event-meta {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.9rem;
-      line-height: 1.5;
-    }
-    .source-bar,
-    .mini-bar {
-      height: 10px;
-      border-radius: 999px;
-      overflow: hidden;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.06);
       margin-top: 4px;
-    }
-    .source-bar > span,
-    .mini-bar > span {
-      display: block;
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, var(--bar-a), var(--bar-b));
-    }
-    .source-value,
-    .stack-value {
-      color: white;
-      font-family: "Space Grotesk", sans-serif;
-      font-size: 1.05rem;
-      font-weight: 700;
-      white-space: nowrap;
+      color: var(--muted);
+      font-size: 0.83rem;
+      line-height: 1.55;
     }
 
-    .user-table-wrap {
-      overflow-x: auto;
-      border-radius: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      background: rgba(255, 255, 255, 0.02);
-    }
-    table {
+    .data-table {
       width: 100%;
       border-collapse: collapse;
       min-width: 980px;
     }
-    th, td {
-      padding: 14px 16px;
-      text-align: left;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+    .data-table th,
+    .data-table td {
+      padding: 14px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       vertical-align: top;
+      text-align: left;
+      font-size: 0.92rem;
     }
-    th {
-      color: #d5e7f2;
-      font-size: 0.82rem;
-      letter-spacing: 0.11em;
+
+    .data-table th {
+      color: var(--muted);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
-      background: rgba(255, 255, 255, 0.03);
     }
-    td {
-      color: #eaf2f8;
-      font-size: 0.93rem;
-      line-height: 1.45;
+
+    .table-wrap {
+      overflow: auto;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.02);
     }
-    tr:last-child td { border-bottom: 0; }
+
     .risk-chip {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
-      border-radius: 999px;
-      font-size: 0.8rem;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-    .risk-chip::before {
-      content: "";
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: currentColor;
-    }
-    .risk-low { color: #8ff2ba; background: rgba(124, 242, 182, 0.10); }
-    .risk-medium { color: #ffcf75; background: rgba(255, 202, 99, 0.10); }
-    .risk-high { color: #ff8e9d; background: rgba(255, 109, 125, 0.10); }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
       padding: 7px 10px;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.06);
-      color: #e5f1fa;
-      font-size: 0.8rem;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      white-space: nowrap;
+      font-size: 0.79rem;
+      font-weight: 700;
+      border: 1px solid transparent;
     }
 
-    .donut-panel {
+    .risk-low {
+      color: #b1f8d0;
+      background: rgba(125, 242, 186, 0.1);
+      border-color: rgba(125, 242, 186, 0.16);
+    }
+
+    .risk-medium {
+      color: #ffe0a7;
+      background: rgba(255, 188, 103, 0.12);
+      border-color: rgba(255, 188, 103, 0.18);
+    }
+
+    .risk-high {
+      color: #ffb7c6;
+      background: rgba(255, 125, 152, 0.12);
+      border-color: rgba(255, 125, 152, 0.18);
+    }
+
+    .supabase-grid {
       display: grid;
-      grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
-      gap: 18px;
-      align-items: center;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
     }
-    .donut {
-      width: 220px;
-      aspect-ratio: 1;
-      border-radius: 50%;
-      position: relative;
-      margin: 0 auto;
-      background: conic-gradient(var(--cyan) 0deg 72deg, var(--green) 72deg 136deg, var(--amber) 136deg 198deg, var(--rose) 198deg 270deg, var(--violet) 270deg 360deg);
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 54px rgba(85, 214, 255, 0.14);
-    }
-    .donut::before {
-      content: "";
-      position: absolute;
-      inset: 18px;
-      background: linear-gradient(180deg, rgba(13, 24, 37, 0.96), rgba(7, 14, 24, 0.98));
-      border-radius: 50%;
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-    }
-    .donut-center {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 18px;
-      z-index: 1;
-    }
-    .donut-center strong {
-      display: block;
-      font-family: "Space Grotesk", sans-serif;
-      font-size: 2rem;
-      line-height: 1;
-      margin-bottom: 8px;
-    }
-    .donut-center span {
+
+    .muted {
       color: var(--muted);
-      font-size: 0.9rem;
-      line-height: 1.45;
     }
 
-    .hidden { display: none !important; }
-
-    @media (max-width: 1280px) {
-      .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .template-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+      gap: 14px;
     }
+
+    .template-pane {
+      padding: 16px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .template-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .template-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .template-meta {
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.5;
+    }
+
+    .template-input,
+    .template-preview {
+      width: 100%;
+      min-height: 420px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(7, 11, 19, 0.92);
+      color: #eef8fb;
+      font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 0.88rem;
+      line-height: 1.65;
+      padding: 14px;
+      resize: vertical;
+      white-space: pre-wrap;
+      overflow: auto;
+    }
+
+    .template-input:focus {
+      outline: 2px solid rgba(0, 245, 255, 0.28);
+      border-color: rgba(0, 245, 255, 0.32);
+    }
+
+    .template-preview {
+      margin: 0;
+      overflow: auto;
+    }
+
+    .template-actions .action-btn.primary {
+      background: linear-gradient(135deg, #00f5ff 0%, #7df2ba 100%);
+      color: #041316;
+      border-color: transparent;
+    }
+
+    .template-status {
+      font-size: 0.82rem;
+      color: var(--soft);
+    }
+
+    @media (max-width: 1380px) {
+      .tracking-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .catalog-grid,
+      .supabase-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 1120px) {
+      .hero,
+      .split-grid,
+      .domain-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .template-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .tracking-grid,
+      .catalog-grid,
+      .supabase-grid,
+      .verification-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .quick-stats,
+      .mini-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
     @media (max-width: 760px) {
-      .shell { width: min(100vw - 18px, 1540px); padding-top: 14px; }
-      .hero, .status-panel, .card { border-radius: 20px; }
-      .hero, .status-panel, .card, .kpi-card { padding-left: 16px; padding-right: 16px; }
-      .kpi-grid { grid-template-columns: 1fr; }
-      .section-head, .card-head, .status-top { flex-direction: column; align-items: flex-start; }
-      .range-group { width: 100%; justify-content: space-between; }
-      .range-btn { flex: 1; text-align: center; }
-      .donut-panel { grid-template-columns: 1fr; }
-      .donut { width: 190px; }
-      .funnel-row { grid-template-columns: 1fr; }
-      .chart-wrap { min-height: 300px; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
+      .shell {
+        width: min(100vw - 18px, 100%);
+        padding: 16px 0 30px;
+      }
+
+      .hero,
+      .panel,
+      .kpi-card {
+        border-radius: 22px;
+      }
+
+      .hero {
+        padding: 20px;
+      }
+
+      .kpi-grid,
+      .quick-stats,
+      .mini-grid,
+      .verification-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .template-input,
+      .template-preview {
+        min-height: 320px;
+      }
+
+      .chart-area {
+        padding: 10px;
       }
     }
   </style>
 </head>
 <body>
   <main class="shell">
-    <section class="topbar grid-2">
-      <div class="hero">
-        <div class="eyebrow">ProspektLab / backend control tower</div>
-        <h1>Track the full user journey across Azure, Supabase, Workspace, and Insights.</h1>
-        <p class="hero-copy">
-          This dashboard blends landing traffic, auth conversion, onboarding, workspace activation, first-value delivery,
-          and operational health into one view. It is designed to show where users fall off and which systems are keeping the platform healthy.
+    <section class="hero">
+      <div>
+        <div class="eyebrow">ProspektLab Backend Dashboard</div>
+        <h1>Track user journey, backend health, workspace usage, and outreach in one place.</h1>
+        <p class="hero-copy" id="statusCopy">
+          Loading the latest stitched view from Azure, Application Insights, the workspace, insights memory, and Supabase.
         </p>
-        <div class="meta-row">
-          <div class="meta-chip"><strong id="hero-landing">0</strong> landing sessions</div>
-          <div class="meta-chip"><strong id="hero-users">0</strong> combined users</div>
-          <div class="meta-chip"><strong id="hero-workspaces">0</strong> workspace users</div>
+        <div class="hero-meta">
+          <div class="meta-chip">Mode <strong id="modeBadge">loading</strong></div>
+          <div class="meta-chip">Freshness <strong id="freshnessBadge">0s</strong></div>
+          <div class="meta-chip">Alerts <strong id="alertBadge">0</strong></div>
+          <div class="meta-chip">Identity match <strong id="identityBadge">0%</strong></div>
         </div>
       </div>
 
-      <aside class="status-panel">
-        <div>
-          <div class="status-top">
-            <div>
-              <p class="panel-label">Live status</p>
-              <h2 class="panel-title">One readout for the whole platform.</h2>
-              <p class="panel-copy" id="status-copy">
-                Use the range controls to switch between 7, 30, and 90 day views.
-              </p>
+      <div class="hero-side">
+        <div class="hero-row">
+          <div>
+            <p class="hero-label">Snapshot status</p>
+            <h2 class="hero-title">Control tower pulse</h2>
+            <p class="hero-note" id="heroNote">
+              The dashboard is checking telemetry coverage and data freshness.
+            </p>
+          </div>
+          <div class="score-ring">
+            <div class="score-inner">
+              <span>Health</span>
+              <div class="score-value" id="healthScore">0</div>
             </div>
-            <div class="status-pill healthy" id="overall-status">Healthy</div>
           </div>
         </div>
 
-        <div class="range-group" role="tablist" aria-label="Time range">
-          <button class="range-btn" data-range="7D" type="button">7D</button>
-          <button class="range-btn active" data-range="30D" type="button">30D</button>
-          <button class="range-btn" data-range="90D" type="button">90D</button>
+        <div class="segmented" id="rangeButtons">
+          <button class="segment-btn active" data-range="7D" type="button">7D</button>
+          <button class="segment-btn" data-range="30D" type="button">30D</button>
+          <button class="segment-btn" data-range="90D" type="button">90D</button>
         </div>
 
-        <div class="card" style="padding: 16px; margin: 0; background: rgba(255,255,255,0.03); border-radius: 18px;">
-          <div class="kpi-label" style="margin-bottom: 8px;">
-            <span>Freshness</span>
-            <span class="status-pill healthy" id="freshness-pill">0s lag</span>
+        <div class="action-row">
+          <button class="action-btn" id="refreshBtn" type="button">Refresh snapshot</button>
+          <button class="action-btn" id="copyJsonBtn" type="button">Copy JSON</button>
+        </div>
+
+        <div class="quick-stats">
+          <div class="quick-stat">
+            <span>Landing traffic</span>
+            <strong id="heroLanding">0</strong>
+            <small id="heroLandingTrend">Waiting for data</small>
           </div>
-          <p class="card-subtitle" style="margin-bottom: 4px;">Last successful sync</p>
-          <p class="panel-copy" id="sync-copy">Loading metrics...</p>
-        </div>
-
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button class="action-btn" id="refreshBtn" type="button">Refresh now</button>
-          <button class="action-btn" id="copyJsonBtn" type="button">Copy snapshot JSON</button>
-        </div>
-      </aside>
-    </section>
-
-    <section class="section">
-      <div class="kpi-grid">
-        <div class="card kpi-card">
-          <div class="kpi-label"><span>Landing traffic</span><span id="kpi-landing-trend" class="metric-trend up">0%</span></div>
-          <div id="kpi-landing" class="metric-value">0</div>
-          <p class="metric-foot">Sessions reaching marketing pages and the root landing route.</p>
-        </div>
-        <div class="card kpi-card">
-          <div class="kpi-label"><span>Signup completion</span><span id="kpi-signup-trend" class="metric-trend up">0%</span></div>
-          <div id="kpi-signup" class="metric-value">0%</div>
-          <p class="metric-foot">Signup or login sessions that make it through auth.</p>
-        </div>
-        <div class="card kpi-card">
-          <div class="kpi-label"><span>Combined users</span><span id="kpi-users-trend" class="metric-trend up">0%</span></div>
-          <div id="kpi-users" class="metric-value">0</div>
-          <p class="metric-foot">Stitched across Azure telemetry and Supabase records.</p>
-        </div>
-        <div class="card kpi-card">
-          <div class="kpi-label"><span>Workspace users</span><span id="kpi-workspace-trend" class="metric-trend up">0%</span></div>
-          <div id="kpi-workspace" class="metric-value">0</div>
-          <p class="metric-foot">Users getting into the workspace and taking action.</p>
-        </div>
-        <div class="card kpi-card">
-          <div class="kpi-label"><span>First value</span><span id="kpi-first-trend" class="metric-trend up">0%</span></div>
-          <div id="kpi-first" class="metric-value">0</div>
-          <p class="metric-foot">Users who reached a delivered insight or result.</p>
-        </div>
-        <div class="card kpi-card">
-          <div class="kpi-label"><span>Open alerts</span><span id="kpi-alerts-trend" class="metric-trend up">0%</span></div>
-          <div id="kpi-alerts" class="metric-value">0</div>
-          <p class="metric-foot">Errors, failed requests, and operational spikes.</p>
+          <div class="quick-stat">
+            <span>Combined users</span>
+            <strong id="heroUsers">0</strong>
+            <small id="heroUsersTrend">Waiting for data</small>
+          </div>
+          <div class="quick-stat">
+            <span>Backend requests</span>
+            <strong id="heroRequests">0</strong>
+            <small id="heroRequestsTrend">Waiting for data</small>
+          </div>
+          <div class="quick-stat">
+            <span>Token usage</span>
+            <strong id="heroTokens">0</strong>
+            <small id="heroTokensTrend">Waiting for data</small>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="section grid-2">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <h2 class="card-title">Traffic and activation trend</h2>
-            <p class="card-subtitle">Landing, workspace, and first-value sessions over time.</p>
-          </div>
-          <div class="badge" id="mode-badge">mode</div>
+    <section class="section panel">
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">Data integrity</h2>
+          <p class="section-copy">Every headline metric below is now tagged as live, persisted, or withheld. Synthetic filler has been removed from the dashboard path.</p>
         </div>
-        <div class="chart-wrap">
-          <div class="chart-note">Health score <span id="health-score">0</span></div>
-          <svg class="svg-chart" id="trendChart" viewBox="0 0 1120 380" preserveAspectRatio="none" aria-label="Trend chart"></svg>
-        </div>
-        <div class="legend-row" id="trend-legend"></div>
+        <div class="badge" id="integrityBadge">Verifying</div>
       </div>
+      <div class="verification-grid" id="verificationGrid"></div>
+      <div class="gap-list" id="connectorGaps"></div>
+    </section>
 
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <h2 class="card-title">Journey funnel</h2>
-            <p class="card-subtitle">Where sessions drop between the major platform steps.</p>
-          </div>
-          <div class="badge" id="leak-badge">biggest leak</div>
+    <section class="section kpi-grid">
+      <article class="kpi-card">
+        <p class="kpi-label">Landing sessions</p>
+        <div class="metric-value" id="kpiLanding">0</div>
+        <div class="metric-meta">Top-of-funnel traffic entering the app and landing pages.</div>
+        <div class="metric-trend up" id="kpiLandingTrend">0%</div>
+      </article>
+      <article class="kpi-card">
+        <p class="kpi-label">Signup completion</p>
+        <div class="metric-value" id="kpiSignup">0%</div>
+        <div class="metric-meta">Successful auth completions after users begin the signup flow.</div>
+        <div class="metric-trend up" id="kpiSignupTrend">0%</div>
+      </article>
+      <article class="kpi-card">
+        <p class="kpi-label">First value reached</p>
+        <div class="metric-value" id="kpiFirstValue">0</div>
+        <div class="metric-meta">Users who reached their first meaningful insight or result.</div>
+        <div class="metric-trend up" id="kpiFirstValueTrend">0%</div>
+      </article>
+      <article class="kpi-card">
+        <p class="kpi-label">Ops error rate</p>
+        <div class="metric-value" id="kpiErrorRate">0%</div>
+        <div class="metric-meta">Requests, dependencies, and exceptions rolling into one pulse.</div>
+        <div class="metric-trend down" id="kpiErrorRateTrend">0%</div>
+      </article>
+      <article class="kpi-card">
+        <p class="kpi-label">Token usage</p>
+        <div class="metric-value" id="kpiTokens">0</div>
+        <div class="metric-meta">Total token usage captured from Supabase session records.</div>
+        <div class="metric-trend up" id="kpiTokensTrend">0%</div>
+      </article>
+      <article class="kpi-card">
+        <p class="kpi-label">Portfolio positions</p>
+        <div class="metric-value" id="kpiPortfolio">0</div>
+        <div class="metric-meta">Active mirrored positions available in the workspace.</div>
+        <div class="metric-trend up" id="kpiPortfolioTrend">0%</div>
+      </article>
+      <article class="kpi-card">
+        <p class="kpi-label">Outreach messages</p>
+        <div class="metric-value" id="kpiOutreach">0</div>
+        <div class="metric-meta">Campaign messages, provider events, replies, and unsubscribes.</div>
+        <div class="metric-trend up" id="kpiOutreachTrend">0%</div>
+      </article>
+      <article class="kpi-card">
+        <p class="kpi-label">Supabase rows</p>
+        <div class="metric-value" id="kpiSupabase">0</div>
+        <div class="metric-meta">Rows visible across the connected operational and insights tables.</div>
+        <div class="metric-trend up" id="kpiSupabaseTrend">0%</div>
+      </article>
+    </section>
+
+    <section class="section panel chart-shell">
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">Trend graph</h2>
+          <p class="section-copy" id="chartCopy">Journey, product activity, and ops load are all available from the same timeline.</p>
         </div>
-        <div class="funnel-wrap" id="funnelWrap"></div>
-        <div class="callout" id="leak-callout">Loading funnel...</div>
+        <div class="segmented" id="chartViews">
+          <button class="view-btn active" data-view="journey" type="button">Journey</button>
+          <button class="view-btn" data-view="product" type="button">Product</button>
+          <button class="view-btn" data-view="ops" type="button">Ops</button>
+        </div>
+      </div>
+      <div class="chart-area">
+        <svg class="chart-svg" id="mainChart" viewBox="0 0 1120 360" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="legend-row" id="chartLegend"></div>
       </div>
     </section>
 
-    <section class="section grid-3">
-      <div class="card">
-        <div class="card-head">
+    <section class="section split-grid">
+      <section class="panel">
+        <div class="section-head">
           <div>
-            <h2 class="card-title">Source health</h2>
-            <p class="card-subtitle">Azure, Supabase, Workspace, and Insights are all stitched into the same control surface.</p>
+            <h2 class="section-title">Journey funnel</h2>
+            <p class="section-copy">Follow the path from landing to retained users, and see exactly where people fall off.</p>
           </div>
+          <div class="badge" id="biggestLeakBadge">Loading</div>
+        </div>
+        <div class="stack-list" id="funnelList"></div>
+        <div style="height:14px"></div>
+        <div class="stack-list" id="dropoffList"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">Source coverage</h2>
+            <p class="section-copy">Know which data sources are live, stale, or missing before trusting the story.</p>
+          </div>
+          <div class="badge" id="sourceTotalBadge">0 signals</div>
         </div>
         <div class="source-list" id="sourceHealth"></div>
-      </div>
+        <div style="height:16px"></div>
+        <div class="source-list" id="sourceMix"></div>
+      </section>
+    </section>
 
-      <div class="card">
-        <div class="card-head">
+    <section class="section panel">
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">Tracking coverage</h2>
+          <p class="section-copy">Every telemetry family emitted by the app is grouped here so product, ops, and growth can see what is active and what has gone silent.</p>
+        </div>
+      </div>
+      <div class="tracking-grid" id="trackingGrid"></div>
+      <div class="catalog-grid" id="trackingCatalog"></div>
+    </section>
+
+    <section class="section domain-grid">
+      <article class="panel">
+        <div class="section-head">
           <div>
-            <h2 class="card-title">Source mix</h2>
-            <p class="card-subtitle">How the unified snapshot is split across connectors.</p>
+            <h2 class="section-title">Workspace and research</h2>
+            <p class="section-copy">Sessions, targets, quality, citations, and model usage across the core product.</p>
           </div>
         </div>
-        <div class="donut-panel">
-          <div class="donut">
-            <div class="donut-center">
-              <strong id="sourceTotal">0</strong>
-              <span>signals in window</span>
+        <div class="mini-grid" id="workspaceMetrics"></div>
+        <div style="height:14px"></div>
+        <div class="detail-list" id="workspaceBreakdowns"></div>
+      </article>
+
+      <article class="panel">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">Portfolio operations</h2>
+            <p class="section-copy">Mirrors, extraction reviews, verification codes, and portfolio composition.</p>
+          </div>
+        </div>
+        <div class="mini-grid" id="portfolioMetrics"></div>
+        <div style="height:14px"></div>
+        <div class="detail-list" id="portfolioBreakdowns"></div>
+      </article>
+
+      <article class="panel">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">Outreach engine</h2>
+            <p class="section-copy">Campaigns, sends, provider events, replies, and unsubscribes from the insights side.</p>
+          </div>
+        </div>
+        <div class="mini-grid" id="outreachMetrics"></div>
+        <div style="height:14px"></div>
+        <div class="detail-list" id="outreachBreakdowns"></div>
+      </article>
+
+      <article class="panel">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">Data pipeline</h2>
+            <p class="section-copy">Contacts, scrape jobs, checkpoints, export workloads, and verified lead coverage.</p>
+          </div>
+        </div>
+        <div class="mini-grid" id="pipelineMetrics"></div>
+        <div style="height:14px"></div>
+        <div class="detail-list" id="pipelineBreakdowns"></div>
+      </article>
+    </section>
+
+    <section class="section panel">
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">Outreach template editor</h2>
+          <p class="section-copy">This is the exact message template the sender uses. Edit it here, then save to update future outreach runs.</p>
+        </div>
+        <div class="badge" id="templateBadge">Template loading</div>
+      </div>
+      <div class="template-layout">
+        <section class="template-pane">
+          <div class="template-toolbar">
+            <div>
+              <div class="template-meta" id="templatePath">Source: loading...</div>
+              <div class="template-status" id="templateStatus">Waiting for the current template.</div>
+            </div>
+            <div class="template-actions">
+              <button class="action-btn" id="refreshTemplateBtn" type="button">Refresh template</button>
+              <button class="action-btn primary" id="saveTemplateBtn" type="button">Save template</button>
             </div>
           </div>
-          <div class="source-list" id="sourceMixList"></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <h2 class="card-title">Drop-off reasons</h2>
-            <p class="card-subtitle">The roughest areas in the journey, based on the funnel gaps and operational signals.</p>
+          <textarea class="template-input" id="outreachTemplateInput" spellcheck="false" aria-label="Outreach template editor"></textarea>
+        </section>
+        <section class="template-pane">
+          <div class="template-toolbar">
+            <div>
+              <h3 style="margin:0;font-size:1rem;">Live preview</h3>
+              <div class="template-meta">Read-only preview of the current subject and body.</div>
+            </div>
           </div>
-        </div>
-        <div class="stack-list" id="dropoffList"></div>
+          <pre class="template-preview" id="outreachTemplatePreview"></pre>
+        </section>
       </div>
     </section>
 
-    <section class="section grid-2">
-      <div class="card">
-        <div class="card-head">
+    <section class="section split-grid">
+      <section class="panel">
+        <div class="section-head">
           <div>
-            <h2 class="card-title">Combined users</h2>
-            <p class="card-subtitle">Identity stitched across Azure telemetry, Supabase auth, workspace usage, and insight outputs.</p>
+            <h2 class="section-title">Backend operations</h2>
+            <p class="section-copy">Request and dependency hotspots, plus the latest alerts that need attention.</p>
           </div>
         </div>
-        <div class="user-table-wrap">
-          <table aria-label="Combined user data">
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Stage</th>
-                <th>Source</th>
-                <th>Last seen</th>
-                <th>Signals</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="userTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="grid-2" style="grid-template-columns: 1fr; gap: 14px;">
-        <div class="card">
-          <div class="card-head">
-            <div>
-              <h2 class="card-title">Top landing pages</h2>
-              <p class="card-subtitle">The pages users reach before they convert or fall off.</p>
-            </div>
-          </div>
-          <div class="page-list" id="pageList"></div>
-        </div>
-
-        <div class="card">
-          <div class="card-head">
-            <div>
-              <h2 class="card-title">Top signals</h2>
-              <p class="card-subtitle">The event types that keep showing up in the telemetry stream.</p>
-            </div>
-          </div>
-          <div class="event-list" id="eventList"></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section grid-2">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <h2 class="card-title">Recent monitor notes</h2>
-            <p class="card-subtitle">Latest request failures and exceptions from the monitoring stream.</p>
-          </div>
-        </div>
+        <div class="mini-grid" id="opsMetrics"></div>
+        <div style="height:14px"></div>
+        <div class="detail-list" id="opsBreakdowns"></div>
+        <div style="height:14px"></div>
         <div class="alert-list" id="alertList"></div>
-      </div>
+      </section>
 
-      <div class="card">
-        <div class="card-head">
+      <section class="panel">
+        <div class="section-head">
           <div>
-            <h2 class="card-title">Snapshot summary</h2>
-            <p class="card-subtitle">A compact readout for product, ops, and growth teams.</p>
+            <h2 class="section-title">Pages and events</h2>
+            <p class="section-copy">Top routes, top signals, and what is currently carrying the most activity.</p>
           </div>
         </div>
-        <div class="source-row" style="grid-template-columns:1fr auto;">
-          <div>
-            <p class="source-name">Landing -> first value</p>
-            <p class="source-meta" id="summaryLine">Loading summary...</p>
-          </div>
-          <div class="source-value" id="summaryPct">0%</div>
-        </div>
-        <div style="height: 14px;"></div>
-        <div class="source-row" style="grid-template-columns:1fr auto;">
-          <div>
-            <p class="source-name">Identity match</p>
-            <p class="source-meta">Supabase users matched with telemetry identity.</p>
-          </div>
-          <div class="source-value" id="identityPct">0%</div>
-        </div>
-        <div style="height: 14px;"></div>
-        <div class="source-row" style="grid-template-columns:1fr auto;">
-          <div>
-            <p class="source-name">Request p95</p>
-            <p class="source-meta">Approximate request latency from Azure telemetry.</p>
-          </div>
-          <div class="source-value" id="latencyP95">0ms</div>
+        <div class="page-list" id="pageList"></div>
+        <div style="height:14px"></div>
+        <div class="event-list" id="eventList"></div>
+      </section>
+    </section>
+
+    <section class="section panel">
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">Combined users</h2>
+          <p class="section-copy">A stitched user table combining telemetry, Supabase profiles, workspace behavior, insights, portfolio state, and outreach ownership.</p>
         </div>
       </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Stage</th>
+              <th>Last seen</th>
+              <th>Workspace</th>
+              <th>Portfolio</th>
+              <th>Tokens / model</th>
+              <th>Target</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="userTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section panel">
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">Supabase inventory</h2>
+          <p class="section-copy">Every connected table behind the backend dashboard, with row counts and last-seen freshness.</p>
+        </div>
+        <div class="badge" id="supabaseBadge">Not checked</div>
+      </div>
+      <div class="supabase-grid" id="supabaseGrid"></div>
     </section>
   </main>
 
   <script>
     const state = {
       range: '30D',
+      view: 'journey',
       data: null,
-      loading: false,
       timer: null,
+      template: null,
+      templateDirty: false,
     };
 
     const fmtCount = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+    const fmtCompact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
     const fmtPct = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
     const fmtDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
     const fmtDateTime = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-    const landingRoutes = new Set(['/', '/landing', '/home', '/features', '/pricing', '/testimonials', '/contact']);
-    const labelMap = {
-      landing: 'Landing',
-      signup_started: 'Signup started',
-      signup_completed: 'Signup completed',
-      onboarding_completed: 'Onboarding completed',
-      workspace: 'Workspace active',
-      first_value: 'First value',
-      retained: 'Retained',
-      profile: 'Profile only',
+    const chartViews = {
+      journey: {
+        title: 'Journey view',
+        copy: 'Landing, auth completion, workspace activation, and first value on one chart.',
+        series: [
+          { key: 'landing', label: 'Landing', color: '#56d7ff' },
+          { key: 'signup_completed', label: 'Signup completed', color: '#8ea8ff' },
+          { key: 'workspace', label: 'Workspace active', color: '#ffbc67' },
+          { key: 'first_value', label: 'First value', color: '#7df2ba' },
+        ],
+      },
+      product: {
+        title: 'Product view',
+        copy: 'Auth, research, portfolio, content, and chat activity across the same range.',
+        series: [
+          { key: 'auth_success', label: 'Auth success', color: '#56d7ff' },
+          { key: 'portfolio', label: 'Portfolio', color: '#ffbc67' },
+          { key: 'research', label: 'Research', color: '#ff7d98' },
+          { key: 'content', label: 'Content', color: '#f8e27a' },
+          { key: 'chat', label: 'Chat', color: '#8ea8ff' },
+        ],
+      },
+      ops: {
+        title: 'Ops view',
+        copy: 'Requests, frontend dependencies, and error load for the backend dashboard.',
+        series: [
+          { key: 'requests', label: 'Requests', color: '#56d7ff' },
+          { key: 'dependencies', label: 'Dependencies', color: '#7df2ba' },
+          { key: 'errors', label: 'Errors', color: '#ff7d98' },
+        ],
+      },
     };
-    const riskClass = (level) => level === 'high' ? 'risk-high' : level === 'medium' ? 'risk-medium' : 'risk-low';
-    const statusClass = (value) => value === 'healthy' ? 'healthy' : value === 'watch' ? 'watch' : 'stale';
-    const escapeHtml = (value) => String(value ?? '').replace(/[&<>\"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[ch]));
+    const persistedChartViews = {
+      journey: {
+        title: 'Verified journey',
+        copy: 'Azure journey telemetry is unavailable, so this chart shows verified persisted progression from known profiles to retained users.',
+        series: [
+          { key: 'profiles', label: 'Known profiles', color: '#00f5ff' },
+          { key: 'workspace_users', label: 'Workspace users', color: '#60a5fa' },
+          { key: 'first_value_users', label: 'Insight users', color: '#7df2ba' },
+          { key: 'retained_users', label: 'Retained users', color: '#ffbc67' },
+        ],
+      },
+      product: {
+        title: 'Persisted product view',
+        copy: 'Verified writes from workspace sessions, token logs, facts, portfolio updates, and outreach messages.',
+        series: [
+          { key: 'token_logs', label: 'Token logs', color: '#00f5ff' },
+          { key: 'research', label: 'Facts', color: '#ff7d98' },
+          { key: 'portfolio', label: 'Portfolio writes', color: '#ffbc67' },
+          { key: 'outreach_messages', label: 'Outreach messages', color: '#7df2ba' },
+        ],
+      },
+      ops: {
+        title: 'Ops coverage',
+        copy: 'Live Azure Monitor request telemetry is not available, so this view shows persisted operational writes instead of fake request volume.',
+        series: [
+          { key: 'profiles', label: 'Profiles', color: '#00f5ff' },
+          { key: 'token_logs', label: 'Token logs', color: '#60a5fa' },
+          { key: 'outreach_messages', label: 'Outreach messages', color: '#7df2ba' },
+        ],
+      },
+    };
 
-    function setActiveRangeButtons() {
-      document.querySelectorAll('.range-btn').forEach((btn) => {
-        btn.classList.toggle('active', btn.dataset.range === state.range);
-      });
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"]/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+      }[char]));
     }
 
     function clearNode(node) {
@@ -989,19 +1407,38 @@
     }
 
     function formatCount(value) {
-      return fmtCount.format(Math.round(value || 0));
+      const numeric = Number(value) || 0;
+      return Math.abs(numeric) >= 1000 ? fmtCompact.format(numeric) : fmtCount.format(numeric);
+    }
+
+    function formatOptionalCount(value) {
+      return value === null || value === undefined ? '--' : formatCount(value);
     }
 
     function formatPct(value) {
-      return `${fmtPct.format(value || 0)}%`;
+      return `${fmtPct.format(Number(value) || 0)}%`;
+    }
+
+    function formatOptionalPct(value) {
+      return value === null || value === undefined ? '--' : formatPct(value);
+    }
+
+    function formatMoney(value) {
+      const numeric = Number(value) || 0;
+      if (!numeric) return '0';
+      return `₹${fmtCompact.format(numeric)}`;
+    }
+
+    function formatOptionalMoney(value) {
+      return value === null || value === undefined ? '--' : formatMoney(value);
     }
 
     function formatAge(seconds) {
-      const total = Math.max(0, Math.round(seconds || 0));
+      const total = Math.max(0, Math.round(Number(seconds) || 0));
       if (total < 60) return `${total}s`;
       const minutes = Math.floor(total / 60);
       const remaining = total % 60;
-      if (minutes < 60) return `${minutes}m ${remaining.toString().padStart(2, '0')}s`;
+      if (minutes < 60) return `${minutes}m ${String(remaining).padStart(2, '0')}s`;
       const hours = Math.floor(minutes / 60);
       return `${hours}h ${String(minutes % 60).padStart(2, '0')}m`;
     }
@@ -1012,11 +1449,52 @@
     }
 
     function trendForSeries(series, key) {
-      if (!series.length) return 0;
+      if (!series || !series.length) return 0;
       const midpoint = Math.max(2, Math.floor(series.length / 2));
       const first = series.slice(0, midpoint).reduce((sum, row) => sum + (Number(row[key]) || 0), 0) / midpoint;
       const second = series.slice(midpoint).reduce((sum, row) => sum + (Number(row[key]) || 0), 0) / Math.max(1, series.length - midpoint);
       return percentTrend(second, first);
+    }
+
+    function setTrend(id, value, invert = false, note = '') {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (note) {
+        el.className = 'metric-trend neutral';
+        el.textContent = note;
+        return;
+      }
+      const effective = invert ? -value : value;
+      el.className = `metric-trend ${effective >= 0 ? 'up' : 'down'}`;
+      el.textContent = `${effective >= 0 ? '+' : ''}${fmtPct.format(effective)}% vs prior half`;
+    }
+
+    function metricState(data, key) {
+      return data?.verification?.metric_states?.[key] || null;
+    }
+
+    function metricUnavailable(data, key) {
+      return metricState(data, key)?.status === 'unavailable';
+    }
+
+    function metricSourceNote(data, key, fallback = '') {
+      const item = metricState(data, key);
+      if (!item) return fallback;
+      const statusLabel = item.status === 'live' ? 'Live' : item.status === 'persisted' ? 'Persisted' : 'Withheld';
+      return `${statusLabel} · ${item.source}`;
+    }
+
+    function getChartPreset(view, data) {
+      if (!data?.verification?.has_live_journey) {
+        return persistedChartViews[view] || persistedChartViews.journey;
+      }
+      return chartViews[view] || chartViews.journey;
+    }
+
+    function setActiveButtons(selector, value, dataKey) {
+      document.querySelectorAll(selector).forEach((button) => {
+        button.classList.toggle('active', button.dataset[dataKey] === value);
+      });
     }
 
     function makeSvgEl(tag, attrs = {}) {
@@ -1025,316 +1503,572 @@
       return el;
     }
 
-    function drawTrendChart(series) {
-      const svg = document.getElementById('trendChart');
+    function drawChart(series, view, data) {
+      const preset = getChartPreset(view, data);
+      document.getElementById('chartCopy').textContent = preset.copy;
+      const svg = document.getElementById('mainChart');
       clearNode(svg);
+      const legend = document.getElementById('chartLegend');
+      clearNode(legend);
       if (!series || !series.length) return;
 
       const width = 1120;
-      const height = 380;
-      const padding = { left: 64, right: 26, top: 26, bottom: 50 };
-      const maxValue = Math.max(
-        1,
-        ...series.map((row) => Math.max(
-          Number(row.landing) || 0,
-          Number(row.workspace) || 0,
-          Number(row.first_value) || 0,
-        ))
-      ) * 1.18;
+      const height = 360;
+      const padding = { top: 24, right: 26, bottom: 50, left: 62 };
       const plotWidth = width - padding.left - padding.right;
       const plotHeight = height - padding.top - padding.bottom;
+      const maxValue = Math.max(1, ...series.flatMap((row) => preset.series.map((item) => Number(row[item.key]) || 0))) * 1.14;
       const xFor = (index) => padding.left + (index / Math.max(1, series.length - 1)) * plotWidth;
       const yFor = (value) => padding.top + (1 - value / maxValue) * plotHeight;
 
-      const defs = makeSvgEl('defs');
-      const areaGradient = makeSvgEl('linearGradient', { id: 'areaGradient', x1: '0%', y1: '0%', x2: '0%', y2: '100%' });
-      areaGradient.append(
-        makeSvgEl('stop', { offset: '0%', 'stop-color': '#55d6ff', 'stop-opacity': '0.32' }),
-        makeSvgEl('stop', { offset: '100%', 'stop-color': '#55d6ff', 'stop-opacity': '0.02' })
-      );
-      const lineBlue = makeSvgEl('linearGradient', { id: 'lineBlue', x1: '0%', y1: '0%', x2: '100%', y2: '0%' });
-      lineBlue.append(
-        makeSvgEl('stop', { offset: '0%', 'stop-color': '#55d6ff' }),
-        makeSvgEl('stop', { offset: '100%', 'stop-color': '#7feaff' })
-      );
-      const lineGreen = makeSvgEl('linearGradient', { id: 'lineGreen', x1: '0%', y1: '0%', x2: '100%', y2: '0%' });
-      lineGreen.append(
-        makeSvgEl('stop', { offset: '0%', 'stop-color': '#7cf2b6' }),
-        makeSvgEl('stop', { offset: '100%', 'stop-color': '#c2ffd9' })
-      );
-      const lineAmber = makeSvgEl('linearGradient', { id: 'lineAmber', x1: '0%', y1: '0%', x2: '100%', y2: '0%' });
-      lineAmber.append(
-        makeSvgEl('stop', { offset: '0%', 'stop-color': '#ffbf69' }),
-        makeSvgEl('stop', { offset: '100%', 'stop-color': '#ffd99e' })
-      );
-      defs.append(areaGradient, lineBlue, lineGreen, lineAmber);
-      svg.append(defs);
-
       for (let i = 0; i <= 4; i += 1) {
         const y = padding.top + (plotHeight / 4) * i;
-        svg.append(makeSvgEl('line', {
+        svg.appendChild(makeSvgEl('line', {
           x1: padding.left,
           y1: y,
           x2: width - padding.right,
           y2: y,
           stroke: 'rgba(255,255,255,0.08)',
           'stroke-dasharray': i === 4 ? '0' : '6 10',
-          'stroke-width': '1'
+          'stroke-width': '1',
         }));
         const label = makeSvgEl('text', {
-          x: 14,
-          y: y + 5,
-          fill: 'rgba(220,232,242,0.78)',
+          x: 12,
+          y: y + 4,
+          fill: 'rgba(220,232,242,0.74)',
           'font-size': '12',
-          'font-family': 'Inter, sans-serif'
+          'font-family': 'IBM Plex Sans, sans-serif',
         });
         label.textContent = formatCount(Math.round(maxValue * (1 - i / 4)));
-        svg.append(label);
+        svg.appendChild(label);
       }
-
-      const landingPoints = series.map((row, index) => `${xFor(index)},${yFor(Number(row.landing) || 0)}`).join(' ');
-      const firstPoints = series.map((row, index) => `${xFor(index)},${yFor(Number(row.first_value) || 0)}`).join(' ');
-      const workspacePoints = series.map((row, index) => `${xFor(index)},${yFor(Number(row.workspace) || 0)}`).join(' ');
-      const areaPath = `M ${xFor(0)} ${height - padding.bottom} L ${series.map((row, index) => `${xFor(index)} ${yFor(Number(row.landing) || 0)}`).join(' L ')} L ${xFor(series.length - 1)} ${height - padding.bottom} Z`;
-
-      svg.append(makeSvgEl('path', { d: areaPath, fill: 'url(#areaGradient)', stroke: 'none' }));
-      svg.append(makeSvgEl('polyline', {
-        points: landingPoints,
-        fill: 'none',
-        stroke: 'url(#lineBlue)',
-        'stroke-width': '4',
-        'stroke-linecap': 'round',
-        'stroke-linejoin': 'round'
-      }));
-      svg.append(makeSvgEl('polyline', {
-        points: workspacePoints,
-        fill: 'none',
-        stroke: 'url(#lineAmber)',
-        'stroke-width': '4',
-        'stroke-linecap': 'round',
-        'stroke-linejoin': 'round'
-      }));
-      svg.append(makeSvgEl('polyline', {
-        points: firstPoints,
-        fill: 'none',
-        stroke: 'url(#lineGreen)',
-        'stroke-width': '4',
-        'stroke-linecap': 'round',
-        'stroke-linejoin': 'round'
-      }));
 
       series.forEach((row, index) => {
         if (index % Math.max(1, Math.floor(series.length / 6)) === 0 || index === series.length - 1) {
-          svg.append(makeSvgEl('line', {
+          svg.appendChild(makeSvgEl('line', {
             x1: xFor(index),
             y1: padding.top,
             x2: xFor(index),
             y2: height - padding.bottom,
-            stroke: 'rgba(255,255,255,0.05)',
-            'stroke-width': '1'
+            stroke: 'rgba(255,255,255,0.045)',
+            'stroke-width': '1',
           }));
           const label = makeSvgEl('text', {
             x: xFor(index),
             y: height - 18,
             fill: 'rgba(220,232,242,0.78)',
             'font-size': '12',
-            'font-family': 'Inter, sans-serif',
-            'text-anchor': 'middle'
+            'font-family': 'IBM Plex Sans, sans-serif',
+            'text-anchor': 'middle',
           });
           label.textContent = fmtDate.format(new Date(row.date));
-          svg.append(label);
+          svg.appendChild(label);
         }
       });
 
-      const markers = [
-        { x: xFor(series.length - 1), y: yFor(Number(series[series.length - 1].landing) || 0), label: 'Landing', color: '#55d6ff' },
-        { x: xFor(series.length - 1), y: yFor(Number(series[series.length - 1].workspace) || 0), label: 'Workspace', color: '#ffbf69' },
-        { x: xFor(series.length - 1), y: yFor(Number(series[series.length - 1].first_value) || 0), label: 'First value', color: '#7cf2b6' },
-      ];
-      markers.forEach((point, index) => {
-        svg.append(makeSvgEl('circle', {
-          cx: point.x,
-          cy: point.y,
-          r: '6.5',
-          fill: point.color,
-          stroke: '#06111d',
-          'stroke-width': '2'
-        }));
-        svg.append(makeSvgEl('circle', {
-          cx: point.x,
-          cy: point.y,
-          r: '12',
+      preset.series.forEach((seriesItem, seriesIndex) => {
+        const points = series.map((row, index) => `${xFor(index)},${yFor(Number(row[seriesItem.key]) || 0)}`).join(' ');
+        svg.appendChild(makeSvgEl('polyline', {
+          points,
           fill: 'none',
-          stroke: `${point.color}55`,
-          'stroke-width': '1.2'
+          stroke: seriesItem.color,
+          'stroke-width': seriesIndex === 0 ? '4.5' : '3.25',
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
         }));
-        const tag = makeSvgEl('text', {
-          x: point.x + (index === 0 ? -12 : 12),
-          y: point.y - 14,
-          fill: point.color,
-          'font-size': '12',
-          'font-family': 'Inter, sans-serif',
-          'font-weight': '800',
-          'text-anchor': index === 0 ? 'end' : 'start'
-        });
-        tag.textContent = point.label;
-        svg.append(tag);
-      });
 
-      const legend = document.getElementById('trend-legend');
-      clearNode(legend);
-      [
-        { label: 'Landing', value: series.reduce((sum, row) => sum + (Number(row.landing) || 0), 0), color: '#55d6ff' },
-        { label: 'Workspace', value: series.reduce((sum, row) => sum + (Number(row.workspace) || 0), 0), color: '#ffbf69' },
-        { label: 'First value', value: series.reduce((sum, row) => sum + (Number(row.first_value) || 0), 0), color: '#7cf2b6' },
-      ].forEach((item) => {
-        const node = document.createElement('div');
-        node.className = 'legend-item';
-        node.innerHTML = `<span class="legend-dot" style="background:${item.color}"></span><span>${escapeHtml(item.label)}</span><strong style="color:white">${formatCount(item.value)}</strong>`;
-        legend.appendChild(node);
+        const lastValue = Number(series[series.length - 1][seriesItem.key]) || 0;
+        svg.appendChild(makeSvgEl('circle', {
+          cx: xFor(series.length - 1),
+          cy: yFor(lastValue),
+          r: '5.4',
+          fill: seriesItem.color,
+          stroke: '#08111c',
+          'stroke-width': '2',
+        }));
+
+        const legendItem = document.createElement('div');
+        legendItem.className = 'legend-chip';
+        const total = series.reduce((sum, row) => sum + (Number(row[seriesItem.key]) || 0), 0);
+        legendItem.innerHTML = `
+          <span class="legend-dot" style="background:${seriesItem.color}"></span>
+          <span>${escapeHtml(seriesItem.label)}</span>
+          <strong style="color:white">${formatCount(total)}</strong>
+        `;
+        legend.appendChild(legendItem);
       });
     }
 
+function renderSummary(data) {
+      const summary = data.summary || {};
+      const series = data.series || [];
+      const landing = summary.landing_sessions;
+      const combinedUsers = summary.combined_users;
+      const requestCount = summary.request_count;
+      const tokenTotal = summary.token_total;
+      const firstValue = summary.first_value_sessions;
+      const portfolioPositions = summary.portfolio_positions;
+      const outreachMessages = summary.outreach_messages;
+      const supabaseRows = summary.supabase_rows;
+      const firstValueRate = summary.workspace_activation_rate;
+      const hasLiveJourney = Boolean(data?.verification?.has_live_journey);
+      const hasLiveOps = Boolean(data?.verification?.has_live_ops);
+
+      document.getElementById('modeBadge').textContent = data.mode || 'demo';
+      document.getElementById('freshnessBadge').textContent = formatAge(summary.avg_freshness_seconds || 0);
+      document.getElementById('alertBadge').textContent = formatOptionalCount(summary.open_alerts);
+      document.getElementById('identityBadge').textContent = formatPct(summary.identity_match_rate || 0);
+      document.getElementById('healthScore').textContent = formatCount(data.health_score || 0);
+      document.getElementById('heroLanding').textContent = formatOptionalCount(landing);
+      document.getElementById('heroUsers').textContent = formatOptionalCount(combinedUsers);
+      document.getElementById('heroRequests').textContent = formatOptionalCount(requestCount);
+      document.getElementById('heroTokens').textContent = formatOptionalCount(tokenTotal);
+      document.getElementById('heroNote').textContent = hasLiveJourney
+        ? `Azure is live. Workspace activation is running at ${formatOptionalPct(firstValueRate)} for the selected range.`
+        : `Azure journey telemetry is still sparse, so the dashboard is leaning on verified Supabase and local persisted product data.`;
+
+      const kpiLanding = document.getElementById('kpiLanding');
+      const kpiSignup = document.getElementById('kpiSignup');
+      const kpiFirstValue = document.getElementById('kpiFirstValue');
+      const kpiErrorRate = document.getElementById('kpiErrorRate');
+      const kpiTokens = document.getElementById('kpiTokens');
+      const kpiPortfolio = document.getElementById('kpiPortfolio');
+      const kpiOutreach = document.getElementById('kpiOutreach');
+      const kpiSupabase = document.getElementById('kpiSupabase');
+
+      kpiLanding.className = metricUnavailable(data, 'landing_sessions') ? 'metric-value unavailable' : 'metric-value';
+      kpiSignup.className = metricUnavailable(data, 'signup_completion_rate') ? 'metric-value unavailable' : 'metric-value';
+      kpiFirstValue.className = metricUnavailable(data, 'first_value_sessions') ? 'metric-value unavailable' : 'metric-value';
+      kpiErrorRate.className = metricUnavailable(data, 'error_rate') ? 'metric-value unavailable' : 'metric-value';
+      kpiTokens.className = 'metric-value';
+      kpiPortfolio.className = 'metric-value';
+      kpiOutreach.className = 'metric-value';
+      kpiSupabase.className = 'metric-value';
+
+      kpiLanding.textContent = formatOptionalCount(landing);
+      kpiSignup.textContent = formatOptionalPct(summary.signup_completion_rate);
+      kpiFirstValue.textContent = formatOptionalCount(firstValue);
+      kpiErrorRate.textContent = formatOptionalPct(summary.error_rate);
+      kpiTokens.textContent = formatOptionalCount(tokenTotal);
+      kpiPortfolio.textContent = formatOptionalCount(portfolioPositions);
+      kpiOutreach.textContent = formatOptionalCount(outreachMessages);
+      kpiSupabase.textContent = formatOptionalCount(supabaseRows);
+
+      const landingTrend = trendForSeries(series, 'landing');
+      const usersTrend = trendForSeries(series, 'workspace');
+      const requestTrend = trendForSeries(series, 'requests');
+      const tokenTrend = trendForSeries(series, 'first_value');
+
+      document.getElementById('heroLandingTrend').textContent = hasLiveJourney
+        ? `${landingTrend >= 0 ? '+' : ''}${fmtPct.format(landingTrend)} vs prior half`
+        : metricSourceNote(data, 'landing_sessions', 'Awaiting Azure journey telemetry');
+      document.getElementById('heroUsersTrend').textContent = `${usersTrend >= 0 ? '+' : ''}${fmtPct.format(usersTrend)} vs prior half`;
+      document.getElementById('heroRequestsTrend').textContent = hasLiveOps
+        ? `${requestTrend >= 0 ? '+' : ''}${fmtPct.format(requestTrend)} vs prior half`
+        : metricSourceNote(data, 'request_count', 'Awaiting Azure ops telemetry');
+      document.getElementById('heroTokensTrend').textContent = `${tokenTrend >= 0 ? '+' : ''}${fmtPct.format(tokenTrend)} proxy from insights`;
+
+      setTrend('kpiLandingTrend', landingTrend, false, hasLiveJourney ? '' : metricSourceNote(data, 'landing_sessions', 'Awaiting Azure journey telemetry'));
+      setTrend('kpiSignupTrend', trendForSeries(series, 'signup_completed'), false, metricUnavailable(data, 'signup_completion_rate') ? metricSourceNote(data, 'signup_completion_rate') : '');
+      setTrend('kpiFirstValueTrend', trendForSeries(series, 'first_value'));
+      setTrend('kpiErrorRateTrend', trendForSeries(series, 'errors'), true, hasLiveOps ? '' : metricSourceNote(data, 'error_rate', 'Awaiting Azure ops telemetry'));
+      setTrend('kpiTokensTrend', tokenTrend);
+      setTrend('kpiPortfolioTrend', trendForSeries(series, 'portfolio'));
+      setTrend('kpiOutreachTrend', trendForSeries(series, 'outreach_messages'));
+      setTrend('kpiSupabaseTrend', trendForSeries(series, 'workspace'));
+
+      const generated = data.generated_at ? fmtDateTime.format(new Date(data.generated_at)) : 'just now';
+      document.getElementById('statusCopy').textContent = `Snapshot generated ${generated}. ${data.live_data ? 'Azure CLI and application telemetry are live for the available streams.' : 'This snapshot is using verified persisted data while some live connectors are still incomplete.'}`;
+    }
+
     function renderFunnel(data) {
-      const wrap = document.getElementById('funnelWrap');
-      clearNode(wrap);
+      const host = document.getElementById('funnelList');
+      clearNode(host);
       const funnel = data.funnel || [];
-      const landingValue = funnel[0] ? Number(funnel[0].value) || 1 : 1;
+      const landing = funnel[0] ? Number(funnel[0].value) || 1 : 1;
       funnel.forEach((stage, index) => {
         const value = Number(stage.value) || 0;
         const next = funnel[index + 1];
         const loss = next ? Math.max(0, value - (Number(next.value) || 0)) : Math.max(0, value - (Number(data.summary?.retained_sessions) || 0));
-        const lossPct = value ? loss / value * 100 : 0;
+        const pct = landing ? (value / landing) * 100 : 0;
         const row = document.createElement('div');
-        row.className = 'funnel-row';
+        row.className = 'stack-row';
         row.innerHTML = `
-          <div class="funnel-label">
-            <p class="funnel-name">${escapeHtml(stage.stage)}</p>
-            <p class="funnel-meta">${escapeHtml(stage.detail || '')}</p>
+          <div class="row-head">
+            <div>
+              <p class="row-title">${escapeHtml(stage.stage)}</p>
+              <p class="row-meta">${escapeHtml(stage.detail || '')}</p>
+            </div>
+            <div class="row-value">${formatCount(value)}</div>
           </div>
-          <div class="funnel-bar">
-            <span style="width:${Math.max(10, value / landingValue * 100)}%"></span>
+          <div class="meter"><div class="meter-fill" style="width:${Math.max(6, pct)}%"></div></div>
+          <div class="tracking-footer">
+            <span>${formatPct(pct)} of landing</span>
+            <span>${index === funnel.length - 1 ? 'retained baseline' : `${formatCount(loss)} lost to next step`}</span>
           </div>
-          <div class="funnel-count">${formatCount(value)} <span class="muted" style="color:var(--muted); font-size:0.78em;">${index === 0 ? 'baseline' : `${fmtPct.format(lossPct)}% lost`}</span></div>
         `;
-        wrap.appendChild(row);
+        host.appendChild(row);
       });
-      const biggest = data.biggest_leak || { label: 'unknown', amount: 0, pct: 0 };
-      document.getElementById('leak-badge').textContent = `${biggest.label}`;
-      document.getElementById('leak-callout').innerHTML = `<strong>Biggest leak:</strong> ${escapeHtml(biggest.label)} is dropping ${formatCount(biggest.amount)} sessions, which is ${formatPct(biggest.pct)} of landing traffic.`;
+
+      const dropoffHost = document.getElementById('dropoffList');
+      clearNode(dropoffHost);
+      const biggest = data.biggest_leak || { label: 'Unknown', pct: 0, amount: 0 };
+      document.getElementById('biggestLeakBadge').textContent = biggest.label || 'Largest leak';
+      (data.dropoffs || []).slice(0, 5).forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'stack-row';
+        row.innerHTML = `
+          <div class="row-head">
+            <div>
+              <p class="row-title">${escapeHtml(item.label || '')}</p>
+              <p class="row-meta">${escapeHtml(item.detail || '')}</p>
+            </div>
+            <div class="row-value">${formatCount(item.amount || 0)}</div>
+          </div>
+          <div class="meter"><div class="meter-fill" style="width:${Math.max(8, Number(item.pct) || 0)}%; background:linear-gradient(90deg, ${item.color || '#56d7ff'}, rgba(255,255,255,0.16))"></div></div>
+          <div class="tracking-footer">
+            <span>${formatPct(item.pct || 0)} of landing</span>
+            <span>${biggest.label === item.label ? 'largest leak' : 'monitor'}</span>
+          </div>
+        `;
+        dropoffHost.appendChild(row);
+      });
     }
 
     function renderSourceHealth(list) {
       const host = document.getElementById('sourceHealth');
       clearNode(host);
-      (list || []).forEach((source) => {
+      (list || []).forEach((item) => {
         const row = document.createElement('div');
         row.className = 'source-row';
         row.innerHTML = `
-          <div>
-            <p class="source-name">${escapeHtml(source.name)}</p>
-            <p class="source-meta">${escapeHtml(source.note || '')}</p>
-            <div class="source-bar"><span style="width:${Math.max(5, Number(source.coverage) || 0)}%; background:linear-gradient(90deg, ${source.status === 'healthy' ? '#7cf2b6' : source.status === 'watch' ? '#ffbf69' : '#ff7ea8'}, #ffffff22)"></span></div>
+          <div class="row-head">
+            <div>
+              <p class="row-title">${escapeHtml(item.name || '')}</p>
+              <p class="row-meta">${escapeHtml(item.note || '')}</p>
+            </div>
+            <div class="status-pill ${escapeHtml(item.status || 'stale')}">${escapeHtml(item.status || 'stale')}</div>
           </div>
-          <div class="status-pill ${statusClass(source.status)}">${escapeHtml(source.status)}</div>
+          <div class="meter"><div class="meter-fill" style="width:${Math.max(4, Number(item.coverage) || 0)}%"></div></div>
+          <div class="tracking-footer">
+            <span>${escapeHtml(item.metric || '')}</span>
+            <span>${escapeHtml(item.extra || '')}</span>
+          </div>
         `;
         host.appendChild(row);
       });
     }
 
     function renderSourceMix(list) {
-      const host = document.getElementById('sourceMixList');
+      const host = document.getElementById('sourceMix');
       clearNode(host);
       const total = (list || []).reduce((sum, item) => sum + (Number(item.value) || 0), 0);
-      document.getElementById('sourceTotal').textContent = formatCount(total);
-      const donut = document.querySelector('.donut');
-      if (donut) {
-        const parts = (list || []).map((item) => {
-          const pct = total ? (Number(item.value) || 0) / total * 100 : 0;
-          return `${item.color || '#55d6ff'} ${item.__start?.toFixed?.(2) || 0}deg ${(item.__end?.toFixed?.(2) || 0)}deg`;
-        });
-        let cursor = 0;
-        donut.style.background = `conic-gradient(${(list || []).map((item) => {
-          const pct = total ? (Number(item.value) || 0) / total * 360 : 0;
-          const start = cursor;
-          cursor += pct;
-          return `${item.color || '#55d6ff'} ${start.toFixed(2)}deg ${cursor.toFixed(2)}deg`;
-        }).join(', ')})`;
-      }
+      document.getElementById('sourceTotalBadge').textContent = `${formatCount(total)} stitched signals`;
       (list || []).forEach((item) => {
         const row = document.createElement('div');
         row.className = 'source-row';
-        row.style.setProperty('--bar-a', item.color || '#55d6ff');
-        row.style.setProperty('--bar-b', `${item.color || '#55d6ff'}99`);
+        row.innerHTML = `
+          <div class="row-head">
+            <div>
+              <p class="row-title">${escapeHtml(item.name || '')}</p>
+              <p class="row-meta">${formatCount(item.value || 0)} rows or signals in the selected window.</p>
+            </div>
+            <div class="row-value">${formatPct(item.pct || 0)}</div>
+          </div>
+          <div class="meter"><div class="meter-fill" style="width:${Math.max(6, Number(item.pct) || 0)}%; background:linear-gradient(90deg, ${item.color || '#56d7ff'}, rgba(255,255,255,0.16))"></div></div>
+        `;
+        host.appendChild(row);
+      });
+    }
+
+    function renderTrackingGroups(groups) {
+      const host = document.getElementById('trackingGrid');
+      clearNode(host);
+      (groups || []).forEach((group) => {
+        const card = document.createElement('div');
+        card.className = 'tracking-card';
+        card.innerHTML = `
+          <h3>${escapeHtml(group.label || '')}</h3>
+          <p class="tracking-meta">${escapeHtml(group.description || '')}</p>
+          <div class="tracking-value">
+            <strong>${formatCount(group.total || 0)}</strong>
+            <span>${formatPct(group.share_pct || 0)} share</span>
+          </div>
+          <div class="meter"><div class="meter-fill" style="width:${Math.max(4, Number(group.coverage_pct) || 0)}%; background:linear-gradient(90deg, ${group.color || '#56d7ff'}, rgba(255,255,255,0.2))"></div></div>
+          <div class="tracking-footer">
+            <span>${formatCount(group.active_event_count || 0)} / ${formatCount(group.tracked_event_count || 0)} active</span>
+            <span>${group.success_count || group.failure_count ? formatPct(group.success_rate || 0) + ' success' : 'signal only'}</span>
+          </div>
+          <div class="tracking-footer">
+            <span>${escapeHtml(group.top_event?.label || 'No activity yet')}</span>
+            <span>${formatCount(group.top_event?.count || 0)}</span>
+          </div>
+        `;
+        host.appendChild(card);
+      });
+    }
+
+    function renderTrackingCatalog(catalog) {
+      const host = document.getElementById('trackingCatalog');
+      clearNode(host);
+      (catalog || []).forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'catalog-item';
+        card.innerHTML = `
+          <div class="row-head">
+            <div>
+              <p class="row-title">${escapeHtml(item.label || '')}</p>
+              <p class="row-meta">${escapeHtml(item.name || '')}</p>
+            </div>
+            <div class="status-pill ${escapeHtml(item.status || 'stale')}">${escapeHtml(item.status || 'stale')}</div>
+          </div>
+          <div class="tracking-footer">
+            <span>${escapeHtml(item.group_label || '')}</span>
+            <span>${formatCount(item.count || 0)}</span>
+          </div>
+        `;
+        host.appendChild(card);
+      });
+    }
+
+    function renderMetricCards(hostId, items) {
+      const host = document.getElementById(hostId);
+      clearNode(host);
+      items.forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'micro-card';
+        card.innerHTML = `<span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong>`;
+        host.appendChild(card);
+      });
+    }
+
+    function renderDetailRows(hostId, rows, keyName, valueName, helperText) {
+      const host = document.getElementById(hostId);
+      clearNode(host);
+      (rows || []).forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'detail-row';
         row.innerHTML = `
           <div>
-            <p class="source-name">${escapeHtml(item.name)}</p>
-            <p class="source-meta">${formatCount(item.value)} signals in the selected window</p>
-            <div class="source-bar"><span style="width:${Math.max(6, Number(item.pct) || 0)}%; background:linear-gradient(90deg, ${item.color || '#55d6ff'}, #ffffff22)"></span></div>
+            <strong>${escapeHtml(item.label || item[keyName] || item.name || 'Signal')}</strong>
+            <small>${escapeHtml(helperText(item))}</small>
           </div>
-          <div class="source-value">${formatPct(item.pct || 0)}</div>
+          <div class="row-value">${formatCount(item[valueName] || item.count || 0)}</div>
         `;
         host.appendChild(row);
       });
     }
 
-    function renderDropoffs(list) {
-      const host = document.getElementById('dropoffList');
-      clearNode(host);
-      (list || []).slice(0, 5).forEach((item) => {
+    function renderWorkspace(workspace) {
+      renderMetricCards('workspaceMetrics', [
+        { label: 'Sessions', value: formatCount(workspace.session_count || 0) },
+        { label: 'Users', value: formatCount(workspace.unique_users || 0) },
+        { label: 'Targets', value: formatCount(workspace.unique_targets || 0) },
+        { label: 'Tokens', value: formatCount(workspace.token_total || 0) },
+      ]);
+      const rows = [];
+      (workspace.top_models || []).slice(0, 3).forEach((item) => rows.push({ label: `Model: ${item.model}`, count: item.count, pct: item.pct }));
+      (workspace.top_targets || []).slice(0, 3).forEach((item) => rows.push({ label: `Target: ${item.target}`, count: item.count, pct: item.pct }));
+      (workspace.fact_kinds || []).slice(0, 3).forEach((item) => rows.push({ label: `Fact kind: ${item.kind}`, count: item.count, pct: item.pct }));
+      renderDetailRows('workspaceBreakdowns', rows, 'label', 'count', (item) => `${formatPct(item.pct || 0)} share of visible rows`);
+    }
+
+    function renderPortfolio(portfolio) {
+      renderMetricCards('portfolioMetrics', [
+        { label: 'Active positions', value: formatCount(portfolio.active_positions || 0) },
+        { label: 'Portfolio users', value: formatCount(portfolio.portfolio_users || 0) },
+        { label: 'Market value', value: formatMoney(portfolio.total_market_value || 0) },
+        { label: 'Pending reviews', value: formatCount(portfolio.pending_reviews || 0) },
+      ]);
+      const rows = [];
+      (portfolio.top_sectors || []).slice(0, 4).forEach((item) => rows.push({ label: `Sector: ${item.sector}`, count: item.count, pct: item.pct }));
+      (portfolio.asset_mix || []).slice(0, 4).forEach((item) => rows.push({ label: `Asset: ${item.kind}`, count: item.count, pct: item.pct }));
+      rows.push({ label: 'Verification codes', count: portfolio.verification_codes || 0, pct: 0 });
+      rows.push({ label: 'Revoked tokens', count: portfolio.revoked_tokens || 0, pct: 0 });
+      renderDetailRows('portfolioBreakdowns', rows, 'label', 'count', (item) => item.pct ? `${formatPct(item.pct)} of active positions` : 'Operational count');
+    }
+
+    function renderOutreach(outreach) {
+      renderMetricCards('outreachMetrics', [
+        { label: 'Campaigns', value: formatCount(outreach.campaigns || 0) },
+        { label: 'Messages', value: formatCount(outreach.messages || 0) },
+        { label: 'Replies', value: formatCount(outreach.replies || 0) },
+        { label: 'Unsubscribes', value: formatCount(outreach.unsubscribes || 0) },
+      ]);
+      const rows = [];
+      (outreach.message_statuses || []).slice(0, 3).forEach((item) => rows.push({ label: `Message: ${item.status}`, count: item.count, pct: item.pct }));
+      (outreach.event_types || []).slice(0, 3).forEach((item) => rows.push({ label: `Event: ${item.event_type}`, count: item.count, pct: item.pct }));
+      (outreach.providers || []).slice(0, 2).forEach((item) => rows.push({ label: `Provider: ${item.provider}`, count: item.count, pct: item.pct }));
+      renderDetailRows('outreachBreakdowns', rows, 'label', 'count', (item) => item.pct ? `${formatPct(item.pct)} of visible outreach rows` : 'Operational count');
+    }
+
+    function renderOutreachTemplate(template) {
+      state.template = template || null;
+      state.templateDirty = false;
+
+      const input = document.getElementById('outreachTemplateInput');
+      const preview = document.getElementById('outreachTemplatePreview');
+      const badge = document.getElementById('templateBadge');
+      const path = document.getElementById('templatePath');
+      const status = document.getElementById('templateStatus');
+
+      if (!template) {
+        if (input) input.value = '';
+        if (preview) preview.textContent = 'No template loaded yet.';
+        if (badge) badge.textContent = 'Template unavailable';
+        if (path) path.textContent = 'Source: unavailable';
+        if (status) status.textContent = 'Template fetch failed.';
+        return;
+      }
+
+      if (input && input.value !== template.template_text) {
+        input.value = template.template_text || '';
+      }
+      if (preview) {
+        preview.textContent = template.template_text || '';
+      }
+      if (badge) {
+        badge.textContent = `${template.line_count || 0} lines`;
+      }
+      if (path) {
+        path.textContent = `Source: ${template.path || 'unknown'} · Updated ${template.updated_at ? fmtDateTime.format(new Date(template.updated_at)) : 'just now'}`;
+      }
+      if (status) {
+        status.textContent = `Subject: ${template.subject || '(empty)'}`;
+      }
+    }
+
+    async function loadOutreachTemplate({ silent = false } = {}) {
+      const response = await fetch('/api/ops/outreach/template', {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to load outreach template: ${response.status}`);
+      }
+      const data = await response.json();
+      renderOutreachTemplate(data);
+      if (!silent) {
+        const status = document.getElementById('templateStatus');
+        if (status) status.textContent = `Subject: ${data.subject || '(empty)'}`;
+      }
+    }
+
+    async function saveOutreachTemplate() {
+      const input = document.getElementById('outreachTemplateInput');
+      const status = document.getElementById('templateStatus');
+      const badge = document.getElementById('templateBadge');
+      const preview = document.getElementById('outreachTemplatePreview');
+      if (!input) return;
+      const response = await fetch('/api/ops/outreach/template', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ template_text: input.value }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.detail || `Failed to save outreach template: ${response.status}`);
+      }
+      const data = await response.json();
+      renderOutreachTemplate(data.template || data);
+      if (badge) badge.textContent = `${(data.template?.line_count ?? data.line_count ?? 0)} lines`;
+      if (preview && data.template?.template_text) preview.textContent = data.template.template_text;
+      if (status) status.textContent = `Saved ${data.template?.updated_at ? fmtDateTime.format(new Date(data.template.updated_at)) : 'just now'}. Subject: ${data.template?.subject || ''}`;
+    }
+
+    function renderPipeline(pipeline) {
+      renderMetricCards('pipelineMetrics', [
+        { label: 'Contacts', value: formatCount(pipeline.contacts || 0) },
+        { label: 'Scrape jobs', value: formatCount(pipeline.scrape_jobs || 0) },
+        { label: 'Exports', value: formatCount(pipeline.exports || 0) },
+        { label: 'Verified leads', value: formatCount(pipeline.verified_leads || 0) },
+      ]);
+      const rows = [];
+      (pipeline.contact_sources || []).slice(0, 3).forEach((item) => rows.push({ label: `Source: ${item.source}`, count: item.count, pct: item.pct }));
+      (pipeline.scrape_statuses || []).slice(0, 3).forEach((item) => rows.push({ label: `Scrape: ${item.status}`, count: item.count, pct: item.pct }));
+      (pipeline.export_statuses || []).slice(0, 3).forEach((item) => rows.push({ label: `Export: ${item.status}`, count: item.count, pct: item.pct }));
+      renderDetailRows('pipelineBreakdowns', rows, 'label', 'count', (item) => item.pct ? `${formatPct(item.pct)} of visible rows` : 'Operational count');
+    }
+
+    function renderOperations(operations, data) {
+      renderMetricCards('opsMetrics', [
+        { label: 'Requests', value: formatCount(operations.request_count || 0) },
+        { label: 'Dependencies', value: formatCount(operations.dependency_count || 0) },
+        { label: 'Error rate', value: formatPct(operations.error_rate || 0) },
+        { label: 'Request p95', value: `${Math.round(operations.request_p95_ms || 0)}ms` },
+      ]);
+      const rows = [];
+      (operations.top_request_routes || []).slice(0, 3).forEach((item) => rows.push({ label: item.label || item.route, count: item.count, pct: item.pct }));
+      (operations.top_dependency_targets || []).slice(0, 3).forEach((item) => rows.push({ label: item.target, count: item.count, pct: item.pct }));
+      (operations.source_breakdown || []).slice(0, 2).forEach((item) => rows.push({ label: `Source: ${item.source}`, count: item.count, pct: item.pct }));
+      renderDetailRows('opsBreakdowns', rows, 'label', 'count', (item) => item.pct ? `${formatPct(item.pct)} share` : 'Operational count');
+
+      const alerts = [];
+      (data.exception_samples || []).slice(0, 3).forEach((item) => {
+        alerts.push({
+          title: item.name || 'Exception',
+          meta: item.message || item.route || 'Unhandled backend error',
+          status: 'stale',
+        });
+      });
+      (data.request_samples || []).slice(0, 3).forEach((item) => {
+        alerts.push({
+          title: item.name || 'Failed request',
+          meta: `${item.route || ''} ${item.status_code || ''} ${item.duration_ms ? `· ${Math.round(item.duration_ms)}ms` : ''}`.trim(),
+          status: 'watch',
+        });
+      });
+      (data.dependency_samples || []).slice(0, 2).forEach((item) => {
+        alerts.push({
+          title: item.name || 'Dependency issue',
+          meta: `${item.target || item.route || ''} ${item.status_code || ''}`.trim(),
+          status: 'watch',
+        });
+      });
+      if (!alerts.length) {
+        alerts.push({
+          title: 'No active alerts',
+          meta: 'No failing requests, dependencies, or recent exceptions were visible for this range.',
+          status: 'healthy',
+        });
+      }
+      const alertHost = document.getElementById('alertList');
+      clearNode(alertHost);
+      alerts.slice(0, 6).forEach((alert) => {
         const row = document.createElement('div');
-        row.className = 'stack-row';
+        row.className = 'alert-row';
         row.innerHTML = `
-          <div class="stack-name">${escapeHtml(item.label)}</div>
-          <div class="stack-meta">${escapeHtml(item.detail || '')}</div>
-          <div class="mini-bar"><span style="width:${Math.max(8, Number(item.pct) || 0)}%; background:linear-gradient(90deg, ${item.color || '#55d6ff'}, #ffffff22)"></span></div>
-          <div class="stack-meta" style="display:flex; justify-content:space-between; gap:12px;">
-            <span>${formatCount(item.amount)} exits</span>
-            <span>${formatPct(item.pct || 0)} of total</span>
+          <div class="row-head">
+            <div>
+              <p class="row-title">${escapeHtml(alert.title)}</p>
+              <p class="row-meta">${escapeHtml(alert.meta)}</p>
+            </div>
+            <div class="status-pill ${escapeHtml(alert.status)}">${escapeHtml(alert.status)}</div>
           </div>
         `;
-        host.appendChild(row);
-      });
-    }
-
-    function renderUsers(users) {
-      const body = document.getElementById('userTableBody');
-      clearNode(body);
-      (users || []).slice(0, 12).forEach((user) => {
-        const row = document.createElement('tr');
-        const risk = user.risk || 'medium';
-        row.innerHTML = `
-          <td>
-            <strong>${escapeHtml(user.name || user.email || 'Unknown')}</strong>
-            <div class="muted" style="margin-top:4px">${escapeHtml(user.email || '')}</div>
-            <div class="muted" style="margin-top:4px;font-size:12px;">${escapeHtml(user.auth_provider || '')}</div>
-          </td>
-          <td><span class="badge">${escapeHtml(labelMap[user.stage] || user.stage || 'Unknown')}</span></td>
-          <td>${escapeHtml(user.source || '')}</td>
-          <td>${fmtDateTime.format(new Date(user.last_seen || Date.now()))}</td>
-          <td>
-            <div class="muted">${formatCount(user.workspace_events || 0)} workspace</div>
-            <div class="muted">${formatCount(user.token_usage || 0)} tokens</div>
-          </td>
-          <td><span class="risk-chip ${riskClass(risk)}">${escapeHtml(user.action || 'Review')}</span></td>
-        `;
-        body.appendChild(row);
+        alertHost.appendChild(row);
       });
     }
 
     function renderPages(list) {
       const host = document.getElementById('pageList');
       clearNode(host);
-      (list || []).slice(0, 8).forEach((item) => {
+      (list || []).slice(0, 5).forEach((item) => {
         const row = document.createElement('div');
         row.className = 'page-row';
         row.innerHTML = `
-          <div>
-            <p class="page-name">${escapeHtml(item.label || item.route || 'Page')}</p>
-            <p class="page-meta">${escapeHtml(item.route || '')}</p>
-            <div class="mini-bar"><span style="width:${Math.max(6, Number(item.pct) || 0)}%; background:linear-gradient(90deg, #55d6ff, #7cf2b6)"></span></div>
+          <div class="row-head">
+            <div>
+              <p class="row-title">${escapeHtml(item.label || item.route || 'Route')}</p>
+              <p class="row-meta">${escapeHtml(item.route || '')}</p>
+            </div>
+            <div class="row-value">${formatCount(item.views || 0)}</div>
           </div>
-          <div class="stack-value">${formatCount(item.views || 0)}</div>
+          <div class="meter"><div class="meter-fill" style="width:${Math.max(6, Number(item.pct) || 0)}%"></div></div>
         `;
         host.appendChild(row);
       });
@@ -1343,150 +2077,169 @@
     function renderEvents(list) {
       const host = document.getElementById('eventList');
       clearNode(host);
-      (list || []).slice(0, 8).forEach((item) => {
+      (list || []).slice(0, 6).forEach((item) => {
         const row = document.createElement('div');
         row.className = 'event-row';
         row.innerHTML = `
-          <div>
-            <p class="event-name">${escapeHtml(item.label || item.name || 'Event')}</p>
-            <p class="event-meta">${escapeHtml(item.name || '')}</p>
-            <div class="mini-bar"><span style="width:${Math.max(6, Number(item.pct) || 0)}%; background:linear-gradient(90deg, #7cf2b6, #55d6ff)"></span></div>
-          </div>
-          <div class="stack-value">${formatCount(item.count || 0)}</div>
-        `;
-        host.appendChild(row);
-      });
-    }
-
-    function renderAlerts(data) {
-      const host = document.getElementById('alertList');
-      clearNode(host);
-      const alerts = [];
-      (data.exception_samples || []).slice(0, 3).forEach((item) => {
-        alerts.push({
-          title: item.name || 'Exception',
-          meta: item.message || item.route || 'Unhandled error',
-          status: 'stale',
-        });
-      });
-      (data.request_samples || []).slice(0, 3).forEach((item) => {
-        if ((item.status_code || '').startsWith('5')) {
-          alerts.push({
-            title: item.name || 'Failed request',
-            meta: `${item.route || ''} ${item.status_code || ''}`.trim(),
-            status: 'watch',
-          });
-        }
-      });
-      if (!alerts.length) {
-        alerts.push({
-          title: 'No recent errors',
-          meta: 'The monitoring stream is quiet for this range.',
-          status: 'healthy',
-        });
-      }
-      alerts.slice(0, 5).forEach((alert) => {
-        const row = document.createElement('div');
-        row.className = 'alert-row';
-        row.innerHTML = `
-          <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+          <div class="row-head">
             <div>
-              <p class="alert-title">${escapeHtml(alert.title)}</p>
-              <p class="alert-meta">${escapeHtml(alert.meta || '')}</p>
+              <p class="row-title">${escapeHtml(item.label || item.name || 'Event')}</p>
+              <p class="row-meta">${escapeHtml(item.name || '')}</p>
             </div>
-            <div class="status-pill ${statusClass(alert.status)}">${escapeHtml(alert.status)}</div>
+            <div class="row-value">${formatCount(item.count || 0)}</div>
           </div>
+          <div class="meter"><div class="meter-fill" style="width:${Math.max(6, Number(item.pct) || 0)}%; background:linear-gradient(90deg, #7df2ba, rgba(255,255,255,0.14))"></div></div>
         `;
         host.appendChild(row);
       });
     }
 
-    function renderSummary(data) {
-      const summary = data.summary || {};
-      const landing = Number(summary.landing_sessions) || 0;
-      const combinedUsers = Number(summary.combined_users) || 0;
-      const workspaceUsers = Number(summary.workspace_users) || 0;
-      const firstValue = Number(summary.first_value_sessions) || 0;
-      const signupRate = Number(summary.signup_completion_rate) || 0;
-      const retentionRate = Number(summary.retention_rate) || 0;
-      document.getElementById('hero-landing').textContent = formatCount(landing);
-      document.getElementById('hero-users').textContent = formatCount(combinedUsers);
-      document.getElementById('hero-workspaces').textContent = formatCount(workspaceUsers);
-      document.getElementById('kpi-landing').textContent = formatCount(landing);
-      document.getElementById('kpi-signup').textContent = formatPct(signupRate);
-      document.getElementById('kpi-users').textContent = formatCount(combinedUsers);
-      document.getElementById('kpi-workspace').textContent = formatCount(workspaceUsers);
-      document.getElementById('kpi-first').textContent = formatCount(firstValue);
-      document.getElementById('kpi-alerts').textContent = formatCount(summary.open_alerts || data.open_alerts || 0);
+    function renderUsers(users) {
+      const host = document.getElementById('userTableBody');
+      clearNode(host);
+      (users || []).slice(0, 15).forEach((user) => {
+        const row = document.createElement('tr');
+        const stage = user.stage ? user.stage.replace(/_/g, ' ') : 'unknown';
+        row.innerHTML = `
+          <td>
+            <strong>${escapeHtml(user.name || user.email || 'Unknown')}</strong>
+            <div class="muted" style="margin-top:4px">${escapeHtml(user.email || '')}</div>
+            <div class="muted" style="margin-top:4px;font-size:12px;">${escapeHtml(user.auth_provider || '')}</div>
+          </td>
+          <td><span class="badge">${escapeHtml(stage)}</span></td>
+          <td>${user.last_seen ? fmtDateTime.format(new Date(user.last_seen)) : 'Unknown'}</td>
+          <td>
+            <div>${formatCount(user.workspace_events || 0)} sessions</div>
+            <div class="muted" style="margin-top:4px;">${formatPct(user.avg_quality_score || 0)} avg quality</div>
+          </td>
+          <td>
+            <div>${formatCount(user.portfolio_positions || 0)} positions</div>
+            <div class="muted" style="margin-top:4px;">${formatMoney(user.portfolio_value || 0)}</div>
+          </td>
+          <td>
+            <div>${formatCount(user.token_usage || 0)} tokens</div>
+            <div class="muted" style="margin-top:4px;">${escapeHtml(user.top_model || 'No model yet')}</div>
+          </td>
+          <td>
+            <div>${escapeHtml(user.top_target || 'No target yet')}</div>
+            <div class="muted" style="margin-top:4px;">${formatCount(user.insight_rows || 0)} facts</div>
+          </td>
+          <td><span class="risk-chip ${user.risk === 'high' ? 'risk-high' : user.risk === 'medium' ? 'risk-medium' : 'risk-low'}">${escapeHtml(user.action || 'Review')}</span></td>
+        `;
+        host.appendChild(row);
+      });
+    }
 
-      const series = data.series || [];
-      const trends = {
-        landing: trendForSeries(series, 'landing'),
-        signup: trendForSeries(series, 'signup_completed'),
-        users: trendForSeries(series, 'workspace'),
-        workspace: trendForSeries(series, 'workspace'),
-        first: trendForSeries(series, 'first_value'),
-        alerts: trendForSeries(series, 'errors'),
-      };
-      const setTrend = (id, value, invert = false) => {
-        const el = document.getElementById(id);
-        const effective = invert ? -value : value;
-        el.className = `metric-trend ${effective >= 0 ? 'up' : 'down'}`;
-        el.textContent = `${effective >= 0 ? '+' : ''}${fmtPct.format(effective)}% vs prior half`;
-      };
-      setTrend('kpi-landing-trend', trends.landing);
-      setTrend('kpi-signup-trend', trends.signup);
-      setTrend('kpi-users-trend', trends.users);
-      setTrend('kpi-workspace-trend', trends.workspace);
-      setTrend('kpi-first-trend', trends.first);
-      setTrend('kpi-alerts-trend', trends.alerts, true);
+function renderSupabase(supabase) {
+      const host = document.getElementById('supabaseGrid');
+      clearNode(host);
+      document.getElementById('supabaseBadge').textContent = supabase.connected
+        ? `${formatCount(supabase.total_rows || 0)} rows visible`
+        : 'Connector not configured';
 
-      document.getElementById('mode-badge').textContent = data.mode || 'demo';
-      document.getElementById('overall-status').className = `status-pill ${summary.open_alerts > 4 ? 'watch' : 'healthy'}`;
-      document.getElementById('overall-status').textContent = summary.open_alerts > 4 ? 'Watch' : 'Healthy';
-      document.getElementById('freshness-pill').className = `status-pill ${summary.avg_freshness_seconds > 1800 ? 'watch' : 'healthy'}`;
-      document.getElementById('freshness-pill').textContent = `${formatAge(summary.avg_freshness_seconds || 0)} lag`;
-      document.getElementById('sync-copy').textContent = `Latest snapshot is ${formatAge(summary.avg_freshness_seconds || 0)} behind real time. Azure, Supabase, Workspace, and Insights are stitched together here.`;
-      document.getElementById('health-score').textContent = fmtCount(data.health_score || 0);
-      document.getElementById('summaryLine').textContent = `Landing -> first value conversion is ${formatPct((Number(firstValue) / Math.max(1, landing)) * 100)} for this range.`;
-      document.getElementById('summaryPct').textContent = formatPct((Number(firstValue) / Math.max(1, landing)) * 100);
-      document.getElementById('identityPct').textContent = formatPct(summary.identity_match_rate || 0);
-      document.getElementById('latencyP95').textContent = `${Math.round(summary.p95_latency_ms || 0)}ms`;
+      (supabase.tables || []).forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'supabase-card';
+        card.innerHTML = `
+          <div class="row-head">
+            <div>
+              <p class="row-title">${escapeHtml(item.label || item.table || '')}</p>
+              <p class="row-meta">${escapeHtml(item.note || '')}</p>
+            </div>
+            <div class="status-pill ${escapeHtml(item.status || 'stale')}">${escapeHtml(item.status || 'stale')}</div>
+          </div>
+          <div class="tracking-value" style="margin-top:10px;">
+            <strong>${formatCount(item.count || 0)}</strong>
+            <span>${escapeHtml(item.source || '')}</span>
+          </div>
+          <div class="tracking-footer">
+            <span>${item.configured ? 'configured' : 'missing config'}</span>
+            <span>${item.last_seen ? fmtDateTime.format(new Date(item.last_seen)) : 'no recent row'}</span>
+          </div>
+        `;
+        host.appendChild(card);
+      });
+    }
+
+    function renderVerification(data) {
+      const verification = data.verification || {};
+      const grid = document.getElementById('verificationGrid');
+      const gaps = document.getElementById('connectorGaps');
+      clearNode(grid);
+      clearNode(gaps);
+
+      document.getElementById('integrityBadge').textContent = verification.synthetic_metrics_removed
+        ? 'Synthetic metrics removed'
+        : 'Integrity pending';
+
+      [
+        { label: 'Live metrics', value: verification.live_metrics ?? 0, note: 'Metrics backed by live Azure or live product telemetry.' },
+        { label: 'Persisted metrics', value: verification.persisted_metrics ?? 0, note: 'Metrics backed by Supabase or local persisted storage.' },
+        { label: 'Withheld metrics', value: verification.unavailable_metrics ?? 0, note: 'Metrics intentionally hidden until the source is trustworthy.' },
+        { label: 'Connector gaps', value: (verification.connector_gaps || []).length, note: 'Missing or incomplete live connectors still blocking full coverage.' },
+      ].forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'verification-card';
+        card.innerHTML = `
+          <p class="verification-label">${escapeHtml(item.label)}</p>
+          <div class="verification-value">${formatCount(item.value)}</div>
+          <p class="verification-note">${escapeHtml(item.note)}</p>
+        `;
+        grid.appendChild(card);
+      });
+
+      if (!(verification.connector_gaps || []).length) {
+        const chip = document.createElement('div');
+        chip.className = 'gap-chip';
+        chip.textContent = 'No connector gaps detected in this snapshot';
+        gaps.appendChild(chip);
+        return;
+      }
+
+      (verification.connector_gaps || []).forEach((item) => {
+        const chip = document.createElement('div');
+        chip.className = 'gap-chip';
+        chip.textContent = item;
+        gaps.appendChild(chip);
+      });
     }
 
     function render(data) {
       state.data = data;
       document.title = `ProspektLab Control Tower - ${data.range?.label || 'Dashboard'}`;
-      setActiveRangeButtons();
       renderSummary(data);
-      drawTrendChart(data.series || []);
+      renderVerification(data);
+      drawChart(data.series || [], state.view, data);
       renderFunnel(data);
       renderSourceHealth(data.source_health || []);
       renderSourceMix(data.source_mix || []);
-      renderDropoffs(data.dropoffs || []);
-      renderUsers(data.combined_users || []);
+      renderTrackingGroups(data.tracking_groups || []);
+      renderTrackingCatalog(data.tracking_catalog || []);
+      renderWorkspace(data.workspace || {});
+      renderPortfolio(data.portfolio || {});
+      renderOutreach(data.outreach || {});
+      renderPipeline(data.pipeline || {});
+      renderOperations(data.operations || {}, data);
       renderPages(data.top_pages || []);
       renderEvents(data.top_events || []);
-      renderAlerts(data);
-      const generated = data.generated_at ? fmtDateTime.format(new Date(data.generated_at)) : 'just now';
-      document.getElementById('status-copy').textContent = `Snapshot generated ${generated}. ${data.live_data ? 'Azure data is live.' : 'The dashboard is running in demo or partial mode.'}`;
+      renderUsers(data.combined_users || []);
+      renderSupabase(data.supabase || { tables: [] });
     }
 
     async function loadRange(range = state.range, silent = false) {
       state.range = range;
-      setActiveRangeButtons();
+      setActiveButtons('.segment-btn', range, 'range');
       if (!silent) {
-        document.getElementById('sync-copy').textContent = 'Loading snapshot...';
+        document.getElementById('statusCopy').textContent = 'Loading snapshot from backend connectors...';
       }
-
-      const res = await fetch(`/api/ops/control-tower?range=${encodeURIComponent(range)}`, {
+      const response = await fetch(`/api/ops/control-tower?range=${encodeURIComponent(range)}`, {
         credentials: 'include',
-        headers: { 'Accept': 'application/json' },
+        headers: { Accept: 'application/json' },
       });
-      if (!res.ok) {
-        throw new Error(`Failed to load control tower snapshot: ${res.status}`);
+      if (!response.ok) {
+        throw new Error(`Failed to load control tower snapshot: ${response.status}`);
       }
-      const data = await res.json();
+      const data = await response.json();
       render(data);
     }
 
@@ -1497,19 +2250,29 @@
       }, 60000);
     }
 
-    document.querySelectorAll('.range-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        loadRange(btn.dataset.range || '30D').catch((error) => {
+    document.querySelectorAll('.segment-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        loadRange(button.dataset.range || '30D').catch((error) => {
           console.error(error);
         });
       });
     });
+
+    document.querySelectorAll('.view-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.view = button.dataset.view || 'journey';
+        setActiveButtons('.view-btn', state.view, 'view');
+        if (state.data) drawChart(state.data.series || [], state.view, state.data);
+      });
+    });
+
     document.getElementById('refreshBtn').addEventListener('click', () => {
       loadRange(state.range).catch((error) => {
         console.error(error);
-        document.getElementById('sync-copy').textContent = 'Snapshot refresh failed.';
+        document.getElementById('statusCopy').textContent = 'Snapshot refresh failed. Check the backend connectors.';
       });
     });
+
     document.getElementById('copyJsonBtn').addEventListener('click', async () => {
       try {
         if (!state.data) return;
@@ -1519,10 +2282,50 @@
       }
     });
 
-    loadRange('30D').catch((error) => {
+    const templateInput = document.getElementById('outreachTemplateInput');
+    const templateStatus = document.getElementById('templateStatus');
+    const templateBadge = document.getElementById('templateBadge');
+    const templatePreview = document.getElementById('outreachTemplatePreview');
+
+    templateInput?.addEventListener('input', () => {
+      state.templateDirty = true;
+      if (templatePreview) {
+        templatePreview.textContent = templateInput.value;
+      }
+      if (templateBadge) {
+        templateBadge.textContent = 'Unsaved changes';
+      }
+      if (templateStatus) {
+        templateStatus.textContent = 'Template edited locally. Save to publish the new copy.';
+      }
+    });
+
+    document.getElementById('refreshTemplateBtn')?.addEventListener('click', () => {
+      loadOutreachTemplate().catch((error) => {
+        console.error(error);
+        if (templateStatus) templateStatus.textContent = 'Template refresh failed. Check control tower access.';
+      });
+    });
+
+    document.getElementById('saveTemplateBtn')?.addEventListener('click', () => {
+      saveOutreachTemplate().catch((error) => {
+        console.error(error);
+        if (templateStatus) templateStatus.textContent = error?.message || 'Template save failed.';
+      });
+    });
+
+    setActiveButtons('.segment-btn', state.range, 'range');
+    setActiveButtons('.view-btn', state.view, 'view');
+    loadRange(state.range).catch((error) => {
       console.error(error);
-      document.getElementById('sync-copy').textContent = 'Failed to load live data. Try refreshing or check the backend connectors.';
-    }).finally(() => startAutoRefresh());
+      document.getElementById('statusCopy').textContent = 'Failed to load live data. Refresh the page or check Azure and Supabase configuration.';
+    }).finally(() => {
+      startAutoRefresh();
+      loadOutreachTemplate({ silent: true }).catch((error) => {
+        console.error(error);
+        if (templateStatus) templateStatus.textContent = 'Template load failed. Check control tower access.';
+      });
+    });
   </script>
 </body>
 </html>

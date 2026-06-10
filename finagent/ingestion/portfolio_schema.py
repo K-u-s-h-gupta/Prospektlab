@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-AssetKind = Literal["equity", "mf", "etf", "bond", "cash", "other"]
+AssetKind = Literal["equity", "mf", "etf", "bond", "cash", "gold", "silver", "sgb", "other"]
 ExtractionStatus = Literal[
     "MIRROR_SYNCHRONIZED",
     "REVIEW_REQUIRED",
@@ -56,6 +56,39 @@ class PortfolioPositionSchema(StrictBaseModel):
         return " ".join(str(value or "").split())
 
 
+class PortfolioTransactionSchema(BaseModel):
+    """Single transaction extracted from a CAS statement.
+
+    Kept outside strict LLM schemas so PDF/CAS pipelines can return it
+    without breaking OpenAI structured-output compatibility.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    date: str = Field(default="", max_length=40)
+    txn_type: str = Field(default="", max_length=40)
+    amount: float = Field(default=0.0, ge=0)
+    units: float = Field(default=0.0)
+    nav: float = Field(default=0.0, ge=0)
+    isin: str = Field(default="", max_length=16)
+    amfi: str = Field(default="", max_length=24)
+    symbol: str = Field(default="", max_length=48)
+    name: str = Field(default="", max_length=180)
+    scheme_type: str = Field(default="", max_length=40)
+    kind: AssetKind = "mf"
+    raw_evidence: str = Field(default="", max_length=500)
+
+    @field_validator("isin", "amfi", "symbol", "txn_type", "scheme_type", mode="before")
+    @classmethod
+    def _upper_compact(cls, value: object) -> str:
+        return str(value or "").strip().upper()
+
+    @field_validator("name", "date", "raw_evidence", mode="before")
+    @classmethod
+    def _clean_text(cls, value: object) -> str:
+        return " ".join(str(value or "").split())
+
+
 class PortfolioExtractionSchema(BaseModel):
     """Primary Python-side extraction result.
 
@@ -71,13 +104,17 @@ class PortfolioExtractionSchema(BaseModel):
     broker_or_vendor: str = Field(default="", max_length=80)
     investor: dict[str, str | None] = Field(default_factory=dict)
     positions: list[PortfolioPositionSchema] = Field(default_factory=list)
+    transactions: list[PortfolioTransactionSchema] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.0, ge=0, le=1)
     diagnostics: dict = Field(default_factory=dict)
 
     @property
     def has_syncable_positions(self) -> bool:
-        return any((p.symbol or p.isin or p.name) and (p.quantity > 0 or p.market_value > 0) for p in self.positions)
+        return any(
+            (p.symbol or p.isin or p.name) and (p.quantity > 0 or p.market_value > 0)
+            for p in self.positions
+        )
 
 
 class PortfolioExtractionLLMResponse(StrictBaseModel):
@@ -91,9 +128,6 @@ class PortfolioExtractionLLMResponse(StrictBaseModel):
     status: ExtractionStatus = "REVIEW_REQUIRED"
     source_type: Literal["pdf", "csv", "xlsx", "image", "unknown"] = "unknown"
     broker_or_vendor: str = Field(default="", max_length=80)
-    screen_type: Literal["portfolio_holdings", "not_portfolio", "unclear"] = "unclear"
-    visible_labels: list[str] = Field(default_factory=list, max_length=24)
-    rejection_reason: str = Field(default="", max_length=240)
     positions: list[PortfolioPositionSchema] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.0, ge=0, le=1)
@@ -135,7 +169,9 @@ def ensure_openai_strict_schema(model: type[BaseModel]) -> dict:
             addl = obj.get("additionalProperties")
             if addl is not False:
                 path = obj.get("title") or "<anonymous object>"
-                raise AssertionError(f"OpenAI strict schema violation in {path}: additionalProperties={addl!r}")
+                raise AssertionError(
+                    f"OpenAI strict schema violation in {path}: additionalProperties={addl!r}"
+                )
         for v in obj.values():
             if isinstance(v, dict):
                 _check(v)
@@ -146,4 +182,3 @@ def ensure_openai_strict_schema(model: type[BaseModel]) -> dict:
 
     _check(schema)
     return schema
-

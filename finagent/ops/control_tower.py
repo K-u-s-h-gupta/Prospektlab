@@ -1412,6 +1412,7 @@ def _load_local_store_stats(days: int) -> dict[str, Any]:
         "pending_extractions": 0,
         "revoked_tokens": 0,
         "outreach_unsubscribes": 0,
+        "outreach_events": 0,
         "rate_limits": 0,
     }
     state_latest: datetime | None = None
@@ -1426,6 +1427,7 @@ def _load_local_store_stats(days: int) -> dict[str, Any]:
                     conn.execute("SELECT MAX(created_at) FROM pending_extractions").fetchone()[0],
                     conn.execute("SELECT MAX(revoked_at) FROM revoked_tokens").fetchone()[0],
                     conn.execute("SELECT MAX(updated_at) FROM outreach_unsubscribes").fetchone()[0],
+                    conn.execute("SELECT MAX(created_at) FROM outreach_events").fetchone()[0],
                     conn.execute("SELECT MAX(window_start) FROM rate_limits").fetchone()[0],
                 ]
                 for raw_value in state_latest_candidates:

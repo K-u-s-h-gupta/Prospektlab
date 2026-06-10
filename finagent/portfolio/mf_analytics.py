@@ -32,30 +32,54 @@ def _load_scheme_meta() -> dict[str, Any]:
 
 
 def _classify_mf_category(scheme_name: str, scheme_type: str = "") -> str:
-    """Classify MF into broad category."""
+    """Classify MF into broad category including metals."""
     text = (scheme_name + " " + scheme_type).lower()
-    if "debt" in text or "gilt" in text or "money market" in text:
+    # Metals — check before generic equity/debt to avoid misclassification
+    if "gold" in text or "sona" in text or "sovereign gold" in text:
+        return "gold"
+    if "silver" in text or "chandi" in text:
+        return "silver"
+    if "commodity" in text and ("metal" in text or "precious" in text):
+        return "commodity_metal"
+    # Debt / fixed income
+    if "debt" in text or "gilt" in text or "money market" in text or "income" in text:
         return "debt"
-    if "hybrid" in text or "balanced" in text or "allocation" in text:
+    # Hybrid / balanced
+    if "hybrid" in text or "balanced" in text or "allocation" in text or "multi asset" in text:
         return "hybrid"
-    if "large" in text:
+    # Equity sub-categories
+    if "large" in text and "cap" in text:
         return "large_cap"
-    if "mid" in text:
+    if "mid" in text and "cap" in text:
         return "mid_cap"
-    if "small" in text:
+    if "small" in text and "cap" in text:
         return "small_cap"
-    if "index" in text or "etf" in text:
+    if "flexi" in text or "multi cap" in text or "multicap" in text:
+        return "flexi_cap"
+    if "sectoral" in text or "thematic" in text or "sector" in text:
+        return "sectoral"
+    if "index" in text or "nifty" in text or "sensex" in text or "etf" in text:
         return "index_etf"
-    if "liquid" in text or "ultra short" in text:
+    if "liquid" in text or "ultra short" in text or "overnight" in text:
         return "liquid"
-    if "elss" in text or "tax saver" in text:
+    if "elss" in text or "tax saver" in text or "tax saving" in text:
         return "elss"
+    if "international" in text or "overseas" in text or "global" in text or "us" in text:
+        return "international"
+    if "dynamic" in text or "aggressive" in text:
+        return "dynamic"
     return "other"
 
 
+_MF_KINDS = {"mf", "gold_mf", "silver_mf"}
+
+
 def compute_mf_analytics(positions: list[PositionMirror]) -> dict[str, Any] | None:
-    """Return MF analytics block. Returns None if user has no MFs."""
-    mf_positions = [p for p in positions if p.kind == "mf"]
+    """Return MF analytics block. Returns None if user has no MFs.
+
+    Includes gold/silver MF schemes in the analysis with proper categorisation.
+    """
+    mf_positions = [p for p in positions if p.kind in _MF_KINDS]
     if not mf_positions:
         return None
 

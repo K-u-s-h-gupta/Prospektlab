@@ -1,7 +1,5 @@
 import pytest
-import os
 from unittest.mock import AsyncMock, patch, MagicMock
-import pytest
 from fastapi.testclient import TestClient
 from fastapi import HTTPException
 from finagent.gateway.email_delivery import EmailDeliveryOutcome
@@ -19,15 +17,11 @@ def reset_rate_limiters():
     # Also clear in-memory rate limits used by the new backend
     try:
         import finagent.storage.supabase_store as _ss
-        import finagent.memory.store as _ms
-        os.environ["MEMORY_IN_MEMORY"] = "1"
-        os.environ["MEMORY_BACKEND"] = "prospekt_tiered"
-        os.environ.pop("MEMORY_DATABASE_URL", None)
         _ss._is_supabase_configured = lambda: False
         _ss._portfolio_store = None
+        _ss._memory_store = None
         _ss._state_store = None
         _ss._token_usage_store = None
-        _ms._singleton = None
     except Exception:
         pass
 
@@ -55,6 +49,120 @@ def test_outreach_unsubscribe_endpoint(mock_store_unsubscribe):
     assert data["email"] == "optout@example.com"
     assert data["reason"] == "unsubscribe"
     mock_store_unsubscribe.assert_awaited_once()
+
+
+@patch("finagent.gateway.run.supabase.store_outreach_event", new_callable=AsyncMock)
+def test_outreach_event_ingest_endpoint(mock_store_event):
+    token = _mint_token("user-1", "owner@example.com", "Owner User")
+    mock_store_event.return_value = {
+        "owner_email": "owner@example.com",
+        "event_type": "opened",
+    }
+
+    response = client.post(
+        "/api/outreach/events/ingest",
+        json={
+            "owner_email": "owner@example.com",
+            "event_type": "opened",
+            "provider": "azure_communication_services",
+            "message_id": 42,
+            "provider_message_id": "abc123",
+            "source": "provider_webhook",
+            "note": "test",
+            "event_payload": {"delivered_at": "2026-06-10T00:00:00Z"},
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["event"]["event_type"] == "opened"
+    mock_store_event.assert_awaited_once()
+
+
+@patch("finagent.gateway.run.supabase.list_outreach_events", new_callable=AsyncMock)
+def test_list_outreach_events_endpoint(mock_list_events):
+    token = _mint_token("user-1", "owner@example.com", "Owner User")
+    mock_list_events.return_value = [
+        {
+            "owner_email": "owner@example.com",
+            "message_id": 42,
+            "event_type": "opened",
+            "provider": "azure_communication_services",
+            "event_payload": {},
+            "occurred_at": 1,
+            "created_at": 1,
+        },
+        {
+            "owner_email": "someoneelse@example.com",
+            "message_id": 99,
+            "event_type": "clicked",
+            "provider": "azure_communication_services",
+            "event_payload": {},
+            "occurred_at": 2,
+            "created_at": 2,
+        },
+    ]
+
+    response = client.get(
+        "/api/outreach/events",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] == 1
+    assert data["items"][0]["event_type"] == "opened"
+    mock_list_events.assert_awaited_once()
+
+
+@patch("finagent.gateway.run._load_outreach_template_text")
+def test_get_outreach_template_endpoint(mock_load_template):
+    token = _mint_token("user-1", "owner@example.com", "Owner User")
+    mock_load_template.return_value = {
+        "path": "C:/tmp/outreach.md",
+        "subject": "Would love your feedback on ProspektLab",
+        "body": "Hi there",
+        "template_text": "Subject: Would love your feedback on ProspektLab\n\nHi there",
+        "line_count": 2,
+        "updated_at": "2026-06-10T00:00:00+00:00",
+    }
+
+    response = client.get(
+        "/api/ops/outreach/template",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["subject"] == "Would love your feedback on ProspektLab"
+    mock_load_template.assert_called_once()
+
+
+@patch("finagent.gateway.run._save_outreach_template_text")
+def test_update_outreach_template_endpoint(mock_save_template):
+    token = _mint_token("user-1", "owner@example.com", "Owner User")
+    mock_save_template.return_value = {
+        "path": "C:/tmp/outreach.md",
+        "subject": "New Subject",
+        "body": "Hi there",
+        "template_text": "Subject: New Subject\n\nHi there",
+        "line_count": 2,
+        "updated_at": "2026-06-10T00:00:00+00:00",
+    }
+
+    response = client.put(
+        "/api/ops/outreach/template",
+        json={"template_text": "Subject: New Subject\n\nHi there"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["template"]["subject"] == "New Subject"
+    mock_save_template.assert_called_once()
 
 
 def test_outreach_unsubscribe_endpoint_rejects_invalid_email():
@@ -209,37 +317,6 @@ def test_app_requires_auth_redirect():
     assert response.status_code == 302
     assert response.headers["location"] == "/login"
 
-
-@pytest.mark.parametrize(
-    ("path", "target"),
-    [
-        ("/onboarding", "/#/onboarding"),
-        ("/dashboard", "/#/dashboard"),
-        ("/insights-studio", "/#/insights-studio"),
-    ],
-)
-def test_frontend_hash_route_redirects_exist(path, target):
-    response = client.get(path, follow_redirects=False)
-    assert response.status_code == 302
-    assert response.headers["location"].endswith(target)
-
-
-def test_frontend_base_url_defaults_to_vite_dev_server(monkeypatch):
-    import finagent.gateway.run as gateway_run
-
-    monkeypatch.delenv("FINAGENT_FRONTEND_URL", raising=False)
-    monkeypatch.delenv("FRONTEND_URL", raising=False)
-    monkeypatch.setattr(gateway_run, "_allow_origins", ["*"])
-
-    assert gateway_run._frontend_base_url() == "http://localhost:3000"
-
-
-def test_unsubscribe_redirects_to_dedicated_page(monkeypatch):
-    monkeypatch.setenv("FINAGENT_FRONTEND_URL", "https://app.prospektlab.com")
-    response = client.get("/unsubscribe?email=user%40example.com", follow_redirects=False)
-    assert response.status_code == 302
-    assert response.headers["location"] == "https://app.prospektlab.com/unsubscribe/?email=user%40example.com"
-
 def test_pydantic_validation_handler():
     # Send signup request with invalid email to trigger Pydantic validation error
     payload = {
@@ -310,32 +387,6 @@ def test_app_ignores_token_query_without_cookie(mock_auth):
     assert bootstrap_response.status_code == 302
     assert bootstrap_response.headers["location"] == "/login"
     assert "prospektlab_auth=" not in bootstrap_response.headers.get("set-cookie", "")
-
-
-def test_session_stream_accepts_query_token_for_sse():
-    from finagent.gateway.run import BUS, _session_record
-
-    token = _mint_token("user-1", "content@example.com", "Content User")
-    session_id = "abc123def456"
-    BUS.open(session_id, reset=True)
-    _session_record(
-        session_id,
-        mode="content_flash",
-        target="Test article",
-        objective="Stream auth smoke test",
-        user_email="content@example.com",
-    )
-    BUS.emit(session_id, "phase", phase="content_generation", note="Streaming with query token")
-    BUS.close(session_id)
-
-    with client.stream("GET", f"/sessions/{session_id}/stream?token={token}") as response:
-        body = "".join(response.iter_text())
-
-    assert response.status_code == 200
-    assert "event: open" in body
-    assert "event: phase" in body
-
-    BUS.forget_memory(session_id)
 
 @patch("finagent.gateway.supabase_client.authenticate_user", new_callable=AsyncMock)
 def test_auth_login_invalid_credentials(mock_auth):

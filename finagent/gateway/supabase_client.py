@@ -77,18 +77,9 @@ def _parse_payload_json(raw: object) -> dict:
     except Exception:
         return {}
 
-async def create_admin_user(
-    email: str,
-    password: str,
-    full_name: str,
-    mobile: str = "",
-    avatar_url: str = "",
-    auth_provider: str = "email",
-    referral_source: str = "",
-):
+async def create_admin_user(email: str, password: str, full_name: str, mobile: str = "", avatar_url: str = "", auth_provider: str = "email"):
     """Create a user via Supabase Admin API. This skips email confirmation checks."""
     mobile_clean = str(mobile or "").strip()
-    referral_source_clean = str(referral_source or "").strip()
     url = f"{_get_supabase_url()}/auth/v1/admin/users"
     base_payload = {
         "email": email,
@@ -99,8 +90,7 @@ async def create_admin_user(
             "mobile": mobile_clean,
             "phone": mobile_clean,
             "avatar_url": avatar_url,
-            "auth_provider": auth_provider,
-            "referral_source": referral_source_clean,
+            "auth_provider": auth_provider
         }
     }
     payload = {**base_payload, "phone": mobile_clean} if mobile_clean else base_payload
@@ -153,30 +143,21 @@ async def update_admin_user_password(user_id: str, new_password: str):
         raise HTTPException(status_code=res.status_code, detail="Failed to update password in Supabase.")
     return res.json()
 
-async def upsert_profile(
-    user_id: str,
-    email: str,
-    full_name: str,
-    auth_provider: str,
-    mobile: str = "",
-    avatar_url: str = "",
-    referral_source: str = "",
-):
+async def upsert_profile(user_id: str, email: str, full_name: str, auth_provider: str, mobile: str = "", avatar_url: str = ""):
     """Upserts the user profile into the public.profiles table.
 
     Returns the saved profile row. Raises HTTPException on failure.
     """
     url = f"{_get_supabase_url()}/rest/v1/profiles"
     mobile_clean = str(mobile or "").strip()
-    referral_source_clean = str(referral_source or "").strip()
     base_payload = {
         "id": user_id,
         "email": email,
         "full_name": full_name,
         "auth_provider": auth_provider,
-        "avatar_url": avatar_url,
+        "avatar_url": avatar_url
     }
-
+    
     headers = get_headers()
     headers["Prefer"] = "resolution=merge-duplicates,return=representation"
     params = {"on_conflict": "id"}
@@ -184,44 +165,17 @@ async def upsert_profile(
     async def _post_profile(payload: dict) -> httpx.Response:
         async with _supabase_async_client() as client:
             return await client.post(url, json=payload, headers=headers, params=params)
+    
+    try:
+        res = await _post_profile({**base_payload, "mobile": mobile_clean})
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Profile save timed out. Please retry.")
 
-    candidate_payloads = []
-    if mobile_clean and referral_source_clean:
-        candidate_payloads.extend([
-            {**base_payload, "mobile": mobile_clean, "referral_source": referral_source_clean},
-            {**base_payload, "phone": mobile_clean, "referral_source": referral_source_clean},
-            {**base_payload, "mobile": mobile_clean},
-            {**base_payload, "phone": mobile_clean},
-        ])
-    elif mobile_clean:
-        candidate_payloads.extend([
-            {**base_payload, "mobile": mobile_clean},
-            {**base_payload, "phone": mobile_clean},
-        ])
-    elif referral_source_clean:
-        candidate_payloads.append({**base_payload, "referral_source": referral_source_clean})
-    candidate_payloads.append(base_payload)
-
-    res = None
-    last_error_text = ""
-    for payload in candidate_payloads:
+    if not res.is_success and "column profiles.mobile does not exist" in (res.text or ""):
         try:
-            res = await _post_profile(payload)
+            res = await _post_profile({**base_payload, "phone": mobile_clean})
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="Profile save timed out. Please retry.")
-
-        if res.is_success:
-            break
-
-        last_error_text = res.text or ""
-        missing_mobile = "column profiles.mobile does not exist" in last_error_text
-        missing_phone = "column profiles.phone does not exist" in last_error_text
-        missing_referral = "column profiles.referral_source does not exist" in last_error_text
-        if not (missing_mobile or missing_phone or missing_referral):
-            break
-
-    if res is None:
-        raise HTTPException(status_code=500, detail="Profile save did not return a response.")
 
     if not res.is_success:
         detail = "Failed to save profile details in Supabase."
@@ -328,8 +282,9 @@ def get_user_id_from_auth(email: str) -> str | None:
     """Queries auth.users via GoTrue Admin Users API, falling back to psycopg2 using DB URL."""
     # 1. Query GoTrue Admin Users API using service key
     try:
-        url = f"{_get_supabase_url()}/auth/v1/admin/users"
-        headers = get_headers()
+        supabase_url = _get_supabase_url()
+        url = f"{supabase_url}/auth/v1/admin/users"
+        headers = get_headers() if supabase_url and _get_supabase_key() else {}
         # Filter by email using GoTrue's filter query parameter
         resp = httpx.get(url, params={"filter": email}, headers=headers, timeout=_SUPABASE_TIMEOUT, trust_env=_HTTPX_TRUST_ENV)
         if resp.status_code == 200:
@@ -554,6 +509,78 @@ async def list_outreach_unsubscribes() -> list[dict]:
         pass
 
     from finagent.gateway.state_store import list_outreach_unsubscribes as local_list
+
+    return local_list()
+
+
+async def store_outreach_event(
+    owner_email: str,
+    event_type: str,
+    *,
+    provider: str = "",
+    message_id: int | None = None,
+    event_payload: dict | None = None,
+    occurred_at: datetime | None = None,
+):
+    """Store an outreach event in Supabase (or local SQLite fallback)."""
+    normalized_owner = owner_email.lower().strip()
+    payload = {
+        "owner_email": normalized_owner,
+        "message_id": message_id,
+        "event_type": (event_type or "").strip().lower(),
+        "provider": (provider or "").strip(),
+        "event_payload": json.dumps(event_payload or {}, ensure_ascii=False),
+        "occurred_at": (occurred_at or datetime.now(timezone.utc)).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    url = f"{_get_outreach_supabase_url()}/rest/v1/outreach_events"
+    try:
+        async with _supabase_async_client() as client:
+            headers = get_headers(outreach=True)
+            headers["Prefer"] = "resolution=merge-duplicates"
+            res = await client.post(url, json=payload, headers=headers)
+            if res.is_success:
+                data = res.json()
+                if isinstance(data, list) and data:
+                    return data[0]
+                if isinstance(data, dict):
+                    return data
+                return payload
+    except Exception:
+        pass
+
+    from finagent.gateway.state_store import store_outreach_event as local_store
+
+    occurred_ts = (occurred_at or datetime.now(timezone.utc)).timestamp()
+    return local_store(
+        normalized_owner,
+        payload["event_type"],
+        provider=payload["provider"],
+        message_id=message_id,
+        event_payload=event_payload or {},
+        occurred_at=occurred_ts,
+    )
+
+
+async def list_outreach_events() -> list[dict]:
+    """Return outreach events from Supabase (or local SQLite fallback)."""
+    url = f"{_get_outreach_supabase_url()}/rest/v1/outreach_events"
+    try:
+        async with _supabase_async_client() as client:
+            headers = get_headers(outreach=True)
+            params = {
+                "select": "owner_email,message_id,event_type,provider,event_payload,occurred_at,created_at",
+                "order": "occurred_at.desc,created_at.desc",
+            }
+            res = await client.get(url, params=params, headers=headers)
+            if res.is_success:
+                data = res.json()
+                if isinstance(data, list):
+                    return data
+    except Exception:
+        pass
+
+    from finagent.gateway.state_store import list_outreach_events as local_list
 
     return local_list()
 
