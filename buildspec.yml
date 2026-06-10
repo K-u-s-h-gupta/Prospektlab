@@ -14,7 +14,30 @@ phases:
   post_build:
     commands:
       - echo Build completed on `date`
+      - echo Tagging image with build ID...
+      - docker tag $IMAGE_REPO_NAME:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_BUILD_ID
       - echo Pushing the Docker image...
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest
-      - echo Updating ECS service to 1 desired task and forcing new deployment...
-      - aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --desired-count 1 --force-new-deployment
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_BUILD_ID
+      - echo Registering new task definition with tagged image...
+      - |
+        aws ecs describe-task-definition \
+          --task-definition finagent-backend \
+          --query 'taskDefinition' > task-def.json
+      - |
+        python3 -c "
+        import json, sys, os
+        with open('task-def.json') as f: td = json.load(f)
+        image = f\"{os.environ['AWS_ACCOUNT_ID']}.dkr.ecr.{os.environ['AWS_DEFAULT_REGION']}.amazonaws.com/{os.environ['IMAGE_REPO_NAME']}:{os.environ['CODEBUILD_BUILD_ID']}\"
+        td['containerDefinitions'][0]['image'] = image
+        for k in ('taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy'):
+            td.pop(k, None)
+        with open('task-def-new.json','w') as f: json.dump(td, f, indent=2)
+        "
+      - echo Starting new task definition registration...
+      - NEW_TASK_DEF=$(aws ecs register-task-definition --cli-input-json file://task-def-new.json --query 'taskDefinition.taskDefinitionArn' --output text)
+      - echo "New task definition: $NEW_TASK_DEF"
+      - echo Updating ECS service with new task definition...
+      - aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition $NEW_TASK_DEF --force-new-deployment
+      - echo "Waiting for service stability..."
+      - aws ecs wait services-stable --cluster $ECS_CLUSTER --services $(basename $ECS_SERVICE)
