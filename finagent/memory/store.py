@@ -1,6 +1,8 @@
-"""Supabase PostgreSQL-backed memory store (replaces SQLite).
+"""Cross-session memory facade backed by ProspektLab tiered memory.
 
-Thread safety: each method is async and uses the Supabase PostgREST client.
+Agents keep calling this module's stable API. The implementation delegates to
+ProspektLab's internal Core/Recall/Archival memory store, not Supabase, so
+Supabase remains limited to auth and user-operational data.
 """
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ import time
 from dataclasses import dataclass
 from typing import Iterable
 
-from finagent.storage.supabase_store import get_memory_store as _get_storage_memory_store
+from finagent.memory.tiered_store import ProspektTieredMemoryStore
 
 logger = logging.getLogger("finagent.memory")
 
@@ -32,14 +34,14 @@ def normalize_target(s: str) -> str:
 @dataclass
 class MemoryFact:
     target_key: str
-    kind: str  # financial | risk | sentiment | news_event | competitive | governance | identity | other
+    kind: str
     body: str
-    confidence: str  # HIGH | MEDIUM | LOW
+    confidence: str
     source_url: str | None = None
     session_id: str | None = None
     user_email: str | None = None
     created_at: float = 0.0
-    score: float = 0.0  # BM25 rank when returned by recall()
+    score: float = 0.0
 
     def to_dict(self) -> dict:
         return {
@@ -56,8 +58,16 @@ class MemoryFact:
 
 
 class MemoryStore:
-    def __init__(self) -> None:
-        self._store = _get_storage_memory_store()
+    def __init__(self, store: ProspektTieredMemoryStore | None = None) -> None:
+        self._store = store or ProspektTieredMemoryStore()
+
+    @property
+    def backend_name(self) -> str:
+        return getattr(self._store, "backend_name", "prospekt_tiered")
+
+    @property
+    def location(self) -> str:
+        return getattr(self._store, "location", "<memory>")
 
     async def remember(self, fact: MemoryFact) -> int:
         if not fact.body or not fact.body.strip():
@@ -66,10 +76,9 @@ class MemoryStore:
             raise ValueError("user_email is required to persist memory facts")
         if not fact.created_at:
             fact.created_at = time.time()
-        target = normalize_target(fact.target_key)
         try:
-            await self._store.remember(
-                target_key=target,
+            return await self._store.remember(
+                target_key=normalize_target(fact.target_key),
                 kind=fact.kind,
                 body=fact.body.strip(),
                 confidence=fact.confidence,
@@ -78,23 +87,24 @@ class MemoryStore:
                 user_email=fact.user_email,
                 created_at=fact.created_at,
             )
-            return 1
         except Exception as exc:
-            logger.warning("Supabase remember failed: %s", exc)
+            logger.warning("tiered memory remember failed: %s", exc)
             return 0
 
     async def remember_many(self, facts: Iterable[MemoryFact]) -> int:
         count = 0
-        for f in facts:
-            if not f.user_email:
+        for fact in facts:
+            if not fact.user_email:
                 raise ValueError("user_email is required for every memory fact")
             try:
-                ok = await self.remember(f)
-                if ok:
-                    count += 1
+                count += await self.remember(fact)
             except Exception as exc:
                 logger.warning("remember_many single fact failed: %s", exc)
         return count
+
+    async def append(self, fact: MemoryFact) -> int:
+        """Compatibility alias for older agent-facing memory.append() calls."""
+        return await self.remember(fact)
 
     async def save_session_summary(
         self,
@@ -123,7 +133,7 @@ class MemoryStore:
                 created_at=time.time(),
             )
         except Exception as exc:
-            logger.warning("Supabase save_session_summary failed: %s", exc)
+            logger.warning("tiered memory save_session_summary failed: %s", exc)
 
     async def recall(
         self,
@@ -143,23 +153,34 @@ class MemoryStore:
                 limit=limit,
                 user_email=user_email,
             )
-            return [
-                MemoryFact(
-                    target_key=r.get("target_key", ""),
-                    kind=r.get("kind", ""),
-                    body=r.get("body", ""),
-                    confidence=r.get("confidence", ""),
-                    source_url=r.get("source_url"),
-                    session_id=r.get("session_id"),
-                    user_email=r.get("user_email"),
-                    created_at=r.get("created_at", 0.0),
-                    score=0.0,
-                )
-                for r in rows
-            ]
         except Exception as exc:
-            logger.warning("Supabase recall failed: %s", exc)
+            logger.warning("tiered memory recall failed: %s", exc)
             return []
+        return [
+            MemoryFact(
+                target_key=row.get("target_key", ""),
+                kind=row.get("kind", ""),
+                body=row.get("body", ""),
+                confidence=row.get("confidence", ""),
+                source_url=row.get("source_url"),
+                session_id=row.get("session_id"),
+                user_email=row.get("user_email"),
+                created_at=float(row.get("created_at") or 0.0),
+                score=float(row.get("score") or 0.0),
+            )
+            for row in rows
+        ]
+
+    async def search(
+        self,
+        target_key: str,
+        *,
+        kind: str | None = None,
+        limit: int = 20,
+        user_email: str | None = None,
+    ) -> list[MemoryFact]:
+        """Compatibility alias for older agent-facing memory.search() calls."""
+        return await self.recall(target_key, kind=kind, limit=limit, user_email=user_email)
 
     async def get_facts(
         self,
@@ -171,57 +192,68 @@ class MemoryStore:
         if not user_email:
             raise ValueError("user_email is required to retrieve facts")
         try:
-            if target_key:
-                target_key = normalize_target(target_key)
             return await self._store.get_facts(
-                target_key=target_key,
+                target_key=normalize_target(target_key) if target_key else None,
                 user_email=user_email,
                 limit=limit,
             )
         except Exception as exc:
-            logger.warning("Supabase get_facts failed: %s", exc)
+            logger.warning("tiered memory get_facts failed: %s", exc)
             return []
 
     async def last_summary(self, target_key: str, *, user_email: str | None = None) -> dict | None:
         if not user_email:
             raise ValueError("user_email is required to retrieve session summaries")
-        target = normalize_target(target_key)
         try:
-            row = await self._store.last_summary(target_key=target, user_email=user_email)
-            if not row:
-                return None
-            return {
-                "session_id": row.get("session_id"),
-                "target_key": row.get("target_key"),
-                "target_display": row.get("target_display"),
-                "summary": row.get("summary", ""),
-                "metrics": json.loads(row.get("metrics_json") or "{}"),
-                "citation_count": row.get("citation_count"),
-                "quality_score": row.get("quality_score"),
-                "user_email": row.get("user_email"),
-                "created_at": row.get("created_at"),
-            }
+            row = await self._store.last_summary(
+                normalize_target(target_key),
+                user_email=user_email,
+            )
         except Exception as exc:
-            logger.warning("Supabase last_summary failed: %s", exc)
+            logger.warning("tiered memory last_summary failed: %s", exc)
             return None
+        if not row:
+            return None
+        metrics = row.get("metrics", {})
+        if not metrics and row.get("metrics_json"):
+            try:
+                metrics = json.loads(row.get("metrics_json") or "{}")
+            except Exception:
+                metrics = {}
+        return {
+            "session_id": row.get("session_id"),
+            "target_key": row.get("target_key"),
+            "target_display": row.get("target_display"),
+            "summary": row.get("summary", ""),
+            "metrics": metrics,
+            "citation_count": row.get("citation_count"),
+            "quality_score": row.get("quality_score"),
+            "user_email": row.get("user_email"),
+            "created_at": row.get("created_at"),
+        }
 
     async def count(self, target_key: str | None = None, *, user_email: str | None = None) -> int:
         if not user_email:
             raise ValueError("user_email is required to count memory facts")
         try:
-            normalized = normalize_target(target_key) if target_key else None
-            return await self._store.count(target_key=normalized, user_email=user_email)
+            return await self._store.count(
+                target_key=normalize_target(target_key) if target_key else None,
+                user_email=user_email,
+            )
         except Exception as exc:
-            logger.warning("Supabase count failed: %s", exc)
+            logger.warning("tiered memory count failed: %s", exc)
             return 0
 
     async def clear_target(self, target_key: str, *, user_email: str | None = None) -> int:
         if not user_email:
             raise ValueError("user_email is required to clear memory facts")
         try:
-            return await self._store.clear_target(normalize_target(target_key), user_email=user_email)
+            return await self._store.clear_target(
+                normalize_target(target_key),
+                user_email=user_email,
+            )
         except Exception as exc:
-            logger.warning("Supabase clear_target failed: %s", exc)
+            logger.warning("tiered memory clear_target failed: %s", exc)
             return 0
 
     async def get_targets(self, *, user_email: str | None = None, limit: int = 20) -> list[dict]:
@@ -230,7 +262,7 @@ class MemoryStore:
         try:
             return await self._store.get_targets(user_email=user_email, limit=limit)
         except Exception as exc:
-            logger.warning("Supabase get_targets failed: %s", exc)
+            logger.warning("tiered memory get_targets failed: %s", exc)
             return []
 
     async def get_session_count(self, *, user_email: str | None = None) -> int:
@@ -239,7 +271,7 @@ class MemoryStore:
         try:
             return await self._store.get_session_count(user_email=user_email)
         except Exception as exc:
-            logger.warning("Supabase get_session_count failed: %s", exc)
+            logger.warning("tiered memory get_session_count failed: %s", exc)
             return 0
 
     async def list_sessions(
@@ -252,14 +284,13 @@ class MemoryStore:
         if not user_email:
             raise ValueError("user_email is required to list sessions")
         try:
-            normalized = normalize_target(target_key) if target_key else None
             return await self._store.list_sessions(
                 user_email=user_email,
-                target_key=normalized,
+                target_key=normalize_target(target_key) if target_key else None,
                 limit=limit,
             )
         except Exception as exc:
-            logger.warning("Supabase list_sessions failed: %s", exc)
+            logger.warning("tiered memory list_sessions failed: %s", exc)
             return []
 
     async def delete_session(self, session_id: str, *, user_email: str | None = None) -> dict[str, int]:
@@ -268,7 +299,7 @@ class MemoryStore:
         try:
             return await self._store.delete_session(session_id, user_email=user_email)
         except Exception as exc:
-            logger.warning("Supabase delete_session failed: %s", exc)
+            logger.warning("tiered memory delete_session failed: %s", exc)
             return {"facts": 0, "summaries": 0}
 
 
@@ -276,11 +307,6 @@ _singleton: MemoryStore | None = None
 
 
 def get_memory_store() -> MemoryStore:
-    """Return the per-process memory store singleton.
-
-    Pass `db_path` to override for tests; subsequent calls without
-    a path reuse the same store.
-    """
     global _singleton
     if _singleton is None:
         _singleton = MemoryStore()

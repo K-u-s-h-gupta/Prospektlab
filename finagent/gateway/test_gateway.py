@@ -1,5 +1,7 @@
 import pytest
+import os
 from unittest.mock import AsyncMock, patch, MagicMock
+import pytest
 from fastapi.testclient import TestClient
 from fastapi import HTTPException
 from finagent.gateway.email_delivery import EmailDeliveryOutcome
@@ -17,11 +19,15 @@ def reset_rate_limiters():
     # Also clear in-memory rate limits used by the new backend
     try:
         import finagent.storage.supabase_store as _ss
+        import finagent.memory.store as _ms
+        os.environ["MEMORY_IN_MEMORY"] = "1"
+        os.environ["MEMORY_BACKEND"] = "prospekt_tiered"
+        os.environ.pop("MEMORY_DATABASE_URL", None)
         _ss._is_supabase_configured = lambda: False
         _ss._portfolio_store = None
-        _ss._memory_store = None
         _ss._state_store = None
         _ss._token_usage_store = None
+        _ms._singleton = None
     except Exception:
         pass
 
@@ -203,6 +209,37 @@ def test_app_requires_auth_redirect():
     assert response.status_code == 302
     assert response.headers["location"] == "/login"
 
+
+@pytest.mark.parametrize(
+    ("path", "target"),
+    [
+        ("/onboarding", "/#/onboarding"),
+        ("/dashboard", "/#/dashboard"),
+        ("/insights-studio", "/#/insights-studio"),
+    ],
+)
+def test_frontend_hash_route_redirects_exist(path, target):
+    response = client.get(path, follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"].endswith(target)
+
+
+def test_frontend_base_url_defaults_to_vite_dev_server(monkeypatch):
+    import finagent.gateway.run as gateway_run
+
+    monkeypatch.delenv("FINAGENT_FRONTEND_URL", raising=False)
+    monkeypatch.delenv("FRONTEND_URL", raising=False)
+    monkeypatch.setattr(gateway_run, "_allow_origins", ["*"])
+
+    assert gateway_run._frontend_base_url() == "http://localhost:3000"
+
+
+def test_unsubscribe_redirects_to_dedicated_page(monkeypatch):
+    monkeypatch.setenv("FINAGENT_FRONTEND_URL", "https://app.prospektlab.com")
+    response = client.get("/unsubscribe?email=user%40example.com", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == "https://app.prospektlab.com/unsubscribe/?email=user%40example.com"
+
 def test_pydantic_validation_handler():
     # Send signup request with invalid email to trigger Pydantic validation error
     payload = {
@@ -273,6 +310,32 @@ def test_app_ignores_token_query_without_cookie(mock_auth):
     assert bootstrap_response.status_code == 302
     assert bootstrap_response.headers["location"] == "/login"
     assert "prospektlab_auth=" not in bootstrap_response.headers.get("set-cookie", "")
+
+
+def test_session_stream_accepts_query_token_for_sse():
+    from finagent.gateway.run import BUS, _session_record
+
+    token = _mint_token("user-1", "content@example.com", "Content User")
+    session_id = "abc123def456"
+    BUS.open(session_id, reset=True)
+    _session_record(
+        session_id,
+        mode="content_flash",
+        target="Test article",
+        objective="Stream auth smoke test",
+        user_email="content@example.com",
+    )
+    BUS.emit(session_id, "phase", phase="content_generation", note="Streaming with query token")
+    BUS.close(session_id)
+
+    with client.stream("GET", f"/sessions/{session_id}/stream?token={token}") as response:
+        body = "".join(response.iter_text())
+
+    assert response.status_code == 200
+    assert "event: open" in body
+    assert "event: phase" in body
+
+    BUS.forget_memory(session_id)
 
 @patch("finagent.gateway.supabase_client.authenticate_user", new_callable=AsyncMock)
 def test_auth_login_invalid_credentials(mock_auth):

@@ -1,0 +1,185 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ikg
+      POSTGRES_USER: ikg_user
+      POSTGRES_PASSWORD: ${IKG_POSTGRES_PASSWORD:-ikg_password_change_me}
+    ports:
+      - "${IKG_POSTGRES_BIND:-127.0.0.1:15432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./ikg_db_bootstrap.sql:/docker-entrypoint-initdb.d/001_ikg_db_bootstrap.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ikg_user -d ikg"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  memgraph:
+    image: memgraph/memgraph-mage:latest
+    ports:
+      - "${IKG_MEMGRAPH_BOLT_BIND:-127.0.0.1:7688}:7687"
+    volumes:
+      - memgraph_data:/var/lib/memgraph
+    command: ["--log-level=INFO"]
+    restart: unless-stopped
+
+  memgraph-lab:
+    image: memgraph/lab:latest
+    ports:
+      - "${IKG_MEMGRAPH_LAB_BIND:-127.0.0.1:3001}:3000"
+    depends_on:
+      memgraph:
+        condition: service_started
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${IKG_REDIS_BIND:-127.0.0.1:6379}:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "${IKG_QDRANT_HTTP_BIND:-127.0.0.1:6333}:6333"
+      - "${IKG_QDRANT_GRPC_BIND:-127.0.0.1:6334}:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+  celery-worker:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.ikg-worker
+    env_file:
+      - ../finagent/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ""
+      IKG_BACKEND: postgres
+      IKG_DATABASE_URL: postgresql://ikg_user:${IKG_POSTGRES_PASSWORD:-ikg_password_change_me}@postgres:5432/ikg
+      DATABASE_URL: postgresql://ikg_user:${IKG_POSTGRES_PASSWORD:-ikg_password_change_me}@postgres:5432/ikg
+      MEMGRAPH_URI: bolt://memgraph:7687
+      MEMGRAPH_USER: ""
+      MEMGRAPH_PASSWORD: ""
+      FINAGENT_GRAPH_SERVING_BACKEND: memgraph
+      FINAGENT_RETRIEVAL_BACKEND: qdrant_postgres
+      FINAGENT_DISABLE_AZURE_SEARCH: "1"
+      FINAGENT_DI_PROVIDER: local_first
+      FINAGENT_DI_LOCAL_MIN_CHARS_PER_PAGE: "250"
+      FINAGENT_DI_LOCAL_MIN_TOTAL_CHARS: "400"
+      FINAGENT_DI_STRICT_ALLOW_LOCAL_ON_AZURE_FAILURE: "1"
+      FINAGENT_SCHEDULER_USE_CELERY: "1"
+      FINAGENT_SCHEDULER_ENABLE_CRON: "0"
+      FINAGENT_SCHEDULER_ENABLE_DREAMING: "0"
+      FINAGENT_CELERY_PREFETCH: "1"
+      FINAGENT_PIPELINE_PARALLEL_WORKERS: "24"
+      FINAGENT_SHP_QUARTERS: "40"
+      FINAGENT_BSE_SHP_MAX_QUARTERS: "40"
+      FINAGENT_IKG_XBRL_FACT_LIMIT: "100000"
+      FINAGENT_QDRANT_INDEX_BATCH_SIZE: "8"
+      FINAGENT_EMBEDDING_BATCH_SIZE: "8"
+      FINAGENT_EMBEDDING_MAX_CHARS: "2500"
+      FINAGENT_EMBEDDING_BATCH_DELAY_S: "8"
+      FINAGENT_ANNUAL_REPORT_EXTRACT_MODE: targeted
+      FINAGENT_ANNUAL_REPORT_TARGETED_TOP_N: "100"
+      FINAGENT_ANNUAL_REPORT_REQUIRE_TABLES: "0"
+      # Tiered memory (workers don't dream; scheduler does)
+      MEMORY_DATABASE_URL: ${MEMORY_DATABASE_URL:-}
+      # NSE cookie injection — set in finagent/.env to bypass 403 on cloud IPs
+      NSE_COOKIE_STRING: ${NSE_COOKIE_STRING:-}
+    command:
+      - celery
+      - -A
+      - finagent.ikg.pipeline.celery_app:celery_app
+      - worker
+      - -Q
+      - nse,bse,sebi,documents,financials,graph
+      - --pool=threads
+      - --concurrency=10
+      - --loglevel=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      memgraph:
+        condition: service_started
+      memgraph-lab:
+        condition: service_started
+    restart: unless-stopped
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.ikg-worker
+    env_file:
+      - ../finagent/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ""
+      IKG_BACKEND: postgres
+      IKG_DATABASE_URL: postgresql://ikg_user:${IKG_POSTGRES_PASSWORD:-ikg_password_change_me}@postgres:5432/ikg
+      DATABASE_URL: postgresql://ikg_user:${IKG_POSTGRES_PASSWORD:-ikg_password_change_me}@postgres:5432/ikg
+      MEMGRAPH_URI: bolt://memgraph:7687
+      MEMGRAPH_USER: ""
+      MEMGRAPH_PASSWORD: ""
+      FINAGENT_GRAPH_SERVING_BACKEND: memgraph
+      FINAGENT_RETRIEVAL_BACKEND: qdrant_postgres
+      FINAGENT_DISABLE_AZURE_SEARCH: "1"
+      FINAGENT_DI_PROVIDER: local_first
+      FINAGENT_DI_LOCAL_MIN_CHARS_PER_PAGE: "250"
+      FINAGENT_DI_LOCAL_MIN_TOTAL_CHARS: "400"
+      FINAGENT_DI_STRICT_ALLOW_LOCAL_ON_AZURE_FAILURE: "1"
+      FINAGENT_SCHEDULER_USE_CELERY: "1"
+      FINAGENT_SCHEDULER_ENABLE_CRON: "1"
+      FINAGENT_SCHEDULER_ENABLE_DREAMING: "1"
+      FINAGENT_SHP_QUARTERS: "40"
+      FINAGENT_BSE_SHP_MAX_QUARTERS: "40"
+      FINAGENT_IKG_XBRL_FACT_LIMIT: "100000"
+      FINAGENT_QDRANT_INDEX_BATCH_SIZE: "8"
+      FINAGENT_EMBEDDING_BATCH_SIZE: "8"
+      FINAGENT_EMBEDDING_MAX_CHARS: "2500"
+      FINAGENT_EMBEDDING_BATCH_DELAY_S: "8"
+      FINAGENT_ANNUAL_REPORT_EXTRACT_MODE: targeted
+      FINAGENT_ANNUAL_REPORT_TARGETED_TOP_N: "100"
+      FINAGENT_ANNUAL_REPORT_REQUIRE_TABLES: "0"
+      # Tiered memory / dreaming layer (nightly 2 AM IST)
+      MEMORY_DATABASE_URL: ${MEMORY_DATABASE_URL:-}
+      # NSE cookie injection — set in finagent/.env to bypass 403 on cloud IPs
+      NSE_COOKIE_STRING: ${NSE_COOKIE_STRING:-}
+    command: ["python", "-m", "finagent.ikg.pipeline.scheduler"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      memgraph:
+        condition: service_started
+      memgraph-lab:
+        condition: service_started
+      celery-worker:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  memgraph_data:
+  redis_data:
+  qdrant_storage:

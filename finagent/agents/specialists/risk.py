@@ -17,6 +17,11 @@ _RISK_PATTERNS = (
 )
 
 
+def _needs_fresh_signals(objective: str) -> bool:
+    text = (objective or "").lower()
+    return any(token in text for token in ("latest", "recent", "today", "news", "announcement", "update"))
+
+
 class RiskAgent(BaseSubAgent):
     name = "risk"
     display = "Risk & Litigation"
@@ -25,6 +30,12 @@ class RiskAgent(BaseSubAgent):
     async def execute(self, ctx: SubAgentContext) -> AgentTaskResult:
         out = AgentTaskResult(agent_name=self.name)
         filing = ctx.bundle.filing if ctx.bundle else None
+        ikg_ctx = ctx.agent_context(self.name)
+        pledge_pct = ikg_ctx.get("pledge_pct")
+        risk_flags = ikg_ctx.get("risk_flags") or []
+        enforcement = []
+        if ctx.ikg_bundle:
+            enforcement = ctx.ikg_bundle.risk.get("enforcement_actions") or []
 
         # Risk Factors / management discussion digest from exchange filings.
         if filing and getattr(filing, "risk_factors", None):
@@ -47,6 +58,39 @@ class RiskAgent(BaseSubAgent):
                     is_material=True,
                 )
             )
+
+        if pledge_pct is not None:
+            out.findings.append(
+                Finding(
+                    agent=self.name,
+                    kind="risk",
+                    headline=f"IKG pledge-risk baseline: {float(pledge_pct):.2f}%",
+                    detail="Promoter pledge is treated as a structural balance-sheet and governance risk until cross-checked against the latest shareholding pattern.",
+                    confidence="HIGH" if float(pledge_pct) >= 25 else "MEDIUM",
+                    evidence=(ctx.ikg_bundle.source_refs[:3] if ctx.ikg_bundle else []),
+                    metrics={"pledge_pct": pledge_pct, "risk_flags": risk_flags},
+                )
+            )
+        if enforcement:
+            out.findings.append(
+                Finding(
+                    agent=self.name,
+                    kind="risk",
+                    headline=f"IKG records {len(enforcement)} enforcement-linked event(s)",
+                    detail="These graph-linked actions should be validated against official SEBI / exchange documents before being treated as decisive.",
+                    confidence="HIGH",
+                    evidence=(ctx.ikg_bundle.source_refs[:4] if ctx.ikg_bundle else []),
+                    metrics={"enforcement_count": len(enforcement)},
+                )
+            )
+
+        if (
+            ctx.ikg_bundle
+            and ctx.ikg_bundle.coverage.get("risk") != "missing"
+            and ctx.ikg_bundle.coverage.get("ownership") != "missing"
+            and not _needs_fresh_signals(ctx.objective)
+        ):
+            return out
 
         # Search for active litigation / regulatory news
         queries = [

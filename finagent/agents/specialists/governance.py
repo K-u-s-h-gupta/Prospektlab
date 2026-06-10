@@ -9,6 +9,11 @@ from __future__ import annotations
 from finagent.agents.base import AgentTaskResult, BaseSubAgent, Finding, SubAgentContext, search_and_dedupe
 
 
+def _needs_fresh_signals(objective: str) -> bool:
+    text = (objective or "").lower()
+    return any(token in text for token in ("latest", "recent", "today", "news", "announcement", "update"))
+
+
 class GovernanceAgent(BaseSubAgent):
     name = "governance"
     display = "Governance & Insiders"
@@ -16,6 +21,68 @@ class GovernanceAgent(BaseSubAgent):
 
     async def execute(self, ctx: SubAgentContext) -> AgentTaskResult:
         out = AgentTaskResult(agent_name=self.name)
+        ikg_ctx = ctx.agent_context(self.name)
+        pledge = ikg_ctx.get("pledge_summary") or {}
+        directors = ikg_ctx.get("director_history") or []
+        enforcement = ikg_ctx.get("enforcement_actions") or []
+
+        if directors:
+            out.findings.append(
+                Finding(
+                    agent=self.name,
+                    kind="governance",
+                    headline=f"IKG board graph exposes {len(directors)} director relationship(s)",
+                    detail=(
+                        "Use this as a high-signal governance baseline before layering in fresh exchange disclosures. "
+                        f"Recent graph freshness: {ctx.ikg_bundle.as_of_date if ctx.ikg_bundle else 'unknown'}."
+                    ),
+                    confidence="HIGH" if ctx.ikg_bundle and ctx.ikg_bundle.coverage.get("governance") == "complete" else "MEDIUM",
+                    evidence=(ctx.ikg_bundle.source_refs[:3] if ctx.ikg_bundle else []),
+                    metrics={"ikg_director_count": len(directors)},
+                )
+            )
+
+        pledge_pct = pledge.get("total_pledge_pct")
+        if pledge_pct is not None:
+            out.findings.append(
+                Finding(
+                    agent=self.name,
+                    kind="governance",
+                    headline=f"Promoter pledge baseline: {float(pledge_pct):.2f}%",
+                    detail=(
+                        f"IKG ownership summary shows promoter holding {float(pledge.get('total_promoter_holding_pct') or 0.0):.2f}% "
+                        f"with pledge flag {pledge.get('pledge_flag') or 'unknown'}."
+                    ),
+                    confidence="HIGH",
+                    evidence=(ctx.ikg_bundle.source_refs[:3] if ctx.ikg_bundle else []),
+                    metrics={
+                        "promoter_holding_pct": pledge.get("total_promoter_holding_pct"),
+                        "pledge_pct": pledge_pct,
+                    },
+                )
+            )
+
+        if enforcement:
+            out.findings.append(
+                Finding(
+                    agent=self.name,
+                    kind="governance",
+                    headline=f"Governance graph links {len(enforcement)} enforcement action(s)",
+                    detail="Regulatory history exists in the IKG and should be reconciled with any recent disclosure scan.",
+                    confidence="HIGH",
+                    evidence=(ctx.ikg_bundle.source_refs[:3] if ctx.ikg_bundle else []),
+                    metrics={"enforcement_actions": len(enforcement)},
+                )
+            )
+
+        if (
+            ctx.ikg_bundle
+            and ctx.ikg_bundle.coverage.get("governance") == "complete"
+            and not _needs_fresh_signals(ctx.objective)
+        ):
+            out.status = "ok" if out.findings else "partial"
+            return out
+
         queries = [
             f"{ctx.canonical_label} promoter shareholding insider trading NSE BSE",
             f"{ctx.canonical_label} CEO CFO board change resignation appointment",

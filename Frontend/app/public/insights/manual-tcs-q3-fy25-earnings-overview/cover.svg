@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024" role="img" aria-label="TCS Q3 FY25: strong order book, uneven demand recovery">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f7f1e6" />
+      <stop offset="58%" stop-color="#efe6d7" />
+      <stop offset="100%" stop-color="#dce7f1" />
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#17314d" />
+      <stop offset="100%" stop-color="#245a8a" />
+    </linearGradient>
+  </defs>
+  <rect width="1536" height="1024" fill="url(#bg)" />
+  <circle cx="190" cy="176" r="220" fill="#0d766e" fill-opacity="0.10" />
+  <circle cx="1330" cy="164" r="260" fill="#1d4f91" fill-opacity="0.11" />
+  <rect x="54" y="54" width="1428" height="916" rx="44" fill="#fffaf3" fill-opacity="0.92" stroke="#17314d" stroke-opacity="0.10" />
+  <rect x="862" y="164" width="528" height="548" rx="32" fill="#17314d" fill-opacity="0.96" />
+  <path d="M910 618 C1018 468 1118 552 1212 430 C1274 350 1328 326 1364 318" fill="none" stroke="#66d2c4" stroke-width="10" stroke-linecap="round" />
+  <path d="M910 654 C1010 596 1108 616 1210 534 C1280 478 1334 458 1364 452" fill="none" stroke="#f9bf71" stroke-width="7" stroke-linecap="round" stroke-opacity="0.92" />
+  <g fill="#fff2df">
+    <rect x="930" y="720" width="32" height="122" rx="12" />
+    <rect x="986" y="664" width="32" height="178" rx="12" />
+    <rect x="1042" y="610" width="32" height="232" rx="12" />
+    <rect x="1098" y="674" width="32" height="168" rx="12" />
+    <rect x="1154" y="564" width="32" height="278" rx="12" />
+    <rect x="1210" y="706" width="32" height="136" rx="12" />
+  </g>
+  <text x="96" y="132" fill="#0d766e" font-size="26" font-family="IBM Plex Mono, monospace" font-weight="600" letter-spacing="4">PROSPEKTLAB INSIGHT</text>
+  <text x="96" y="250" fill="url(#ink)" font-size="94" font-family="Newsreader, Georgia, serif" font-weight="700"><tspan x="96" dy="0">TCS Q3 FY25:</tspan><tspan x="96" dy="92">strong order book...</tspan></text>
+  <text x="96" y="560" fill="#5f6778" font-size="30" font-family="Manrope, Arial, sans-serif" font-weight="600"><tspan x="96" dy="0">TCS delivered a strong Q3 FY25 on margins,</tspan><tspan x="96" dy="36">cash conversion and deal wins, but the un...</tspan></text>
+  <text x="96" y="714" fill="#17314d" font-size="26" font-family="IBM Plex Mono, monospace" font-weight="500" letter-spacing="3">EDITORIAL REPORT</text>
+  <g><rect x="96" y="824" rx="24" ry="24" width="248" height="56" fill="#fff7ee" fill-opacity="0.88" stroke="#17314d" stroke-opacity="0.10" /><text x="120" y="860" fill="#17314d" font-size="24" font-family="Manrope, Arial, sans-serif" font-weight="700">TCS Q3 FY25 earnings</text></g><g><rect x="360" y="824" rx="24" ry="24" width="188" height="56" fill="#fff7ee" fill-opacity="0.88" stroke="#17314d" stroke-opacity="0.10" /><text x="384" y="860" fill="#17314d" font-size="24" font-family="Manrope, Arial, sans-serif" font-weight="700">TCS order book</text></g><g><rect x="564" y="824" rx="24" ry="24" width="178" height="56" fill="#fff7ee" fill-opacity="0.88" stroke="#17314d" stroke-opacity="0.10" /><text x="588" y="860" fill="#17314d" font-size="24" font-family="Manrope, Arial, sans-serif" font-weight="700">TCS deal wins</text></g><g><rect x="758" y="824" rx="24" ry="24" width="198" height="56" fill="#fff7ee" fill-opacity="0.88" stroke="#17314d" stroke-opacity="0.10" /><text x="782" y="860" fill="#17314d" font-size="24" font-family="Manrope, Arial, sans-serif" font-weight="700">TCS BFSI growth</text></g>
+</svg>

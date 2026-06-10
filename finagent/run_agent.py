@@ -23,7 +23,7 @@ import math
 import re
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from datetime import datetime, timezone
@@ -31,6 +31,7 @@ from datetime import datetime, timezone
 from finagent.accuracy_validator import AccuracyValidator, Claim, Source
 from finagent.agent.reflection import ReflectionLoop
 from finagent.agents import Orchestrator, SubAgentContext, Verifier, detect_blind_spots
+from finagent.agents.context_loaders import load_agent_context
 from finagent.agents.specialists import default_roster
 from finagent.analysis.conflicts import detect_conflicts
 from finagent.analysis.quality import score_research
@@ -40,6 +41,7 @@ from finagent.geo.query_localizer import localize_search_query
 from finagent.geo.source_policy import preferred_domains_for_entity
 from finagent.harness import Harness, HarnessConfig, compress_context_stub
 from finagent.harness.context_manager import should_compress
+from finagent.ikg.service import get_ikg_service, metric_observations_from_bundle
 from finagent.memory import MemoryFact, get_memory_store
 from finagent.memory.store import normalize_target
 from finagent.paths import finagent_data_path
@@ -80,6 +82,7 @@ from finagent.tools.data import (
     search_reddit,
 )
 from finagent.tools.social.viral_verifier import score_text_for_pump_and_dump
+from finagent.tools.web.http_fetcher import aclose_shared_client
 from finagent.tools.web.scraper import ScrapedDoc, search_layered, search_web
 
 logger = logging.getLogger("finagent.run_agent")
@@ -384,6 +387,84 @@ def _auto_max_steps(objective: str, base: int) -> int:
     # preserving the larger floor for standard/deep research sessions.
     floor = 24 if base < 40 else 40
     return max(floor, int(base * complexity))
+
+
+def _objective_needs_fresh_web(objective: str) -> bool:
+    text = (objective or "").lower()
+    freshness_markers = (
+        "latest",
+        "today",
+        "recent",
+        "current",
+        "breaking",
+        "news",
+        "headline",
+        "update",
+        "this week",
+        "this month",
+        "announcement",
+        "announced",
+        "appointed",
+        "appointment",
+        "resigned",
+        "resignation",
+        "stepped down",
+        "ceased",
+        "cessation",
+        "board change",
+        "ceo",
+        "cfo",
+        "kmp",
+        "order",
+        "penalty",
+        "settlement",
+        "show cause",
+    )
+    if any(marker in text for marker in freshness_markers):
+        return True
+    ownership_change_markers = (
+        "increased promoter",
+        "decreased promoter",
+        "promoter change",
+        "change in promoter",
+        "pledge change",
+        "changed shareholding",
+    )
+    return any(marker in text for marker in ownership_change_markers)
+
+
+def _ikg_grounding_is_sufficient(bundle: EnrichmentBundle | None) -> bool:
+    ikg = getattr(bundle, "ikg", None)
+    if ikg is None or ikg.status not in {"ok", "partial"}:
+        return False
+    if ikg.confidence < 0.6:
+        return False
+    if not getattr(ikg, "source_refs", None):
+        return False
+    needed = ("governance", "ownership", "risk", "financials")
+    available = sum(1 for key in needed if ikg.coverage.get(key) != "missing")
+    return available >= 3
+
+
+def _ikg_can_answer_objective(bundle: EnrichmentBundle | None, objective: str, output_mode: str) -> bool:
+    ikg = getattr(bundle, "ikg", None)
+    if ikg is None or ikg.status not in {"ok", "partial"}:
+        return False
+    coverage = getattr(ikg, "coverage", {}) or {}
+    if coverage.get("identity") == "missing":
+        return False
+    lower = (objective or "").lower()
+    ownership_terms = ("shareholding", "shareholding pattern", "promoter", "pledge", "ownership", "fii", "dii")
+    governance_terms = ("governance", "board", "director", "auditor", "management")
+    wants_ownership = any(term in lower for term in ownership_terms)
+    wants_governance = any(term in lower for term in governance_terms)
+    if output_mode not in {"direct_answer", "conversational_chat"} and not (wants_ownership or wants_governance):
+        return False
+    if wants_ownership and coverage.get("ownership") != "missing":
+        return True
+    if wants_governance and coverage.get("governance") != "missing":
+        return True
+    return False
 
 
 def _tier_to_kind(tier: int) -> str:
@@ -1503,6 +1584,20 @@ async def run_research_session(
     if cfg.auto_depth:
         cfg.max_steps = _auto_max_steps(objective, cfg.max_steps)
     session_id = cfg.session_id or str(uuid.uuid4())
+    loop = asyncio.get_running_loop()
+
+    def _cleanup_on_task_done(_task: asyncio.Task) -> None:
+        if cfg.close_bus_on_finish:
+            BUS.close(session_id)
+        try:
+            loop.create_task(aclose_shared_client())
+        except RuntimeError:
+            pass
+
+    current_task = asyncio.current_task()
+    if current_task is not None:
+        current_task.add_done_callback(_cleanup_on_task_done)
+
     harness = Harness(HarnessConfig(session_id=session_id))
     cp = empty_checkpoint()
     validator = AccuracyValidator()
@@ -1536,12 +1631,27 @@ async def run_research_session(
         cfg.enable_reflection = True
         cfg.enable_blindspot = True
         cfg.enable_deep_dive = True
+        cfg.max_steps = min(max(cfg.max_steps, 16), 32)
+        cfg.breadth_search_timeout = min(cfg.breadth_search_timeout, 35.0)
+        cfg.followup_search_timeout = min(cfg.followup_search_timeout, 15.0)
+        cfg.news_timeout = min(cfg.news_timeout, 10.0)
+        cfg.agent_deadline_ms = min(cfg.agent_deadline_ms, 18_000)
+        cfg.blindspot_max_queries = min(cfg.blindspot_max_queries, 4)
+        cfg.blindspot_per_query_timeout = min(cfg.blindspot_per_query_timeout, 8.0)
+        cfg.reflection_max_rounds = min(cfg.reflection_max_rounds, 1)
+        cfg.reflection_per_query_limit = min(cfg.reflection_per_query_limit, 3)
+        cfg.reflection_per_query_timeout = min(cfg.reflection_per_query_timeout, 10.0)
+        cfg.reflection_max_new_docs = min(cfg.reflection_max_new_docs, 16)
+        cfg.reflection_wall_clock_seconds = min(cfg.reflection_wall_clock_seconds or 20.0, 20.0)
     elif response_depth == ResponseDepth.CHAT:
         cfg.enable_multi_agent = False
         cfg.enable_blindspot = False
         cfg.enable_reflection = False
         cfg.enable_deep_dive = False
         cfg.max_steps = min(cfg.max_steps, 8)
+        cfg.breadth_search_timeout = min(cfg.breadth_search_timeout, 10.0)
+        cfg.followup_search_timeout = min(cfg.followup_search_timeout, 6.0)
+        cfg.news_timeout = min(cfg.news_timeout, 6.0)
         if routing.query_complexity == "simple":
             cfg.enable_scraping = False
         if retrieval_plan and retrieval_plan.breadth_queries:
@@ -1552,11 +1662,14 @@ async def run_research_session(
         cfg.enable_blindspot = False
         cfg.enable_reflection = False
         cfg.enable_deep_dive = False
-        cfg.max_steps = min(max(cfg.max_steps, 8), 18)
+        cfg.max_steps = min(max(cfg.max_steps, 8), 12)
+        cfg.breadth_search_timeout = min(cfg.breadth_search_timeout, 10.0)
+        cfg.followup_search_timeout = min(cfg.followup_search_timeout, 8.0)
+        cfg.news_timeout = min(cfg.news_timeout, 8.0)
         if routing.intent_key == "PORTFOLIO_AUDIT":
             cfg.enable_scraping = False
         elif retrieval_plan and retrieval_plan.breadth_queries:
-            retrieval_plan.breadth_queries = retrieval_plan.breadth_queries[:3]
+            retrieval_plan.breadth_queries = retrieval_plan.breadth_queries[:1]
     output_mode = classify_output_mode(
         query=objective,
         target=target,
@@ -1565,13 +1678,7 @@ async def run_research_session(
         explicit_mode=cfg.output_mode,
     )
     if routing.deep_research and response_depth == ResponseDepth.DEEP:
-        cfg.max_steps = max(cfg.max_steps, 80)
-        cfg.reflection_max_rounds = min(cfg.reflection_max_rounds, 2)
-        cfg.reflection_per_query_limit = min(cfg.reflection_per_query_limit, 4)
-        cfg.reflection_per_query_timeout = min(cfg.reflection_per_query_timeout, 18.0)
-        cfg.reflection_max_new_docs = min(cfg.reflection_max_new_docs, 32)
-        cfg.reflection_wall_clock_seconds = min(cfg.reflection_wall_clock_seconds or 45.0, 45.0)
-        cfg.blindspot_max_queries = max(cfg.blindspot_max_queries, 10)
+        cfg.max_steps = min(max(cfg.max_steps, 20), 36)
 
     # ============================================================
     # DETAILED AGENT STEP LOGGING — every major decision point
@@ -1652,13 +1759,21 @@ async def run_research_session(
                 len(retrieval_plan.breadth_queries), retrieval_plan.breadth_queries[:6])
 
     t0 = time.perf_counter()
+    session_budget_s = 18.0 if response_depth == ResponseDepth.CHAT else (30.0 if response_depth == ResponseDepth.STANDARD else 55.0)
+
+    def _budget_exceeded() -> bool:
+        return (time.perf_counter() - t0) >= session_budget_s
+
+    def _remaining_budget_s() -> float:
+        return max(0.0, session_budget_s - (time.perf_counter() - t0))
 
     last_compression_step = 0
     docs: list[ScrapedDoc] = []
     step = 0
 
     # ── Phase 0: memory recall ─────────────────────────────────────────────
-    memory_store = get_memory_store() if cfg.enable_memory else None
+    memory_enabled = bool(cfg.enable_memory and cfg.user_email)
+    memory_store = get_memory_store() if memory_enabled else None
     recalled_facts: list[MemoryFact] = []
     last_summary: dict | None = None
     if memory_store is not None:
@@ -1714,8 +1829,122 @@ async def run_research_session(
         logger.info("[AGENT-ENRICH] Done | Yahoo=%s | Wiki=%s | News=%d | India/SEC=%s",
                     bundle.yahoo is not None, bundle.wikipedia is not None, len(bundle.news), bundle.sec is not None)
 
+    ikg_service = get_ikg_service()
+    ikg_aliases = [
+        target,
+        entity.canonical_name,
+        entity.ticker_label,
+        entity.yahoo_ticker,
+        bundle.sec.symbol if bundle.sec else None,
+        bundle.sec.company_name if bundle.sec else None,
+        bundle.sec.isin if bundle.sec else None,
+        bundle.yahoo.ticker if bundle.yahoo else None,
+        bundle.yahoo.name if bundle.yahoo else None,
+    ]
+    ikg_depth = "extended" if response_depth == ResponseDepth.DEEP else "standard"
+    try:
+        bundle.ikg = await ikg_service.build_company_bundle(
+            identifier=target,
+            ticker=(bundle.sec.symbol if bundle.sec else None) or entity.ticker_label,
+            isin=(bundle.sec.isin if bundle.sec else None),
+            name=(bundle.sec.company_name if bundle.sec else None) or (bundle.yahoo.name if bundle.yahoo else None),
+            aliases=[alias for alias in ikg_aliases if alias],
+            depth=ikg_depth,
+        )
+        BUS.emit(
+            session_id,
+            "ikg_grounded",
+            status=bundle.ikg.status,
+            depth=bundle.ikg.depth,
+            confidence=round(bundle.ikg.confidence, 3),
+            as_of_date=bundle.ikg.as_of_date,
+            coverage=bundle.ikg.coverage,
+            warnings=bundle.ikg.warnings[:4],
+            entity=bundle.ikg.entity,
+        )
+    except Exception as exc:
+        logger.warning("IKG grounding failed: %s", exc)
+        BUS.emit(session_id, "warning", message=f"IKG grounding failed: {exc}")
+        bundle.ikg = None
+
+    if bundle.ikg and bundle.ikg.entity:
+        ikg_name = str(bundle.ikg.entity.get("name") or "").strip()
+        ikg_ticker = str(bundle.ikg.entity.get("nse_symbol") or "").strip() or entity.ticker_label
+        should_upgrade_entity = bool(
+            ikg_name
+            and ikg_name.lower() != entity.canonical_name.lower()
+            and (
+                entity.confidence != "high"
+                or " " not in entity.canonical_name
+                or len(ikg_name) > len(entity.canonical_name) + 3
+            )
+        )
+        if should_upgrade_entity:
+            entity = replace(
+                entity,
+                canonical_name=ikg_name,
+                normalized_name=ikg_name.lower(),
+                ticker_label=ikg_ticker,
+                search_aliases=tuple(
+                    dict.fromkeys(
+                        alias
+                        for alias in (
+                            ikg_name,
+                            ikg_ticker,
+                            entity.yahoo_ticker,
+                            *entity.search_aliases,
+                        )
+                        if alias
+                    )
+                ),
+                confidence="high" if bundle.ikg.entity.get("cin") else entity.confidence,
+            )
+            preferred_domains = preferred_domains_for_entity(entity)
+            retrieval_plan = build_retrieval_plan(entity, objective)
+            retrieval_plan.breadth_queries = apply_playbook_to_queries(retrieval_plan.breadth_queries, playbook)
+            logger.info(
+                "[AGENT-ENTITY-UPGRADE] Rebuilt retrieval plan using IKG identity | canonical_name=%s | ticker=%s",
+                entity.canonical_name,
+                entity.ticker_label,
+            )
+            BUS.emit(
+                session_id,
+                "phase",
+                phase="ikg-entity-upgrade",
+                note=f"Using canonical identity '{entity.canonical_name}' for search planning.",
+            )
+
+    if response_depth == ResponseDepth.STANDARD and cfg.enable_scraping:
+        if (
+            _ikg_grounding_is_sufficient(bundle)
+            or _ikg_can_answer_objective(bundle, objective, output_mode.value)
+        ) and not _objective_needs_fresh_web(objective):
+            cfg.enable_scraping = False
+            BUS.emit(
+                session_id,
+                "phase",
+                phase="ikg-fast-path",
+                note="Skipping broad web scraping because IKG coverage is sufficient for a standard-depth answer.",
+            )
+            logger.info("[AGENT-FASTPATH] Standard mode using IKG-first path; broad scraping disabled")
+    elif response_depth == ResponseDepth.DEEP and _ikg_grounding_is_sufficient(bundle):
+        if retrieval_plan and retrieval_plan.breadth_queries:
+            retrieval_plan.breadth_queries = retrieval_plan.breadth_queries[:2]
+        if not _objective_needs_fresh_web(objective):
+            cfg.enable_blindspot = False
+            BUS.emit(
+                session_id,
+                "phase",
+                phase="ikg-deep-guardrail",
+                note="Reducing blindspot fanout because IKG already covers the core entity graph.",
+            )
+            logger.info("[AGENT-FASTPATH] Deep mode reducing blindspot fanout via IKG coverage")
+
     # ── Phase 3: breadth survey ───────────────────────────────────────────
-    canonical_label = bundle.sec.name if bundle.sec else (bundle.yahoo.name if bundle.yahoo and bundle.yahoo.name else entity.canonical_name or target)
+    canonical_label = bundle.sec.name if bundle.sec else (
+        bundle.ikg.entity.get("name") if bundle.ikg and bundle.ikg.entity.get("name")
+        else (bundle.yahoo.name if bundle.yahoo and bundle.yahoo.name else entity.canonical_name or target)
+    )
     if cfg.enable_scraping:
         BUS.emit(session_id, "phase", phase="breadth-survey", note="Checking filings, market data, news, and peer context")
         logger.info("[AGENT-PHASE] === PHASE: BREADTH SURVEY (search_layered) ===")
@@ -1735,7 +1964,8 @@ async def run_research_session(
                 preferred_domains=preferred_domains,
                 entity=entity,
                 timeout_s=timeout_s,
-                bypass_crawl4ai=(response_depth in {ResponseDepth.STANDARD, ResponseDepth.CHAT}),
+                bypass_crawl4ai=(response_depth == ResponseDepth.CHAT),
+                lite_crawl=(response_depth == ResponseDepth.STANDARD),
             )
             logger.info("[AGENT-SEARCH] Breadth survey COMPLETE | docs_returned=%d", len(docs))
         except Exception as exc:
@@ -1767,7 +1997,7 @@ async def run_research_session(
             BUS.emit(session_id, "compression", step=step)
 
     # ── Phase 4: deep-dive (multi-round iterative search) ─────────────────
-    if cfg.enable_scraping and cfg.enable_deep_dive and step < cfg.max_steps:
+    if cfg.enable_scraping and cfg.enable_deep_dive and step < cfg.max_steps and not _budget_exceeded():
         BUS.emit(session_id, "phase", phase="deep-dive", note="Iterative gap-driven queries")
         logger.info("[AGENT-PHASE] === PHASE: DEEP DIVE (iterative follow-ups) ===")
         logger.info("[AGENT-DEEP] Starting deep-dive | current_step=%d | max_steps=%d", step, cfg.max_steps)
@@ -1811,11 +2041,27 @@ async def run_research_session(
         # Up to 4 rounds, gated by remaining step budget. Each round harvests
         # entities/gaps from the *cumulative* doc pool so coverage compounds.
         for round_index in range(4):
-            if step >= cfg.max_steps:
+            if step >= cfg.max_steps or _budget_exceeded():
+                break
+            remaining_budget_s = _remaining_budget_s()
+            if remaining_budget_s < max(8.0, cfg.followup_search_timeout + 3.0):
+                BUS.emit(
+                    session_id,
+                    "warning",
+                    message="Deep-dive time budget is nearly exhausted; moving to analysis and synthesis.",
+                )
+                logger.info(
+                    "[AGENT-DEEP] Stopping deep-dive early | remaining_budget_s=%.1f | step=%d/%d",
+                    remaining_budget_s,
+                    step,
+                    cfg.max_steps,
+                )
                 break
             followups = _build_followup_queries(canonical_label, docs, bundle.sec, round_index=round_index)
             if not followups:
                 continue
+            max_followups = 2 if remaining_budget_s < 16.0 else 3
+            followups = followups[:max_followups]
             logger.info("Phase 4 (Deep Dive): Round %d | Generated follow-up queries: %s", round_index + 1, followups)
             BUS.emit(
                 session_id,
@@ -1853,6 +2099,9 @@ async def run_research_session(
                 step += len(new_docs_in_round)
                 logger.info("Phase 4 (Deep Dive): Round %d finished | Found %d new documents | Total documents: %d | Step: %d/%d",
                             round_index + 1, len(new_docs_in_round), len(docs), step, cfg.max_steps)
+                if _budget_exceeded():
+                    logger.info("[AGENT-DEEP] Time budget reached immediately after round %d processing", round_index + 1)
+                    break
 
             if not new_docs_in_round:
                 break
@@ -1866,7 +2115,7 @@ async def run_research_session(
 
     # ── Phase 4.5: reflection loop (Hermes-style self-improvement) ────────
     reflection_payload = None
-    if cfg.enable_reflection and cfg.enable_scraping:
+    if cfg.enable_reflection and cfg.enable_scraping and not _budget_exceeded() and _remaining_budget_s() >= 12.0:
         BUS.emit(
             session_id,
             "phase",
@@ -1926,6 +2175,7 @@ async def run_research_session(
                 search_callable=_search_for_reflection,
                 process_doc_callable=_process_for_reflection,
                 emit_callable=_emit_event,
+                budget_exceeded=_budget_exceeded,
             )
             step = step_ref["v"]
             reflection_payload = ref_result.to_dict()
@@ -1935,12 +2185,23 @@ async def run_research_session(
         except Exception as exc:
             logger.warning("reflection loop failed: %s", exc)
             BUS.emit(session_id, "warning", message=f"reflection loop failed: {exc}")
+    elif cfg.enable_reflection and cfg.enable_scraping:
+        BUS.emit(
+            session_id,
+            "warning",
+            message="Skipping reflection to preserve response latency budget.",
+        )
+        logger.info(
+            "[AGENT-REFLECTION] Skipped | budget_exceeded=%s | remaining_budget_s=%.1f",
+            _budget_exceeded(),
+            _remaining_budget_s(),
+        )
 
     # ── Phase 4.7: Multi-agent dispatch (parallel specialists + verifier) ──
     orchestration_payload = None
     blindspot_payload = None
     orchestration_findings: list = []
-    if cfg.enable_multi_agent and cfg.enable_scraping:
+    if cfg.enable_multi_agent and cfg.enable_scraping and not _budget_exceeded() and _remaining_budget_s() >= 10.0:
         BUS.emit(
             session_id,
             "phase",
@@ -1953,6 +2214,30 @@ async def run_research_session(
             BUS.emit(session_id, event_type, **payload)
 
         seen_urls = {(d.final_url or d.url or "").split("#", 1)[0] for d in docs}
+        ikg_entity = bundle.ikg.entity if bundle.ikg else {}
+        agent_contexts: dict[str, dict] = {}
+        try:
+            selected_agent_names = sorted(set(routing.selected_agents))
+            context_tasks = [
+                load_agent_context(
+                    agent_name,
+                    ticker=ikg_entity.get("nse_symbol") or (bundle.sec.symbol if bundle.sec else None) or entity.ticker_label,
+                    cin=ikg_entity.get("cin"),
+                    sector=ikg_entity.get("sector") or (bundle.sec.sector if bundle.sec else None),
+                    ikg_bundle=bundle.ikg,
+                )
+                for agent_name in selected_agent_names
+            ]
+            if context_tasks:
+                context_results = await asyncio.gather(*context_tasks, return_exceptions=True)
+                for agent_name, context_result in zip(selected_agent_names, context_results):
+                    if isinstance(context_result, Exception):
+                        logger.debug("Agent context load failed for %s: %s", agent_name, context_result)
+                        continue
+                    agent_contexts[agent_name] = context_result or {}
+        except Exception as exc:
+            logger.warning("agent-specific IKG context load failed: %s", exc)
+
         ctx = SubAgentContext(
             target=target,
             canonical_label=canonical_label,
@@ -1962,10 +2247,13 @@ async def run_research_session(
             session_id=session_id,
             seen_urls=seen_urls,
             resolved_entity=entity,
+            ikg_bundle=bundle.ikg,
+            agent_contexts=agent_contexts,
             preferred_domains=preferred_domains,
             portfolio_symbols=(portfolio_sentinel.symbols if portfolio_sentinel else []),
             portfolio_risk=(portfolio_sentinel.risk if portfolio_sentinel else {}),
             runtime_rules=(portfolio_sentinel.rules if portfolio_sentinel else []),
+            budget_exceeded=_budget_exceeded,
         )
 
         try:
@@ -2007,9 +2295,11 @@ async def run_research_session(
             # Verifier — cross-checks all findings, demotes/promotes, runs
             # AccuracyValidator on each finding.
             verifier = Verifier(validator=validator)
+            ikg_metric_observations = metric_observations_from_bundle(bundle.ikg)
             verifier_report = verifier.run(
                 findings=orchestration_findings,
                 docs=docs,
+                extra_metric_observations=ikg_metric_observations,
                 emit=_emit_event,
             )
             orchestration_payload["verifier"] = verifier_report.to_dict()
@@ -2033,19 +2323,32 @@ async def run_research_session(
         # ── Blind-spot generator + optional auto-dispatch ─────────────
         if cfg.enable_blindspot and orchestration_findings:
             try:
-                spots = detect_blind_spots(
-                    target_label=canonical_label,
-                    findings=orchestration_findings,
-                    seed_docs=docs,
-                    top_n=6,
-                )
-                logger.info("Phase 4.7 (Multi-Agent): Blind-spot generation detected %d spots", len(spots))
-                blindspot_payload = {"blindspots": [s.to_dict() for s in spots]}
-                _emit_event(
-                    "blindspot",
-                    blindspot_count=len(spots),
-                    blindspots=blindspot_payload["blindspots"],
-                )
+                if _budget_exceeded() or _remaining_budget_s() < 8.0:
+                    logger.info(
+                        "[AGENT-BLINDSPOT] Skipped | budget_exceeded=%s | remaining_budget_s=%.1f",
+                        _budget_exceeded(),
+                        _remaining_budget_s(),
+                    )
+                    _emit_event(
+                        "warning",
+                        message="Skipping blindspot fanout to preserve response latency budget.",
+                    )
+                    spots = []
+                    blindspot_payload = {"blindspots": [], "new_docs": 0, "skipped": True, "reason": "latency_budget"}
+                else:
+                    spots = detect_blind_spots(
+                        target_label=canonical_label,
+                        findings=orchestration_findings,
+                        seed_docs=docs,
+                        top_n=6,
+                    )
+                    logger.info("Phase 4.7 (Multi-Agent): Blind-spot generation detected %d spots", len(spots))
+                    blindspot_payload = {"blindspots": [s.to_dict() for s in spots]}
+                    _emit_event(
+                        "blindspot",
+                        blindspot_count=len(spots),
+                        blindspots=blindspot_payload["blindspots"],
+                    )
                 if spots:
                     if routing.intent_key == "PORTFOLIO_AUDIT":
                         # Portfolio deep runs already carry holdings/risk context; blindspot web fanout
@@ -2167,11 +2470,25 @@ async def run_research_session(
                     _emit_event("blindspot_dispatched", new_docs=bs_new, queries=len(fanout))
             except Exception as exc:
                 logger.warning("blindspot pass failed: %s", exc)
+    elif cfg.enable_multi_agent and cfg.enable_scraping:
+        BUS.emit(
+            session_id,
+            "warning",
+            message="Skipping multi-agent pass to preserve response latency budget.",
+        )
+        logger.info(
+            "[AGENT-SPECIALISTS] Skipped | budget_exceeded=%s | remaining_budget_s=%.1f",
+            _budget_exceeded(),
+            _remaining_budget_s(),
+        )
 
     # ── Phase 5: analysis ─────────────────────────────────────────────────
     BUS.emit(session_id, "phase", phase="analysis", note="Cross-source conflict detection")
     logger.info("Phase 5 (Analysis): Starting conflict detection on %d documents", len(docs))
-    conflicts = detect_conflicts(docs)
+    conflicts = detect_conflicts(
+        docs,
+        external_observations=metric_observations_from_bundle(bundle.ikg),
+    )
     logger.info("Phase 5 (Analysis): Completed conflict detection | Found %d cross-source conflicts", len(conflicts))
     for conflict in conflicts:
         logger.info("  Conflict on metric '%s': spread %.1f%% | Note: %s",
@@ -2247,6 +2564,7 @@ async def run_research_session(
             objective,
             docs,
             cp,
+            timeout_s=max(8.0, min(_remaining_budget_s() + 5.0, 15.0 if response_depth == ResponseDepth.STANDARD else 20.0)),
             conflicts=conflicts,
             on_token=_on_memo_token,
             enrichment=bundle,
@@ -2328,6 +2646,18 @@ async def run_research_session(
         logger.warning("playbook promotion failed: %s", exc)
 
     primary_count = sum(1 for c in cp.citation_log if c.kind == "primary")
+    runtime_meta = {
+        "ikg_sufficient": _ikg_grounding_is_sufficient(bundle),
+        "can_answer_objective": _ikg_can_answer_objective(bundle, objective, output_mode.value),
+        "objective_needs_fresh_web": _objective_needs_fresh_web(objective),
+        "doc_count": len(docs),
+        "conflict_count": len(conflicts),
+        "primary_citations": primary_count,
+        "news_item_count": len(bundle.news or []),
+        "ikg_coverage": dict(getattr(bundle.ikg, "coverage", {}) or {}),
+        "response_depth": response_depth.value,
+    }
+    setattr(cp, "runtime_meta", runtime_meta)
 
     _final_payload = dict(
         target=target,
@@ -2356,6 +2686,7 @@ async def run_research_session(
         orchestration=orchestration_payload,
         blindspot=blindspot_payload,
         resolved_entity=entity.to_event_payload(),
+        ikg=(bundle.ikg.to_public_payload() if bundle.ikg else None),
     )
     # Attach rich structured data (comparison tables, charts) so the frontend
     # final handler can render them even if visual_data_ready was insufficient.
@@ -2407,6 +2738,7 @@ async def run_research_session(
     except Exception as exc:
         logger.warning("Failed to print session summary: %s", exc)
 
+    await aclose_shared_client()
     return pl, cp
 
 

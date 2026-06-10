@@ -7,7 +7,6 @@ import Features from './pages/Features';
 import Onboarding from './pages/Onboarding';
 import ContactUs from './pages/ContactUs';
 import { Dashboard } from './pages/Dashboard';
-import { ControlTowerPage } from './pages/ControlTower';
 import { Login } from './pages/Login';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { hydrateAuthToken } from './api/client';
@@ -172,15 +171,6 @@ export const AppContent: React.FC = () => {
               <Dashboard />
             </ProtectedRoute>
           } 
-        />
-
-        <Route
-          path="/ops"
-          element={
-            <ProtectedRoute>
-              <ControlTowerPage />
-            </ProtectedRoute>
-          }
         />
 
         {/* Fallback */}

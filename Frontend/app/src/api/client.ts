@@ -267,6 +267,10 @@ function getAuthToken(): string | null {
   return _authToken;
 }
 
+export function getEventSourceAuthToken(): string | null {
+  return getStoredAuthToken();
+}
+
 function setAuthToken(token: string | null, remember: boolean = true): void {
   _authToken = token;
   if (typeof window === 'undefined') return;
@@ -1407,4 +1411,234 @@ export async function getMarketHistory(
     throw new Error(err.detail || `Failed to fetch market history: ${res.statusText}`);
   }
   return res.json();
+}
+
+// ── Flash Content Engine API ──────────────────────────────────────────────────
+
+export interface FlashGenerationRequest {
+  mode?: 'flash' | 'deep' | 'research';
+  content_type: 'earnings' | 'sebi' | 'trend' | 'company' | 'manual';
+  target: string;
+  objective?: string;
+  source_url?: string;
+  source_markdown?: string;
+  route_base?: string;
+  include_image?: boolean;
+  overwrite?: boolean;
+}
+
+export interface FlashJobStarted {
+  job_id: string;
+  stream: string;
+  status: string;
+  events: string;
+  result: string;
+  mode: string;
+  content_type: string;
+}
+
+export interface ArticleListItem {
+  slug: string;
+  title: string;
+  description: string;
+  route_base: string;
+  public_url: string;
+  generated_at: string;
+  image_path?: string;
+  confidence_score: number;
+  publish_status: 'draft' | 'published';
+  content_type?: string;
+  mode?: string;
+  quality_score?: number;
+  ikg_covered?: boolean;
+  job_id?: string;
+  editorial_review?: Record<string, any>;
+  editorial_quality_score?: number;
+  publish_urgency_score?: number;
+}
+
+export interface ArticleDetail extends ArticleListItem {
+  html_path: string;
+  json_path: string;
+  sources_used: Array<{ title: string; url: string }>;
+  publish_reasons: string[];
+  mirrored_public_path?: string;
+  article?: Record<string, unknown>;
+  editorial_review?: Record<string, any>;
+}
+
+export interface FlashIngestRequest {
+  content_type: 'earnings' | 'sebi' | 'trend';
+  mode?: 'flash' | 'deep' | 'research';
+  symbols?: string[];
+  isin_list?: string[];
+  bse_codes?: string[];
+  route_base?: string;
+  max_events_per_source?: number;
+  include_image?: boolean;
+  dry_run?: boolean;
+}
+
+export interface AutomationStatus {
+  status: string;
+  last_started_at: string;
+  last_completed_at: string;
+  last_error: string;
+  last_summary: Record<string, any>;
+  source_health: Record<string, any>;
+  current_run?: Record<string, any>;
+  activity_log?: Array<Record<string, any>>;
+  recent_items: Array<Record<string, any>>;
+  cursor: number;
+  updated_at: string;
+  automation_mode?: string;
+  automation_label?: string;
+  status_detail?: string;
+  scheduler_status?: string;
+  scheduler_enabled?: boolean;
+  scheduler_last_heartbeat_at?: string;
+  next_scheduled_run_at?: string;
+  fallback_status?: string;
+  fallback_daily_count?: number;
+  fallback_daily_target?: number;
+  fallback_remaining_today?: number;
+  fallback_generated_today?: number;
+  fallback_published_today?: number;
+  fallback_held_today?: number;
+  fallback_candidates_considered?: number;
+  fallback_qualified_topics?: number;
+  fallback_last_action?: string;
+  fallback_review_reasons?: string[];
+  next_fallback_after?: string;
+  search_console?: {
+    enabled?: boolean;
+    configured?: boolean;
+    site_url?: string;
+    sitemap_url?: string;
+    error?: string;
+    top_pages?: Array<Record<string, any>>;
+    top_queries?: Array<Record<string, any>>;
+    generated_at?: string;
+  };
+}
+
+export async function generateFlashArticle(req: FlashGenerationRequest): Promise<FlashJobStarted> {
+  const res = await fetchApi(apiUrl('/api/content/flash/generate'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Flash generation failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function ingestFlashEvents(req: FlashIngestRequest): Promise<FlashJobStarted> {
+  const res = await fetchApi(apiUrl('/api/content/flash/ingest-events'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Ingest failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function getContentAutomationStatus(): Promise<AutomationStatus> {
+  const res = await fetchApi(apiUrl('/api/content/automation/status'), {
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch automation status: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function runContentAutomationNow(): Promise<FlashJobStarted> {
+  const res = await fetchApi(apiUrl('/api/content/automation/run-now'), {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to start automation sweep: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function listContentArticles(
+  routeBase?: string,
+  limit = 80,
+): Promise<{ items: ArticleListItem[]; count: number }> {
+  const params = new URLSearchParams();
+  if (routeBase) params.set('route_base', routeBase);
+  params.set('limit', String(limit));
+  const res = await fetchApi(apiUrl(`/api/content/articles?${params.toString()}`), {
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error(`Failed to list articles: ${res.statusText}`);
+  return res.json();
+}
+
+export async function getContentArticle(slug: string, routeBase = 'insights'): Promise<ArticleDetail> {
+  const res = await fetchApi(
+    apiUrl(`/api/content/articles/${encodeURIComponent(slug)}?route_base=${routeBase}`),
+    { credentials: 'include' },
+  );
+  if (!res.ok) throw new Error(`Article not found: ${slug}`);
+  return res.json();
+}
+
+export async function getContentArticleHtml(slug: string, routeBase = 'insights'): Promise<string> {
+  const res = await fetchApi(
+    apiUrl(`/api/content/articles/${encodeURIComponent(slug)}/html?route_base=${routeBase}`),
+    { credentials: 'include' },
+  );
+  if (!res.ok) throw new Error(`Article HTML not found: ${slug}`);
+  return res.text();
+}
+
+export async function publishContentArticle(
+  slug: string,
+  routeBase = 'insights',
+): Promise<{ slug: string; publish_status: string; public_url?: string }> {
+  const res = await fetchApi(
+    apiUrl(`/api/content/articles/${encodeURIComponent(slug)}/publish?route_base=${routeBase}`),
+    { method: 'POST', credentials: 'include' },
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Publish failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function unpublishContentArticle(
+  slug: string,
+  routeBase = 'insights',
+): Promise<{ slug: string; publish_status: string }> {
+  const res = await fetchApi(
+    apiUrl(`/api/content/articles/${encodeURIComponent(slug)}/unpublish?route_base=${routeBase}`),
+    { method: 'POST', credentials: 'include' },
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Unpublish failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+/** Returns the SSE stream URL for a flash job (caller creates EventSource). */
+export function flashJobStreamUrl(jobId: string): string {
+  return apiUrl(`/sessions/${encodeURIComponent(jobId)}/stream`);
+}
+
+export function flashJobStatusUrl(jobId: string): string {
+  return apiUrl(`/sessions/${encodeURIComponent(jobId)}/status`);
 }

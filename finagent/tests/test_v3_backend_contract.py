@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import types
 
@@ -10,6 +11,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi.testclient import TestClient
 
 from finagent.ingestion.markdown_extractor import extract_positions_from_markdown
+from finagent.ingestion.portfolio_guardrails import enforce_document_guardrails
 from finagent.ingestion.portfolio_schema import PortfolioExtractionSchema
 from finagent.memory.store import MemoryFact, get_memory_store
 from finagent.portfolio_mirrors import load_active_positions, portfolio_weights, replace_active_positions
@@ -27,12 +29,14 @@ def _mint_test_token(payload: dict, secret: str) -> str:
 
 
 def setup_function(function):
-    """Force in-memory fallback for tests by disabling Supabase configuration."""
+    """Force in-memory test stores without routing memory through Supabase."""
     import finagent.storage.supabase_store as _ss
     import finagent.memory.store as _ms
+    os.environ["MEMORY_IN_MEMORY"] = "1"
+    os.environ["MEMORY_BACKEND"] = "prospekt_tiered"
+    os.environ.pop("MEMORY_DATABASE_URL", None)
     _ss._is_supabase_configured = lambda: False
     _ss._portfolio_store = None
-    _ss._memory_store = None
     _ss._state_store = None
     _ss._token_usage_store = None
     _ms._singleton = None
@@ -93,6 +97,96 @@ def test_memory_store_accepts_explicit_created_at_and_summary():
     summary = asyncio.run(store.last_summary("TCS", user_email="memory@example.com"))
     assert summary is not None
     assert summary["summary"] == "Portfolio remains resilient."
+
+
+def test_memory_store_append_search_aliases_and_session_delete():
+    store = get_memory_store()
+
+    saved = asyncio.run(
+        store.append(
+            MemoryFact(
+                target_key="RELIANCE",
+                kind="risk",
+                body="High energy exposure matters for downside scenarios.",
+                confidence="MEDIUM",
+                user_email="alias@example.com",
+                session_id="sess-alias-1",
+            )
+        )
+    )
+    assert saved == 1
+
+    rows = asyncio.run(store.search("RELIANCE", kind="risk", user_email="alias@example.com"))
+    assert len(rows) == 1
+    assert rows[0].body.startswith("High energy exposure")
+
+    deleted = asyncio.run(store.delete_session("sess-alias-1", user_email="alias@example.com"))
+    assert deleted == {"facts": 1, "summaries": 0}
+    rows_after_delete = asyncio.run(store.search("RELIANCE", kind="risk", user_email="alias@example.com"))
+    assert rows_after_delete == []
+
+
+def test_memory_runtime_does_not_expose_supabase_memory_store():
+    import finagent.storage.supabase_store as supabase_store
+
+    assert not hasattr(supabase_store, "SupabaseMemoryStore")
+
+
+def test_tiered_memory_legacy_import_is_idempotent():
+    from finagent.memory.tiered_store import ProspektTieredMemoryStore
+
+    store = ProspektTieredMemoryStore()
+    first = asyncio.run(
+        store.remember(
+            target_key="tcs",
+            kind="financial",
+            body="Legacy imported revenue fact.",
+            confidence="HIGH",
+            user_email="legacy@example.com",
+            legacy_source="supabase_facts",
+            legacy_id="fact-1",
+        )
+    )
+    second = asyncio.run(
+        store.remember(
+            target_key="tcs",
+            kind="financial",
+            body="Legacy imported revenue fact.",
+            confidence="HIGH",
+            user_email="legacy@example.com",
+            legacy_source="supabase_facts",
+            legacy_id="fact-1",
+        )
+    )
+
+    assert first == 1
+    assert second == 0
+
+
+def test_memory_store_without_memory_database_config_fails_safe(monkeypatch):
+    import finagent.memory.store as _ms
+
+    monkeypatch.delenv("MEMORY_IN_MEMORY", raising=False)
+    monkeypatch.delenv("MEMORY_DATABASE_URL", raising=False)
+    monkeypatch.setenv("MEMORY_BACKEND", "prospekt_tiered")
+    _ms._singleton = None
+    store = get_memory_store()
+
+    saved = asyncio.run(
+        store.remember(
+            MemoryFact(
+                target_key="TCS",
+                kind="financial",
+                body="Revenue grew year over year.",
+                confidence="HIGH",
+                user_email="memory@example.com",
+            )
+        )
+    )
+    rows = asyncio.run(store.get_facts(target_key="TCS", user_email="memory@example.com"))
+
+    assert saved == 0
+    assert rows == []
 
 
 async def _seed_positions(tenant_id: str, positions: list[dict]) -> None:
@@ -244,6 +338,37 @@ def test_markdown_extractor_uses_visible_rows_not_sandbox_names():
     assert "RELIANCEINDUSTRIESLIMITED" not in symbols
 
 
+def test_document_guardrails_reject_invoice_like_tables():
+    md = """
+| Item | Description | Qty | Amount |
+|---|---|---:|---:|
+| SKU-1001 | Office Chair | 2 | 18000 |
+| SKU-1002 | Work Desk | 1 | 12500 |
+"""
+
+    extraction = extract_positions_from_markdown(md, source_type="csv")
+    guarded = enforce_document_guardrails(extraction, md, filename="invoice.xlsx")
+
+    assert guarded.status == "INGESTION_FAILED"
+    assert guarded.diagnostics["code"] == "NOT_PORTFOLIO_DOCUMENT"
+    assert guarded.positions == []
+
+
+def test_document_guardrails_keep_real_holdings_tables():
+    md = """
+| Symbol | Security Name | Qty | Market Value | Avg Cost | LTP |
+|---|---|---:|---:|---:|---:|
+| TCS | Tata Consultancy Services | 2 | 7000 | 3000 | 3500 |
+| INFY | Infosys Limited | 4 | 6400 | 1400 | 1600 |
+"""
+
+    extraction = extract_positions_from_markdown(md, source_type="csv")
+    guarded = enforce_document_guardrails(extraction, md, filename="holdings.xlsx")
+
+    assert guarded.status == "MIRROR_SYNCHRONIZED"
+    assert {position.symbol for position in guarded.positions} == {"TCS", "INFY"}
+
+
 def test_screenshot_upload_requires_review_and_does_not_write(monkeypatch):
     from finagent.gateway.run import JWT_SECRET, app
 
@@ -279,6 +404,29 @@ def test_screenshot_upload_requires_review_and_does_not_write(monkeypatch):
     assert body["status"] == "REVIEW_REQUIRED"
     assert body["review_id"]
     assert asyncio.run(load_active_positions("tenant-img")) == []
+
+
+def test_screenshot_upload_rejects_non_holdings_screen(monkeypatch):
+    from finagent.gateway.run import JWT_SECRET, app
+    from finagent.ingestion.image_ingestion import PortfolioImageExtractionError
+
+    async def fake_image_extract(_image_bytes, _filename):
+        raise PortfolioImageExtractionError("This screenshot is not a verified holdings screen.")
+
+    monkeypatch.setattr("finagent.gateway.run.extract_portfolio_from_image", fake_image_extract)
+    client = TestClient(app, raise_server_exceptions=False)
+    token = _mint_test_token({"user_id": "tenant-bad-img", "email": "badimg@example.com"}, JWT_SECRET)
+
+    response = client.post(
+        "/api/portfolio/upload-screenshot",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("random.png", b"\x89PNG\x0d\x0a\x1a\x0a fake", "image/png")},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["detail"]["code"] == "SCREENSHOT_EXTRACTION_FAILED"
+    assert "verified holdings screen" in body["detail"]["message"].lower()
 
 
 def test_portfolio_chat_requires_synchronized_mirror():

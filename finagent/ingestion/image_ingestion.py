@@ -12,6 +12,21 @@ from finagent.ingestion.portfolio_schema import (
 
 logger = logging.getLogger("finagent.ingestion.image_ingestion")
 
+_HOLDINGS_SCREEN_LABELS = (
+    "holdings",
+    "portfolio",
+    "positions",
+    "invested",
+    "current value",
+    "market value",
+    "qty",
+    "quantity",
+    "ltp",
+    "nav",
+    "p&l",
+    "day p&l",
+)
+
 
 class PortfolioImageExtractionError(RuntimeError):
     pass
@@ -27,18 +42,7 @@ def _mime_type(filename: str) -> str:
 
 
 async def extract_portfolio_from_image(image_bytes: bytes, filename: str) -> PortfolioExtractionSchema:
-    """Extract portfolio holdings from a screenshot image using OpenAI vision.
-
-    Args:
-        image_bytes: Image file bytes
-        filename: Original filename
-
-    Returns:
-        PortfolioExtractionSchema with status='REVIEW_REQUIRED' (always gated for safety)
-
-    Raises:
-        PortfolioImageExtractionError: If extraction fails (API key missing, model error, etc.)
-    """
+    """Extract holdings from a genuine broker holdings screenshot using OpenAI vision."""
     if not image_bytes:
         raise PortfolioImageExtractionError("Image upload is empty.")
 
@@ -60,20 +64,22 @@ async def extract_portfolio_from_image(image_bytes: bytes, filename: str) -> Por
     model = os.getenv("PORTFOLIO_VISION_MODEL", "gpt-4o-mini")
 
     prompt = (
-        "Extract ONLY visible holdings from this Indian broker/DP portfolio screenshot. "
-        "Supported brokers: Zerodha, Groww, Dhan, Shoonya, Angel, Motilal, Axis Direct, etc. "
-        "Extract these fields per row: symbol (ticker), quantity, price/NAV, value, cost_basis, name. "
-        "IMPORTANT number formatting: "
-        "  - Indian lakhs notation: 1,23,456 = 123456; 2.5L = 250000; use exact numeric value in JSON. "
-        "  - Parse '%' sign if present; store as ratio (e.g., '5%' = 0.05). "
-        "  - If a value column shows '₹' or 'Rs', extract only the number. "
-        "Do NOT infer or hallucinate missing grid values. If not visible, omit the field or use 0. "
-        "Each position must include: symbol, quantity, market_value, confidence (0.0-1.0), raw_evidence (copy visible text). "
-        "Use exchange 'NSE' for stocks unless screenshot shows BSE; 'AMFI' for mutual funds. "
-        "Return JSON with status='REVIEW_REQUIRED', source_type='image', positions[], warnings[]. "
-        "If unable to read any value clearly, set confidence=0.5 or lower for that row. "
-        "If entire screen is unreadable, return empty positions[] with status='REVIEW_REQUIRED'."
+        "First decide whether this image is a genuine Indian broker or DP holdings screenshot. "
+        "Classify screen_type as 'portfolio_holdings' only when the image clearly shows a holdings or portfolio screen with security rows and portfolio columns. "
+        "If the image is random, unrelated, or not a holdings view, set screen_type='not_portfolio', positions=[], visible_labels=[], rejection_reason, and confidence<=0.2. "
+        "If the image is blurry or uncertain, set screen_type='unclear', positions=[], visible_labels=[], rejection_reason, and confidence<=0.3. "
+        "When the image is valid, extract ONLY visible holdings from this Indian broker or DP portfolio screenshot. "
+        "Supported brokers include Zerodha, Groww, Dhan, Shoonya, Angel, Motilal, Axis Direct, and similar Indian broker holdings views. "
+        "Also return visible_labels[] with the exact UI labels you can clearly read, like Holdings, Qty, Invested, Current Value, Day P&L, Market Value. "
+        "Extract these fields per row: symbol, quantity, price_or_nav, market_value, cost_basis, and name. "
+        "Indian number formatting must be normalized to exact numeric JSON values. "
+        "Do not infer or hallucinate missing grid values. If a value is not visible, omit it or use 0. "
+        "Each position must include symbol, quantity, market_value, confidence, and raw_evidence copied from visible text. "
+        "Use exchange 'NSE' for stocks unless the screenshot clearly shows BSE, and 'AMFI' for mutual funds. "
+        "Return JSON with status='REVIEW_REQUIRED', source_type='image', screen_type, visible_labels, rejection_reason, positions[], warnings[]. "
+        "Never convert a random screen, article, invoice, chat, gallery image, or photo into holdings rows."
     )
+
     try:
         messages = [
             {
@@ -97,14 +103,6 @@ async def extract_portfolio_from_image(image_bytes: bytes, filename: str) -> Por
             if llm_result is None:
                 content = response.choices[0].message.content or "{}"
                 llm_result = PortfolioExtractionLLMResponse.model_validate(json.loads(content))
-            extraction = PortfolioExtractionSchema(
-                status=llm_result.status,
-                source_type=llm_result.source_type,
-                broker_or_vendor=llm_result.broker_or_vendor,
-                positions=llm_result.positions,
-                warnings=llm_result.warnings,
-                confidence=llm_result.confidence,
-            )
         else:
             response = await client.chat.completions.create(
                 model=model,
@@ -114,20 +112,52 @@ async def extract_portfolio_from_image(image_bytes: bytes, filename: str) -> Por
             )
             content = response.choices[0].message.content or "{}"
             llm_result = PortfolioExtractionLLMResponse.model_validate(json.loads(content))
-            extraction = PortfolioExtractionSchema(
-                status=llm_result.status,
-                source_type=llm_result.source_type,
-                broker_or_vendor=llm_result.broker_or_vendor,
-                positions=llm_result.positions,
-                warnings=llm_result.warnings,
-                confidence=llm_result.confidence,
-            )
     except Exception as exc:
         logger.exception("OpenAI screenshot extraction failed")
         raise PortfolioImageExtractionError(f"Screenshot extraction failed: {exc}") from exc
 
+    extraction = PortfolioExtractionSchema(
+        status=llm_result.status,
+        source_type=llm_result.source_type,
+        broker_or_vendor=llm_result.broker_or_vendor,
+        positions=llm_result.positions,
+        warnings=llm_result.warnings,
+        confidence=llm_result.confidence,
+    )
+
+    visible_labels = [" ".join(str(label or "").split()) for label in llm_result.visible_labels if str(label or "").strip()]
+    holdings_label_hits = sum(
+        1 for label in visible_labels if any(term in label.lower() for term in _HOLDINGS_SCREEN_LABELS)
+    )
+    strong_positions = sum(
+        1
+        for position in extraction.positions
+        if (position.symbol or position.name or position.isin or position.amfi)
+        and (position.quantity > 0 or position.market_value > 0)
+    )
+
+    if (
+        llm_result.screen_type != "portfolio_holdings"
+        or strong_positions == 0
+        or extraction.confidence < 0.45
+        or (holdings_label_hits == 0 and not (extraction.broker_or_vendor or "").strip())
+    ):
+        reason = llm_result.rejection_reason.strip() or (
+            "This screenshot is not a verified holdings screen. Upload a broker holdings page that clearly shows securities, quantities, and values."
+        )
+        raise PortfolioImageExtractionError(reason)
+
     extraction.status = "REVIEW_REQUIRED"
     extraction.source_type = "image"
-    extraction.diagnostics.update({"filename": filename, "model": model, "review_required": True})
+    extraction.diagnostics.update(
+        {
+            "filename": filename,
+            "model": model,
+            "review_required": True,
+            "screen_type": llm_result.screen_type,
+            "visible_labels": visible_labels,
+            "holdings_label_hits": holdings_label_hits,
+        }
+    )
     extraction.warnings.append("Screenshot extraction requires user review before syncing to the portfolio mirror.")
     return extraction

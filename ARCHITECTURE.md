@@ -22,9 +22,10 @@ This document describes the complete architecture, workflow, and component break
 14. [Frontend Architecture](#frontend-architecture)
 15. [Gateway & API Endpoints](#gateway--api-endpoints)
 16. [Security & Auth](#security--auth)
-17. [Deployment](#deployment)
-18. [Data Flow Diagrams](#data-flow-diagrams)
-19. [Complete File Inventory](#complete-file-inventory)
+17. [Monitoring & Telemetry](#monitoring--telemetry)
+18. [Deployment](#deployment)
+19. [Data Flow Diagrams](#data-flow-diagrams)
+20. [Complete File Inventory](#complete-file-inventory)
 
 ---
 
@@ -144,6 +145,7 @@ This document describes the complete architecture, workflow, and component break
 | CI/CD | GitHub Actions + AWS CodeBuild |
 | Auth Database | Supabase (PostgreSQL) |
 | Local Storage | SQLite (WAL mode, `.finagent/`) |
+| Monitoring | Azure Application Insights (frontend + backend) | |
 
 ### Dependency Management
 
@@ -263,6 +265,33 @@ Legacy standalone server files exist in the same directory but are no longer dep
 | Cache | `.finagent/cache/` | Per-session query cache |
 | Users | `.finagent/users/` | User-specific data |
 | Supabase | Cloud PostgreSQL | User auth, profiles, global state |
+
+### `.finagent/` Runtime Directory Structure
+
+```
+.finagent/                          # Created automatically at first run
+├── memory.sqlite3                  # Financial facts + portfolio mirror (WAL mode)
+├── memory.sqlite3-shm              # WAL shared memory
+├── memory.sqlite3-wal              # WAL journal
+├── chat_memory.db                  # Per-session chat history
+├── playbooks.sqlite3               # Reusable research playbooks
+├── research_state.sqlite3          # Research checkpoints
+├── state.sqlite3                   # Session state store
+├── state.sqlite3-shm/wal           # WAL files
+├── robots_cache.db                 # robots.txt cache for web scrapers
+├── global_sqlite_test.db           # Test database
+├── crawl4ai_test.db                # Crawl4AI test database
+├── .crawl4ai/                      # Crawl4AI browser profiles
+├── cache/                          # Per-session query cache
+├── data/                           # Downloaded reference data cache
+├── ingestion_state/                # Portfolio ingestion work-in-progress
+├── isin_master.json                # Cached ISIN lookup data
+├── magic_pdf_models/               # MinerU PDF model weights
+├── memos/                          # Generated research memos (markdown)
+├── portfolio_mirror_cache/         # Cached portfolio snapshots
+├── sessions/                       # Session event JSONL + metadata
+└── users/                          # User-specific data
+```
 
 ---
 
@@ -1204,6 +1233,45 @@ State management is entirely React `useState`/`useRef` with no external library.
 
 ---
 
+## Monitoring & Telemetry
+
+ProspektLab uses **Azure Application Insights** for both frontend and backend telemetry, with structured event tracking, dependency monitoring, and exception reporting.
+
+### Frontend Telemetry (`Frontend/app/src/telemetry.ts`)
+
+- Custom lightweight telemetry client (no SDK dependency)
+- Batched envelope posting to Application Insights ingestion endpoint
+- Tracks:
+  - **Page views** — route changes via `TelemetryRouteTracker`
+  - **Custom events** — user actions (login, research, portfolio)
+  - **Dependencies** — API call duration and success/failure
+  - **Exceptions** — unhandled errors with stack traces
+  - **Metrics** — custom measurements
+- Runtime configuration via `window.__CONFIG__.telemetry` (injected by Amplify build)
+- Configuration keys: `connectionString`, `roleName`, `cloudRoleInstance`, `enabled`
+
+### Backend Telemetry (`finagent/telemetry.py`)
+
+- `TelemetryClient` class with async support (httpx)
+- Tracks:
+  - **Requests** — HTTP method, URL, duration, status code, result code
+  - **Custom events** — research phases, agent execution, data fetches
+  - **Exceptions** — captured with stack trace and severity
+  - **Metrics** — token usage, latency, quality scores
+- Telemetry user context: email, user_id, tenant_id, auth_provider
+- Environment-driven configuration via `APPINSIGHTS_*` variables
+- Graceful degradation: telemetry failures never block application logic
+
+### Runtime Configuration (`env-config.js`)
+
+Generated at Amplify build time, this file injects:
+- `window.__BACKEND_URL` — backend API base URL
+- `window.__CONFIG__` — environment, telemetry connection string, role names
+
+For local development, `env-config.js` defaults to `http://127.0.0.1:8000`.
+
+---
+
 ## Deployment
 
 ### Docker
@@ -1221,6 +1289,17 @@ FROM python:3.11-slim
 ```
 
 The Dockerfile runs only the FastAPI gateway. MCP servers (discovery, quant) would be deployed as separate containers in production.
+
+### AWS Amplify Build (`Frontend/app/amplify.yml`)
+
+The Amplify build pipeline:
+
+1. **preBuild:** `npm ci` to install dependencies, generates `public/env-config.js` from environment variables (`BACKEND_API_URL`, `APPINSIGHTS_ENABLED`, `APPINSIGHTS_CONNECTION_STRING`)
+2. **build:** `npm run build` (Vite production build → `dist/`)
+3. **postBuild:** Verification of build output
+4. **Artifacts:** `dist/` directory served via CloudFront CDN
+5. **Cache:** `node_modules/` preserved between builds
+6. **Rewrites:** SPA fallback for client-side routing; API proxy rewrites configured in Amplify Console for `/auth`, `/chat`, `/portfolio`, etc.
 
 ### AWS Infrastructure
 
@@ -1482,9 +1561,22 @@ Return to frontend for user review
 | `research_planner.py` | ResearchPlan, PlanStep Pydantic models |
 | `runtime_provider.py` | LLM provider resolution (OpenAI/xAI) |
 | `settings.py` | Environment-driven FinAgentSettings |
+| `telemetry.py` | Azure Application Insights telemetry client (async httpx) |
 | `portfolio_mirrors.py` | Position mirror CRUD (SQLite) |
 | `portfolio_sentinel.py` | Portfolio monitoring |
 | `test_events.py` | Event bus tests |
+
+#### Reference Data (`finagent/data/`)
+
+| File | Purpose |
+|------|---------|
+| `isin_master.json` | ISIN-to-ticker lookup map for Indian equities |
+| `nifty500_sectors.json` | Nifty 500 sector classification data |
+| `amfi_schemes_meta.json` | Indian mutual fund scheme metadata from AMFI |
+| `news_cache.sqlite3` | Cached news articles with TTL |
+| `sector_cache.sqlite3` | Cached sector classification data |
+| `build_isin_master.py` | Script to rebuild ISIN master from source data |
+| `generate_sector_lookup.py` | Script to regenerate sector lookup data |
 
 #### Agent (`finagent/agent/`)
 
@@ -1672,13 +1764,14 @@ Return to frontend for user review
 | `citation_log.py` | Citation tracking and source linking |
 | `compression.py` | Context compression utilities |
 | `research_state.py` | Research state store (SQLite) |
-| `session_context.py` | Thread-local session context (contextvars) |
+| `session_context.py` | Thread-local session context (contextvars: active agents, MCPs, websites per async task chain) |
 
 #### Storage (`finagent/storage/`)
 
 | File | Purpose |
 |------|---------|
 | `sqlite.py` | SQLite WAL connection helper |
+| `supabase_store.py` | Supabase PostgreSQL-backed storage for portfolio mirrors, rate limiting (shared across containers) |
 
 #### Tools — Data (`finagent/tools/data/`)
 
@@ -1754,6 +1847,7 @@ Return to frontend for user review
 | `main.tsx` | React entry point, AuthProvider |
 | `App.tsx` | Route definitions, auth guards |
 | `index.css` | Global design system (dark theme) |
+| `telemetry.ts` | Azure Application Insights telemetry client (batched envelope posting) |
 | `api/client.ts` | Full API client + SSE streaming |
 | `context/AuthContext.tsx` | Auth state + Google OAuth |
 | `data/indianStocks.ts` | Indian stock reference data |
@@ -1769,6 +1863,7 @@ Return to frontend for user review
 | `pages/Features.tsx` | Feature showcase |
 | `pages/Pricing.tsx` | Pricing tiers |
 | `pages/Testimonials.tsx` | User testimonials |
+| `pages/ContactUs.tsx` | Contact form page |
 
 #### Components — Layout
 
@@ -1825,12 +1920,14 @@ Return to frontend for user review
 | `Dockerfile` | Python 3.11-slim, Crawl4AI + Chromium, FastAPI gateway |
 | `pyproject.toml` | Project metadata, core dependencies (summary only) |
 | `uv.lock` | UV lockfile for local development |
+| `package.json` | Root: Playwright dependency only (for browser tests) |
 | `finagent/requirements-finagent.txt` | **Authoritative** dependency list for production builds |
 | `.github/workflows/deploy-production.yml` | CI/CD: build → ECR → ECS → Amplify |
 | `buildspec.yml` | AWS CodeBuild specification |
 | `buildspec-prod.yml` | AWS CodeBuild production specification |
-| `amplify-buildspec.yml` | AWS Amplify build spec |
-| `deployment/` | Deployment configurations |
+| `Frontend/app/amplify.yml` | AWS Amplify build specification (Vite build + env-config.js generation) |
+| `deployment/` | Deployment configurations (backend deploy scripts, Fargate YAML, Supabase SQL) |
+| `scratch/` | Ad-hoc scripts and experimental code |
 | `start_server.ps1` | Local server start script (PowerShell) |
 
 ---

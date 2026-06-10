@@ -39,7 +39,6 @@ class AccountingAgent(BaseSubAgent):
     def precondition(self, ctx: SubAgentContext) -> tuple[bool, str]:
         yahoo = ctx.bundle.yahoo if ctx.bundle else None
         sec = ctx.bundle.sec if ctx.bundle else None
-
         has_data = False
         if yahoo:
             if yahoo.annual_revenue and len(yahoo.annual_revenue) >= 4:
@@ -58,6 +57,33 @@ class AccountingAgent(BaseSubAgent):
         out = AgentTaskResult(agent_name=self.name)
         yahoo = ctx.bundle.yahoo if ctx.bundle else None
         sec = ctx.bundle.sec if ctx.bundle else None
+        ikg_ctx = ctx.agent_context(self.name)
+        audit_firm = ikg_ctx.get("audit_firm")
+        rpt = ikg_ctx.get("related_party_transactions") or []
+        if audit_firm:
+            out.findings.append(
+                Finding(
+                    agent=self.name,
+                    kind="financial",
+                    headline=f"IKG auditor baseline: {audit_firm}",
+                    detail="Auditor identity comes from graph-backed extraction and should be reconciled with the latest annual report before drawing hard forensic conclusions.",
+                    confidence="MEDIUM",
+                    evidence=(ctx.ikg_bundle.source_refs[:3] if ctx.ikg_bundle else []),
+                    metrics={"audit_firm": audit_firm},
+                )
+            )
+        if rpt:
+            out.findings.append(
+                Finding(
+                    agent=self.name,
+                    kind="risk",
+                    headline=f"Related-party disclosure facts present ({len(rpt)} row(s))",
+                    detail="IKG contains related-party transaction evidence that can anchor deeper accounting review without treating every extracted row as validated misconduct.",
+                    confidence="MEDIUM",
+                    evidence=(ctx.ikg_bundle.source_refs[:4] if ctx.ikg_bundle else []),
+                    metrics={"rpt_count": len(rpt)},
+                )
+            )
 
         # ── Statistical anomaly engine ─────────────────────────────────
         # The old forecasting MCP path is removed; keep detection local.

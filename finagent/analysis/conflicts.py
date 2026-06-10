@@ -196,8 +196,15 @@ def extract_metrics(docs: list[ScrapedDoc]) -> list[MetricObservation]:
     return out
 
 
-def detect_conflicts(docs: list[ScrapedDoc], *, tolerance_pct: float = 5.0) -> list[ConflictReport]:
+def detect_conflicts(
+    docs: list[ScrapedDoc],
+    *,
+    tolerance_pct: float = 5.0,
+    external_observations: list[MetricObservation] | None = None,
+) -> list[ConflictReport]:
     observations = extract_metrics(docs)
+    if external_observations:
+        observations.extend(external_observations)
     by_metric: dict[str, list[MetricObservation]] = {}
     for o in observations:
         by_metric.setdefault(o.metric, []).append(o)

@@ -19,6 +19,10 @@ MCP_SERVERS = {
         "url": _mcp_url("MCP_DISCOVERY_URL", 8003),
         "transport": "streamable_http",
     },
+    "ikg": {
+        "url": _mcp_url("MCP_IKG_URL", 8007),
+        "transport": "streamable_http",
+    },
     "quant": {
         "url": _mcp_url("MCP_QUANT_URL", 8005),
         "transport": "streamable_http",

@@ -33,12 +33,29 @@ except Exception:
 from dotenv import load_dotenv
 from pathlib import Path
 
-# Load from the finagent directory's .env file
-env_path = Path(__file__).parent / ".env"
-if env_path.exists():
-    load_dotenv(env_path, override=True)
-else:
+# Load root .env first, then finagent/.env so local app settings can override.
+_package_dir = Path(__file__).parent
+_root_env_path = _package_dir.parent / ".env"
+_package_env_path = _package_dir / ".env"
+if _root_env_path.exists():
+    load_dotenv(_root_env_path, override=True)
+if _package_env_path.exists():
+    load_dotenv(_package_env_path, override=True)
+if not _root_env_path.exists() and not _package_env_path.exists():
     load_dotenv(override=True)
+
+# Supabase exposes Postgres. If only SUPABASE_DB_URL is present, wire the
+# existing Postgres code path automatically instead of falling back to memory.
+_db_url = (
+    os.getenv("IKG_DATABASE_URL", "").strip()
+    or os.getenv("DATABASE_URL", "").strip()
+    or os.getenv("SUPABASE_DB_URL", "").strip()
+)
+if _db_url:
+    os.environ.setdefault("IKG_DATABASE_URL", _db_url)
+    os.environ.setdefault("DATABASE_URL", _db_url)
+    os.environ.setdefault("SUPABASE_DB_URL", _db_url)
+    os.environ.setdefault("IKG_BACKEND", "postgres")
 
 from finagent.settings import FinAgentSettings, load_settings
 

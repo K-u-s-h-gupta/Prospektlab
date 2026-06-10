@@ -91,6 +91,9 @@ class PortfolioExtractionLLMResponse(StrictBaseModel):
     status: ExtractionStatus = "REVIEW_REQUIRED"
     source_type: Literal["pdf", "csv", "xlsx", "image", "unknown"] = "unknown"
     broker_or_vendor: str = Field(default="", max_length=80)
+    screen_type: Literal["portfolio_holdings", "not_portfolio", "unclear"] = "unclear"
+    visible_labels: list[str] = Field(default_factory=list, max_length=24)
+    rejection_reason: str = Field(default="", max_length=240)
     positions: list[PortfolioPositionSchema] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.0, ge=0, le=1)
