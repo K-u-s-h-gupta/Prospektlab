@@ -1,20 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  MessageSquarePlus,
-  Trash2,
-  ArrowUpRight,
+import { useLocation, useNavigate } from 'react-router-dom';
+import { 
+  LayoutDashboard, 
+  MessageSquarePlus, 
+  Trash2, 
+  ArrowUpRight, 
   ShieldCheck,
-  Compass,
+  Compass, 
   LogOut,
   ChevronLeft,
   ChevronRight,
-  X,
-  Newspaper
+  X
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAuth } from '../../context/AuthContext';
-import { deletePortfolioMirror } from '../../api/client';
 
 interface SidebarProps {
   conversations: Array<{ id: string; title: string; date: string }>;
@@ -42,7 +41,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   tokenUsage
 }) => {
   const navigate = useNavigate();
-  const { user, logout, setOnboarded, showToast } = useAuth();
+  const location = useLocation();
+  const { user, logout, setOnboarded } = useAuth();
   
   // Drag-to-resize state
   const [width, setWidth] = useState<number>(() => {
@@ -50,7 +50,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return saved ? parseInt(saved, 10) : 260;
   });
   const [isDragging, setIsDragging] = useState(false);
-  const [isResettingSetup, setIsResettingSetup] = useState(false);
   const dragRef = useRef<HTMLDivElement>(null);
 
   const isCollapsed = width <= 120;
@@ -116,40 +115,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     navigate('/login');
   };
 
-  const clearPortfolioWorkspace = () => {
-    localStorage.removeItem('prospektlab_portfolio');
-    localStorage.removeItem('prospektlab_conversations');
-    localStorage.removeItem('prospektlab_onboarding_step');
-
-    const messageKeys: string[] = [];
-    for (let index = 0; index < localStorage.length; index += 1) {
-      const key = localStorage.key(index);
-      if (key && key.startsWith('prospektlab_messages_')) {
-        messageKeys.push(key);
-      }
-    }
-    messageKeys.forEach((key) => localStorage.removeItem(key));
-  };
-
-  const handleRerunSetup = async () => {
-    if (isResettingSetup) return;
-    setIsResettingSetup(true);
-    dismissSidebarOnMobile();
-
-    try {
-      await deletePortfolioMirror();
-      clearPortfolioWorkspace();
-      setOnboarded(false);
-      showToast('Setup reset. Upload the new holdings file to rebuild the dashboard.', 'success');
-      navigate('/onboarding');
-    } catch (error: any) {
-      console.error('Failed to reset synced portfolio before rerun', error);
-      showToast(error?.message || 'Could not reset the current holdings. Please retry rerun.', 'error');
-    } finally {
-      setIsResettingSetup(false);
-    }
-  };
-
   // Initials for avatar
   const getInitials = (name?: string) => {
     if (!name) return 'U';
@@ -161,6 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const hasPortfolio = portfolioSummary && portfolioSummary.totalValue > 0;
+  const isDashboardRoute = location.pathname === '/dashboard';
 
   return (
     <div 
@@ -282,7 +248,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* New Chat Button */}
-        <div style={{ padding: isCollapsed ? '16px 8px' : '16px 20px 8px', flexShrink: 0 }}>
+        <div style={{ padding: isCollapsed ? '16px 8px' : '16px 20px', flexShrink: 0 }}>
           <button
             onClick={handleNewChatClick}
             className="glass-interactive"
@@ -306,34 +272,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* Insights Studio Nav Link */}
-        {user && (
-          <div style={{ padding: isCollapsed ? '0 8px 12px' : '0 20px 12px', flexShrink: 0 }}>
-            <button
-              onClick={() => { dismissSidebarOnMobile(); navigate('/insights-studio'); }}
-              className="glass-interactive"
-              title="Insights Studio"
-              style={{
-                width: '100%',
-                color: 'var(--text-secondary)',
-                padding: '10px 8px',
-                borderRadius: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                fontWeight: 500,
-                fontSize: '13px',
-                border: '1px solid rgba(255,255,255,0.05)',
-                background: 'transparent',
-                cursor: 'pointer',
-              }}
-            >
-              <Newspaper size={15} color="var(--accent-cyan)" />
-              {!isCollapsed && <span className="nav-text">Insights Studio</span>}
-            </button>
-          </div>
-        )}
+        {/* Navigation */}
+        <div style={{
+          padding: isCollapsed ? '0 8px 12px' : '0 20px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+          flexShrink: 0
+        }}>
+          <button
+            onClick={() => {
+              dismissSidebarOnMobile();
+              navigate('/dashboard');
+            }}
+            title="Dashboard"
+            style={{
+              width: '100%',
+              background: isDashboardRoute ? 'rgba(255, 255, 255, 0.03)' : 'transparent',
+              border: isDashboardRoute ? '1px solid rgba(56, 189, 248, 0.1)' : '1px solid rgba(255, 255, 255, 0.06)',
+              color: isDashboardRoute ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+              padding: '10px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: isCollapsed ? 'center' : 'flex-start',
+              gap: '10px',
+              fontSize: '13px',
+              fontWeight: 600,
+              textAlign: 'left'
+            }}
+          >
+            <LayoutDashboard size={16} />
+            {!isCollapsed && <span className="nav-text">Dashboard</span>}
+          </button>
+
+        </div>
 
         {/* Conversation List */}
         {!isCollapsed && (
@@ -413,31 +386,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (conversations.length <= 1) return;
                               onDeleteConversation(chat.id);
                             }}
-                            disabled={conversations.length <= 1}
                             style={{
                               position: 'absolute',
                               right: '8px',
                               background: 'transparent',
                               border: 'none',
                               color: 'var(--loss)',
-                              opacity: conversations.length <= 1 ? 0.2 : (isActive ? 0.8 : 0.4),
+                              opacity: isActive ? 0.8 : 0.4,
                               padding: '4px',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              cursor: conversations.length <= 1 ? 'not-allowed' : 'pointer',
+                              cursor: 'pointer',
                               transition: 'opacity 0.2s ease'
                             }}
-                            onMouseEnter={(e) => {
-                              if (conversations.length > 1) e.currentTarget.style.opacity = '1';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.opacity = conversations.length <= 1 ? '0.2' : (isActive ? '0.8' : '0.4');
-                            }}
-                            title={conversations.length <= 1 ? 'At least one session must remain' : 'Delete session'}
+                            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                            onMouseLeave={(e) => e.currentTarget.style.opacity = isActive ? '0.8' : '0.4'}
+                            title="Delete session"
                           >
                             <Trash2 size={12} />
                           </button>
@@ -654,27 +621,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 href="/"
                 onClick={(e) => {
                   e.preventDefault();
-                  void handleRerunSetup();
+                  setOnboarded(false);
+                  dismissSidebarOnMobile();
+                  navigate('/onboarding');
                 }}
                 style={{
                   marginLeft: 'auto',
                   color: 'var(--accent-cyan)',
                   textDecoration: 'none',
-                  fontWeight: 600,
-                  pointerEvents: isResettingSetup ? 'none' : 'auto',
-                  opacity: isResettingSetup ? 0.65 : 1,
+                  fontWeight: 600
                 }}
               >
-                {isResettingSetup ? 'Resetting...' : 'Re-run'}
+                Re-run
               </a>
             </div>
           ) : (
             <button
               title="Re-run Setup"
               onClick={() => {
-                void handleRerunSetup();
+                setOnboarded(false);
+                dismissSidebarOnMobile();
+                navigate('/onboarding');
               }}
-              disabled={isResettingSetup}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -683,8 +651,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '4px',
-                opacity: isResettingSetup ? 0.65 : 1,
+                padding: '4px'
               }}
             >
               <Compass size={14} />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import Pricing from './pages/Pricing';
 import Testimonials from './pages/Testimonials';
@@ -8,18 +8,22 @@ import Onboarding from './pages/Onboarding';
 import ContactUs from './pages/ContactUs';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
-import InsightsStudio from './pages/InsightsStudio';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { hydrateAuthToken } from './api/client';
 import { trackPageView } from './telemetry';
 
 // Protected Route for authenticated users
 const ProtectedRoute: React.FC<{
   children: React.ReactElement;
   requireOnboarded?: boolean;
-  /** Skip all onboarding checks — just require the user to be authenticated */
-  authOnly?: boolean;
-}> = ({ children, requireOnboarded = false, authOnly = false }) => {
+  onboardingOnly?: boolean;
+}> = ({
+  children,
+  requireOnboarded = false,
+  onboardingOnly = false,
+}) => {
   const { isAuthenticated, isLoading, onboarded } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -30,19 +34,14 @@ const ProtectedRoute: React.FC<{
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // authOnly routes (e.g. Insights Studio) skip all portfolio-onboarding checks
-  if (authOnly) {
-    return children;
+    return <Navigate to="/login" replace state={{ next: location.pathname }} />;
   }
 
   if (requireOnboarded && !onboarded) {
     return <Navigate to="/onboarding" replace />;
   }
 
-  if (!requireOnboarded && onboarded) {
+  if (onboardingOnly && onboarded) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -81,9 +80,52 @@ const TelemetryRouteTracker: React.FC = () => {
   return null;
 };
 
+function upgradeLegacyHashLocation() {
+  if (typeof window === 'undefined') return;
+  const rawHash = window.location.hash || '';
+  if (!rawHash.startsWith('#/')) return;
+
+  const hashPath = rawHash.slice(1);
+  const nextPath = hashPath.includes('?') ? hashPath.slice(0, hashPath.indexOf('?')) : hashPath;
+  const hashQuery = hashPath.includes('?') ? hashPath.slice(hashPath.indexOf('?') + 1) : '';
+  const current = new URL(window.location.href);
+  const mergedParams = new URLSearchParams(current.search);
+  const hashParams = new URLSearchParams(hashQuery);
+
+  hashParams.forEach((value, key) => {
+    if (!mergedParams.has(key)) {
+      mergedParams.set(key, value);
+    }
+  });
+
+  const nextSearch = mergedParams.toString();
+  const nextUrl = `${nextPath || '/'}${nextSearch ? `?${nextSearch}` : ''}`;
+  window.history.replaceState(null, '', nextUrl);
+}
+
+function hydrateBootstrapTokenFromUrl() {
+  if (typeof window === 'undefined') return;
+  const current = new URL(window.location.href);
+  const params = new URLSearchParams(current.search);
+  const opsToken = params.get('opsToken');
+  const devToken = params.get('devToken');
+  const isLocalHost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+  const bootstrapToken = opsToken || (isLocalHost ? devToken : '');
+  if (!bootstrapToken) return;
+
+  hydrateAuthToken(bootstrapToken, true);
+  params.delete('opsToken');
+  params.delete('devToken');
+  const nextSearch = params.toString();
+  window.history.replaceState(null, '', `${current.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
+}
+
 export const AppContent: React.FC = () => {
+  upgradeLegacyHashLocation();
+  hydrateBootstrapTokenFromUrl();
+
   return (
-    <HashRouter>
+    <BrowserRouter>
       <TelemetryRouteTracker />
       <Routes>
         {/* Marketing Pages */}
@@ -116,34 +158,25 @@ export const AppContent: React.FC = () => {
         <Route 
           path="/onboarding" 
           element={
-            <ProtectedRoute>
+            <ProtectedRoute onboardingOnly>
               <Onboarding />
             </ProtectedRoute>
           } 
         />
         
-        <Route
-          path="/dashboard"
+        <Route 
+          path="/dashboard" 
           element={
             <ProtectedRoute requireOnboarded>
               <Dashboard />
             </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/insights-studio"
-          element={
-            <ProtectedRoute authOnly>
-              <InsightsStudio />
-            </ProtectedRoute>
-          }
+          } 
         />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </HashRouter>
+    </BrowserRouter>
   );
 };
 
