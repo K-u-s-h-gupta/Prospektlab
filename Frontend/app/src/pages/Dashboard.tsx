@@ -30,7 +30,7 @@ import {
   getPortfolioBrief,
   getUserTokenUsage
 } from '../api/client';
-import { Search, Edit3, Sparkles, MessageSquare, ChevronRight, ChevronDown } from 'lucide-react';
+import { Search, Sparkles, MessageSquare, ChevronRight, ChevronDown } from 'lucide-react';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
 
 interface Message {
@@ -882,6 +882,38 @@ export const Dashboard: React.FC = () => {
     localStorage.setItem(`prospektlab_messages_${convId}`, JSON.stringify(welcomeMsgs));
   };
 
+  const readConversationMessages = (conversationId: string): Message[] => {
+    if (!conversationId) return [];
+    if (conversationId === activeConversationId) {
+      return messages;
+    }
+    const savedMessagesRaw = localStorage.getItem(`prospektlab_messages_${conversationId}`);
+    if (!savedMessagesRaw) return [];
+    try {
+      const parsed = JSON.parse(savedMessagesRaw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error('Failed to read saved conversation messages', error);
+      return [];
+    }
+  };
+
+  const isDraftConversation = (conversationId: string): boolean => {
+    const conversationMessages = readConversationMessages(conversationId);
+    return !conversationMessages.some((message) => message?.sender === 'user');
+  };
+
+  const createConversationDraft = (existingConversations: any[] = conversations) => {
+    const newId = `conv-${Date.now()}`;
+    const newConv = { id: newId, title: 'Equity Analysis Session', date: 'Today' };
+    const updatedConversations = [newConv, ...existingConversations];
+    setConversations(updatedConversations);
+    localStorage.setItem('prospektlab_conversations', JSON.stringify(updatedConversations));
+    setActiveConversationId(newId);
+    bootstrapWelcomeMessage(newId);
+    return newId;
+  };
+
   // Keep the newest chat turn visible as messages and live pipeline events arrive.
   useEffect(() => {
     const node = chatContainerRef.current;
@@ -1520,19 +1552,20 @@ export const Dashboard: React.FC = () => {
 
   // --- Real API Chat Integration ---
   const handleSendMessage = async (message: string, depth: 'standard' | 'deep' = 'standard') => {
-    if (!message.trim() || isThinking || !activeConversationId) return;
+    if (!message.trim() || isThinking) return;
+    const conversationId = activeConversationId || createConversationDraft(conversations);
 
     // 1. Append User Bubble
     const userMsg: Message = { sender: 'user', text: message, depth };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
-    localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(updatedMessages));
+    localStorage.setItem(`prospektlab_messages_${conversationId}`, JSON.stringify(updatedMessages));
 
     // Update conversation title if needed
-    const activeConv = conversations.find(c => c.id === activeConversationId);
+    const activeConv = conversations.find(c => c.id === conversationId);
     if (activeConv && (activeConv.title === 'Equity Analysis Session' || activeConv.title.startsWith('Analyze ') || activeConv.title.startsWith('Portfolio '))) {
       const cleanTitle = message.length > 28 ? message.substring(0, 28) + '...' : message;
-      const updatedConvs = conversations.map(c => c.id === activeConversationId ? { ...c, title: cleanTitle } : c);
+      const updatedConvs = conversations.map(c => c.id === conversationId ? { ...c, title: cleanTitle } : c);
       setConversations(updatedConvs);
       localStorage.setItem('prospektlab_conversations', JSON.stringify(updatedConvs));
     }
@@ -1573,7 +1606,7 @@ export const Dashboard: React.FC = () => {
         setMessages((prev) => {
           const next = [...prev, aiResponse];
           try {
-            localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(next));
+            localStorage.setItem(`prospektlab_messages_${conversationId}`, JSON.stringify(next));
           } catch (storageErr) {
             console.warn('[DASHBOARD] localStorage persist failed', storageErr);
           }
@@ -1606,7 +1639,7 @@ export const Dashboard: React.FC = () => {
       };
       if (backendSessionId && backendSessionId !== activeConv?.backendSessionId) {
         const updatedConvs = conversations.map(c =>
-          c.id === activeConversationId ? { ...c, backendSessionId } : c
+          c.id === conversationId ? { ...c, backendSessionId } : c
         );
         setConversations(updatedConvs);
         localStorage.setItem('prospektlab_conversations', JSON.stringify(updatedConvs));
@@ -1730,7 +1763,7 @@ export const Dashboard: React.FC = () => {
         setMessages((prev) => {
           const next = [...prev, fallbackResponse];
           try {
-            localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(next));
+            localStorage.setItem(`prospektlab_messages_${conversationId}`, JSON.stringify(next));
           } catch (storageErr) {
             console.warn('[DASHBOARD] localStorage persist failed', storageErr);
           }
@@ -1748,7 +1781,7 @@ export const Dashboard: React.FC = () => {
         setMessages((prev) => {
           const next = [...prev, limitResponse];
           try {
-            localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(next));
+            localStorage.setItem(`prospektlab_messages_${conversationId}`, JSON.stringify(next));
           } catch (e) { /* ignore storage errors */ }
           return next;
         });
@@ -1772,7 +1805,7 @@ export const Dashboard: React.FC = () => {
           setMessages((prev) => {
             const next = [...prev, fallbackResponse];
             try {
-              localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(next));
+              localStorage.setItem(`prospektlab_messages_${conversationId}`, JSON.stringify(next));
             } catch (storageErr) {
               console.warn('[DASHBOARD] localStorage persist failed', storageErr);
             }
@@ -1787,7 +1820,7 @@ export const Dashboard: React.FC = () => {
         setMessages((prev) => [...prev, errResponse]);
         try {
           const merged = [...updatedMessages, errResponse];
-          localStorage.setItem(`prospektlab_messages_${activeConversationId}`, JSON.stringify(merged));
+          localStorage.setItem(`prospektlab_messages_${conversationId}`, JSON.stringify(merged));
         } catch (e) { /* ignore storage errors */ }
       }
     }
@@ -1837,28 +1870,32 @@ export const Dashboard: React.FC = () => {
 
   const handleNewConversation = () => {
     if (isThinking) return;
-    const newId = 'conv-' + Date.now();
-    const newConv = { id: newId, title: 'Equity Analysis Session', date: 'Today' };
-    const updatedConvs = [newConv, ...conversations];
-    setConversations(updatedConvs);
-    localStorage.setItem('prospektlab_conversations', JSON.stringify(updatedConvs));
-    
-    setActiveConversationId(newId);
-    bootstrapWelcomeMessage(newId);
+    const reusableDraft = conversations.find((conversation) => isDraftConversation(conversation.id));
+    if (reusableDraft) {
+      handleSelectConversation(reusableDraft.id);
+      return;
+    }
+    createConversationDraft(conversations);
   };
 
   const handleDeleteConversation = (id: string) => {
+    if (conversations.length <= 1) return;
     if (isThinking && activeConversationId === id) return;
     const updated = conversations.filter(c => c.id !== id);
     setConversations(updated);
-    localStorage.setItem('prospektlab_conversations', JSON.stringify(updated));
+    if (updated.length > 0) {
+      localStorage.setItem('prospektlab_conversations', JSON.stringify(updated));
+    } else {
+      localStorage.removeItem('prospektlab_conversations');
+    }
     localStorage.removeItem(`prospektlab_messages_${id}`);
 
     if (activeConversationId === id) {
       if (updated.length > 0) {
         handleSelectConversation(updated[0].id);
       } else {
-        handleNewConversation();
+        setActiveConversationId('');
+        setMessages([]);
       }
     }
   };
@@ -2986,9 +3023,6 @@ export const Dashboard: React.FC = () => {
           <div className="chat-rail-head">
             <div className="chat-rail-title">Arthik</div>
             <div className="chat-rail-actions">
-               <button className="chat-rail-iconbtn" title="New session" onClick={handleNewConversation}>
-                 <Edit3 size={16} color="#38BDF8" style={{ minWidth: 16, minHeight: 16, display: 'block' }} />
-               </button>
                <button className="chat-rail-iconbtn" title="Collapse Chat" onClick={() => {
                  setIsChatHidden(true);
                  setChatWidth(0);

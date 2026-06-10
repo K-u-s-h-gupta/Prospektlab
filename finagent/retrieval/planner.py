@@ -1,12 +1,40 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 
 from finagent.geo.entity_resolver import ResolvedEntity
 from finagent.geo.query_localizer import localize_search_query
 
 logger = logging.getLogger("finagent.retrieval.planner")
+
+_TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9&/\-]{1,}")
+_LEADING_INSTRUCTION_RE = re.compile(
+    r"^(analyze|analyse|assess|evaluate|review|research|summarize|explain|describe|provide|give|tell)\b",
+    flags=re.IGNORECASE,
+)
+_QUERY_STOPWORDS = {
+    "a", "an", "and", "the", "for", "of", "to", "with", "without", "on", "in", "into",
+    "briefly", "please", "about", "me", "my", "its", "their", "company", "business",
+    "stock", "share", "shares", "cross", "checks", "cross-checks", "evidence",
+    "overview", "explained", "explain", "provide", "give", "tell", "review",
+    "research", "analyze", "analyse", "assess", "evaluate", "summarize", "describe",
+}
+
+
+def _dedupe_queries(queries: list[str], *, limit: int = 8) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for query in queries:
+        normalized = " ".join(query.lower().split())
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        out.append(query)
+        if len(out) >= limit:
+            break
+    return out
 
 
 @dataclass
@@ -36,6 +64,8 @@ def _intent_tags(objective: str) -> list[str]:
         tags.append("news")
     if any(term in lower for term in ("governance", "board", "insider", "management")):
         tags.append("governance")
+    if any(term in lower for term in ("shareholding", "shareholding pattern", "promoter", "pledge", "institutional holding", "fii", "dii")):
+        tags.append("ownership")
     if any(term in lower for term in ("transcript", "concall", "commentary", "earnings call")):
         tags.append("transcript")
     if any(term in lower for term in ("ipo", "drhp", "rhp", "prospectus", "red herring")):
@@ -53,21 +83,43 @@ def _is_small_cap_target(entity: ResolvedEntity, objective: str) -> bool:
 
 
 def _direct_query(base: str, entity: ResolvedEntity, objective: str) -> str:
-    """Avoid duplicating the company name when the follow-up is already self-contained."""
+    """Convert conversational objectives into a company-scoped search phrase."""
 
     text = (objective or "").strip()
     if not text:
         return base
-    lower = text.lower()
-    known_labels = {
-        (base or "").lower(),
-        (entity.canonical_name or "").lower(),
-        (entity.normalized_name or "").lower(),
-        (entity.ticker_label or "").lower(),
-    }
-    if any(label and label in lower for label in known_labels):
-        return text
-    return f"{base} {text}"
+    cleaned = _LEADING_INSTRUCTION_RE.sub("", text).strip()
+    known_labels = sorted(
+        {
+            label.strip().lower()
+            for label in (
+                base,
+                entity.canonical_name,
+                entity.normalized_name,
+                entity.ticker_label,
+                entity.search_label,
+            )
+            if label and label.strip()
+        },
+        key=len,
+        reverse=True,
+    )
+    lowered = cleaned.lower()
+    for label in known_labels:
+        lowered = re.sub(rf"\b{re.escape(label)}\b", " ", lowered)
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for match in _TOKEN_RE.finditer(lowered):
+        token = match.group(0).lower()
+        if len(token) <= 2 or token in _QUERY_STOPWORDS:
+            continue
+        if token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+    if not tokens:
+        return base
+    return f"{base} {' '.join(tokens[:8])}".strip()
 
 
 def _focused_queries(entity: ResolvedEntity, objective: str, tags: list[str]) -> list[str] | None:
@@ -96,6 +148,13 @@ def _focused_queries(entity: ResolvedEntity, objective: str, tags: list[str]) ->
             f"{base} stock price history 1 month 1 year Yahoo Finance",
             f"{base} Moneycontrol price chart historical data",
         ]
+    if "ownership" in tags and "comparison" not in tags:
+        return [
+            _direct_query(base, entity, objective),
+            f"{base} shareholding pattern promoter holding institutional ownership",
+            f"{base} promoter pledge disclosure NSE BSE",
+            f"{base} quarterly shareholding filing FII DII promoter stake",
+        ]
     return None
 
 
@@ -107,18 +166,18 @@ def build_breadth_queries(entity: ResolvedEntity, objective: str) -> list[str]:
         return [localize_search_query(q, entity) for q in focused[:4]]
     elif _is_small_cap_target(entity, objective):
         queries = [
-            f"{base} SEBI LODR Regulation 33 financial results NSE BSE",
-            f"{base} outcome of board meeting financial results NSE BSE",
-            f"{base} Regulation 30 corporate announcement NSE BSE",
-            f"{base} Regulation 31 shareholding pattern promoter pledge NSE BSE",
-            f"{base} annual report PDF NSE BSE",
-            f"{base} NSE Emerge BSE SME board financial results",
+            f"{base} SEBI LODR Regulation 33 financial results",
+            f"{base} outcome of board meeting financial results",
+            f"{base} Regulation 30 corporate announcement",
+            f"{base} Regulation 31 shareholding pattern promoter pledge",
+            f"{base} annual report PDF",
+            f"{base} SME board financial results",
         ]
     else:
         queries = [
-            f"{base} annual report NSE BSE SEBI LODR",
+            f"{base} annual report SEBI LODR",
             f"{base} quarterly results investor presentation concall transcript",
-            f"{base} NSE BSE filings shareholding pattern corporate governance",
+            f"{base} exchange filings shareholding pattern corporate governance",
             f"{base} Moneycontrol Screener Trendlyne financials",
         ]
 
@@ -144,7 +203,7 @@ def build_breadth_queries(entity: ResolvedEntity, objective: str) -> list[str]:
         queries.append(f"{base} DRHP RHP prospectus SEBI IPO changes")
     if "market" in tags:
         queries.append(f"{base} India market macro RBI Nifty Sensex impact")
-    return [localize_search_query(q, entity) for q in queries[:8]]
+    return _dedupe_queries([localize_search_query(q, entity) for q in queries], limit=8)
 
 
 def build_retrieval_plan(entity: ResolvedEntity, objective: str) -> RetrievalPlan:

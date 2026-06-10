@@ -1,4 +1,4 @@
-"""Supabase PostgreSQL-backed storage layer replacing SQLite for production.
+"""Supabase PostgreSQL-backed user-operational storage layer.
 
 Uses the existing Supabase PostgREST client pattern (httpx) so no new
 dependencies are required. All tables must be created in Supabase with
@@ -28,37 +28,6 @@ Required Supabase tables (run these in Supabase SQL Editor):
       as_of TEXT
   );
   CREATE INDEX idx_portfolio_mirrors_tenant_active ON portfolio_mirrors(tenant_id, active, symbol);
-
-  -- facts
-  CREATE TABLE IF NOT EXISTS facts (
-      id SERIAL PRIMARY KEY,
-      target_key TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      body TEXT NOT NULL,
-      confidence TEXT NOT NULL,
-      source_url TEXT,
-      session_id TEXT,
-      user_email TEXT NOT NULL,
-      created_at REAL NOT NULL
-  );
-  CREATE INDEX idx_facts_target ON facts(target_key, created_at DESC);
-  CREATE INDEX idx_facts_kind ON facts(target_key, kind);
-  CREATE INDEX idx_facts_user ON facts(user_email, target_key, created_at DESC);
-
-  -- session_summaries
-  CREATE TABLE IF NOT EXISTS session_summaries (
-      session_id TEXT PRIMARY KEY,
-      target_key TEXT NOT NULL,
-      target_display TEXT,
-      summary TEXT NOT NULL,
-      metrics_json TEXT,
-      citation_count INTEGER,
-      quality_score REAL,
-      user_email TEXT NOT NULL,
-      created_at REAL NOT NULL
-  );
-  CREATE INDEX idx_summaries_target ON session_summaries(target_key, created_at DESC);
-  CREATE INDEX idx_summaries_user ON session_summaries(user_email, target_key, created_at DESC);
 
   -- rate_limits
   CREATE TABLE IF NOT EXISTS rate_limits (
@@ -110,14 +79,6 @@ Required Supabase tables (run these in Supabase SQL Editor):
   ALTER TABLE portfolio_mirrors ENABLE ROW LEVEL SECURITY;
   CREATE POLICY portfolio_mirrors_tenant_isolation ON portfolio_mirrors
     FOR ALL USING (tenant_id = auth.uid());
-
-  ALTER TABLE facts ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY facts_user_isolation ON facts
-    FOR ALL USING (user_email = auth.email());
-
-  ALTER TABLE session_summaries ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY session_summaries_user_isolation ON session_summaries
-    FOR ALL USING (user_email = auth.email());
 
   ALTER TABLE pending_extractions ENABLE ROW LEVEL SECURITY;
   CREATE POLICY pending_extractions_tenant_isolation ON pending_extractions
@@ -238,9 +199,9 @@ def _to_epoch_seconds(value: Any) -> float:
     return 0.0
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 # Portfolio Mirrors
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class SupabasePortfolioStore:
     def __init__(self) -> None:
@@ -442,314 +403,6 @@ class SupabasePortfolioStore:
             logger.debug("Supabase portfolio delete failed for tenant %s; continuing: %s", tenant_id, exc)
             return 0
 
-
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# Memory Store (facts + session_summaries)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-class SupabaseMemoryStore:
-    def __init__(self) -> None:
-        self.facts_base = f"{_get_supabase_url()}/rest/v1/facts"
-        self.summaries_base = f"{_get_supabase_url()}/rest/v1/session_summaries"
-
-    async def remember(
-        self,
-        target_key: str,
-        kind: str,
-        body: str,
-        confidence: str,
-        source_url: str | None = None,
-        session_id: str | None = None,
-        user_email: str | None = None,
-        created_at: float | None = None,
-    ) -> int:
-        if not user_email:
-            raise ValueError("user_email is required to persist memory facts")
-        row = _clean_none({
-            "target_key": target_key,
-            "kind": kind,
-            "body": body.strip(),
-            "confidence": confidence,
-            "source_url": source_url,
-            "session_id": session_id,
-            "user_email": user_email,
-            "created_at": float(created_at) if created_at is not None else time.time(),
-        })
-        async with _supabase_async_client() as client:
-            res = await client.post(
-                self.facts_base,
-                headers=_get_headers(),
-                json=row,
-            )
-            if not res.is_success:
-                logger.error("Supabase remember failed: %s", res.text)
-                return 0
-            return 1
-
-    async def remember_many(
-        self,
-        facts: list[dict[str, Any]],
-    ) -> int:
-        count = 0
-        for f in facts:
-            if not f.get("user_email"):
-                raise ValueError("user_email is required for every memory fact")
-            try:
-                ok = await self.remember(**f)
-                count += ok
-            except Exception as exc:
-                logger.warning("remember_many single fact failed: %s", exc)
-        return count
-
-    async def save_session_summary(
-        self,
-        *,
-        session_id: str,
-        target_key: str,
-        target_display: str,
-        summary: str,
-        metrics: dict | None = None,
-        citation_count: int = 0,
-        quality_score: float = 0.0,
-        user_email: str | None = None,
-        created_at: float | None = None,
-    ) -> None:
-        if not user_email:
-            raise ValueError("user_email is required to save session summaries")
-        row = {
-            "session_id": session_id,
-            "target_key": target_key,
-            "target_display": target_display,
-            "summary": summary,
-            "metrics_json": json.dumps(metrics or {}),
-            "citation_count": citation_count,
-            "quality_score": quality_score,
-            "user_email": user_email,
-            "created_at": float(created_at) if created_at is not None else time.time(),
-        }
-        async with _supabase_async_client() as client:
-            res = await client.post(
-                self.summaries_base,
-                headers=_get_headers(),
-                json=row,
-            )
-            if not res.is_success:
-                logger.error("Supabase save_session_summary failed: %s", res.text)
-
-    async def recall(
-        self,
-        target_key: str,
-        *,
-        kind: str | None = None,
-        limit: int = 20,
-        user_email: str | None = None,
-    ) -> list[dict[str, Any]]:
-        if not user_email:
-            raise ValueError("user_email is required to recall memory facts")
-        params: dict[str, Any] = {
-            "target_key": f"eq.{target_key}",
-            "user_email": f"eq.{user_email}",
-            "select": "*",
-            "order": "created_at.desc",
-            "limit": limit,
-        }
-        if kind:
-            params["kind"] = f"eq.{kind}"
-        async with _supabase_async_client() as client:
-            res = await client.get(
-                self.facts_base,
-                headers=_get_headers(),
-                params=params,
-            )
-            if not res.is_success:
-                logger.error("Supabase recall failed: %s", res.text)
-                return []
-            return res.json()
-
-    async def get_facts(
-        self,
-        target_key: str | None = None,
-        *,
-        user_email: str | None = None,
-        limit: int = 50,
-    ) -> list[dict[str, Any]]:
-        if not user_email:
-            raise ValueError("user_email is required to retrieve facts")
-        params: dict[str, Any] = {
-            "user_email": f"eq.{user_email}",
-            "select": "*",
-            "order": "created_at.desc",
-            "limit": max(1, min(int(limit or 50), 500)),
-        }
-        if target_key:
-            params["target_key"] = f"eq.{target_key}"
-        async with _supabase_async_client() as client:
-            res = await client.get(
-                self.facts_base,
-                headers=_get_headers(),
-                params=params,
-            )
-            if not res.is_success:
-                logger.error("Supabase get_facts failed: %s", res.text)
-                return []
-            data = res.json()
-            return data if isinstance(data, list) else []
-
-    async def last_summary(
-        self,
-        target_key: str,
-        *,
-        user_email: str | None = None,
-    ) -> dict | None:
-        if not user_email:
-            raise ValueError("user_email is required to retrieve session summaries")
-        async with _supabase_async_client() as client:
-            res = await client.get(
-                self.summaries_base,
-                headers=_get_headers(),
-                params={
-                    "target_key": f"eq.{target_key}",
-                    "user_email": f"eq.{user_email}",
-                    "select": "*",
-                    "order": "created_at.desc",
-                    "limit": 1,
-                },
-            )
-            if not res.is_success:
-                logger.error("Supabase last_summary failed: %s", res.text)
-                return None
-            data = res.json()
-            if data and isinstance(data, list) and len(data) > 0:
-                return data[0]
-            return None
-
-    async def clear_target(self, target_key: str, user_email: str | None = None) -> int:
-        if not user_email:
-            raise ValueError("user_email is required to clear memory facts")
-        async with _supabase_async_client() as client:
-            res = await client.delete(
-                self.facts_base,
-                headers=_get_headers(),
-                params={
-                    "target_key": f"eq.{target_key}",
-                    "user_email": f"eq.{user_email}",
-                },
-            )
-            if not res.is_success:
-                logger.error("Supabase clear_target failed: %s", res.text)
-                return 0
-            return 1
-
-    async def delete_session(self, session_id: str, user_email: str | None = None) -> dict[str, int]:
-        if not user_email:
-            raise ValueError("user_email is required to delete session memory")
-        async with _supabase_async_client() as client:
-            f_res = await client.delete(
-                self.facts_base,
-                headers=_get_headers(),
-                params={
-                    "session_id": f"eq.{session_id}",
-                    "user_email": f"eq.{user_email}",
-                },
-            )
-            s_res = await client.delete(
-                self.summaries_base,
-                headers=_get_headers(),
-                params={
-                    "session_id": f"eq.{session_id}",
-                    "user_email": f"eq.{user_email}",
-                },
-            )
-            return {
-                "facts": 1 if f_res.is_success else 0,
-                "summaries": 1 if s_res.is_success else 0,
-            }
-
-    async def count(self, target_key: str | None = None, user_email: str | None = None) -> int:
-        if not user_email:
-            raise ValueError("user_email is required to count memory facts")
-        params: dict[str, Any] = {"user_email": f"eq.{user_email}", "select": "*"}
-        if target_key:
-            params["target_key"] = f"eq.{target_key}"
-        async with _supabase_async_client() as client:
-            res = await client.get(
-                self.facts_base,
-                headers=_get_headers(),
-                params=params,
-            )
-            if not res.is_success:
-                return 0
-            data = res.json()
-            return len(data) if isinstance(data, list) else 0
-
-    async def get_targets(self, user_email: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
-        if not user_email:
-            raise ValueError("user_email is required to get targets")
-        async with _supabase_async_client() as client:
-            res = await client.get(
-                self.facts_base,
-                headers=_get_headers(),
-                params={
-                    "user_email": f"eq.{user_email}",
-                    "select": "target_key",
-                    "order": "created_at.desc",
-                    "limit": limit,
-                },
-            )
-            if not res.is_success:
-                return []
-            data = res.json()
-            if not isinstance(data, list):
-                return []
-            from collections import Counter
-            counter = Counter(r["target_key"] for r in data if r.get("target_key"))
-            return [{"target": t, "facts": c} for t, c in counter.most_common()]
-
-    async def get_session_count(self, user_email: str | None = None) -> int:
-        if not user_email:
-            raise ValueError("user_email is required to count sessions")
-        async with _supabase_async_client() as client:
-            res = await client.get(
-                self.summaries_base,
-                headers=_get_headers(),
-                params={"user_email": f"eq.{user_email}", "select": "*"},
-            )
-            if not res.is_success:
-                return 0
-            data = res.json()
-            return len(data) if isinstance(data, list) else 0
-
-    async def list_sessions(
-        self,
-        user_email: str | None = None,
-        target_key: str | None = None,
-        limit: int = 20,
-    ) -> list[dict[str, Any]]:
-        if not user_email:
-            raise ValueError("user_email is required to list sessions")
-        params: dict[str, Any] = {
-            "user_email": f"eq.{user_email}",
-            "select": "*",
-            "order": "created_at.desc",
-            "limit": limit,
-        }
-        if target_key:
-            params["target_key"] = f"eq.{target_key}"
-        async with _supabase_async_client() as client:
-            res = await client.get(
-                self.summaries_base,
-                headers=_get_headers(),
-                params=params,
-            )
-            if not res.is_success:
-                return []
-            data = res.json()
-            return data if isinstance(data, list) else []
-
-
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# State Store (rate limits, verification codes, pending extractions, revoked tokens)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SupabaseStateStore:
     def __init__(self) -> None:
@@ -999,9 +652,9 @@ class SupabaseStateStore:
             )
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 # Token Usage
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class SupabaseTokenUsageStore:
     def __init__(self) -> None:
@@ -1069,9 +722,9 @@ class SupabaseTokenUsageStore:
             logger.debug("Supabase token usage write failed for %s; continuing: %s", user_email, exc)
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 # In-memory fallback stores (used when SUPABASE_URL is not configured)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 class _MemoryPortfolioStore:
     def __init__(self) -> None:
@@ -1091,183 +744,6 @@ class _MemoryPortfolioStore:
             del self._data[tenant_id]
             return 1
         return 0
-
-
-class _MemoryMemoryStore:
-    def __init__(self) -> None:
-        self._facts: list[dict[str, Any]] = []
-        self._summaries: list[dict[str, Any]] = []
-
-    async def remember(
-        self,
-        target_key: str,
-        kind: str,
-        body: str,
-        confidence: str,
-        source_url: str | None = None,
-        session_id: str | None = None,
-        user_email: str | None = None,
-        created_at: float | None = None,
-    ) -> int:
-        self._facts.append(
-            {
-                "target_key": target_key,
-                "kind": kind,
-                "body": body.strip(),
-                "confidence": confidence,
-                "source_url": source_url,
-                "session_id": session_id,
-                "user_email": user_email,
-                "created_at": float(created_at) if created_at is not None else time.time(),
-            }
-        )
-        return 1
-
-    async def remember_many(self, facts: list[dict[str, Any]]) -> int:
-        for f in facts:
-            self._facts.append({**f, "created_at": time.time()})
-        return len(facts)
-
-    async def save_session_summary(
-        self,
-        *,
-        session_id: str,
-        target_key: str,
-        target_display: str,
-        summary: str,
-        metrics: dict | None = None,
-        citation_count: int = 0,
-        quality_score: float = 0,
-        user_email: str | None = None,
-        created_at: float | None = None,
-    ) -> None:
-        self._summaries.append(
-            {
-                "session_id": session_id,
-                "target_key": target_key,
-                "target_display": target_display,
-                "summary": summary,
-                "metrics_json": json.dumps(metrics or {}),
-                "citation_count": citation_count,
-                "quality_score": quality_score,
-                "user_email": user_email,
-                "created_at": float(created_at) if created_at is not None else time.time(),
-            }
-        )
-
-    async def recall(
-        self,
-        target_key: str,
-        *,
-        kind: str | None = None,
-        limit: int = 20,
-        user_email: str | None = None,
-    ) -> list[dict[str, Any]]:
-        matches = [
-            f
-            for f in self._facts
-            if f.get("target_key") == target_key and f.get("user_email") == user_email
-        ]
-        if kind:
-            matches = [f for f in matches if f.get("kind") == kind]
-        return matches[:limit]
-
-    async def get_facts(
-        self,
-        target_key: str | None = None,
-        *,
-        user_email: str | None = None,
-        limit: int = 50,
-    ) -> list[dict[str, Any]]:
-        matches = [f for f in self._facts if f.get("user_email") == user_email]
-        if target_key:
-            matches = [f for f in matches if f.get("target_key") == target_key]
-        matches.sort(key=lambda row: float(row.get("created_at", 0) or 0), reverse=True)
-        return matches[: max(1, min(int(limit or 50), 500))]
-
-    async def last_summary(
-        self, target_key: str, *, user_email: str | None = None
-    ) -> dict | None:
-        matches = [
-            s
-            for s in self._summaries
-            if s.get("target_key") == target_key and s.get("user_email") == user_email
-        ]
-        return matches[-1] if matches else None
-
-    async def clear_target(self, target_key: str, user_email: str | None = None) -> int:
-        before = len(self._facts)
-        self._facts = [
-            f
-            for f in self._facts
-            if not (
-                f.get("target_key") == target_key and f.get("user_email") == user_email
-            )
-        ]
-        return before - len(self._facts)
-
-    async def count(self, target_key: str | None = None, user_email: str | None = None) -> int:
-        return len(
-            [
-                f
-                for f in self._facts
-                if f.get("user_email") == user_email
-                and (not target_key or f.get("target_key") == target_key)
-            ]
-        )
-
-    async def get_targets(self, user_email: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
-        from collections import Counter
-
-        targets = [
-            f["target_key"]
-            for f in self._facts
-            if f.get("user_email") == user_email and f.get("target_key")
-        ]
-        counter = Counter(targets)
-        return [{"target": t, "facts": c} for t, c in counter.most_common()[:limit]]
-
-    async def get_session_count(self, user_email: str | None = None) -> int:
-        return len([s for s in self._summaries if s.get("user_email") == user_email])
-
-    async def list_sessions(
-        self, user_email: str | None = None, target_key: str | None = None, limit: int = 20
-    ) -> list[dict[str, Any]]:
-        matches = [
-            s
-            for s in self._summaries
-            if s.get("user_email") == user_email
-            and (not target_key or s.get("target_key") == target_key)
-        ]
-        return matches[:limit]
-
-    async def delete_session(self, session_id: str, user_email: str | None = None) -> dict[str, int]:
-        before_f = len(self._facts)
-        before_s = len(self._summaries)
-        self._facts = [
-            f
-            for f in self._facts
-            if not (
-                f.get("session_id") == session_id and f.get("user_email") == user_email
-            )
-        ]
-        self._summaries = [
-            s
-            for s in self._summaries
-            if not (
-                s.get("session_id") == session_id and s.get("user_email") == user_email
-            )
-        ]
-        return {"facts": before_f - len(self._facts), "summaries": before_s - len(self._summaries)}
-
-    async def get_active_portfolio_keys(self) -> list[str]:
-        return [f["target_key"] for f in self._facts if f.get("target_key")]
-
-    async def update_recent_keys(self, user_email: str, key: str) -> None:
-        pass
-
-    async def get_recent_targets(self, user_email: str, limit: int = 12) -> list[str]:
-        return []
 
 
 class _MemoryStateStore:
@@ -1374,16 +850,15 @@ class _MemoryTokenUsageStore:
         )
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 # Singleton accessors (async-safe)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 def _is_supabase_configured() -> bool:
     return bool(_get_supabase_url() and _get_supabase_key())
 
 
 _portfolio_store: SupabasePortfolioStore | _MemoryPortfolioStore | None = None
-_memory_store: SupabaseMemoryStore | _MemoryMemoryStore | None = None
 _state_store: SupabaseStateStore | _MemoryStateStore | None = None
 _token_usage_store: SupabaseTokenUsageStore | _MemoryTokenUsageStore | None = None
 
@@ -1393,13 +868,6 @@ def get_portfolio_store() -> SupabasePortfolioStore | _MemoryPortfolioStore:
     if _portfolio_store is None:
         _portfolio_store = SupabasePortfolioStore() if _is_supabase_configured() else _MemoryPortfolioStore()
     return _portfolio_store
-
-
-def get_memory_store() -> SupabaseMemoryStore | _MemoryMemoryStore:
-    global _memory_store
-    if _memory_store is None:
-        _memory_store = SupabaseMemoryStore() if _is_supabase_configured() else _MemoryMemoryStore()
-    return _memory_store
 
 
 def get_state_store() -> SupabaseStateStore | _MemoryStateStore:

@@ -264,10 +264,53 @@ def _fitz_layout_to_markdown(pdf_path_or_bytes: str | bytes) -> str:
 
 
 def _pdf_to_markdown(path: str) -> tuple[str, str]:
-    """Process a PDF using PyMuPDF (fitz) layout extraction with table detection.
-    
-    Returns Markdown representation of the PDF content.
+    """Process a PDF using Azure Document Intelligence (primary) or PyMuPDF (fallback).
+
+    Strategy:
+      1. If AZURE_DI_ENDPOINT + AZURE_DI_KEY are configured → use Azure DI
+         (better table extraction, key-value pair extraction, higher accuracy)
+      2. Otherwise → use PyMuPDF fitz layout extraction
+
+    Returns Markdown representation of the PDF content + transformer name.
     """
+    # Try Azure Document Intelligence first
+    try:
+        from finagent.ingestion.azure_doc_intel import is_azure_di_configured, extract_document
+        if is_azure_di_configured():
+            import asyncio
+            with open(path, "rb") as fh:
+                file_bytes = fh.read()
+
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            di_result = loop.run_until_complete(extract_document(file_bytes=file_bytes))
+
+            if di_result.full_text and len(di_result.full_text.strip()) > 50:
+                # Combine full text with any extracted tables
+                parts = [di_result.full_text]
+                if di_result.tables:
+                    parts.append("\n\n## Extracted Tables\n")
+                    parts.append(di_result.tables_markdown)
+                logger.info(
+                    "[PDF-DI] Azure DI extracted %d pages, %d tables, %.0fs",
+                    di_result.page_count, len(di_result.tables), di_result.duration_s,
+                )
+                return "\n\n".join(parts), "azure_document_intelligence"
+            else:
+                logger.warning("[PDF-DI] Azure DI returned empty text, falling back to PyMuPDF")
+    except ImportError:
+        pass  # azure_doc_intel module not available
+    except Exception as exc:
+        logger.warning("[PDF-DI] Azure DI failed, falling back to PyMuPDF: %s", exc)
+
+    # Fallback: PyMuPDF layout extraction
     try:
         markdown = _fitz_layout_to_markdown(path)
         return markdown, "fitz_layout"

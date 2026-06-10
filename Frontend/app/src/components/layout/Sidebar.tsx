@@ -5,7 +5,7 @@ import {
   MessageSquarePlus, 
   Trash2, 
   ArrowUpRight, 
-  ShieldCheck, 
+  ShieldCheck,
   Compass, 
   LogOut,
   ChevronLeft,
@@ -127,7 +127,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const hasPortfolio = portfolioSummary && portfolioSummary.totalValue > 0;
   const isDashboardRoute = location.pathname === '/dashboard';
-  const isOpsRoute = location.pathname === '/ops';
 
   return (
     <div 
@@ -307,31 +306,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {!isCollapsed && <span className="nav-text">Dashboard</span>}
           </button>
 
-          <button
-            onClick={() => {
-              dismissSidebarOnMobile();
-              navigate('/ops');
-            }}
-            title="Control Tower"
-            style={{
-              width: '100%',
-              background: isOpsRoute ? 'rgba(255, 255, 255, 0.03)' : 'transparent',
-              border: isOpsRoute ? '1px solid rgba(56, 189, 248, 0.1)' : '1px solid rgba(255, 255, 255, 0.06)',
-              color: isOpsRoute ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-              padding: '10px',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: isCollapsed ? 'center' : 'flex-start',
-              gap: '10px',
-              fontSize: '13px',
-              fontWeight: 600,
-              textAlign: 'left'
-            }}
-          >
-            <ShieldCheck size={16} />
-            {!isCollapsed && <span className="nav-text">Control Tower</span>}
-          </button>
         </div>
 
         {/* Conversation List */}

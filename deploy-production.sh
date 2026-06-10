@@ -30,7 +30,7 @@ MCP_VALUATION_URL="${MCP_VALUATION_URL:-http://mcp-valuation-service:8005/mcp}"
 # OpenAI API Key (from environment)
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 APPINSIGHTS_ENABLED="${APPINSIGHTS_ENABLED:-true}"
-APPINSIGHTS_CONNECTION_STRING="${APPINSIGHTS_CONNECTION_STRING:-InstrumentationKey=b4797745-6b7f-4d72-894f-768bdc808d3d;IngestionEndpoint=https://centralindia-0.in.applicationinsights.azure.com/;LiveEndpoint=https://centralindia.livediagnostics.monitor.azure.com/;ApplicationId=980e7ddb-6ef5-46e2-b7ae-bb833f3fc8c8}"
+APPINSIGHTS_CONNECTION_STRING="${APPINSIGHTS_CONNECTION_STRING:-}"
 APPINSIGHTS_ROLE_NAME="${APPINSIGHTS_ROLE_NAME:-prospektlab-backend}"
 
 # ============================================================================
@@ -50,6 +50,10 @@ if [ -z "$OPENAI_API_KEY" ]; then
 fi
 
 echo "✅ Configuration validated"
+if [ "$APPINSIGHTS_ENABLED" = "true" ] && [ -z "$APPINSIGHTS_CONNECTION_STRING" ]; then
+	echo "⚠️  APPINSIGHTS_CONNECTION_STRING not set. Disabling Application Insights for this deployment."
+	APPINSIGHTS_ENABLED="false"
+fi
 echo ""
 echo "🚀 Deployment Configuration:"
 echo "   AWS Region: $AWS_REGION"

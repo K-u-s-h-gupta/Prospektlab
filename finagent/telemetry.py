@@ -277,17 +277,15 @@ class TelemetryClient:
 
         self._schedule(
             self._build_envelope(
-                "RemoteDependencyData",
+                "RequestData",
                 {
                     "ver": 2,
                     "id": request_id or str(uuid.uuid4()),
                     "name": name,
-                    "data": url,
-                    "target": url,
+                    "url": url,
                     "duration": _format_duration(duration_ms),
                     "success": success,
-                    "resultCode": str(status_code) if status_code is not None else None,
-                    "type": method,
+                    "responseCode": str(status_code) if status_code is not None else None,
                     "properties": _sanitize_properties({
                         **_user_properties(user),
                         **(properties or {}),
@@ -342,6 +340,101 @@ class TelemetryClient:
                     }),
                 },
                 user=user,
+            )
+        )
+
+    def emit_trace(
+        self,
+        message: str,
+        *,
+        severity_level: int = 1,
+        user: TelemetryUserContext | None = None,
+        request_id: str | None = None,
+        session_id: str | None = None,
+        properties: Mapping[str, Any] | None = None,
+        measurements: Mapping[str, Any] | None = None,
+        extra_tags: Mapping[str, str] | None = None,
+    ) -> None:
+        if not self.enabled:
+            return
+
+        tags: dict[str, str] = {}
+        if request_id:
+            tags["ai.operation.id"] = request_id
+        if session_id:
+            tags["ai.session.id"] = session_id
+        if extra_tags:
+            tags.update(extra_tags)
+
+        self._schedule(
+            self._build_envelope(
+                "MessageData",
+                {
+                    "ver": 2,
+                    "message": message,
+                    "severityLevel": severity_level,
+                    "properties": _sanitize_properties({
+                        **_user_properties(user),
+                        **(properties or {}),
+                    }),
+                    "measurements": _sanitize_measurements(measurements),
+                },
+                user=user,
+                extra_tags=tags,
+            )
+        )
+
+    def emit_metric(
+        self,
+        name: str,
+        value: float | int,
+        *,
+        count: int = 1,
+        minimum: float | int | None = None,
+        maximum: float | int | None = None,
+        std_dev: float | int | None = None,
+        user: TelemetryUserContext | None = None,
+        request_id: str | None = None,
+        session_id: str | None = None,
+        properties: Mapping[str, Any] | None = None,
+        extra_tags: Mapping[str, str] | None = None,
+    ) -> None:
+        if not self.enabled:
+            return
+
+        tags: dict[str, str] = {}
+        if request_id:
+            tags["ai.operation.id"] = request_id
+        if session_id:
+            tags["ai.session.id"] = session_id
+        if extra_tags:
+            tags.update(extra_tags)
+
+        metric: dict[str, Any] = {
+            "name": name,
+            "value": float(value),
+            "count": max(1, int(count)),
+        }
+        if minimum is not None:
+            metric["min"] = float(minimum)
+        if maximum is not None:
+            metric["max"] = float(maximum)
+        if std_dev is not None:
+            metric["stdDev"] = float(std_dev)
+
+        self._schedule(
+            self._build_envelope(
+                "MetricData",
+                {
+                    "ver": 2,
+                    "metrics": [metric],
+                    "properties": _sanitize_properties({
+                        **_user_properties(user),
+                        **(properties or {}),
+                    }),
+                },
+                user=user,
+                extra_tags=tags,
             )
         )
 

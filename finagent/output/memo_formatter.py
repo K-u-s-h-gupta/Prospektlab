@@ -24,6 +24,7 @@ def format_memo(
     data_quality_rows: list[str],
     citation_rows: list[str],
 ) -> str:
+    _ = source_count, data_quality_rows, citation_rows
     lines = [
         f"# Research memo: {entity}",
         f"Date: {date}",
@@ -31,7 +32,6 @@ def format_memo(
         f"Research depth: {depth}",
         f"Overall confidence: {overall_confidence}",
         f"Research duration: {duration}",
-        f"Sources consulted: {source_count}",
         "",
     ]
     # Suppress the legacy placeholder when callers already supply an Executive summary section.
@@ -46,17 +46,4 @@ def format_memo(
         )
     for sec in sections:
         lines.extend([f"## {sec.title} [CONFIDENCE: {sec.confidence}]", sec.body, ""])
-    lines.extend(
-        [
-            "## Data quality log",
-            "| Claim | Source | Confidence | As-of date | Conflicts? |",
-            "|-------|--------|------------|------------|------------|",
-            *data_quality_rows,
-            "",
-            "## Citation log",
-            "| Title | URL | Accessed | Type |",
-            "|-------|-----|----------|------|",
-            *citation_rows,
-        ]
-    )
     return "\n".join(lines)

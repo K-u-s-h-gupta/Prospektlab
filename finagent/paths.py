@@ -22,7 +22,12 @@ def _ensure_writable(path: Path) -> bool:
         path.mkdir(parents=True, exist_ok=True)
         probe = path / ".write_probe"
         probe.write_text("ok", encoding="utf-8")
-        probe.unlink(missing_ok=True)
+        try:
+            probe.unlink(missing_ok=True)
+        except OSError:
+            # Some Windows setups briefly lock the probe file after write.
+            # A successful write is enough to treat the directory as usable.
+            pass
         return True
     except OSError:
         return False

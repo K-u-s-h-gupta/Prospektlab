@@ -19,8 +19,6 @@ where n.nspname = 'public'
   and c.relname not in (
     'profiles',
     'portfolio_mirrors',
-    'facts',
-    'session_summaries',
     'rate_limits',
     'verification_codes',
     'pending_extractions',
@@ -56,8 +54,6 @@ begin
       and c.relname not in (
         'profiles',
         'portfolio_mirrors',
-        'facts',
-        'session_summaries',
         'rate_limits',
         'verification_codes',
         'pending_extractions',

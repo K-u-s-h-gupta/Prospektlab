@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_LINK_MODE=copy
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential curl git \
+    && pip install --no-cache-dir uv \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml uv.lock* ./
+COPY finagent ./finagent
+COPY deployment ./deployment
+COPY scripts ./scripts
+COPY test_phases.py test_scrapers.py test_scrapers_full.py ./
+
+RUN uv sync --no-dev
+
+ENV PATH="/app/.venv/bin:${PATH}"
+
+CMD ["python", "-m", "finagent.ikg.pipeline.scheduler"]

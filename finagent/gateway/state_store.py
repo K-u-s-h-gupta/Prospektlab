@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,15 @@ def _init_state_db() -> None:
                 tenant_id TEXT NOT NULL,
                 payload_json TEXT NOT NULL,
                 created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS outreach_unsubscribes (
+                email TEXT PRIMARY KEY,
+                reason TEXT NOT NULL,
+                source TEXT NOT NULL,
+                note TEXT NOT NULL DEFAULT '',
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS revoked_tokens (
@@ -183,6 +193,71 @@ def delete_pending_extraction(review_id: str) -> None:
 
 
 # ── Token revocation ─────────────────────────────────────────────────────
+
+def store_outreach_unsubscribe(
+    email: str,
+    reason: str = "unsubscribe",
+    source: str = "public_page",
+    note: str = "",
+) -> dict[str, Any]:
+    _init_state_db()
+    normalized = email.lower().strip()
+    now = time.time()
+    with connect_wal(_state_db_path(), timeout=5.0) as conn:
+        row = conn.execute(
+            "SELECT created_at FROM outreach_unsubscribes WHERE email = ?",
+            (normalized,),
+        ).fetchone()
+        created_at = float(row[0]) if row else now
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO outreach_unsubscribes
+            (email, reason, source, note, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                normalized,
+                (reason or "unsubscribe").strip() or "unsubscribe",
+                (source or "public_page").strip() or "public_page",
+                (note or "").strip(),
+                created_at,
+                now,
+            ),
+        )
+
+    return {
+        "email": normalized,
+        "reason": (reason or "unsubscribe").strip() or "unsubscribe",
+        "source": (source or "public_page").strip() or "public_page",
+        "note": (note or "").strip(),
+        "created_at": datetime.fromtimestamp(created_at, tz=timezone.utc).isoformat(),
+        "updated_at": datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
+    }
+
+
+def list_outreach_unsubscribes() -> list[dict[str, Any]]:
+    _init_state_db()
+    with connect_wal(_state_db_path(), timeout=5.0) as conn:
+        rows = conn.execute(
+            """
+            SELECT email, reason, source, note, created_at, updated_at
+            FROM outreach_unsubscribes
+            ORDER BY updated_at DESC, email ASC
+            """
+        ).fetchall()
+
+    return [
+        {
+            "email": row[0],
+            "reason": row[1],
+            "source": row[2],
+            "note": row[3],
+            "created_at": datetime.fromtimestamp(float(row[4]), tz=timezone.utc).isoformat(),
+            "updated_at": datetime.fromtimestamp(float(row[5]), tz=timezone.utc).isoformat(),
+        }
+        for row in rows
+    ]
+
 
 def is_token_revoked(jti: str) -> bool:
     _init_state_db()

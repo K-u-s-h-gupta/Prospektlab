@@ -16,6 +16,8 @@ _VERSION_TERMS = ("changes", "changed", "compare documents", "from drhp to rhp",
 _INVESTMENT_TERMS = ("should i buy", "buy", "sell", "hold", "invest", "recommendation")
 _MARKET_TERMS = ("rbi", "nifty", "sensex", "sector", "market", "bond", "yield", "rupee", "inflation", "fii", "dii")
 _FORENSIC_TERMS = ("forensic", "anomaly", "anomalies", "manipulation", "earnings quality", "accounting check", "red flag", "restatement")
+_OWNERSHIP_TERMS = ("shareholding", "shareholding pattern", "promoter", "pledge", "pledged shares", "ownership", "fii", "dii")
+_GOVERNANCE_TERMS = ("governance", "board", "director", "directors", "auditor", "auditors", "management")
 
 
 def normalize_depth(value: str | None) -> ResponseDepth:
@@ -66,6 +68,8 @@ def classify_output_mode(
         return OutputMode.FILING_ANALYSIS
     if any(term in lower for term in _FORENSIC_TERMS):
         return OutputMode.FORENSIC_INSIGHTS
+    if any(term in lower for term in _OWNERSHIP_TERMS + _GOVERNANCE_TERMS):
+        return OutputMode.DIRECT_ANSWER
     if any(term in lower for term in _VALUATION_TERMS):
         return OutputMode.VALUATION_INSIGHTS
     if any(term in lower for term in _NEWS_TERMS):

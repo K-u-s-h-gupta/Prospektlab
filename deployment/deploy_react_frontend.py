@@ -129,6 +129,36 @@ CUSTOM_RULES = [
         "status": "200"
     },
     {
+        "source": "/login",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/signup",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/profile",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/settings",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/app",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/landing",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
         "source": "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp|xml)$)([^.]+$)/>",
         "target": "/index.html",
         "status": "200"
@@ -147,10 +177,10 @@ def create_zip():
     
     # Inject API URL into env-config.js in the build output directory
     env_config_path = os.path.join(DIST_DIR, "env-config.js")
-    telemetry_enabled = APPINSIGHTS_ENABLED.strip().lower() in {"1", "true", "yes", "on"}
+    telemetry_enabled = APPINSIGHTS_ENABLED.strip().lower() in {"1", "true", "yes", "on"} and bool(APPINSIGHTS_CONNECTION_STRING.strip())
     with open(env_config_path, "w") as f:
         f.write(
-            'window.__BACKEND_URL = {backend}; window.__CONFIG__ = {{ apiBase: {backend}, environment: "production", telemetry: {{ enabled: {enabled}, connectionString: {connection}, roleName: "prospektlab-frontend", cloudRoleInstance: "amplify" }} }};\n'.format(
+            '(function () {{ var prodBackend = {backend}; var host = window.location.hostname || ""; var isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1"; var backend = isLocal ? "http://127.0.0.1:8000" : prodBackend; window.__BACKEND_URL = backend; window.__CONFIG__ = {{ apiBase: backend, environment: isLocal ? "local" : "production", telemetry: {{ enabled: {enabled}, connectionString: {connection}, roleName: "prospektlab-frontend", cloudRoleInstance: isLocal ? "local-browser" : "browser" }} }}; }})();\n'.format(
                 backend=json.dumps(API_GATEWAY_URL),
                 enabled="true" if telemetry_enabled else "false",
                 connection=json.dumps(APPINSIGHTS_CONNECTION_STRING),
