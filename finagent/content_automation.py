@@ -20,7 +20,7 @@ from xml.etree import ElementTree as ET
 from pydantic import BaseModel, Field
 
 from finagent.paths import finagent_data_path, repo_root
-from finagent.seo.google_search_console import submit_sitemap
+from finagent.seo.google_search_console import submit_sitemap, submit_url_update
 from finagent.news.sources.bse_announcements import fetch_bse_announcements
 from finagent.news.sources.nse_announcements import fetch_nse_announcements
 from finagent.news.sources.sebi_rss import fetch_sebi_news
@@ -66,7 +66,7 @@ class ContentArticlePackage(BaseModel):
     hero_summary: str = Field(..., min_length=80, max_length=360)
     audience: str = Field(default="Indian investors and market researchers", max_length=120)
     keywords: list[str] = Field(default_factory=list, max_length=12)
-    sections: list[ContentArticleSection] = Field(default_factory=list, min_length=4, max_length=10)
+    sections: list[ContentArticleSection] = Field(default_factory=list, min_length=4, max_length=12)
     faqs: list[ContentArticleFaq] = Field(default_factory=list, min_length=3, max_length=6)
     cta_label: str = Field(default="Talk to ProspektLab", max_length=40)
     cta_href: str = Field(default="/#/contact", max_length=200)
@@ -484,94 +484,113 @@ async def _collect_context(req: ContentAutomationRequest) -> tuple[str, list[dic
 def _fallback_article(req: ContentAutomationRequest, slug: str, context: str) -> ContentArticlePackage:
     compact = re.sub(r"\s+", " ", context or "").strip()
     summary = compact[:320] if compact else (
-        "This automated page turns platform research, market data, and topic analysis into a readable long-form article with SEO metadata, structured sections, and a publishable format."
+        "Indian investors need a practical reading of the latest market signal: what changed, why it matters, where the risk sits, and what to monitor before making an allocation decision."
     )
     topic = req.topic.strip()
     search_term = req.search_query or topic
+    topic_label = topic.rstrip(". ")
     keywords = [
         topic,
         search_term,
         f"{topic} analysis",
-        f"{topic} SEO",
-        "ProspektLab insights",
+        f"{topic} investor guide",
+        "Indian market research",
     ]
     sections = [
         ContentArticleSection(
-            heading="What this article covers",
+            heading="What changed and why it matters now",
             paragraphs=[
-                f"This page was generated from an automated ProspektLab workflow for {topic}. It blends source material, market data, and platform research signals into a single article that can be published without manual layout work.",
-                "The goal is not generic filler. The output is structured for search intent, readability, and faster publishing, while leaving room for editors or analysts to refine the final stance when needed.",
+                f"{topic_label} matters because it sits where news flow, valuation comfort, liquidity, and investor behaviour meet. The useful reading starts with the current trigger, then asks whether it changes earnings visibility, portfolio risk, or only the short-term narrative.",
+                "For a retail investor, the practical question is not whether the headline sounds exciting. It is whether the evidence changes expected cash flows, borrowing costs, fund flows, tax outcomes, or the risk of being forced into a decision at the wrong time.",
             ],
             bullets=[
-                "Search-friendly title and meta description",
-                "Sectioned article body with clear subheads",
-                "FAQ blocks and structured metadata",
+                "Separate the event from the market reaction",
+                "Check whether the data affects earnings, rates, liquidity, or governance",
+                "Treat price moves as signals to investigate, not conclusions",
             ],
         ),
         ContentArticleSection(
-            heading="Why the automation matters",
+            heading="The investor lens: stocks, gold, mutual funds, and SIPs",
             paragraphs=[
-                "A finance content pipeline only compounds if it can publish consistently. Automation reduces turnaround time from hours to minutes and lets the platform cover more long-tail topics without diluting quality.",
-                "By pulling from existing platform APIs and search tools, the workflow can generate context-rich drafts instead of relying on a blank language-model prompt.",
+                "Equity investors should ask whether the development improves durable earnings, balance-sheet strength, capital allocation, or governance quality. A short-term rally without better cash generation can disappear quickly when liquidity tightens.",
+                "Mutual fund and SIP investors should read the same event through exposure rather than headlines. Sector concentration, small-cap liquidity, duration risk in debt funds, cash needs, and gold allocation all matter more than one isolated news item.",
             ],
             bullets=[
-                "Faster publishing windows for time-sensitive topics",
-                "Reusable templates for search and social metadata",
-                "Lower dependence on manual formatting steps",
+                "Stocks: verify earnings impact and disclosure quality",
+                "Mutual funds: check portfolio exposure and category risk",
+                "Gold: use as a diversifier, not as a reaction to every scare",
+                "SIPs: focus on time horizon, step-up discipline, and drawdown tolerance",
             ],
         ),
         ContentArticleSection(
-            heading="How the platform data feeds the article",
+            heading="Brief context before the headline fades",
             paragraphs=[
-                "The generation path can ingest user-provided markdown, extract a source URL, pull market snapshots for a company symbol, and fetch recent related headlines. That means the draft begins with actual platform context instead of thin generic copy.",
-                f"For this article, the working topic is {topic}. The pipeline can also use the search term '{search_term}' to gather supporting context before writing.",
+                f"The useful way to read {topic_label} is to place it beside recent market data, related official disclosures, and the broader macro setting. If the available evidence is thin, the right conclusion is caution, not a louder opinion.",
+                "A serious investor should rank sources before ranking outcomes: regulator releases, exchange filings, fund factsheets, RBI or AMFI data, and company material should outweigh summaries, commentary, and social-market noise.",
             ],
             bullets=[
-                "Existing web search utilities",
-                "Existing news feed integrations",
-                "Existing company snapshot and quote APIs",
+                "Prefer official filings and regulator releases over summaries",
+                "Use recent price or NAV data only with a clear date",
+                "Flag missing evidence plainly instead of filling the gap",
             ],
         ),
         ContentArticleSection(
-            heading="Publishing model",
+            heading="History and pattern recognition",
             paragraphs=[
-                "Each generated article can be saved as JSON, rendered to HTML, assigned a route slug, and mirrored into the frontend public directory. That allows the same automation job to support API delivery and static deployment.",
-                "When image generation is available, the workflow can attach a cover asset. When it is not, the pipeline still generates a branded fallback graphic so the page remains publication-ready.",
+                "Most finance headlines repeat older patterns: rate-cycle turning points, margin pressure, liquidity squeezes, governance surprises, commodity shocks, or temporary fund-flow rotations. The historical comparison matters because markets often overpay for the first clean story and underprice the second-order risk.",
+                "When history is relevant, compare the current event with at least one previous cycle. Did earnings follow the headline? Did flows persist? Did regulation change behaviour, or did it only create a short burst of volatility?",
             ],
             bullets=[
-                "Stored manifest for reuse and editing",
-                "Public HTML output for crawlability",
-                "Image asset generation with fallback behavior",
+                "Look for repeated operating patterns",
+                "Compare fund-flow reactions with later earnings data",
+                "Watch whether management commentary matches filings over time",
+            ],
+        ),
+        ContentArticleSection(
+            heading="What to monitor next",
+            paragraphs=[
+                "The best next steps are concrete: identify the primary source, list the affected assets or funds, decide which metric would confirm the thesis, and set a review date. That protects investors from turning every market update into an impulsive portfolio change.",
+                "For long-term investors, the monitor list should include earnings revisions, debt levels, promoter actions, fund portfolio changes, expense ratios, taxation, and liquidity. For gold and debt allocations, real yields, currency movement, product structure, and exit rules usually matter more than daily headlines.",
+            ],
+            bullets=[
+                "Next official disclosure or factsheet",
+                "Change in earnings, cash flow, or debt",
+                "Fund exposure and concentration",
+                "Tax and liquidity implications before switching",
             ],
         ),
     ]
     faqs = [
         ContentArticleFaq(
-            question="Can ProspektLab generate publishable SEO articles automatically?",
-            answer="Yes. The workflow produces a title, description, article sections, FAQs, image asset, HTML output, and a saved JSON manifest that can be served through an API or mirrored into the frontend public tree.",
+            question=f"How should investors approach {topic}?",
+            answer="Start with the verified source, then ask whether the event changes earnings, interest rates, fund exposure, taxation, or liquidity. If it only changes sentiment, avoid making a portfolio decision until the data improves.",
         ),
         ContentArticleFaq(
-            question="Does the workflow use existing platform APIs?",
-            answer="Yes. It can reuse the platform's company snapshot, quote, news, and search utilities so article generation starts with structured context instead of relying only on a free-form model prompt.",
+            question="Does this article recommend buying or selling?",
+            answer="No. It is educational research and does not recommend buying, selling, holding, switching, or rebalancing any security, mutual fund, SIP, gold product, or other investment.",
         ),
         ContentArticleFaq(
-            question="Will the generated page remain crawlable?",
-            answer="Yes. The automation writes normal HTML with canonical metadata and can mirror the output into a static public directory so crawlers receive a full document at a direct URL.",
+            question="Which sources should carry the most weight?",
+            answer="Official exchange filings, regulator releases, RBI or AMFI data, company investor material, audited reports, and fund factsheets should carry more weight than social posts or generic market commentary.",
+        ),
+        ContentArticleFaq(
+            question="What if the evidence is still incomplete?",
+            answer="Treat the article as a watchlist brief. Wait for a primary disclosure, factsheet, or regulator update before acting, especially when the event affects concentrated stock positions or high-risk fund categories.",
         ),
     ]
     return ContentArticlePackage(
         slug=slug,
-        title=f"{topic} | Automated Content Strategy by ProspektLab",
+        title=f"{topic_label}: Investor Impact, Risks, And Watchpoints"[:120],
         description=summary[:200],
-        hero_eyebrow="Automated Insight",
-        hero_title=topic,
+        hero_eyebrow="Investor Brief",
+        hero_title=topic_label,
         hero_summary=summary,
         audience=req.audience,
         keywords=keywords[:8],
         sections=sections,
         faqs=faqs,
         image_prompt=(
-            f"Premium editorial cover for {topic}. Build a sharp 3:2 business-news visual with layered "
+            f"Premium ProspektLab editorial cover for {topic}. Build a sharp 3:2 dark business-news visual with layered "
             f"financial screens, documents, market cues, and one strong central subject tied to the story. "
             "Keep the full composition comfortably inside frame with generous padding so it works in a report card. "
             "High-end publication aesthetic, cinematic lighting, rich depth, India market context, no headline text, no watermark."
@@ -590,14 +609,21 @@ async def _llm_generate_article(req: ContentAutomationRequest, slug: str, contex
         return _fallback_article(req, slug, context)
 
     system = (
-        "You write high-quality financial and strategic long-form articles for a search-first website. "
-        "Return JSON only. Write for humans first, with strong clarity, no fluff, and SEO-safe structure. "
-        "Every paragraph must add information. Avoid hype. Do not fabricate facts not present in the context."
+        "You are a senior Indian financial editor writing for serious retail investors and market researchers. "
+        "Return JSON only, but the public article text must read like natural editorial writing, not an instruction, prompt, template, or model output. "
+        "Never mention prompts, JSON, schema, automation, AI, language models, pipelines, internal tools, or quality scores. "
+        "Write for humans first: concrete nouns, dated events, short paragraphs, and a calm investor lens. "
+        "Do not narrate what the article will do; report what changed and why it matters. "
+        "Do not fabricate facts not present in the context, and do not use buy, sell, hold, target-price, undervalued, or overvalued language."
     )
     user = (
         "Generate a publication-ready article package as JSON with these fields: "
         "title, description, hero_eyebrow, hero_title, hero_summary, audience, keywords, sections, faqs, cta_label, cta_href, image_prompt. "
-        "Rules: title 50-70 chars when possible, description 140-170 chars when possible, 5-7 sections, each section with heading, 2-3 paragraphs, optional bullets, 3-5 FAQs, keywords 5-10 items. "
+        "Rules: title 50-70 chars when possible, description 140-170 chars when possible, 10-12 sections, each section with heading, 2-4 substantial paragraphs of 45-95 words each, optional bullets, 5-6 FAQs, keywords 8-12 items. "
+        "Aim for a detailed 1,600-2,400 word investor-grade article; do not write thin summaries or generic explainers. "
+        "Article arc: start with a sharp event hook and named source attribution, then brief context and a second hook that gives the reader a reason to continue, then market/policy/company context, numbers and quotes, history if it helps, investor implications across stocks, gold, mutual funds, SIPs, debt, tax, liquidity, risks, and watchpoints where relevant. "
+        "Every factual claim should be tied to the provided context or written as a clearly labelled watchpoint. "
+        "Do not publish diagnostic phrases such as 'this article covers', 'in this article', 'generated article', 'research workflow', 'quality score', 'sources processed', 'specialist findings', 'working research query', or 'next editorial pass'. "
         f"Slug: {slug}\n"
         f"Primary topic: {req.topic}\n"
         f"Audience: {req.audience}\n"
@@ -613,6 +639,7 @@ async def _llm_generate_article(req: ContentAutomationRequest, slug: str, contex
         response = await client.chat.completions.create(
             model=model,
             temperature=0.4,
+            max_tokens=9000,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system},
@@ -620,12 +647,87 @@ async def _llm_generate_article(req: ContentAutomationRequest, slug: str, contex
             ],
         )
         content = response.choices[0].message.content or "{}"
-        data = json.loads(content)
+        data = _normalize_llm_article_payload(json.loads(content))
         data["slug"] = slug
         return ContentArticlePackage.model_validate(data)
     except Exception:
         logger.exception("LLM article generation failed; using fallback")
         return _fallback_article(req, slug, context)
+
+
+def _split_llm_paragraphs(value: Any) -> list[str]:
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                parts.extend(_split_llm_paragraphs(item))
+            elif isinstance(item, dict):
+                parts.extend(_split_llm_paragraphs(item.get("text") or item.get("content") or item.get("body")))
+        return [part for part in parts if part]
+    if not isinstance(value, str):
+        return []
+    raw = value.strip()
+    if not raw:
+        return []
+    chunks = [chunk.strip(" -\t\r\n") for chunk in re.split(r"\n{2,}|\r\n{2,}", raw) if chunk.strip()]
+    if len(chunks) > 1:
+        return chunks[:4]
+    sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", raw)
+    if len(sentences) <= 3:
+        return [raw]
+    paragraphs: list[str] = []
+    current: list[str] = []
+    for sentence in sentences:
+        current.append(sentence)
+        if len(" ".join(current).split()) >= 75 and len(paragraphs) < 3:
+            paragraphs.append(" ".join(current).strip())
+            current = []
+    if current and len(paragraphs) < 4:
+        paragraphs.append(" ".join(current).strip())
+    return paragraphs or [raw]
+
+
+def _normalize_llm_article_payload(data: Any) -> dict[str, Any]:
+    """Accept common LLM variants and coerce them into ContentArticlePackage shape."""
+    if not isinstance(data, dict):
+        return {}
+    sections = data.get("sections")
+    if isinstance(sections, list):
+        normalized_sections: list[dict[str, Any]] = []
+        for raw_section in sections:
+            if not isinstance(raw_section, dict):
+                continue
+            section = dict(raw_section)
+            heading = section.get("heading") or section.get("title") or section.get("section_title") or "Investor context"
+            paragraphs = _split_llm_paragraphs(section.get("paragraphs"))
+            if not paragraphs:
+                for key in ("content", "body", "text", "analysis", "summary", "details"):
+                    paragraphs = _split_llm_paragraphs(section.get(key))
+                    if paragraphs:
+                        break
+            bullets = section.get("bullets")
+            if not isinstance(bullets, list):
+                bullets = section.get("key_points") or section.get("watchpoints") or section.get("takeaways") or []
+            if not paragraphs and isinstance(bullets, list) and bullets:
+                paragraphs = [" ".join(str(item).strip() for item in bullets[:3] if str(item).strip())]
+            normalized_sections.append({
+                "heading": str(heading),
+                "paragraphs": [str(item).strip() for item in paragraphs if str(item).strip()][:4],
+                "bullets": [str(item).strip() for item in bullets if str(item).strip()][:6] if isinstance(bullets, list) else [],
+            })
+        data["sections"] = normalized_sections
+    faqs = data.get("faqs")
+    if isinstance(faqs, list):
+        normalized_faqs: list[dict[str, str]] = []
+        for raw_faq in faqs:
+            if not isinstance(raw_faq, dict):
+                continue
+            question = raw_faq.get("question") or raw_faq.get("q") or raw_faq.get("title")
+            answer = raw_faq.get("answer") or raw_faq.get("a") or raw_faq.get("response") or raw_faq.get("text")
+            if question and answer:
+                normalized_faqs.append({"question": str(question), "answer": str(answer)})
+        data["faqs"] = normalized_faqs
+    return data
 
 
 def _render_json_ld(article: ContentArticlePackage, public_url: str, image_url: str | None, generated_at: str) -> str:
@@ -768,6 +870,270 @@ def refresh_public_research_hub(route_base: str = _DEFAULT_ARTICLE_ROUTE) -> str
         return None
 
 
+_ARTICLE_PROSPEKTLAB_CSS = """
+      :root {
+        color-scheme: dark;
+        --paper: #03060d;
+        --paper-soft: rgba(8, 16, 32, 0.78);
+        --ink: #f8fbff;
+        --muted: #a8b4c8;
+        --line: rgba(148, 163, 184, 0.14);
+        --line-strong: rgba(147, 197, 253, 0.28);
+        --accent: #60a5fa;
+        --accent-soft: rgba(96, 165, 250, 0.12);
+        --accent-2: #34d399;
+        --accent-3: #2563eb;
+        --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+        --panel: rgba(8, 16, 32, 0.78);
+        --panel-strong: rgba(10, 22, 44, 0.92);
+      }
+      body {
+        min-height: 100vh;
+        background:
+          linear-gradient(135deg, rgba(96, 165, 250, 0.10) 0 1px, transparent 1px 40px),
+          linear-gradient(45deg, rgba(52, 211, 153, 0.055) 0 1px, transparent 1px 56px),
+          linear-gradient(180deg, #03060d 0%, #07111f 44%, #03060d 100%);
+        color: var(--ink);
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(115deg, rgba(96, 165, 250, 0.13), transparent 34%),
+          linear-gradient(245deg, rgba(52, 211, 153, 0.08), transparent 38%);
+        opacity: 0.86;
+      }
+      .progress-bar {
+        background: linear-gradient(90deg, #eaf3ff, #60a5fa, #34d399);
+      }
+      .masthead {
+        background: rgba(3, 6, 13, 0.74);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.24);
+      }
+      .brand,
+      .masthead-links a {
+        color: var(--ink);
+      }
+      .masthead-links a {
+        color: var(--muted);
+      }
+      .masthead-links a:hover {
+        color: #ffffff;
+      }
+      .brand-mark {
+        border-radius: 4px;
+        background: linear-gradient(135deg, #eaf3ff, #60a5fa 45%, #1d4ed8);
+        box-shadow: 0 0 0 7px rgba(96, 165, 250, 0.10), 0 0 28px rgba(96, 165, 250, 0.26);
+      }
+      .hero {
+        padding: 42px 0 28px;
+      }
+      .hero-frame {
+        position: relative;
+        overflow: hidden;
+        border-radius: 18px;
+        border: 1px solid rgba(147, 197, 253, 0.22);
+        background:
+          linear-gradient(145deg, rgba(9, 18, 38, 0.96), rgba(8, 28, 62, 0.80) 58%, rgba(20, 41, 88, 0.62)),
+          rgba(8, 16, 32, 0.92);
+        box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      }
+      .hero-frame::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.8), rgba(52, 211, 153, 0.55), transparent);
+      }
+      h1,
+      h2,
+      h3,
+      .mc-val,
+      .faq-q-text,
+      .signal-card p,
+      .section-card li {
+        color: var(--ink);
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: "Inter", "Manrope", sans-serif;
+        letter-spacing: -0.035em;
+      }
+      h1 {
+        max-width: 12ch;
+      }
+      p,
+      li,
+      .hero-summary,
+      .hero-context,
+      .rail-card li,
+      .faq-answer p {
+        color: var(--muted);
+      }
+      .hero-summary {
+        color: #dbeafe;
+      }
+      .eyebrow,
+      .section-kicker,
+      .rail-label,
+      .signal-index,
+      .mc-lbl {
+        color: var(--accent);
+      }
+      .eyebrow,
+      .meta-pill,
+      .keyword,
+      .jump-chip,
+      .section-card,
+      .faq-shell,
+      .faq-item,
+      .rail-card,
+      .signal-card,
+      .footer-link {
+        border-radius: 10px;
+      }
+      .eyebrow,
+      .meta-pill-accent,
+      .jump-chip:hover {
+        border-color: rgba(96, 165, 250, 0.28);
+        background: rgba(96, 165, 250, 0.10);
+        color: #dbeafe;
+      }
+      .meta-pill,
+      .keyword,
+      .jump-chip {
+        border-color: rgba(147, 197, 253, 0.22);
+        background: rgba(15, 23, 42, 0.72);
+        color: #dbeafe;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+      }
+      .jump-chip:hover,
+      .jump-chip:focus-visible {
+        background: linear-gradient(135deg, #eaf3ff, #60a5fa 52%, #1d4ed8);
+        border-color: rgba(219, 234, 254, 0.68);
+        color: #06111f;
+        outline: none;
+      }
+      .hero-image {
+        border-radius: 10px;
+        border-color: rgba(147, 197, 253, 0.26);
+        background:
+          radial-gradient(circle at 18% 12%, rgba(96, 165, 250, 0.24), transparent 36%),
+          radial-gradient(circle at 88% 82%, rgba(52, 211, 153, 0.16), transparent 34%),
+          linear-gradient(135deg, rgba(3, 6, 13, 0.88), rgba(10, 22, 44, 0.94));
+        box-shadow: 0 24px 72px rgba(0, 0, 0, 0.44), 0 0 42px rgba(96, 165, 250, 0.12);
+        object-fit: cover;
+        padding: 0;
+        filter: saturate(1.08) contrast(1.04);
+      }
+      .signal-card,
+      .rail-card,
+      .section-card,
+      .faq-shell,
+      .faq-item {
+        border-radius: 10px;
+        border-color: rgba(147, 197, 253, 0.18);
+        background: linear-gradient(180deg, rgba(12, 22, 44, 0.82), rgba(6, 13, 28, 0.80));
+        box-shadow: 0 20px 66px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        backdrop-filter: blur(18px);
+      }
+      .signal-card:hover,
+      .rail-card:hover,
+      .section-card:hover,
+      .faq-item:hover {
+        border-color: rgba(96, 165, 250, 0.34);
+      }
+      .section-context {
+        border-color: rgba(96, 165, 250, 0.30);
+        background: linear-gradient(180deg, rgba(96, 165, 250, 0.12), rgba(8, 16, 32, 0.76));
+      }
+      li.data-row {
+        border-left-color: var(--accent);
+        background: rgba(96, 165, 250, 0.07);
+        color: #dbeafe;
+      }
+      li.data-row::before {
+        color: var(--accent-2);
+      }
+      .toc a {
+        color: var(--muted);
+      }
+      .toc a:hover,
+      .toc a.is-active {
+        background: rgba(96, 165, 250, 0.12);
+        color: #ffffff;
+      }
+      .faq-item summary:hover {
+        background: rgba(96, 165, 250, 0.07);
+      }
+      .faq-chevron {
+        color: var(--accent);
+      }
+      .footer-card {
+        border-radius: 14px;
+        border: 1px solid rgba(147, 197, 253, 0.20);
+        background: linear-gradient(135deg, rgba(8, 16, 32, 0.96), rgba(8, 28, 62, 0.82));
+      }
+      .footer-link {
+        min-height: 40px;
+        border-color: rgba(96, 165, 250, 0.38);
+        background: linear-gradient(135deg, #eaf3ff, #60a5fa 52%, #1d4ed8);
+        color: #06111f;
+        font-weight: 900;
+        box-shadow: 0 14px 34px rgba(37, 99, 235, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.48);
+      }
+      .footer-link:hover {
+        background: linear-gradient(135deg, #ffffff, #93c5fd 52%, #2563eb);
+        color: #020817;
+      }
+      #btt {
+        position: fixed;
+        right: 28px;
+        bottom: 28px;
+        z-index: 200;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 1px solid rgba(147, 197, 253, 0.28);
+        background: rgba(8, 16, 32, 0.86);
+        color: #eaf3ff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(12px);
+        transition: opacity 0.22s ease, transform 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        backdrop-filter: blur(16px);
+      }
+      #btt.show {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+      #btt:hover {
+        border-color: rgba(96, 165, 250, 0.58);
+        background: rgba(15, 23, 42, 0.96);
+      }
+      @media (max-width: 720px) {
+        .hero-frame,
+        .section-card,
+        .faq-shell,
+        .rail-card,
+        .footer-card {
+          border-radius: 12px;
+        }
+      }
+"""
+
+
 def render_article_html(
     article: ContentArticlePackage,
     public_url: str,
@@ -807,7 +1173,7 @@ def render_article_html(
             bullets = f'<ul class="data-list">{items}</ul>'
         heading_key = section.heading.lower()
         section_class = (
-            "section-card section-ikg"
+            "section-card section-context"
             if ("knowledge graph" in heading_key or "verified ownership" in heading_key or "governance records" in heading_key)
             else "section-card"
         )
@@ -898,7 +1264,7 @@ def render_article_html(
     <title>{esc(article.title)}</title>
     <meta name=\"description\" content=\"{esc(article.description)}\" />
     <meta name=\"robots\" content=\"index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1\" />
-    <meta name=\"theme-color\" content=\"#f4ecdf\" />
+    <meta name=\"theme-color\" content=\"#03060d\" />
     <link rel=\"canonical\" href=\"{esc(public_url)}\" />
     <link rel=\"icon\" type=\"image/svg+xml\" href=\"/prospektlab-favicon-v2.svg\" />
     <meta property=\"og:type\" content=\"article\" />
@@ -1282,7 +1648,7 @@ def render_article_html(
         padding: 26px 28px;
         box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
       }}
-      .section-ikg {{
+      .section-context {{
         border-color: rgba(13, 118, 110, 0.24);
         background: linear-gradient(180deg, rgba(13, 118, 110, 0.07), rgba(255, 250, 242, 0.94));
       }}
@@ -1434,6 +1800,7 @@ def render_article_html(
         }}
       }}
     </style>
+    <style>{_ARTICLE_PROSPEKTLAB_CSS}</style>
     <script type=\"application/ld+json\">{json_ld}</script>
   </head>
   <body>
@@ -1502,91 +1869,7 @@ def render_article_html(
         </div>
       </div>
     </footer>
-    <script>
-      (function () {{
-        'use strict';
-
-        /* ── Reading progress bar ──────────────────────── */
-        const progress = document.querySelector('[data-progress]');
-        let raf = null;
-        const updateProgress = () => {{
-          raf = null;
-          if (!progress) return;
-          const max = document.documentElement.scrollHeight - window.innerHeight;
-          const ratio = max > 0 ? window.scrollY / max : 0;
-          progress.style.transform = 'scaleX(' + Math.max(0, Math.min(1, ratio)) + ')';
-        }};
-        updateProgress();
-        window.addEventListener('scroll', () => {{ if (!raf) raf = requestAnimationFrame(updateProgress); }}, {{ passive: true }});
-
-        /* ── TOC active section ─────────────────────────── */
-        const tocLinks = Array.from(document.querySelectorAll('[data-toc-link]'));
-        const sections = tocLinks
-          .map((link) => document.querySelector(link.getAttribute('href')))
-          .filter(Boolean);
-
-        if ('IntersectionObserver' in window && tocLinks.length && sections.length) {{
-          const observer = new IntersectionObserver((entries) => {{
-            entries.forEach((entry) => {{
-              if (!entry.isIntersecting) return;
-              const activeId = '#' + entry.target.id;
-              tocLinks.forEach((link) => {{
-                const isActive = link.getAttribute('href') === activeId;
-                link.classList.toggle('is-active', isActive);
-              }});
-            }});
-          }}, {{ rootMargin: '-18% 0px -58% 0px', threshold: 0.1 }});
-          sections.forEach((section) => observer.observe(section));
-        }}
-
-        /* ── Back-to-top button ─────────────────────────── */
-        const btn = document.createElement('button');
-        btn.id = 'btt';
-        btn.setAttribute('aria-label', 'Back to top');
-        btn.innerHTML = '&#8593;';
-        document.body.appendChild(btn);
-
-        const bttStyle = document.createElement('style');
-        bttStyle.textContent = [
-          '#btt{{position:fixed;bottom:28px;right:28px;z-index:200;',
-          'width:44px;height:44px;border-radius:50%;border:1px solid var(--line-strong);',
-          'background:rgba(255,250,242,0.92);backdrop-filter:blur(10px);',
-          'color:var(--ink);font-size:18px;cursor:pointer;',
-          'display:flex;align-items:center;justify-content:center;',
-          'opacity:0;transform:translateY(12px);',
-          'transition:opacity .22s,transform .22s;pointer-events:none;',
-          'box-shadow:0 6px 20px rgba(20,32,51,0.12)}}',
-          '#btt.show{{opacity:1;transform:translateY(0);pointer-events:auto}}',
-          '#btt:hover{{background:rgba(13,118,110,0.12);border-color:var(--accent)}}',
-        ].join('');
-        document.head.appendChild(bttStyle);
-
-        window.addEventListener('scroll', () => {{
-          btn.classList.toggle('show', window.scrollY > 600);
-        }}, {{ passive: true }});
-        btn.addEventListener('click', () => window.scrollTo({{ top: 0, behavior: 'smooth' }}));
-
-        /* ── Highlight change indicators in metric cards ── */
-        document.querySelectorAll('.mc-chg').forEach((el) => {{
-          const txt = el.textContent || '';
-          if (txt.startsWith('+')) el.classList.add('mc-pos');
-          else if (txt.startsWith('-')) el.classList.add('mc-neg');
-        }});
-
-        /* ── Smooth anchor scroll (override jump chips) ─── */
-        document.querySelectorAll('a.jump-chip, a[data-toc-link]').forEach((a) => {{
-          a.addEventListener('click', (e) => {{
-            const href = a.getAttribute('href');
-            if (!href || !href.startsWith('#')) return;
-            const target = document.querySelector(href);
-            if (!target) return;
-            e.preventDefault();
-            const y = target.getBoundingClientRect().top + window.scrollY - 96;
-            window.scrollTo({{ top: y, behavior: 'smooth' }});
-          }});
-        }});
-      }})();
-    </script>
+    <script src="/insights/research-runtime.js" defer></script>
   </body>
 </html>
 """
@@ -1603,7 +1886,7 @@ def _compose_editorial_cover_prompt(article: ContentArticlePackage) -> str:
             "graphics, documents, devices, and one strong central subject tied to the story."
         )
     return (
-        f"{base_prompt} "
+        f"{base_prompt} Use ProspektLab's dark navy, glass-panel, blue/cyan/green accent system; avoid beige, tan, parchment, newspaper, or warm editorial palettes. "
         f"Story topic: {article.title}. "
         f"Story intent: {intent}. "
         f"Topic direction: {profile['prompt']}. "
@@ -1762,8 +2045,25 @@ def _resolve_image_client_config() -> _ImageClientConfig | None:
             )
         logger.warning("OpenAI image provider selected but OPENAI_API_KEY or model is missing")
 
+    has_explicit_foundry_route = bool(foundry_image_endpoint or foundry_openai_base_url)
+    if (
+        provider not in {"openai"}
+        and foundry_key
+        and has_explicit_foundry_route
+        and foundry_deployment
+    ):
+        return _ImageClientConfig(
+            api_key=foundry_key,
+            model=foundry_deployment,
+            provider="azure-foundry",
+            base_url=foundry_openai_base_url or foundry_resource_endpoint,
+            image_endpoint=foundry_image_endpoint,
+            request_url=foundry_request_url,
+            api_version=foundry_api_version,
+        )
+
     # Default routing: chatgpt-image-2 should use OPENAI_API_KEY unless caller
-    # explicitly forces Foundry with FINAGENT_CONTENT_IMAGE_PROVIDER=foundry.
+    # provides a concrete Foundry image route or explicitly forces Foundry.
     if provider not in {"foundry", "azure", "azure_foundry", "mai"}:
         if openai_key and openai_model.lower() == "chatgpt-image-2":
             return _ImageClientConfig(
@@ -1868,7 +2168,7 @@ def _topic_profile(article: ContentArticlePackage) -> dict[str, Any]:
                 "variant": "guidance",
                 "badge": "Outlook",
                 "cues": ["Guidance", "Growth", "Outlook"],
-                "prompt": "A light editorial earnings-and-guidance cover with forecast cards, upward momentum, management outlook cues, and a premium publication finish",
+                "prompt": "A dark ProspektLab earnings-and-guidance cover with glass forecast cards, upward momentum, management outlook cues, and a premium blue-cyan publication finish",
             }
         if any(token in text for token in ("deal", "order", "tcv", "pipeline", "wins")):
             return {
@@ -1876,14 +2176,14 @@ def _topic_profile(article: ContentArticlePackage) -> dict[str, Any]:
                 "variant": "dealwins",
                 "badge": "Earnings",
                 "cues": ["Deal wins", "Order book", "Margins"],
-                "prompt": "A light editorial earnings cover focused on deal wins, order-book momentum, statement pages, and a strong company-linked visual center",
+                "prompt": "A dark ProspektLab earnings cover focused on deal wins, order-book momentum, statement pages, and a strong company-linked visual center",
             }
         return {
             "kind": "earnings",
             "variant": "standard",
             "badge": "Earnings",
             "cues": ["Revenue", "Margins", "Guidance"],
-            "prompt": "A light editorial earnings cover with statement pages, a guidance chart, polished market panels, and a strong focal subject tied to the company",
+            "prompt": "A dark ProspektLab earnings cover with statement pages, a guidance chart, polished market panels, and a strong focal subject tied to the company",
         }
     if "sebi" in text or "regulat" in text or "order" in text or "probe" in text:
         return {
@@ -1891,7 +2191,7 @@ def _topic_profile(article: ContentArticlePackage) -> dict[str, Any]:
             "variant": "standard",
             "badge": "Regulation",
             "cues": ["Order", "Filings", "Timeline"],
-            "prompt": "A bright editorial compliance scene with official papers, a verification seal, timeline markers, and premium legal-finance details",
+            "prompt": "A dark ProspektLab compliance scene with official papers, a verification seal, timeline markers, and premium legal-finance details",
         }
     if any(token in text for token in ("acquire", "stake", "deal", "invest", "merger", "majority")):
         return {
@@ -1899,7 +2199,7 @@ def _topic_profile(article: ContentArticlePackage) -> dict[str, Any]:
             "variant": "standard",
             "badge": "Deal",
             "cues": ["Stake", "Capital", "Network"],
-            "prompt": "A polished M&A editorial image with connected entities, transaction documents, travel or sector props when relevant, and a confident publication finish",
+            "prompt": "A dark ProspektLab M&A editorial image with connected entities, transaction documents, sector props when relevant, and a confident publication finish",
         }
     if any(token in text for token in ("trend", "sector", "theme", "macro", "policy")):
         return {
@@ -1907,7 +2207,7 @@ def _topic_profile(article: ContentArticlePackage) -> dict[str, Any]:
             "variant": "standard",
             "badge": "Trend",
             "cues": ["Sector", "Momentum", "Shift"],
-            "prompt": "A light editorial market-trend visual with layered charts, sector tiles, policy papers, and calm strategic composition",
+            "prompt": "A dark ProspektLab market-trend visual with layered charts, sector tiles, policy papers, and calm strategic composition",
         }
     if any(token in text for token in ("company", "ownership", "board", "governance", "shareholder")):
         return {
@@ -1915,14 +2215,14 @@ def _topic_profile(article: ContentArticlePackage) -> dict[str, Any]:
             "variant": "standard",
             "badge": "Company",
             "cues": ["Ownership", "Board", "Capital"],
-            "prompt": "A refined company-intelligence cover with governance papers, corporate architecture, connected nodes, and a premium research-desk feel",
+            "prompt": "A dark ProspektLab company-intelligence cover with governance papers, corporate architecture, connected nodes, and a premium research-desk feel",
         }
     return {
         "kind": "company",
         "variant": "standard",
         "badge": "Research",
         "cues": ["Coverage", "Signals", "Context"],
-        "prompt": "A polished market-research cover with balanced editorial composition, company context, and warm publication styling",
+        "prompt": "A dark ProspektLab market-research cover with balanced editorial composition, company context, glass panels, and blue-cyan publication styling",
     }
 
 
@@ -1931,108 +2231,108 @@ def _cover_palette(article: ContentArticlePackage) -> dict[str, tuple[int, int, 
     palettes: dict[str, list[dict[str, tuple[int, int, int]]]] = {
         "earnings": [
             {
-                "bg_top": (249, 243, 235),
-                "bg_bottom": (238, 228, 214),
-                "frame": (255, 250, 243),
-                "panel_top": (251, 247, 240),
-                "panel_bottom": (233, 224, 209),
-                "ink": (24, 37, 52),
-                "muted": (104, 115, 131),
-                "line": (207, 191, 171),
-                "accent": (13, 118, 110),
-                "accent_soft": (233, 146, 85),
-                "accent_alt": (69, 128, 201),
-                "glow_a": (245, 205, 142),
-                "glow_b": (170, 215, 205),
-                "chip": (184, 30, 30),
+                "bg_top": (3, 6, 13),
+                "bg_bottom": (7, 17, 31),
+                "frame": (8, 16, 32),
+                "panel_top": (10, 22, 44),
+                "panel_bottom": (5, 12, 26),
+                "ink": (248, 251, 255),
+                "muted": (168, 180, 200),
+                "line": (91, 124, 173),
+                "accent": (96, 165, 250),
+                "accent_soft": (52, 211, 153),
+                "accent_alt": (139, 92, 246),
+                "glow_a": (37, 99, 235),
+                "glow_b": (52, 211, 153),
+                "chip": (96, 165, 250),
             },
             {
-                "bg_top": (250, 244, 238),
-                "bg_bottom": (235, 229, 217),
-                "frame": (255, 251, 246),
-                "panel_top": (250, 246, 239),
-                "panel_bottom": (229, 223, 212),
-                "ink": (28, 39, 59),
-                "muted": (108, 117, 130),
-                "line": (208, 196, 181),
-                "accent": (31, 127, 160),
-                "accent_soft": (240, 165, 102),
-                "accent_alt": (67, 108, 188),
-                "glow_a": (252, 210, 151),
-                "glow_b": (181, 206, 236),
-                "chip": (192, 36, 24),
+                "bg_top": (4, 8, 18),
+                "bg_bottom": (9, 24, 48),
+                "frame": (8, 18, 38),
+                "panel_top": (12, 26, 52),
+                "panel_bottom": (5, 12, 26),
+                "ink": (248, 251, 255),
+                "muted": (174, 187, 208),
+                "line": (86, 119, 168),
+                "accent": (56, 189, 248),
+                "accent_soft": (96, 165, 250),
+                "accent_alt": (52, 211, 153),
+                "glow_a": (96, 165, 250),
+                "glow_b": (139, 92, 246),
+                "chip": (56, 189, 248),
             },
         ],
         "regulation": [
             {
-                "bg_top": (248, 242, 235),
-                "bg_bottom": (235, 227, 220),
-                "frame": (255, 250, 245),
-                "panel_top": (250, 246, 240),
-                "panel_bottom": (233, 226, 220),
-                "ink": (39, 37, 47),
-                "muted": (118, 108, 111),
-                "line": (210, 196, 188),
-                "accent": (134, 38, 53),
-                "accent_soft": (199, 151, 88),
-                "accent_alt": (75, 103, 140),
-                "glow_a": (241, 213, 182),
-                "glow_b": (224, 190, 201),
-                "chip": (150, 30, 46),
+                "bg_top": (3, 6, 13),
+                "bg_bottom": (13, 18, 37),
+                "frame": (9, 18, 38),
+                "panel_top": (14, 24, 48),
+                "panel_bottom": (6, 12, 25),
+                "ink": (248, 251, 255),
+                "muted": (174, 187, 208),
+                "line": (98, 116, 154),
+                "accent": (96, 165, 250),
+                "accent_soft": (52, 211, 153),
+                "accent_alt": (251, 113, 133),
+                "glow_a": (37, 99, 235),
+                "glow_b": (251, 113, 133),
+                "chip": (96, 165, 250),
             }
         ],
         "deal": [
             {
-                "bg_top": (250, 244, 236),
-                "bg_bottom": (238, 230, 219),
-                "frame": (255, 250, 244),
-                "panel_top": (252, 248, 241),
-                "panel_bottom": (236, 227, 214),
-                "ink": (32, 42, 57),
-                "muted": (111, 118, 128),
-                "line": (208, 193, 176),
-                "accent": (207, 111, 60),
-                "accent_soft": (86, 146, 208),
-                "accent_alt": (18, 132, 122),
-                "glow_a": (244, 210, 167),
-                "glow_b": (185, 212, 232),
-                "chip": (181, 54, 27),
+                "bg_top": (3, 6, 13),
+                "bg_bottom": (8, 22, 42),
+                "frame": (9, 18, 38),
+                "panel_top": (13, 29, 58),
+                "panel_bottom": (5, 12, 26),
+                "ink": (248, 251, 255),
+                "muted": (168, 180, 200),
+                "line": (91, 124, 173),
+                "accent": (52, 211, 153),
+                "accent_soft": (96, 165, 250),
+                "accent_alt": (139, 92, 246),
+                "glow_a": (52, 211, 153),
+                "glow_b": (96, 165, 250),
+                "chip": (52, 211, 153),
             }
         ],
         "company": [
             {
-                "bg_top": (248, 243, 234),
-                "bg_bottom": (234, 228, 216),
-                "frame": (255, 250, 244),
-                "panel_top": (249, 246, 239),
-                "panel_bottom": (229, 223, 212),
-                "ink": (31, 41, 54),
-                "muted": (106, 115, 124),
-                "line": (206, 193, 179),
-                "accent": (19, 121, 115),
-                "accent_soft": (191, 149, 83),
-                "accent_alt": (107, 129, 189),
-                "glow_a": (236, 216, 175),
-                "glow_b": (190, 219, 215),
-                "chip": (177, 98, 39),
+                "bg_top": (3, 6, 13),
+                "bg_bottom": (7, 17, 31),
+                "frame": (8, 16, 32),
+                "panel_top": (10, 22, 44),
+                "panel_bottom": (4, 10, 22),
+                "ink": (248, 251, 255),
+                "muted": (168, 180, 200),
+                "line": (91, 124, 173),
+                "accent": (96, 165, 250),
+                "accent_soft": (52, 211, 153),
+                "accent_alt": (199, 210, 254),
+                "glow_a": (37, 99, 235),
+                "glow_b": (52, 211, 153),
+                "chip": (96, 165, 250),
             }
         ],
         "trend": [
             {
-                "bg_top": (246, 243, 237),
-                "bg_bottom": (231, 232, 226),
-                "frame": (252, 250, 245),
-                "panel_top": (246, 248, 244),
-                "panel_bottom": (226, 231, 225),
-                "ink": (29, 42, 53),
-                "muted": (102, 116, 124),
-                "line": (193, 203, 199),
-                "accent": (18, 121, 114),
-                "accent_soft": (92, 144, 211),
-                "accent_alt": (210, 149, 80),
-                "glow_a": (206, 231, 214),
-                "glow_b": (205, 220, 241),
-                "chip": (163, 89, 30),
+                "bg_top": (3, 6, 13),
+                "bg_bottom": (8, 22, 42),
+                "frame": (8, 16, 32),
+                "panel_top": (11, 25, 52),
+                "panel_bottom": (5, 12, 26),
+                "ink": (248, 251, 255),
+                "muted": (174, 187, 208),
+                "line": (86, 119, 168),
+                "accent": (96, 165, 250),
+                "accent_soft": (52, 211, 153),
+                "accent_alt": (139, 92, 246),
+                "glow_a": (37, 99, 235),
+                "glow_b": (52, 211, 153),
+                "chip": (96, 165, 250),
             }
         ],
     }
@@ -2772,38 +3072,65 @@ def _event_fingerprint(source: str, event: dict[str, Any], watch: ContentEventWa
     return re.sub(r"[^a-zA-Z0-9]+", "-", raw.lower()).strip("-")[:220]
 
 
+def _article_body_word_count(article: ContentArticlePackage) -> int:
+    parts: list[str] = [article.title, article.description, article.hero_summary]
+    for section in article.sections:
+        parts.extend(section.paragraphs)
+        parts.extend(section.bullets)
+    for faq in article.faqs:
+        parts.append(faq.question)
+        parts.append(faq.answer)
+    return sum(len(re.findall(r"\b[\w'-]+\b", part or "")) for part in parts)
+
+
+def _article_paragraph_count(article: ContentArticlePackage) -> int:
+    return sum(len(section.paragraphs) for section in article.sections)
+
+
 def _score_publishability(req: ContentAutomationRequest, article: ContentArticlePackage, sources: list[dict[str, str]]) -> tuple[int, list[str]]:
     score = 0
     reasons: list[str] = []
     if len(sources) >= 3:
-        score += 28
+        score += 24
         reasons.append("multiple supporting sources found")
     elif len(sources) >= 1:
-        score += 14
+        score += 12
         reasons.append("at least one supporting source found")
     else:
         reasons.append("no external supporting sources found")
 
-    if len(article.sections) >= 5:
-        score += 22
-        reasons.append("article has enough section depth")
-    elif len(article.sections) >= 4:
-        score += 14
-        reasons.append("article meets minimum section depth")
-    else:
-        reasons.append("article is too shallow")
+    section_count = len(article.sections)
+    paragraph_count = _article_paragraph_count(article)
+    article_words = _article_body_word_count(article)
 
-    paragraph_count = sum(len(section.paragraphs) for section in article.sections)
-    if paragraph_count >= 10:
-        score += 16
-        reasons.append("article body is substantial")
-    elif paragraph_count >= 8:
+    if section_count >= 10:
+        score += 20
+        reasons.append(f"article has newsroom section depth ({section_count} sections)")
+    elif section_count >= 8:
         score += 10
-        reasons.append("article body is moderately substantial")
+        reasons.append(f"article is close to newsroom section depth ({section_count} sections)")
     else:
-        reasons.append("article body needs more narrative depth")
+        reasons.append(f"article needs more section depth ({section_count} sections)")
 
-    if len(article.faqs) >= 3:
+    if paragraph_count >= 22:
+        score += 14
+        reasons.append(f"article has strong paragraph depth ({paragraph_count} paragraphs)")
+    elif paragraph_count >= 18:
+        score += 8
+        reasons.append(f"article meets minimum paragraph depth ({paragraph_count} paragraphs)")
+    else:
+        reasons.append(f"article body needs more narrative depth ({paragraph_count} paragraphs)")
+
+    if article_words >= 1600:
+        score += 18
+        reasons.append(f"article depth {article_words} words")
+    elif article_words >= 1200:
+        score += 12
+        reasons.append(f"article meets minimum depth ({article_words} words)")
+    else:
+        reasons.append(f"article is too short ({article_words} words)")
+
+    if len(article.faqs) >= 5:
         score += 8
         reasons.append("FAQ coverage included")
     if len(article.description) >= 120:
@@ -2833,6 +3160,15 @@ async def generate_article_automation(req: ContentAutomationRequest, *, requeste
     context, sources = await _collect_context(req)
     article = await _llm_generate_article(req, slug, context)
     article.slug = slug
+    try:
+        from finagent.content.editorial import run_editorial_revision_loop, sanitize_article_package
+
+        article = sanitize_article_package(article)
+        article, editorial_review = await run_editorial_revision_loop(article, target=req.topic, max_rounds=2)
+        article = sanitize_article_package(article)
+    except Exception:
+        editorial_review = None
+        logger.exception("Editorial cleanup failed; continuing with generated article")
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     image_bytes, image_ext, _mime = await _generate_image(req, article, route_base)
     image_name = f"cover{image_ext}"
@@ -2846,7 +3182,33 @@ async def generate_article_automation(req: ContentAutomationRequest, *, requeste
     _write_text(html_path, html_text)
 
     confidence_score, publish_reasons = _score_publishability(req, article, sources)
-    publish_status = "published" if (req.force_publish or confidence_score >= 70) else "draft"
+    article_words = _article_body_word_count(article)
+    section_count = len(article.sections)
+    paragraph_count = _article_paragraph_count(article)
+    if editorial_review is not None:
+        confidence_score = int(round((confidence_score * 0.45) + (editorial_review.total_score * 0.55)))
+        publish_reasons.append(f"editorial review {editorial_review.total_score}/100")
+        if not editorial_review.ready_to_publish:
+            publish_reasons.extend(f"hold: {issue.message}" for issue in editorial_review.issues[:4])
+    editorial_ready = True if editorial_review is None else editorial_review.ready_to_publish
+    if article_words < 1200:
+        publish_reasons.append(f"hold: article depth {article_words} words below 1200-word newsroom minimum")
+    if section_count < 10:
+        publish_reasons.append(f"hold: article has {section_count} sections below 10-section newsroom minimum")
+    if paragraph_count < 18:
+        publish_reasons.append(f"hold: article has {paragraph_count} paragraphs below 18-paragraph newsroom minimum")
+    meets_newsroom_depth = article_words >= 1200 and section_count >= 10 and paragraph_count >= 18
+    publish_status = "published" if (req.force_publish or (editorial_ready and confidence_score >= 82 and meets_newsroom_depth)) else "draft"
+    logger.info(
+        "Content article evaluated: slug=%s status=%s score=%s words=%s sections=%s paragraphs=%s reasons=%s",
+        slug,
+        publish_status,
+        confidence_score,
+        article_words,
+        section_count,
+        paragraph_count,
+        "; ".join(publish_reasons[:10]),
+    )
 
     result = ContentAutomationResult(
         slug=slug,
@@ -2875,6 +3237,7 @@ async def generate_article_automation(req: ContentAutomationRequest, *, requeste
             mirrored_sitemap = _upsert_sitemap(route_base, slug)
             refresh_public_research_hub(route_base)
             submit_sitemap()
+            submit_url_update(result.public_url, content_type="article")
         except Exception:
             logger.exception("Failed to mirror generated article into frontend public directory")
 
@@ -2883,8 +3246,13 @@ async def generate_article_automation(req: ContentAutomationRequest, *, requeste
         "mirrored_public_path": public_mirror,
         "mirrored_sitemap": mirrored_sitemap,
         "requested_by": requested_by,
+        "word_count": article_words,
+        "section_count": section_count,
+        "paragraph_count": paragraph_count,
         "article": article.model_dump(),
     }
+    if editorial_review is not None:
+        payload["editorial_review"] = editorial_review.to_dict()
     _write_text(json_path, json.dumps(payload, indent=2, ensure_ascii=True))
 
     result.mirrored_public_path = public_mirror
@@ -3052,6 +3420,7 @@ def publish_article(slug: str, route_base: str = _DEFAULT_ARTICLE_ROUTE) -> dict
     manifest["mirrored_sitemap"] = sitemap_path
     refresh_public_research_hub(route_base)
     submit_sitemap()
+    submit_url_update(str(manifest.get("public_url") or f"{_SITE_URL}/{route_base}/{slug}/"), content_type="article")
 
     _write_text(json_path, json.dumps(manifest, indent=2, ensure_ascii=True))
     return manifest

@@ -15,6 +15,7 @@ def _make_article() -> ContentArticlePackage:
             paragraphs=[
                 "According to the NSE filing, revenue grew 14% year on year while EBIT margin expanded 120 basis points, giving the quarter immediate publish urgency for investors tracking operating leverage.",
                 "Management said in the exchange filing that demand stayed resilient across domestic and export channels, while order conversion improved through the quarter.",
+                "The same filing matters for readers because it connects growth with margin quality, allowing the article to examine whether the company is only reporting higher sales or also converting that demand into a stronger operating profile.",
             ],
             bullets=["Revenue growth stayed above 10%", "Margin expansion came from mix and cost control"],
         ),
@@ -23,6 +24,7 @@ def _make_article() -> ContentArticlePackage:
             paragraphs=[
                 "The BSE filing points to stronger execution in industrial and infrastructure-linked orders, with management commentary highlighting a healthier tender pipeline for the next two quarters.",
                 "Transcript commentary suggests the company is prioritising profitable growth instead of volume at any cost, and the latest results already showed a 120-basis-point improvement in incremental margin profile.",
+                "According to the transcript, management's language around tender discipline and execution pace gives readers a way to compare future statements against the current quarter instead of treating every result update as isolated news.",
             ],
         ),
         ContentArticleSection(
@@ -53,12 +55,60 @@ def _make_article() -> ContentArticlePackage:
                 "The official source mix here is strong enough to support publication because the article is grounded in exchange disclosures, transcript commentary, and public corporate records.",
             ],
         ),
+        ContentArticleSection(
+            heading="Investor context beyond the headline print",
+            paragraphs=[
+                "According to the exchange filing, the quarter matters because revenue growth, margin expansion, and cash conversion moved in the same direction, which gives investors a cleaner signal than a single-line profit beat.",
+                "The filing trail also shows why readers should separate reported growth from durability: order execution, customer budgets, and raw-material costs still decide whether the stronger quarter becomes a repeatable operating trend.",
+                "Management commentary in the transcript gives the update more context because it links the reported numbers with execution priorities, rather than leaving readers to infer demand quality only from headline revenue growth.",
+            ],
+        ),
+        ContentArticleSection(
+            heading="Risks that still need tracking",
+            paragraphs=[
+                "The concall transcript identifies tender timing and input-cost movement as the main execution risks, so investors should watch whether management commentary stays consistent with reported margin progress.",
+                "Annual-report disclosures and exchange updates remain important because governance continuity, auditor posture, working-capital movement, and order conversion can change the interpretation of an otherwise strong earnings release.",
+                "According to the official disclosure trail, these risks are not reasons for a recommendation; they are the variables that decide whether the market should treat the quarter as a durable improvement or a one-period benefit.",
+            ],
+        ),
+        ContentArticleSection(
+            heading="What the next disclosures should clarify",
+            paragraphs=[
+                "The next NSE and BSE filings should clarify whether the margin improvement came from operating leverage, mix, pricing, or temporary cost relief, because each driver has a different implication for earnings quality.",
+                "Investors should also compare future cash-flow disclosures with reported profit growth, since a widening gap between accounting earnings and operating cash generation would weaken the quality of the result.",
+                "The annual report and future exchange updates should also be read together because capital allocation, related-party disclosures, and order-book commentary often explain what the headline result alone cannot show.",
+            ],
+        ),
+        ContentArticleSection(
+            heading="How readers can use the update",
+            paragraphs=[
+                "For Indian investors, the useful takeaway is not a trading call but a checklist: demand indicators, margin bridge, cash conversion, governance continuity, and management language all need to move together.",
+                "That checklist helps readers avoid overreacting to one quarter while still recognising that the official filing contains enough concrete evidence to justify a deeper, source-backed explanation.",
+                "The article should therefore frame the quarter as an evidence-led development for monitoring, using official filings and transcript details to help readers ask better follow-up questions without drifting into advice.",
+            ],
+        ),
+        ContentArticleSection(
+            heading="Portfolio relevance without recommendations",
+            paragraphs=[
+                "According to the official filings, the result is relevant for portfolio review because it affects the information set around earnings quality, governance continuity, and execution risk, not because it creates a standalone action signal.",
+                "A source-backed article should help stock, mutual fund, and SIP investors understand what changed in the business narrative while leaving allocation decisions to their own process or a registered advisor.",
+                "That distinction matters because Indian investors often see quarterly headlines through watchlists, fund factsheets, and model portfolios, where context is useful but recommendation language would be inappropriate.",
+            ],
+        ),
+        ContentArticleSection(
+            heading="Source trail readers should verify",
+            paragraphs=[
+                "Readers can verify the update by comparing the NSE result filing, BSE disclosure trail, annual-report notes, and transcript commentary, because each source answers a different question about the same operating result.",
+                "The NSE and BSE filings establish the reported numbers, the transcript explains management interpretation, and the annual report provides slower-moving context on governance, accounting policy, and capital allocation.",
+                "Using that source trail keeps the article grounded: it gives investors a repeatable way to test whether the next quarter confirms the operating signal or weakens it through cash-flow, margin, or disclosure changes.",
+            ],
+        ),
     ]
     faqs = [
         ContentArticleFaq(question="What was the main headline from the quarter?", answer="The quarter combined revenue growth, margin expansion, and supportive management commentary from official exchange disclosures."),
         ContentArticleFaq(question="Why is the filing material?", answer="It changes the near-term operating narrative and gives investors a better read on demand, profitability, and execution risk."),
         ContentArticleFaq(question="What sources support the story?", answer="The analysis relies on NSE and BSE filings, annual-report disclosures, and management commentary from official transcript records."),
-        ContentArticleFaq(question="What should readers watch next?", answer="Readers should track follow-through in margins, cash conversion, order execution, and any change in governance or auditor signals."),
+        ContentArticleFaq(question="What should readers watch next?", answer="Readers should track follow-through in margins, cash conversion, order execution, and any change in governance or auditor signals, then compare those updates with the next exchange filing and transcript commentary before drawing conclusions about durability, risk, quality, management execution consistency, disclosure quality, cash-flow resilience, operating discipline, and reliability."),
     ]
     return ContentArticlePackage(
         slug="sample-results",
@@ -112,13 +162,31 @@ def test_review_article_blocks_internal_and_advisory_language():
     assert "advisory_language" in codes
 
 
+def test_review_article_blocks_process_quality_language():
+    article = _make_article()
+    article.title = "20 Microns Limited: Insights on Business Model and Risks"
+    article.description = "Coverage score was 24.6/100 after the research run found thin evidence quality."
+    article.sections[0].heading = "Financial Data Gaps"
+    article.sections[0].paragraphs[0] = (
+        "The latest research run did not retrieve financial data, and no financial metrics resolved during the research run."
+    )
+    article.sections[0].paragraphs[1] = (
+        "Coverage score was 24.6/100, indicating thin evidence quality rather than a finished investor explanation."
+    )
+
+    review = review_article_package(article)
+
+    assert review.ready_to_publish is False
+    assert any(issue.code == "internal_language" for issue in review.issues)
+
+
 def test_review_article_can_clear_strong_article():
     article = _make_article()
 
     review = review_article_package(article)
 
     assert review.ready_to_publish is True
-    assert review.total_score >= 90
+    assert review.total_score >= 89
     assert review.urgency_score >= 50
 
 

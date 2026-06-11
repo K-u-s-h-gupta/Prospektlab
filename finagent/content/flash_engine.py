@@ -63,7 +63,8 @@ from finagent.content.editorial import (
     sanitize_article_package,
     sanitize_public_text,
 )
-from finagent.seo.google_search_console import submit_sitemap
+from finagent.runtime_provider import resolve_openai_config
+from finagent.seo.google_search_console import submit_sitemap, submit_url_update
 from finagent.events import BUS
 from finagent.run_agent import AgentLoopConfig, run_research_session
 
@@ -205,6 +206,45 @@ _CONTENT_DEEP_OBJECTIVES: list[str] = [
 
 
 # ── Request / result models ───────────────────────────────────────────────────
+
+_CONTENT_NEWSROOM_OBJECTIVES: list[str] = [
+    (
+        "EVENT LEDGER: Identify the latest concrete event, who said or filed it, the date, venue, and the exact policy, market, or product change. "
+        "Extract named people, institutions, regulators, quoted statements, and all numbers from the source packet. Do not search for company P&L unless the topic is explicitly an earnings story."
+    ),
+    (
+        "MARKET CONTEXT: Explain the market this event sits in: size, liquidity, recent issuance or flow data, investor participation, relevant RBI/SEBI/AMFI/market infrastructure rules, and why the timing matters now. "
+        "Prefer official/regulatory data and reputable financial publications."
+    ),
+    (
+        "STAKEHOLDER IMPACT: Map implications for retail investors, mutual funds, SIP investors, debt funds, gold allocation, banks, brokers, issuers, and market makers where relevant. "
+        "Separate direct impact from second-order watchpoints."
+    ),
+    (
+        "HISTORY AND COMPARABLES: Add concise background only if it explains the current event. Include previous policy attempts, market adoption bottlenecks, global parallels, or earlier product launches where the source material supports it."
+    ),
+    (
+        "RISKS AND FRICTIONS: Identify execution risks, regulatory constraints, liquidity gaps, investor suitability issues, tax friction, operational complexity, and what could prevent the development from mattering in practice."
+    ),
+    (
+        "QUOTE AND DATA DENSITY CHECK: Build a source-backed fact bank with the strongest quotes, numbers, dates, market sizes, and definitions. Every important assertion must be traceable to the supplied source packet or retrieved reputable sources."
+    ),
+    (
+        "READER UTILITY: Convert the event into a practical investor reading list: what to monitor next, which disclosures or data releases matter, how to think about portfolio exposure, and which claims should not be over-interpreted."
+    ),
+    (
+        "NEWSROOM ARTICLE SYNTHESIS: Write a Mint-style financial news explainer for serious Indian investors. Lead with the event, attribute the source in the first two paragraphs, then add context, data, history, investor implications, risks, and watchpoints. "
+        "Return ONLY valid JSON matching ContentArticlePackage schema: slug, title, description, hero_eyebrow, hero_title, hero_summary, audience, keywords, sections, faqs, cta_label, cta_href, image_prompt. "
+        "Use 10-12 sections, 2-4 paragraphs per section, 45-95 words per paragraph, 1,600-2,400 total article words, short subheads, and no investment recommendations."
+    ),
+]
+
+
+def _objectives_for_content_type(content_type: str) -> list[str]:
+    if content_type in {"trend", "sebi", "manual"}:
+        return _CONTENT_NEWSROOM_OBJECTIVES
+    return _CONTENT_DEEP_OBJECTIVES
+
 
 class FlashGenerationRequest(BaseModel):
     mode: Literal["flash", "deep", "research"] = "research"
@@ -351,6 +391,306 @@ def _article_structure_brief(content_type: str, target: str, has_ikg: bool) -> s
     return base
 
 
+_RESEARCH_HUB_PROSPEKTLAB_CSS = """
+      :root {
+        color-scheme: dark;
+        --paper: #03060d;
+        --paper-soft: rgba(8, 16, 32, 0.78);
+        --ink: #f8fbff;
+        --muted: #a8b4c8;
+        --line: rgba(148, 163, 184, 0.14);
+        --line-strong: rgba(147, 197, 253, 0.28);
+        --accent: #60a5fa;
+        --accent-blue: #2563eb;
+        --accent-gold: #34d399;
+        --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+        --panel: rgba(8, 16, 32, 0.78);
+        --panel-strong: rgba(10, 22, 44, 0.92);
+        --text-soft: #dbeafe;
+        --profit: #34d399;
+        --loss: #fb7185;
+      }
+      body {
+        min-height: 100vh;
+        background:
+          linear-gradient(135deg, rgba(96, 165, 250, 0.10) 0 1px, transparent 1px 40px),
+          linear-gradient(45deg, rgba(52, 211, 153, 0.055) 0 1px, transparent 1px 56px),
+          linear-gradient(180deg, #03060d 0%, #07111f 42%, #03060d 100%);
+        color: var(--ink);
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(115deg, rgba(96, 165, 250, 0.13), transparent 34%),
+          linear-gradient(245deg, rgba(52, 211, 153, 0.08), transparent 38%);
+        opacity: 0.82;
+      }
+      .masthead {
+        background: rgba(3, 6, 13, 0.72);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.24);
+      }
+      .brand-mark {
+        border-radius: 4px;
+        background: linear-gradient(135deg, #eaf3ff, #60a5fa 45%, #1d4ed8);
+        box-shadow: 0 0 0 7px rgba(96, 165, 250, 0.10), 0 0 28px rgba(96, 165, 250, 0.26);
+      }
+      .brand-text,
+      .masthead-links a {
+        color: var(--ink);
+      }
+      .masthead-links a {
+        color: var(--muted);
+      }
+      .masthead-links a:hover {
+        color: #ffffff;
+      }
+      .hero {
+        padding: 42px 0 30px;
+      }
+      .hero-panel {
+        position: relative;
+        overflow: hidden;
+        border-radius: 18px;
+        border: 1px solid rgba(147, 197, 253, 0.22);
+        background:
+          linear-gradient(145deg, rgba(9, 18, 38, 0.96), rgba(8, 28, 62, 0.80) 58%, rgba(20, 41, 88, 0.62)),
+          rgba(8, 16, 32, 0.92);
+        box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      }
+      .hero-panel::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.8), rgba(52, 211, 153, 0.55), transparent);
+      }
+      .hero-grid {
+        align-items: stretch;
+      }
+      .eyebrow,
+      .type-pill,
+      .section-label,
+      .aside-label,
+      .feature-note,
+      .result-count,
+      .search-label,
+      .story-source {
+        color: var(--accent);
+      }
+      .eyebrow,
+      .type-pill,
+      .meta-pill,
+      .capability-chip,
+      .story-keyword,
+      .filter-button,
+      .search-input {
+        border-radius: 8px;
+      }
+      .eyebrow,
+      .type-pill {
+        border-color: rgba(96, 165, 250, 0.28);
+        background: rgba(96, 165, 250, 0.10);
+      }
+      h1,
+      h2,
+      h3,
+      .stat-value,
+      .story-title,
+      .story-summary {
+        color: var(--ink);
+      }
+      h1 {
+        font-family: "Inter", "Manrope", sans-serif;
+        max-width: 12ch;
+        letter-spacing: -0.04em;
+      }
+      h2,
+      .story-title {
+        font-family: "Inter", "Manrope", sans-serif;
+        letter-spacing: -0.035em;
+      }
+      p,
+      .story-description,
+      .capability-chip,
+      .meta-pill {
+        color: var(--muted);
+      }
+      .hero-copy {
+        color: #dbeafe;
+        font-size: 1.08rem;
+      }
+      .aside-card,
+      .stat-card,
+      .method-card,
+      .story-card,
+      .empty-state {
+        border-radius: 14px;
+        border-color: rgba(148, 163, 184, 0.14);
+        background: rgba(8, 16, 32, 0.72);
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+        backdrop-filter: blur(18px);
+      }
+      .stat-card {
+        background: rgba(15, 23, 42, 0.52);
+      }
+      .search-input {
+        min-height: 48px;
+        background: rgba(4, 10, 22, 0.88);
+        border-color: rgba(147, 197, 253, 0.26);
+        color: #f8fbff;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 12px 36px rgba(0, 0, 0, 0.24);
+      }
+      .search-input::placeholder {
+        color: rgba(219, 234, 254, 0.56);
+      }
+      .search-input:focus {
+        border-color: rgba(96, 165, 250, 0.74);
+        box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.13), 0 0 34px rgba(96, 165, 250, 0.16);
+      }
+      .filter-button {
+        min-height: 42px;
+        border-radius: 8px;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(8, 16, 32, 0.86));
+        border-color: rgba(147, 197, 253, 0.24);
+        color: #dbeafe;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 30px rgba(0, 0, 0, 0.22);
+      }
+      .filter-button span {
+        background: rgba(96, 165, 250, 0.20);
+        color: #ffffff;
+        border: 1px solid rgba(147, 197, 253, 0.18);
+      }
+      .filter-button:hover,
+      .filter-button.is-active {
+        background: linear-gradient(135deg, #eaf3ff, #60a5fa 52%, #1d4ed8);
+        border-color: rgba(219, 234, 254, 0.72);
+        color: #06111f;
+        box-shadow: 0 14px 34px rgba(37, 99, 235, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.44);
+      }
+      .filter-button:hover span,
+      .filter-button.is-active span {
+        background: rgba(6, 17, 31, 0.14);
+        color: #06111f;
+        border-color: rgba(6, 17, 31, 0.16);
+      }
+      .stories-grid {
+        gap: 16px;
+      }
+      .story-card {
+        overflow: hidden;
+        border-radius: 10px;
+        border-color: rgba(147, 197, 253, 0.20);
+        background:
+          linear-gradient(180deg, rgba(12, 22, 44, 0.92), rgba(6, 13, 28, 0.90)),
+          rgba(8, 16, 32, 0.86);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      }
+      .story-card:hover {
+        transform: translateY(-5px);
+        border-color: rgba(96, 165, 250, 0.52);
+        box-shadow: 0 28px 82px rgba(0, 0, 0, 0.46), 0 0 46px rgba(96, 165, 250, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      }
+      .story-card-featured {
+        min-height: 420px;
+        background:
+          linear-gradient(135deg, rgba(8, 16, 32, 0.96), rgba(10, 32, 68, 0.92) 58%, rgba(8, 16, 32, 0.94)),
+          rgba(8, 16, 32, 0.94);
+      }
+      .story-media {
+        padding: 10px;
+        background:
+          radial-gradient(circle at 18% 12%, rgba(96, 165, 250, 0.22), transparent 36%),
+          radial-gradient(circle at 88% 82%, rgba(52, 211, 153, 0.15), transparent 34%),
+          linear-gradient(135deg, rgba(3, 6, 13, 0.88), rgba(10, 22, 44, 0.94));
+        border-bottom: 1px solid rgba(147, 197, 253, 0.16);
+      }
+      .story-card-featured .story-media {
+        border-left: 1px solid rgba(147, 197, 253, 0.16);
+        border-bottom: 0;
+      }
+      .story-image {
+        object-fit: cover;
+        border-radius: 8px;
+        filter: saturate(1.08) contrast(1.04);
+        box-shadow: 0 20px 54px rgba(0, 0, 0, 0.34);
+      }
+      .story-card-featured .story-image {
+        object-fit: cover;
+      }
+      .story-body {
+        gap: 14px;
+      }
+      .story-card-featured .story-body {
+        padding: 34px;
+        justify-content: center;
+      }
+      .story-card-featured .story-title {
+        font-size: clamp(2.2rem, 4.4vw, 4.1rem);
+      }
+      .story-title a:hover {
+        color: #93c5fd;
+      }
+      .story-summary {
+        color: #eaf3ff;
+      }
+      .story-link,
+      .footer-link {
+        border-radius: 8px;
+        border-color: rgba(96, 165, 250, 0.38);
+        background: linear-gradient(135deg, #eaf3ff, #60a5fa 52%, #1d4ed8);
+        color: #06111f;
+        min-height: 40px;
+        font-weight: 900;
+        box-shadow: 0 14px 34px rgba(37, 99, 235, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.48);
+      }
+      .story-link:hover,
+      .footer-link:hover {
+        background: linear-gradient(135deg, #ffffff, #93c5fd 52%, #2563eb);
+        color: #020817;
+      }
+      .story-keyword,
+      .meta-pill,
+      .type-pill,
+      .capability-chip {
+        color: #dbeafe;
+        border-color: rgba(147, 197, 253, 0.20);
+        background: rgba(15, 23, 42, 0.72);
+      }
+      .story-description,
+      .story-source,
+      .result-count,
+      .search-label {
+        color: #aebbd0;
+      }
+      .footer-card {
+        border-radius: 14px;
+        border: 1px solid rgba(147, 197, 253, 0.20);
+        background: linear-gradient(135deg, rgba(8, 16, 32, 0.96), rgba(8, 28, 62, 0.82));
+      }
+      @media (max-width: 760px) {
+        .hero-panel,
+        .story-card,
+        .method-card,
+        .aside-card,
+        .footer-card {
+          border-radius: 12px;
+        }
+        .story-card-featured {
+          min-height: auto;
+        }
+        .story-card-featured .story-body {
+          padding: 22px;
+        }
+      }
+"""
+
+
 def _build_insights_hub_html_editorial(route_base: str = "insights") -> str:
     """
     Render the SEO landing page at /insights/research/
@@ -443,7 +783,7 @@ def _build_insights_hub_html_editorial(route_base: str = "insights") -> str:
         summary = summary_text[:summary_limit].rstrip()
         if summary and len(summary_text) > summary_limit:
             summary = summary.rstrip(" .,;:") + "..."
-        ikg = bool(article.get("ikg_covered"))
+        has_verified_context = bool(article.get("ikg_covered"))
         feature_note = '<div class="feature-note">Lead story</div>' if featured else ""
         date_label = _format_date(str(article.get("published_at") or article.get("generated_at") or ""))
         cover_href = html.escape(_image_href(article))
@@ -454,7 +794,7 @@ def _build_insights_hub_html_editorial(route_base: str = "insights") -> str:
         search_attr = html.escape(_search_blob(article), quote=True)
         return (
             f'<article class="{story_class}" style="--card-accent:{accent};--card-accent-soft:{_rgba(accent, 0.12)};" '
-            f'data-story data-type="{html.escape(content_type)}" data-ikg="{"yes" if ikg else "no"}" '
+            f'data-story data-type="{html.escape(content_type)}" data-context="{"yes" if has_verified_context else "no"}" '
             f'data-search="{search_attr}">'
             f'<a class="story-media" href="{html.escape(local_url)}" aria-label="{title}">'
             f'<img class="story-image" src="{cover_href}" alt="{title} cover image" loading="lazy" />'
@@ -469,7 +809,7 @@ def _build_insights_hub_html_editorial(route_base: str = "insights") -> str:
             f'<p class="story-summary">{deck}</p>'
             f'<p class="story-description">{description}</p>'
             '<div class="story-footer">'
-            f'<span class="story-source">{html.escape("Verified context" if ikg else "Editorial desk")}</span>'
+            f'<span class="story-source">{html.escape("Verified context" if has_verified_context else "Editorial desk")}</span>'
             f'<a class="story-link" href="{html.escape(local_url)}">Open article</a>'
             "</div>"
             "</div>"
@@ -487,7 +827,7 @@ def _build_insights_hub_html_editorial(route_base: str = "insights") -> str:
         if count:
             filter_specs.append((key, type_meta[key]["label"], count))
     if ikg_count:
-        filter_specs.append(("ikg", "Source-backed", ikg_count))
+        filter_specs.append(("context", "Source-backed", ikg_count))
     filter_buttons = "".join(
         f'<button class="filter-button{" is-active" if key == "all" else ""}" type="button" '
         f'data-filter-button data-filter="{html.escape(key)}">{html.escape(label)}<span>{count}</span></button>'
@@ -564,7 +904,7 @@ def _build_insights_hub_html_editorial(route_base: str = "insights") -> str:
       content="Editorial-style financial research for Indian markets, covering earnings, regulation, company intelligence, and market trends in direct, searchable URLs."
     />
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
-    <meta name="theme-color" content="#f4ecdf" />
+    <meta name="theme-color" content="#03060d" />
     <link rel="canonical" href="{html.escape(_SITE_URL)}/insights/research/" />
     <link rel="icon" type="image/svg+xml" href="/prospektlab-favicon-v2.svg" />
     <meta property="og:type" content="website" />
@@ -1203,6 +1543,7 @@ def _build_insights_hub_html_editorial(route_base: str = "insights") -> str:
         }}
       }}
     </style>
+    <style>{_RESEARCH_HUB_PROSPEKTLAB_CSS}</style>
     <script type="application/ld+json">{schema}</script>
   </head>
   <body>
@@ -1308,55 +1649,7 @@ def _build_insights_hub_html_editorial(route_base: str = "insights") -> str:
       </div>
     </footer>
 
-    <script>
-      (function () {{
-        const buttons = Array.from(document.querySelectorAll("[data-filter-button]"));
-        const stories = Array.from(document.querySelectorAll("[data-story]"));
-        const searchInput = document.querySelector("[data-search-input]");
-        const resultCount = document.querySelector("[data-result-count]");
-        const emptyState = document.querySelector("[data-empty-state]");
-        let activeFilter = "all";
-
-        const update = () => {{
-          const query = String(searchInput && searchInput.value ? searchInput.value : "").trim().toLowerCase();
-          let visible = 0;
-          stories.forEach((story) => {{
-            const type = String(story.getAttribute("data-type") || "");
-            const ikg = String(story.getAttribute("data-ikg") || "no");
-            const search = String(story.getAttribute("data-search") || "");
-            const matchesFilter = activeFilter === "all"
-              ? true
-              : activeFilter === "ikg"
-                ? ikg === "yes"
-                : type === activeFilter;
-            const matchesSearch = !query || search.indexOf(query) !== -1;
-            const show = matchesFilter && matchesSearch;
-            story.classList.toggle("is-hidden", !show);
-            if (show) visible += 1;
-          }});
-
-          if (resultCount) {{
-            resultCount.textContent = visible === 1 ? "1 story visible" : visible + " stories visible";
-          }}
-          if (emptyState && stories.length) {{
-            emptyState.hidden = visible !== 0;
-          }}
-        }};
-
-        buttons.forEach((button) => {{
-          button.addEventListener("click", () => {{
-            activeFilter = String(button.getAttribute("data-filter") || "all");
-            buttons.forEach((item) => item.classList.toggle("is-active", item === button));
-            update();
-          }});
-        }});
-
-        if (searchInput) {{
-          searchInput.addEventListener("input", update);
-        }}
-        update();
-      }})();
-    </script>
+    <script src="/insights/research-runtime.js" defer></script>
   </body>
 </html>
 """
@@ -1401,7 +1694,7 @@ async def _build_ikg_context(target: str) -> dict[str, Any]:
 
         parts: list[str] = []
         entity_name = entity.get("name") or company.get("company_name") or target
-        identity_bits = [f"IKG resolved {entity_name} to CIN {cin}"]
+        identity_bits = [f"Verified company records identify {entity_name} with CIN {cin}"]
         if entity.get("isin"):
             identity_bits.append(f"ISIN {entity['isin']}")
         if entity.get("nse_symbol"):
@@ -1422,9 +1715,9 @@ async def _build_ikg_context(target: str) -> dict[str, Any]:
             promoter_holding = promoter_holding or float(promoters[0].get("holding_pct") or 0.0)
         if promoter_holding > 0:
             owner_prefix = f"Promoter/major holder {owner_name}" if owner_name else "Promoter/major holder"
-            parts.append(f"{owner_prefix} is visible in IKG at about {promoter_holding:.2f}% holding.")
+            parts.append(f"{owner_prefix} is visible in verified filings at about {promoter_holding:.2f}% holding.")
             if pledge_pct > 0:
-                parts.append(f"Promoter pledge visible in IKG at about {pledge_pct:.2f}% of holding.")
+                parts.append(f"Promoter pledge is visible in verified filings at about {pledge_pct:.2f}% of holding.")
 
         auditors = governance.get("auditors") or []
         if auditors:
@@ -1439,15 +1732,15 @@ async def _build_ikg_context(target: str) -> dict[str, Any]:
 
         rpts = risk.get("related_party_transactions") or []
         if rpts:
-            parts.append(f"Related-party coverage in IKG: {len(rpts)} fact(s).")
+            parts.append(f"Related-party transaction coverage includes {len(rpts)} record(s).")
 
         enforcement = risk.get("enforcement_actions") or []
         if enforcement:
-            parts.append(f"Regulatory or enforcement records in IKG: {len(enforcement)} item(s).")
+            parts.append(f"Regulatory or enforcement coverage includes {len(enforcement)} record(s).")
 
         transcripts = documents.get("concall_transcripts") or []
         if transcripts:
-            parts.append(f"Concall transcript coverage in IKG: {len(transcripts)} session(s).")
+            parts.append(f"Concall transcript coverage includes {len(transcripts)} session(s).")
 
         sparse_layers = [
             name for name in ("ownership", "governance", "risk", "documents")
@@ -1455,7 +1748,7 @@ async def _build_ikg_context(target: str) -> dict[str, Any]:
         ]
         if sparse_layers:
             parts.append(
-                "IKG coverage is currently thin on "
+                "Verified record coverage is currently thin on "
                 + ", ".join(sparse_layers)
                 + " for this entity, so those angles should be cross-checked against primary filings."
             )
@@ -1500,6 +1793,35 @@ def _harvest_memo(job_id: str) -> str:
     return memo
 
 
+_INTERNAL_MEMO_LINE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bFinal synthesis\b", re.I),
+    re.compile(r"\bNEWSROOM ARTICLE SYNTHESIS\b", re.I),
+    re.compile(r"\bReturn ONLY valid JSON\b", re.I),
+    re.compile(r"\bContentArticlePackage\b", re.I),
+    re.compile(r"\boutput_mode=", re.I),
+    re.compile(r"\bSession ID\b", re.I),
+    re.compile(r"\bquality score\b", re.I),
+    re.compile(r"\bspecialist findings?\b", re.I),
+    re.compile(r"\bworking research query\b", re.I),
+    re.compile(r"\bnext editorial pass\b", re.I),
+)
+
+
+def _is_internal_memo_line(value: str) -> bool:
+    text = (value or "").strip()
+    return bool(text and any(pattern.search(text) for pattern in _INTERNAL_MEMO_LINE_PATTERNS))
+
+
+def _clean_research_memo(memo: str) -> str:
+    """Remove orchestration/protocol lines before article synthesis sees the memo."""
+    cleaned_lines: list[str] = []
+    for line in (memo or "").splitlines():
+        if _is_internal_memo_line(line):
+            continue
+        cleaned_lines.append(line)
+    return "\n".join(cleaned_lines).strip()
+
+
 # ── Article assembly ──────────────────────────────────────────────────────────
 
 def _split_memo_to_sections(memo: str) -> list[ContentArticleSection]:
@@ -1524,6 +1846,8 @@ def _split_memo_to_sections(memo: str) -> list[ContentArticleSection]:
 
     for line in (memo or "").splitlines():
         s = line.strip()
+        if _is_internal_memo_line(s):
+            continue
         m = _HEADING_RE.match(s)
         if m:
             _flush()
@@ -1543,7 +1867,7 @@ def _split_memo_to_sections(memo: str) -> list[ContentArticleSection]:
                 paragraphs.append(s[:900])
 
     _flush()
-    return sections[:10]
+    return sections[:12]
 
 
 def _extract_faqs(memo: str) -> list[ContentArticleFaq]:
@@ -1577,16 +1901,15 @@ _DEFAULT_FAQS = [
         answer=(
             "ProspektLab aggregates data from BSE, NSE, and SEBI official filings, XBRL financial "
             "reports, company press releases, concall transcripts, and verified ownership and "
-            "Knowledge Graph — a proprietary property graph covering listed Indian companies."
+            "governance records for listed Indian companies."
         ),
     ),
     ContentArticleFaq(
-        question="How accurate is AI-generated financial analysis?",
+        question="How does ProspektLab keep financial analysis grounded?",
         answer=(
-            "ProspektLab's multi-pass pipeline cross-validates every claim across official filings, "
-            "exchange announcements, and the IKG. Numbers are sourced from deterministic datasets "
-            "(XBRL, BSE/NSE disclosures) — not generated by the model. Each article cites its "
-            "sources and flags any estimate as such."
+            "ProspektLab cross-checks important claims against official filings, exchange announcements, "
+            "regulatory releases, XBRL data, fund factsheets, and company material. Each article should "
+            "separate verified numbers from watchpoints or estimates."
         ),
     ),
 ]
@@ -1615,8 +1938,8 @@ def _assemble_article_from_pipeline(
                 (
                     "These records track corporate governance structures, "
                     "promoter networks, auditor tenure, related-party transactions, and SEBI regulatory "
-                    "actions for listed Indian companies — providing a verified layer of intelligence "
-                    "not available from public data sources alone."
+                    "actions for listed Indian companies. They are useful only when they clarify the "
+                    "investment context, and thin coverage should be disclosed plainly."
                 ),
             ],
             "bullets": [],
@@ -1693,7 +2016,7 @@ def _assemble_article_from_pipeline(
         audience="Indian investors and market researchers",
         keywords=[target_display, label, "India markets", "ProspektLab",
                   "financial analysis", effective_content_type, "BSE", "NSE", "SEBI"][:12],
-        sections=sections[:10],
+        sections=sections[:12],
         faqs=faqs,
         cta_label="Explore ProspektLab",
         cta_href="/#/contact",
@@ -1714,6 +2037,7 @@ async def _direct_json_article_call(
     req: "FlashGenerationRequest",
     slug: str,
     content_type: str | None = None,
+    revision_note: str | None = None,
 ) -> ContentArticlePackage | None:
     """
     Use a direct OpenAI call (JSON mode) to convert the collected research memo
@@ -1729,11 +2053,11 @@ async def _direct_json_article_call(
     except ImportError:
         return None
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    cfg = resolve_openai_config()
+    if cfg is None:
         return None
 
-    model = os.getenv("FINAGENT_SYNTH_MODEL") or "gpt-4o"
+    model = os.getenv("FINAGENT_SYNTH_MODEL") or cfg.model
 
     effective_content_type = (content_type or req.content_type or "manual").strip().lower()
     label = _label_for_content_type(effective_content_type)
@@ -1743,7 +2067,7 @@ async def _direct_json_article_call(
     ikg_block = ""
     if ikg_ctx.get("narrative"):
         ikg_block = (
-            f"\n\n[IKG CONTEXT — must be included in article as a dedicated section]\n"
+            f"\n\n[VERIFIED COMPANY RECORD CONTEXT]\n"
             f"{ikg_ctx['narrative']}\n"
             f"Supporting record identifier: CIN {ikg_ctx.get('cin')}"
         )
@@ -1756,7 +2080,10 @@ async def _direct_json_article_call(
         "exit, or include target prices or rebalancing instructions anywhere. "
         "Use only the evidence present in the notes and cite the source of each important number inline. "
         "Do not pad the article with textbook company descriptions or stale market-cap trivia. "
-        "Return ONLY valid JSON — no markdown, no code fences, no explanation."
+        "Do not narrate what the article will do; report what changed and why it matters in direct prose. "
+        "Never mention prompts, JSON, schema, AI, language models, internal pipelines, quality scores, "
+        "specialist findings, or the mechanics of how the article was produced in any public field. "
+        "Return ONLY valid JSON - no markdown, no code fences, no explanation."
     )
 
     schema_description = """Return JSON with EXACTLY these fields:
@@ -1785,24 +2112,39 @@ async def _direct_json_article_call(
 }
 
 Requirements:
-- sections: 5-7 sections with 2-3 paragraphs each (not 1 paragraph). Use ALL research data.
-- faqs: 4-5 questions real retail investors ask about this topic
+- sections: 10-12 sections with 2-4 substantial paragraphs each (not 1 paragraph). Use ALL research data.
+- length: a valid response must contain 1,600-2,400 article words. Anything below 1,600 words is invalid.
+- paragraph count: a valid response must contain at least 22 substantial paragraphs across the article body.
+- paragraph rhythm: write like a newsroom explainer, with paragraphs of 45-95 words that each carry one fact, quote, implication, or watchpoint.
+- faqs: 5-6 questions real retail investors ask about this topic
 - Every factual claim must include the source inline in the text (e.g. "according to NSE filing...")
 - Zero filler sentences — every sentence must add information
 - SEBI compliance: NO buy/sell/hold/accumulate/exit/target price/rebalancing
-- Include ALL significant data points from the research notes"""
+- Do not include phrases like "this article covers", "in this article", "quality score", "specialist findings", "research pipeline", "prompt", "working research query", "next editorial pass", or "generated article"
+- Include ALL significant data points from the research notes
+
+Preferred public article structure:
+1. A sharp opening hook from the latest meaningful event, with named source attribution in the first two paragraphs.
+2. A concise why-it-matters paragraph that pulls the reader forward.
+3. The policy, market, or company context behind the event.
+4. Numbers and quotes: issuance, flows, returns, yields, costs, dates, circulars, speakers, or filings where available.
+5. History or cycle context only when it clarifies the current event.
+6. Investor implications for stocks, gold, mutual funds, SIPs, debt funds, taxes, and liquidity where relevant.
+7. Risks, frictions, and what could go wrong.
+8. Clear watchpoints with dates, disclosures, or metrics to verify next."""
 
     ikg_section_instruction = ""
     if ikg_ctx.get("narrative"):
         ikg_section_instruction = (
-            '\n- One section MUST be titled "What the ProspektLab Knowledge Graph shows" '
-            "containing the IKG context block provided"
+            '\n- One section MUST be titled "What verified ownership and governance records show" '
+            "and should use the verified company record context without naming internal systems"
         )
     structure_instruction = _article_structure_brief(
         effective_content_type,
         target_display,
         bool(ikg_ctx.get("narrative")),
     )
+    revision_instruction = f"\n\nDEPTH REVISION NOTE:\n{revision_note.strip()}" if revision_note else ""
 
     user_prompt = (
         f"Convert the following research notes into a publication-ready financial article.\n\n"
@@ -1812,12 +2154,13 @@ Requirements:
         f"Category label: {label}\n"
         f"{schema_description}{ikg_section_instruction}\n\n"
         f"{structure_instruction}\n\n"
+        f"{revision_instruction}\n\n"
         f"RESEARCH NOTES:\n{memo[:12000]}{ikg_block}\n\n"
         f"Return ONLY the JSON object. No markdown fences. No explanation."
     )
 
     try:
-        client = openai.AsyncOpenAI(api_key=api_key)
+        client = openai.AsyncOpenAI(api_key=cfg.api_key, base_url=cfg.base_url)
         response = await client.chat.completions.create(
             model=model,
             messages=[
@@ -1825,7 +2168,7 @@ Requirements:
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.3,
-            max_tokens=4000,
+            max_tokens=9000,
             response_format={"type": "json_object"},
             timeout=60,
         )
@@ -1915,6 +2258,23 @@ def _score_flash_publishability(
 
 # ── Core generation function ──────────────────────────────────────────────────
 
+def _article_body_word_count(article: ContentArticlePackage) -> int:
+    text = " ".join(
+        [
+            article.title,
+            article.description,
+            article.hero_title,
+            article.hero_summary,
+            *[section.heading for section in article.sections],
+            *[paragraph for section in article.sections for paragraph in section.paragraphs],
+            *[bullet for section in article.sections for bullet in section.bullets],
+            *[faq.question for faq in article.faqs],
+            *[faq.answer for faq in article.faqs],
+        ]
+    )
+    return len(re.findall(r"\b[\w'-]+\b", text))
+
+
 async def generate_flash_article(
     req: FlashGenerationRequest,
     *,
@@ -1941,7 +2301,7 @@ async def generate_flash_article(
         if existing:
             return ContentAutomationResult.model_validate(existing)
 
-    objectives = _CONTENT_DEEP_OBJECTIVES
+    objectives = _objectives_for_content_type(effective_content_type)
     total_passes = len(objectives)
     wall_limit = _DEEP_WALL_SECONDS
 
@@ -2118,7 +2478,7 @@ async def generate_flash_article(
     await _run_pass(total_passes - 1)
 
     # ── Harvest memo + quality score ──────────────────────────────────────────
-    memo = _harvest_memo(job_id)
+    memo = _clean_research_memo(_harvest_memo(job_id))
     final_event = _harvest_final_event(job_id)
     quality_score = float(final_event.get("quality_score") or 0)
 
@@ -2131,6 +2491,36 @@ async def generate_flash_article(
     # ContentArticlePackage JSON using the collected research as context.
     BUS.emit(job_id, "phase", phase="content_generation", note="Formatting article as structured JSON")
     article = await _direct_json_article_call(memo, ikg_ctx, req, slug, effective_content_type)
+    if article is not None:
+        draft_words = _article_body_word_count(article)
+        draft_paragraphs = sum(len(section.paragraphs) for section in article.sections)
+        if draft_words < 1500 or len(article.sections) < 10 or draft_paragraphs < 22:
+            BUS.emit(
+                job_id,
+                "log",
+                source="flash_engine",
+                level="warning",
+                message=(
+                    "Initial article missed newsroom depth "
+                    f"({draft_words} words, {len(article.sections)} sections, {draft_paragraphs} paragraphs); retrying expansion"
+                ),
+            )
+            expanded = await _direct_json_article_call(
+                memo,
+                ikg_ctx,
+                req,
+                slug,
+                effective_content_type,
+                revision_note=(
+                    "The previous draft failed the newsroom depth gate. Rewrite the article from the same evidence "
+                    "as a full financial news explainer with 1,700-2,200 words, 10-12 sections, at least 22 body "
+                    "paragraphs, and 5-6 FAQs. Keep the first two paragraphs event-led and source-attributed. "
+                    "Add investor implications, history, market structure, risks, and watchpoints only where supported "
+                    "by the research notes. Do not add recommendations."
+                ),
+            )
+            if expanded is not None:
+                article = expanded
 
     if article is None:
         # Fallback: parse markdown memo into sections
@@ -2144,9 +2534,40 @@ async def generate_flash_article(
     BUS.emit(job_id, "phase", phase="content_generation", note="Running editorial review and revision")
     article, editorial_review = await run_editorial_revision_loop(article, target=req.target, max_rounds=4)
     article = sanitize_article_package(article)
+    reviewed_words = _article_body_word_count(article)
+    reviewed_paragraphs = sum(len(section.paragraphs) for section in article.sections)
+    if reviewed_words < 1500 or len(article.sections) < 10 or reviewed_paragraphs < 22:
+        BUS.emit(
+            job_id,
+            "log",
+            source="flash_engine",
+            level="warning",
+            message=(
+                "Editorial draft still missed newsroom depth "
+                f"({reviewed_words} words, {len(article.sections)} sections, {reviewed_paragraphs} paragraphs); retrying long-form rewrite"
+            ),
+        )
+        expanded = await _direct_json_article_call(
+            memo,
+            ikg_ctx,
+            req,
+            slug,
+            effective_content_type,
+            revision_note=(
+                "The edited draft is still too short for publication. Rewrite as a complete 1,700-2,200 word "
+                "financial news explainer with 10-12 sections and at least 22 body paragraphs. Keep every claim "
+                "source-backed. Expand with market context, investor implications, history, risks, and watchpoints "
+                "from the research notes rather than filler."
+            ),
+        )
+        if expanded is not None:
+            article = sanitize_article_package(expanded)
+            article, editorial_review = await run_editorial_revision_loop(article, target=req.target, max_rounds=2)
+            article = sanitize_article_package(article)
     editorial_score = editorial_review.total_score
     urgency_score = editorial_review.urgency_score
     combined_quality = int(round((max(quality_score, 0.0) * 0.30) + (editorial_score * 0.70)))
+    article_words = _article_body_word_count(article)
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
     # ── Render HTML + image ───────────────────────────────────────────────────
@@ -2170,6 +2591,7 @@ async def generate_flash_article(
             "content_type": effective_content_type,
             "mode": editorial_mode,
             "quality_score": combined_quality,
+            "word_count": article_words,
             "ikg_covered": bool(ikg_ctx.get("covered")),
             "hub_path": f"/{route_base}/research/" if route_base == "insights" else f"/{route_base}/",
         },
@@ -2190,11 +2612,34 @@ async def generate_flash_article(
     confidence = int(round((confidence * 0.35) + (editorial_score * 0.65)))
     reasons.append(f"editorial review {editorial_score}/100")
     reasons.append(f"publish urgency {urgency_score}/100")
+    reasons.append(f"article depth {article_words} words")
     if not editorial_review.ready_to_publish:
         reasons.extend(f"hold: {issue.message}" for issue in editorial_review.issues[:4])
-    publish_status = "published" if (editorial_review.ready_to_publish and confidence >= 90) else "draft"
+    if article_words < 1200:
+        reasons.append("hold: article is below the newsroom depth floor of 1200 words")
+    if len(article.sections) < 10:
+        reasons.append("hold: article has fewer than 10 newsroom sections")
+    publish_status = (
+        "published"
+        if (
+            req.force_publish
+            or (editorial_review.ready_to_publish and confidence >= 84 and article_words >= 1200 and len(article.sections) >= 10)
+        )
+        else "draft"
+    )
 
     # ── Mirror to public if publishing ────────────────────────────────────────
+    logger.info(
+        "Flash article evaluated: slug=%s status=%s score=%s words=%s sections=%s editorial_ready=%s reasons=%s",
+        slug,
+        publish_status,
+        confidence,
+        article_words,
+        len(article.sections),
+        editorial_review.ready_to_publish,
+        "; ".join(reasons[:10]),
+    )
+
     public_mirror: str | None = None
     sitemap: str | None = None
     if publish_status == "published":
@@ -2206,6 +2651,7 @@ async def generate_flash_article(
             sitemap = _upsert_sitemap(route_base, slug)
             refresh_public_research_hub(route_base)
             submit_sitemap()
+            submit_url_update(public_url, content_type="article")
         except Exception:
             logger.exception("Public mirror failed for %s/%s", route_base, slug)
 
@@ -2236,6 +2682,7 @@ async def generate_flash_article(
         "content_type": effective_content_type,
         "requested_content_type": req.content_type,
         "quality_score": combined_quality,
+        "word_count": article_words,
         "ikg_covered": ikg_ctx.get("covered", False),
         "source_evidence_meta": req.source_evidence_meta or {},
         "editorial_review": editorial_review.to_dict(),
