@@ -34,6 +34,10 @@ logger = logging.getLogger("finagent.content_automation")
 _SITE_URL = (os.getenv("PROSPEKTLAB_SITE_URL") or "https://prospektlab.com").rstrip("/")
 _DEFAULT_ARTICLE_ROUTE = "insights"
 _DATA_ROOT = finagent_data_path("content_automation")
+_ARTICLE_DISCLAIMER = os.getenv(
+    "FINAGENT_ARTICLE_DISCLAIMER",
+    "This analysis is for informational purposes only. Markets carry risk; past performance does not guarantee future results.",
+)
 
 
 @dataclass(frozen=True)
@@ -112,6 +116,13 @@ class ContentArticlePackage(BaseModel):
     hero_summary: str = Field(..., min_length=80, max_length=360)
     audience: str = Field(default="Indian investors and market researchers", max_length=120)
     keywords: list[str] = Field(default_factory=list, max_length=12)
+    # ── LiveMint-style narrative journalism fields (inverted pyramid) ──────
+    # narrative_lede: opening paragraph carrying the key insight + hard numbers.
+    # market_context: market/sector backdrop that situates the story.
+    # analyst_commentary: woven analyst-grade interpretation (not bullet dumps).
+    narrative_lede: str = Field(default="", max_length=900)
+    market_context: str = Field(default="", max_length=1400)
+    analyst_commentary: str = Field(default="", max_length=1800)
     key_takeaways: list[ContentArticleTakeaway] = Field(default_factory=list, max_length=8)
     metrics: list[ContentArticleMetric] = Field(default_factory=list, max_length=12)
     tables: list[ContentArticleTable] = Field(default_factory=list, max_length=4)
@@ -149,6 +160,8 @@ class ContentAutomationResult(BaseModel):
     html_path: str
     json_path: str
     image_path: str | None = None
+    image_mime: str | None = None
+    cover_provider: str | None = None
     mirrored_public_path: str | None = None
     mirrored_sitemap: str | None = None
     generated_at: str
@@ -536,6 +549,17 @@ def _table_has_business_numeric_rows(table: dict[str, Any]) -> bool:
     return False
 
 
+def _is_sentence_style_metric_label(label: str, *, max_chars: int, max_words: int) -> bool:
+    cleaned = _repair_mojibake_text(str(label or "")).strip()
+    if not cleaned:
+        return True
+    if len(cleaned) > max_chars or len(cleaned.split()) > max_words:
+        return True
+    if re.search(r"[.!?]", cleaned):
+        return True
+    return False
+
+
 def _filter_public_tables(tables: list[dict[str, Any]]) -> list[dict[str, Any]]:
     filtered: list[dict[str, Any]] = []
     for table in tables:
@@ -552,8 +576,14 @@ def _filter_public_tables(tables: list[dict[str, Any]]) -> list[dict[str, Any]]:
             cleaned = [_repair_mojibake_text(str(cell))[:140].strip() for cell in row[:10]]
             if _contains_diagnostic_public_text(title, columns, cleaned):
                 continue
+            if _is_sentence_style_metric_label(cleaned[0] if cleaned else "", max_chars=72, max_words=8):
+                continue
+            if not re.search(r"[-+]?\d", " ".join(cleaned[1:])):
+                continue
             rows.append(cleaned)
-        if not rows:
+        # A single-row "table" is just a stat line, not a table — require at
+        # least two real data rows so we never render a near-empty table.
+        if len(rows) < 2:
             continue
         candidate = {
             "title": title,
@@ -610,6 +640,9 @@ def _structured_visuals_from_metrics(metrics: list[dict[str, str]]) -> list[dict
     for metric in metrics:
         if not _metric_has_business_numeric_signal(metric):
             continue
+        label = _repair_mojibake_text(str(metric.get("label") or "")).strip()
+        if _is_sentence_style_metric_label(label, max_chars=36, max_words=5):
+            continue
         value = str(metric.get("value") or "").replace(",", "")
         match = re.search(r"[-+]?\d*\.?\d+", value)
         if not match:
@@ -618,7 +651,7 @@ def _structured_visuals_from_metrics(metrics: list[dict[str, str]]) -> list[dict
             numeric = float(match.group(0))
         except ValueError:
             continue
-        points.append({"label": str(metric.get("label") or "")[:30], "value": numeric})
+        points.append({"label": label[:30], "value": numeric})
         if len(points) >= 8:
             break
     if len(points) < 2:
@@ -1509,10 +1542,13 @@ def _fallback_article(req: ContentAutomationRequest, slug: str, context: str) ->
         sections=sections,
         faqs=faqs,
         image_prompt=(
-            f"Premium editorial cover for {topic}. Build a sharp 3:2 business-news visual with layered "
-            f"financial screens, documents, market cues, and one strong central subject tied to the story. "
-            "Keep the full composition comfortably inside frame with generous padding so it works in a report card. "
-            "High-end publication aesthetic, cinematic lighting, rich depth, India market context, no headline text, no watermark."
+            f"Premium editorial cover for {topic}, styled for the ProspektLab dark research terminal. "
+            "Composition: 3:2 ratio, deep navy and near-black backdrop with subtle cyan and violet accent glow, "
+            "layered floating financial UI panels (charts, ticker rows, document snippets), one strong central subject "
+            "tied to the story, soft volumetric lighting from a single cyan accent source. "
+            "Aesthetic: Bloomberg-meets-LiveMint, premium dark-mode financial journalism, India market context "
+            "(Nifty, BSE, SEBI references where relevant). Generous padding so the subject reads cleanly inside a card. "
+            "No headline text, no watermark, no logos."
         ),
     )
 
@@ -1535,9 +1571,14 @@ async def _llm_generate_article(req: ContentAutomationRequest, slug: str, contex
     user = (
         "Generate a publication-ready article package as JSON with these fields: "
         "title, description, hero_eyebrow, hero_title, hero_summary, audience, keywords, "
+        "narrative_lede, market_context, analyst_commentary, "
         "key_takeaways, metrics, tables, visuals, timeline, evidence_notes, sections, faqs, cta_label, cta_href, image_prompt. "
-        "Rules: title 50-70 chars when possible, description 140-170 chars when possible, 5-7 sections, "
-        "each section with heading, 2-3 paragraphs, optional bullets, 3-5 FAQs, keywords 5-10 items. "
+        "Write like a LiveMint finance journalist: data-led, narrative-driven, inverted-pyramid. "
+        "Rules: title is a LiveMint-style headline 60-100 chars anchored on a specific number/named entity (not generic SEO); "
+        "narrative_lede 40-70 words front-loading the key number in sentence one; "
+        "market_context 50-90 words placing the story in index/sector/peer/macro terms with hard numbers; "
+        "analyst_commentary 50-90 words of estimate revisions/valuation/drivers as flowing prose; "
+        "description 140-170 chars when possible, 5-7 sections, each section heading + 2-3 prose paragraphs (numbers embedded in sentences) + optional bullets, 3-5 FAQs, keywords 5-10 items. "
         "Include 3-6 key_takeaways, 4-8 metrics, at least one semantic table, at least one visual block, and evidence_notes when numeric claims appear. "
         f"Slug: {slug}\n"
         f"Primary topic: {req.topic}\n"
@@ -1567,6 +1608,128 @@ async def _llm_generate_article(req: ContentAutomationRequest, slug: str, contex
     except Exception:
         logger.exception("LLM article generation failed; using fallback")
         return _fallback_article(req, slug, context)
+
+
+_DELTA_RE = re.compile(r"^\s*[+\-−]?\s*\d[\d,]*\.?\d*\s*(%|pct|bps|bp|pp|x|cr|crore|bn|mn)?\b", re.I)
+
+
+def _real_delta_direction(change: str) -> str:
+    """Return 'up'/'down' only when `change` is a genuine signed numeric delta.
+
+    Qualitative copy ("Broadly stable", "Disclosed", "Cautious outlook") returns
+    "" so the renderer does not paint a misleading coloured arrow.
+    """
+    text = (change or "").strip()
+    if not text or not _DELTA_RE.match(text):
+        return ""
+    if text.lstrip()[0] in "-−" or text.lower().lstrip("+").startswith(("down", "fell", "declin")):
+        return "down"
+    return "up"
+
+
+def _real_chart_series(article: ContentArticlePackage) -> tuple[str, list[float]] | None:
+    """Return (title, values) for the first visual that is a trustworthy data
+    chart, or None. Never fabricates a placeholder series.
+    """
+    try:
+        from finagent.content.content_accuracy import visual_issues
+    except Exception:
+        visual_issues = None  # type: ignore
+    for visual in article.visuals or []:
+        points = list(getattr(visual, "points", []) or [])
+        values: list[float] = []
+        for p in points:
+            try:
+                values.append(float(getattr(p, "value", None)))
+            except (TypeError, ValueError):
+                continue
+        if len(values) < 2:
+            continue
+        if visual_issues is not None and visual_issues(visual):
+            continue
+        return (str(getattr(visual, "title", "") or ""), values)
+    return None
+
+
+# Content types that warrant a market-style hero (price/series chart + metric rail).
+_MARKET_HERO_TYPES = {"earnings", "company"}
+
+
+def _build_hero_html(
+    article: ContentArticlePackage,
+    content_type: str,
+    stats_html: str,
+    chart_series: tuple[str, list[float]] | None,
+    esc,
+) -> tuple[str, str]:
+    """Build a content-type-aware hero panel.
+
+    Returns (hero_html, chart_points_js). chart_points_js is empty when there is
+    no real series to plot — the caller must not emit the canvas in that case.
+
+    - Market hero (earnings/company WITH a real numeric series): chart + headline
+      metric + metric rail.
+    - Data hero (any type WITH metrics but no chart): metric rail only, no canvas,
+      no "Indicative" badge, no fabricated change arrow.
+    - Brief hero (no metrics, no chart): eyebrow + hero summary text only.
+    """
+    eyebrow = esc(article.hero_eyebrow)
+    headline_metric = article.metrics[0] if article.metrics else None
+    is_market = content_type in _MARKET_HERO_TYPES and chart_series is not None and headline_metric is not None
+
+    if is_market:
+        _title, values = chart_series  # type: ignore
+        chart_points_js = ",".join(str(v) for v in values[:25])
+        delta = _real_delta_direction(str(headline_metric.change or ""))
+        chg_html = (
+            f'<span class="chg {delta}">{esc(headline_metric.change)}</span>' if delta else ""
+        )
+        hero = (
+            '<div class="art-hero-panel">'
+            '<div class="art-chart">'
+            '<div class="art-chart-head">'
+            f'<span class="ach-name">{eyebrow}</span>'
+            f'<span class="ach-range">{esc(_title or "Disclosed series")}</span>'
+            "</div>"
+            '<div class="art-chart-px">'
+            f'<span class="px">{esc(headline_metric.value)}</span>{chg_html}'
+            "</div>"
+            '<canvas id="art-chart" aria-hidden="true"></canvas>'
+            "</div>"
+            f'<div class="art-stats">{stats_html}</div>'
+            "</div>"
+        )
+        return hero, chart_points_js
+
+    if stats_html:
+        # Data hero: metric rail, no chart canvas, no Indicative badge.
+        summary = esc(article.hero_summary or article.description or "")
+        hero = (
+            '<div class="art-hero-panel art-hero-data">'
+            '<div class="art-chart art-chart-text">'
+            '<div class="art-chart-head">'
+            f'<span class="ach-name">{eyebrow}</span>'
+            "</div>"
+            f'<p class="art-hero-summary">{summary}</p>'
+            "</div>"
+            f'<div class="art-stats">{stats_html}</div>'
+            "</div>"
+        )
+        return hero, ""
+
+    # Brief hero: text only.
+    summary = esc(article.hero_summary or article.description or "")
+    hero = (
+        '<div class="art-hero-panel art-hero-brief">'
+        '<div class="art-chart art-chart-text">'
+        '<div class="art-chart-head">'
+        f'<span class="ach-name">{eyebrow}</span>'
+        "</div>"
+        f'<p class="art-hero-summary">{summary}</p>'
+        "</div>"
+        "</div>"
+    )
+    return hero, ""
 
 
 def _render_json_ld(article: ContentArticlePackage, public_url: str, image_url: str | None, generated_at: str) -> str:
@@ -1681,11 +1844,159 @@ def _repair_mojibake_text(value: str) -> str:
         text = text.replace(bad, good)
     text = text.replace("\u00a0", " ").replace("\ufeff", "")
     text = re.sub(r"[^\S\r\n]+", " ", text)
-    return text.strip()
+    return _normalise_indian_financial_units(text.strip())
+
+
+_USD_INR_ARTICLE_DISPLAY_RATE = 84.0
+
+
+def _format_indian_number(value: float, decimals: int = 0) -> str:
+    rounded = round(float(value), max(0, decimals))
+    raw = f"{rounded:.{max(0, decimals)}f}"
+    whole, _, frac = raw.partition(".")
+    sign = ""
+    if whole.startswith("-"):
+        sign, whole = "-", whole[1:]
+    if len(whole) > 3:
+        tail = whole[-3:]
+        head = whole[:-3]
+        pairs: list[str] = []
+        while len(head) > 2:
+            pairs.insert(0, head[-2:])
+            head = head[:-2]
+        if head:
+            pairs.insert(0, head)
+        whole = ",".join(pairs + [tail])
+    if decimals > 0:
+        frac = frac.rstrip("0")
+        if frac:
+            return f"{sign}{whole}.{frac}"
+    return f"{sign}{whole}"
+
+
+def _format_crore(value: float, *, approximate: bool = False) -> str:
+    abs_value = abs(float(value))
+    decimals = 1 if abs_value < 1000 and abs_value % 1 else 0
+    prefix = "about " if approximate else ""
+    return f"{prefix}Rs {_format_indian_number(value, decimals)} crore"
+
+
+def _normalise_indian_financial_units(text: str) -> str:
+    """Render public article money values in Indian crore/lakh notation."""
+    if not text:
+        return ""
+
+    protected_segments: list[str] = []
+
+    def _protect_existing(match: re.Match[str]) -> str:
+        protected_segments.append(match.group(0))
+        return f"__PL_INR_USD_SEGMENT_{len(protected_segments) - 1}__"
+
+    text = re.sub(
+        r"(?i)\b(?:about\s+)?Rs\.?\s+[0-9][\d,]*(?:\.\d+)?\s+crore\s+\(US\$[0-9][\d,]*(?:\.\d+)?[BM]\)",
+        _protect_existing,
+        text,
+    )
+
+    def _num(raw: str) -> float:
+        return float(str(raw).replace(",", ""))
+
+    def _inr_million(match: re.Match[str]) -> str:
+        return _format_crore(_num(match.group(1)) / 10.0)
+
+    def _inr_billion(match: re.Match[str]) -> str:
+        return _format_crore(_num(match.group(1)) * 100.0)
+
+    def _inr_cr(match: re.Match[str]) -> str:
+        return f"Rs {_format_indian_number(_num(match.group(1)), 1 if '.' in match.group(1) else 0)} crore"
+
+    def _bare_cr(match: re.Match[str]) -> str:
+        return f"{match.group(1)}Rs {_format_indian_number(_num(match.group(2)), 1 if '.' in match.group(2) else 0)} crore"
+
+    def _usd(match: re.Match[str]) -> str:
+        amount = _num(match.group(1))
+        unit = match.group(2).lower()
+        if unit.startswith("b") or unit == "b":
+            crore = amount * _USD_INR_ARTICLE_DISPLAY_RATE * 100.0
+            source = f"US${_format_indian_number(amount, 2 if amount % 1 else 0)}B"
+        else:
+            crore = amount * _USD_INR_ARTICLE_DISPLAY_RATE / 10.0
+            source = f"US${_format_indian_number(amount, 2 if amount % 1 else 0)}M"
+        return f"{_format_crore(crore, approximate=True)} ({source})"
+
+    text = re.sub(
+        r"(?i)(?:Rs\.?|INR|₹)\s*([0-9][\d,]*(?:\.\d+)?)\s*(?:million|mn)\b",
+        _inr_million,
+        text,
+    )
+    text = re.sub(
+        r"(?i)(?:Rs\.?|INR|₹)\s*([0-9][\d,]*(?:\.\d+)?)\s*(?:billion|bn)\b",
+        _inr_billion,
+        text,
+    )
+    text = re.sub(
+        r"(?i)(?:Rs\.?|INR|₹)\s*([0-9][\d,]*(?:\.\d+)?)\s*(?:cr|crores?)\b",
+        _inr_cr,
+        text,
+    )
+    text = re.sub(
+        r"(?i)(^|[\s(:;,\-])([0-9][\d,]*(?:\.\d+)?)\s*Cr\b",
+        _bare_cr,
+        text,
+    )
+    text = re.sub(
+        r"(?i)(?:US\$|\$|USD\s*)\s*([0-9][\d,]*(?:\.\d+)?)\s*(billion|bn|b|million|mn|m)\b",
+        _usd,
+        text,
+    )
+    for idx, segment in enumerate(protected_segments):
+        text = text.replace(f"__PL_INR_USD_SEGMENT_{idx}__", segment)
+    return text
+
+
+def _local_article_href(route_base: str, value: str, slug: str | None = None) -> str:
+    cleaned = str(value or "").strip()
+    if slug:
+        return f"/{_safe_route_base(route_base)}/{slug}/"
+    if not cleaned:
+        return "#"
+    try:
+        parsed = urlparse(cleaned)
+        parts = [part for part in (parsed.path or "").split("/") if part]
+        if len(parts) >= 2 and parts[0] == _safe_route_base(route_base):
+            return f"/{parts[0]}/{parts[1]}/"
+    except Exception:
+        pass
+    return cleaned
+
+
+def _compact_sentence(value: str, max_chars: int = 190) -> str:
+    text = re.sub(r"\s+", " ", _repair_mojibake_text(value)).strip()
+    if not text:
+        return ""
+    first_sentence = re.split(r"(?<=[.!?])\s+", text, maxsplit=1)[0]
+    candidate = first_sentence if len(first_sentence) <= max_chars else text
+    if len(candidate) <= max_chars:
+        return candidate
+    trimmed = candidate[:max_chars].rsplit(" ", 1)[0].rstrip(" ,;:-")
+    return f"{trimmed}..."
 
 
 def _hub_public_dir(route_base: str) -> Path:
     return _public_hub_dirs(route_base)[0]
+
+
+def _is_valid_public_hub_html(html_text: str) -> bool:
+    if not html_text:
+        return False
+    style_match = re.search(r"<style>\s*(.*?)\s*</style>", html_text, re.IGNORECASE | re.DOTALL)
+    if not style_match:
+        return False
+    css = (style_match.group(1) or "").strip()
+    if len(css) < 1000:
+        return False
+    required_tokens = (".hero-grid", ".story-card", ".ticker-track", ".snap-grid")
+    return all(tok in css for tok in required_tokens)
 
 
 def refresh_public_research_hub(route_base: str = _DEFAULT_ARTICLE_ROUTE) -> str | None:
@@ -1698,6 +2009,9 @@ def refresh_public_research_hub(route_base: str = _DEFAULT_ARTICLE_ROUTE) -> str
 
     try:
         html_text = build_insights_hub_html(route_base=route_base)
+        if route_base == "insights" and not _is_valid_public_hub_html(html_text):
+            logger.error("Skipping public hub refresh for %s: generated hub HTML failed style validation", route_base)
+            return None
         public_paths = _public_hub_dirs(route_base)
         for public_dir in public_paths:
             _write_text(public_dir / "index.html", html_text)
@@ -1705,6 +2019,84 @@ def refresh_public_research_hub(route_base: str = _DEFAULT_ARTICLE_ROUTE) -> str
     except Exception:
         logger.exception("Failed to refresh public research hub for %s", route_base)
         return None
+
+
+def _render_related_coverage_html(
+    article: ContentArticlePackage,
+    route_base: str,
+    public_url: str,
+    esc: Any,
+) -> str:
+    """Build a 'Related Coverage' HTML section with links to similar articles."""
+    try:
+        parsed = urlparse(public_url)
+        parts = [p for p in (parsed.path or "").split("/") if p]
+        current_slug = parts[-1] if len(parts) >= 2 else ""
+    except Exception:
+        current_slug = ""
+
+    try:
+        related = _find_related_articles(article, route_base, current_slug, max_results=3)
+    except Exception:
+        related = []
+
+    if not related:
+        return ""
+
+    links: list[str] = []
+    for item in related:
+        title = str(item.get("title") or "")[:100]
+        url = _local_article_href(route_base, str(item.get("public_url") or ""), str(item.get("slug") or ""))
+        if not title or not url:
+            continue
+        links.append(
+            f'<li style="margin-bottom:8px;">'
+            f'<a href="{esc(url)}" style="color:#3B82F6;text-decoration:none;font-size:14px;">'
+            f'{esc(title)}</a></li>'
+        )
+
+    if not links:
+        return ""
+
+    return (
+        '<section style="max-width:720px;margin:32px auto 0;padding:24px 0;border-top:1px solid rgba(255,255,255,0.08);">'
+        '<h4 style="font-size:14px;text-transform:uppercase;letter-spacing:0.05em;color:rgba(246,248,252,0.5);margin-bottom:12px;">Related Coverage</h4>'
+        f'<ul style="list-style:none;padding:0;margin:0;">{"".join(links)}</ul>'
+        '</section>'
+    )
+
+
+def _find_related_articles(
+    article: ContentArticlePackage,
+    route_base: str,
+    current_slug: str = "",
+    max_results: int = 3,
+) -> list[dict[str, Any]]:
+    """Find related articles by keyword overlap in title/description."""
+    try:
+        all_articles = list_generated_articles(route_base=route_base, limit=100)
+    except Exception:
+        return []
+
+    target_words = set(re.findall(r"\b[a-z]{3,}\b", (article.title + " " + article.description).lower()))
+    target_words -= {"the", "and", "for", "with", "that", "this", "from", "are", "was", "has", "have", "been", "will", "its"}
+
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for item in all_articles:
+        slug = item.get("slug", "")
+        if slug == current_slug or not slug:
+            continue
+        if str(item.get("publish_status", "")).lower() != "published":
+            continue
+        if str(item.get("publish_gate_status") or "publish").lower() not in {"", "publish"}:
+            continue
+        item_words = set(re.findall(r"\b[a-z]{3,}\b", (str(item.get("title", "")) + " " + str(item.get("description", ""))).lower()))
+        overlap = len(target_words & item_words)
+        if overlap >= 2:
+            scored.append((overlap, item))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [item for _, item in scored[:max_results]]
 
 
 def render_article_html(
@@ -1727,34 +2119,42 @@ def render_article_html(
     except Exception:
         route_base = _DEFAULT_ARTICLE_ROUTE
     hub_path = str(meta.get("hub_path") or (f"/{route_base}/research/" if route_base == "insights" else f"/{route_base}/"))
+    current_article_href = _local_article_href(route_base, public_url, article.slug)
     raw_sources = meta.get("sources_used") if isinstance(meta.get("sources_used"), list) else []
     sources_used = [source for source in raw_sources if isinstance(source, dict)]
 
     section_html: list[str] = []
+    section_toc_items: list[str] = []
     toc_items: list[str] = []
     highlight_points: list[str] = []
     public_sections = [section for section in article.sections if not _contains_diagnostic_public_text(section.heading)]
     for idx, section in enumerate(public_sections, start=1):
         anchor = f"section-{idx}-{slugify(section.heading)}"
-        toc_items.append(f'<li><a href="#{anchor}" data-toc-link>{esc(section.heading)}</a></li>')
-        paragraphs = "".join(f"<p>{esc(paragraph)}</p>" for paragraph in section.paragraphs)
+        section_toc_items.append(f'<li><a href="#{anchor}" data-toc-link>{esc(section.heading)}</a></li>')
+        paragraphs: list[str] = []
+        for pidx, paragraph in enumerate(section.paragraphs):
+            cls = "lead-p" if idx == 1 and pidx == 0 else ""
+            paragraphs.append(f'<p class="{cls}">{esc(paragraph)}</p>' if cls else f"<p>{esc(paragraph)}</p>")
         bullets = ""
         if section.bullets:
             for item in section.bullets:
                 if len(highlight_points) < 4:
                     highlight_points.append(item)
-            items = "".join(f'<li class="data-row">{esc(item)}</li>' for item in section.bullets)
-            bullets = f'<ul class="data-list">{items}</ul>'
-        heading_key = section.heading.lower()
-        section_class = (
-            "section-card section-ikg"
-            if ("knowledge graph" in heading_key or "verified ownership" in heading_key or "governance records" in heading_key)
-            else "section-card"
-        )
+            keypoints: list[str] = []
+            for item in section.bullets:
+                if ":" in item:
+                    label, value = item.split(":", 1)
+                    keypoints.append(
+                        f'<div class="keypoint"><span class="kp-k">{esc(label.strip())}</span>'
+                        f'<span class="kp-v">{esc(value.strip())}</span></div>'
+                    )
+                else:
+                    keypoints.append(f'<div class="keypoint"><span class="kp-v">{esc(item)}</span></div>')
+            bullets = f'<div class="keypoints">{"".join(keypoints)}</div>'
         section_html.append(
-            f'<section class="{section_class}" id="{anchor}" data-section>'
-            f'<div class="section-kicker">Section {idx:02d}</div>'
-            f'<h2>{esc(section.heading)}</h2>{paragraphs}{bullets}'
+            f'<section class="sec" id="{anchor}" data-section>'
+            f'<span class="sec-label">Section {idx:02d}</span>'
+            f'<h2>{esc(section.heading)}</h2>{"".join(paragraphs)}{bullets}'
             f'</section>'
         )
 
@@ -1826,7 +2226,43 @@ def render_article_html(
             value *= 1000000.0
         return value
 
+    # Inline metrics strip from article.metrics.
     metric_strip_html = ""
+    if article.metrics:
+        metric_chips: list[str] = []
+        for m in article.metrics[:4]:
+            chg_html = ""
+            # Only render a coloured up/down chip when the change is an actual
+            # signed delta (e.g. "+120 bps", "-3%"). Prose like "Broadly stable"
+            # or "Cautious outlook" must NOT be painted as a red down-arrow.
+            delta = _real_delta_direction(str(m.change or ""))
+            if delta:
+                chg_html = f'<span class="im-chg {delta}">{esc(m.change)}</span>'
+            metric_chips.append(
+                f'<span class="inline-metric"><span class="im-k">{esc(m.label)}</span>'
+                f'<span class="im-v">{esc(m.value)}</span>{chg_html}</span>'
+            )
+        metric_strip_html = f'<div class="inline-metrics">{"".join(metric_chips)}</div>'
+
+    # ── LiveMint-style narrative blocks (inverted pyramid: lede → context → analysis) ──
+    narrative_html = ""
+    _lede = getattr(article, "narrative_lede", "") or ""
+    _market = getattr(article, "market_context", "") or ""
+    _analyst = getattr(article, "analyst_commentary", "") or ""
+    if _lede or _market or _analyst:
+        parts = []
+        if _lede:
+            parts.append(f'<p class="article-lede">{esc(_lede)}</p>')
+        if _market:
+            parts.append(f'<p class="article-context">{esc(_market)}</p>')
+        if _analyst:
+            parts.append(
+                '<div class="analyst-note">'
+                '<span class="analyst-note-label">Analyst view</span>'
+                f"<p>{esc(_analyst)}</p>"
+                "</div>"
+            )
+        narrative_html = f'<section class="narrative-lede-block">{"".join(parts)}</section>'
 
     takeaway_html = ""
     if article.key_takeaways:
@@ -1846,7 +2282,25 @@ def render_article_html(
             f'<div class="takeaway-grid">{takeaway_items}</div>'
             "</section>"
         )
-        toc_items.insert(1, '<li><a href="#key-takeaways" data-toc-link>Key takeaways</a></li>')
+        toc_items.append('<li><a href="#key-takeaways" data-toc-link>Key takeaways</a></li>')
+    elif highlight_points:
+        takeaway_items = "".join(
+            (
+                '<article class="takeaway-card">'
+                f"<h3>Signal {idx:02d}</h3>"
+                f"<p>{esc(_compact_sentence(point, 260))}</p>"
+                "</article>"
+            )
+            for idx, point in enumerate(highlight_points[:4], start=1)
+        )
+        takeaway_html = (
+            '<section class="structured-card" id="key-takeaways">'
+            '<div class="section-kicker">Key takeaways</div>'
+            "<h2>What changed and why it matters</h2>"
+            f'<div class="takeaway-grid">{takeaway_items}</div>'
+            "</section>"
+        )
+        toc_items.append('<li><a href="#key-takeaways" data-toc-link>Key takeaways</a></li>')
 
     table_html = ""
     public_tables = _filter_public_tables(
@@ -1902,15 +2356,54 @@ def render_article_html(
         bar_w = max(20.0, step * 0.56)
         bars: list[str] = []
         labels: list[str] = []
+
+        def _svg_label_lines(raw: str, max_chars: int = 15) -> list[str]:
+            cleaned = re.sub(r"\s+", " ", _repair_mojibake_text(raw)).strip()
+            if not cleaned:
+                return [""]
+            words = cleaned.split()
+            lines: list[str] = []
+            current = ""
+            for word in words:
+                candidate = f"{current} {word}".strip()
+                if len(candidate) <= max_chars:
+                    current = candidate
+                    continue
+                if current:
+                    lines.append(current)
+                current = word[:max_chars]
+            if current:
+                lines.append(current)
+            if len(lines) > 2:
+                lines = [lines[0], " ".join(lines[1:])]
+            if lines and len(lines[-1]) > max_chars + 2:
+                lines[-1] = lines[-1][: max_chars + 1].rstrip() + "..."
+            return lines[:2]
+
+        def _svg_value_label(value: float) -> str:
+            abs_value = abs(float(value))
+            decimals = 1 if abs_value < 100 and abs_value % 1 else 0
+            return _format_indian_number(value, decimals)
+
         for point_index, point in enumerate(points):
             scaled = (abs(point.value) / max_value) * usable_h
             x = left + point_index * step + ((step - bar_w) / 2.0)
             y = 24 + (usable_h - scaled)
+            center_x = x + (bar_w / 2.0)
+            value_y = max(18.0, y - 8.0)
             bars.append(
-                f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_w:.1f}" height="{scaled:.1f}" rx="6" fill="rgba(13,118,110,0.76)" />'
+                f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_w:.1f}" height="{scaled:.1f}" rx="6" fill="rgba(96,165,250,0.76)" />'
+            )
+            bars.append(
+                f'<text x="{center_x:.1f}" y="{value_y:.1f}" text-anchor="middle" fill="#EAE3D6" font-size="10" font-family="IBM Plex Mono, monospace">{esc(_svg_value_label(point.value))}</text>'
+            )
+            label_lines = _svg_label_lines(point.label)
+            tspans = "".join(
+                f'<tspan x="{center_x:.1f}" dy="{0 if line_idx == 0 else 12}">{esc(line)}</tspan>'
+                for line_idx, line in enumerate(label_lines)
             )
             labels.append(
-                f'<text x="{(x + (bar_w / 2.0)):.1f}" y="{height - 16}" text-anchor="middle" fill="#5f6778" font-size="11">{esc(point.label)[:12]}</text>'
+                f'<text x="{center_x:.1f}" y="{height - 23}" text-anchor="middle" fill="#A8B4C8" font-size="10.5">{tspans}</text>'
             )
         title = esc(visual.title)
         note = f'<div class="visual-note">{esc(visual.note)}</div>' if visual.note else ""
@@ -1918,8 +2411,8 @@ def render_article_html(
             '<article class="visual-card">'
             f"<h3>{title}</h3>"
             f'<svg viewBox="0 0 {width} {height}" role="img" aria-label="{title}">'
-            f'<rect x="0" y="0" width="{width}" height="{height}" fill="rgba(255,255,255,0.85)" />'
-            f'<line x1="{left}" y1="{height-32}" x2="{width-16}" y2="{height-32}" stroke="rgba(20,32,51,0.2)" />'
+            f'<rect x="0" y="0" width="{width}" height="{height}" fill="rgba(13,31,60,0.85)" />'
+            f'<line x1="{left}" y1="{height-32}" x2="{width-16}" y2="{height-32}" stroke="rgba(148,163,184,0.18)" />'
             + "".join(bars)
             + "".join(labels)
             + "</svg>"
@@ -1927,8 +2420,25 @@ def render_article_html(
             + "</article>"
         )
 
-    # Public articles intentionally omit the legacy "visual signals" block.
     visual_html = ""
+    # Belt-and-braces: also scrub diagnostic labels at render time so a
+    # diagnostic-tagged visual / table / metric can never leak into a public
+    # page even if the payload-coming-in filter was bypassed.
+    public_visuals = [
+        v for v in list(article.visuals or [])
+        if isinstance(v, ContentArticleVisual)
+        and not _contains_diagnostic_public_text(v.title, v.note)
+    ]
+    if public_visuals:
+        rendered_visuals = "".join(_render_visual_svg(v, idx) for idx, v in enumerate(public_visuals[:3], start=1))
+        visual_html = (
+            '<section class="structured-card" id="visuals">'
+            '<div class="section-kicker">Visuals</div>'
+            "<h2>Charts and indicators from the data</h2>"
+            f'<div class="visual-grid">{rendered_visuals}</div>'
+            "</section>"
+        )
+        toc_items.append('<li><a href="#visuals" data-toc-link>Visuals</a></li>')
 
     timeline_html = ""
     if article.timeline:
@@ -1982,7 +2492,6 @@ def render_article_html(
         f'<details class="faq-item"><summary><span class="faq-q-text">{esc(faq.question)}</span><span class="faq-chevron" aria-hidden="true">&#8250;</span></summary><div class="faq-answer"><p>{esc(faq.answer)}</p></div></details>'
         for faq in article.faqs
     )
-    image_markup = f'<img class="hero-image" src="{esc(image_href)}" alt="{esc(article.title)} cover image" loading="eager" />' if image_href else '<div class="hero-image hero-image-fallback">ProspektLab Insight</div>'
     json_ld = _render_json_ld(article, public_url, f"{_SITE_URL}{image_href}" if image_href and image_href.startswith("/") else image_href, generated_at).replace("</", "<\\/")
     total_words = sum(len(paragraph.split()) for section in public_sections for paragraph in section.paragraphs)
     read_minutes = max(4, (total_words + 219) // 220)
@@ -2019,15 +2528,96 @@ def render_article_html(
         )
         toc_items.append('<li><a href="#evidence-sources" data-toc-link>Evidence and methodology</a></li>')
 
+    if article.faqs:
+        faq_item = '<li><a href="#faq" data-toc-link>FAQ</a></li>'
+        source_idx = next((idx for idx, item in enumerate(toc_items) if "#evidence-sources" in item), len(toc_items))
+        toc_items.insert(source_idx, faq_item)
+
+    if section_toc_items:
+        section_insert_at = 1 if toc_items and "#key-takeaways" in toc_items[0] else 0
+        toc_items = toc_items[:section_insert_at] + section_toc_items + toc_items[section_insert_at:]
+
+    # ── Handoff layout pieces: hero banner, data panel, tags, rail extras ──
+    hero_img_style = f'style="background-image:url(\'{esc(image_href)}\');"' if image_href else ""
+    tag_chips = "".join(f'<span class="chip">{esc(k)}</span>' for k in article.keywords[:5])
+
+    # Real chart series only — no fabricated fallback. Content-type comes from
+    # the manifest meta; default to a neutral type so non-earnings topics do not
+    # get a market-style price hero.
+    content_type = str((meta or {}).get("content_type") or "").strip().lower()
+    chart_series = _real_chart_series(article)
+
+    stats_html = ""
+    if article.metrics:
+        stats_html = "".join(
+            f'<div class="art-stat"><div class="as-k">{esc(m.label)}</div><div class="as-v">{esc(m.value)}</div></div>'
+            for m in article.metrics[:4]
+        )
+    elif highlight_points:
+        stats_html = "".join(
+            f'<div class="art-stat"><div class="as-k">Signal {i}</div><div class="as-v">{esc(point)}</div></div>'
+            for i, point in enumerate(highlight_points[:4], start=1)
+        )
+
+    hero_panel_html, chart_points_js = _build_hero_html(article, content_type, stats_html, chart_series, esc)
+
+    related_articles: list[dict[str, Any]] = []
+    try:
+        related_articles = _find_related_articles(article, route_base, article.slug, max_results=3)
+    except Exception:
+        related_articles = []
+
+    def _cat_label(item: dict[str, Any]) -> str:
+        ctype = str(item.get("content_type") or item.get("requested_content_type") or item.get("mode") or "").lower()
+        label_map = {
+            "sebi": "SEBI",
+            "regulation": "Regulation",
+            "earnings": "Earnings",
+            "company": "Company",
+            "trend": "Trends",
+            "market": "Market",
+            "manual": "Insight",
+        }
+        return label_map.get(ctype, "Research")
+
+    related_links = [f'<a href="{esc(hub_path)}"><span class="rr-cat">Archive</span>Back to the research hub</a>']
+    for item in related_articles:
+        title = str(item.get("title") or "")[:90]
+        url = _local_article_href(route_base, str(item.get("public_url") or ""), str(item.get("slug") or ""))
+        if not title or not url:
+            continue
+        related_links.append(f'<a href="{esc(url)}"><span class="rr-cat">{esc(_cat_label(item))}</span>{esc(title)}</a>')
+    related_html = '<div class="rail-related">' + "".join(related_links) + "</div>"
+    next_story_href = hub_path
+    next_story_title = "Explore more research notes"
+    for item in related_articles:
+        title = str(item.get("title") or "")[:120]
+        url = _local_article_href(route_base, str(item.get("public_url") or ""), str(item.get("slug") or ""))
+        if title and url:
+            next_story_href = url
+            next_story_title = title
+            break
+    takeaway_rail_items = ""
+    if article.key_takeaways:
+        takeaway_rail_items = "".join(
+            f'<li><strong>{esc(item.heading)}</strong><span>{esc(_compact_sentence(item.detail, 100))}</span></li>'
+            for item in article.key_takeaways[:4]
+        )
+    else:
+        takeaway_rail_items = "".join(
+            f'<li><span>{esc(_compact_sentence(p, 150))}</span></li>'
+            for p in highlight_points[:4]
+        )
+
     return f"""<!doctype html>
-<html lang=\"en-IN\">
+<html lang=\"en-IN\" data-page=\"article\">
   <head>
     <meta charset=\"utf-8\" />
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
     <title>{esc(article.title)}</title>
     <meta name=\"description\" content=\"{esc(article.description)}\" />
     <meta name=\"robots\" content=\"index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1\" />
-    <meta name=\"theme-color\" content=\"#f4ecdf\" />
+    <meta name=\"theme-color\" content=\"#03060d\" />
     <link rel=\"canonical\" href=\"{esc(public_url)}\" />
     <link rel=\"icon\" type=\"image/svg+xml\" href=\"/prospektlab-favicon-v2.svg\" />
     <meta property=\"og:type\" content=\"article\" />
@@ -2042,907 +2632,957 @@ def render_article_html(
     <meta name=\"twitter:image\" content=\"{esc(f'{_SITE_URL}{image_href}' if image_href and image_href.startswith('/') else (image_href or f'{_SITE_URL}/prospektlab-logo.svg'))}\" />
     <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />
     <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />
-    <link href=\"https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap\" rel=\"stylesheet\" />
+    <link href=\"https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..560&display=swap\" rel=\"stylesheet\" />
     <style>
       :root {{
-        color-scheme: light;
-        --paper: #f4ecdf;
-        --paper-soft: #fffaf2;
-        --ink: #142033;
-        --muted: #5f6778;
-        --line: rgba(20, 32, 51, 0.12);
-        --line-strong: rgba(20, 32, 51, 0.22);
-        --accent: #0d766e;
-        --accent-soft: rgba(13, 118, 110, 0.12);
-        --accent-2: #ad6a1f;
-        --accent-3: #0f3d91;
-        --shadow: 0 28px 90px rgba(17, 24, 39, 0.08);
-      }}
-      * {{ box-sizing: border-box; }}
-      html {{ scroll-behavior: smooth; }}
+        color-scheme: dark;
+        --paper: #03060d;
+        --paper-2: #081424;
+        --paper-3: #0d1f3c;
+        --card: #0d1f3c;
+        --ink: #EAE3D6;
+        --ink-2: #A8B4C8;
+        --ink-3: #8c9ab0;
+        --line: rgba(148, 163, 184, 0.10);
+        --line-2: rgba(148, 163, 184, 0.18);
+        --line-strong: rgba(147, 197, 253, 0.24);
+        --accent: #60A5FA;
+        --accent-soft: rgba(96, 165, 250, 0.12);
+        --accent-2: #8B5CF6;
+        --accent-3: #2563EB;
+        --up: #34D399;
+        --down: #FB7185;
+        --radius: 14px;
+        --radius-lg: 22px;
+        --serif: "Newsreader", Georgia, "Times New Roman", serif;
+        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --ink-read: #D8DFEA;
+        --mono: \"IBM Plex Mono\", ui-monospace, \"SF Mono\", Menlo, monospace;\r\n        --pad-x: clamp(20px, 5vw, 80px);\r\n        --maxw: 1440px;\r\n      }}
+      *, *::before, *::after {{ box-sizing: border-box; }}
+      * {{ margin: 0; }}
+      html {{ -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }}
       body {{
-        margin: 0;
-        font-family: "Manrope", Arial, sans-serif;
-        background:
-          radial-gradient(circle at top left, rgba(13, 118, 110, 0.10), transparent 26%),
-          radial-gradient(circle at 100% 0%, rgba(15, 61, 145, 0.12), transparent 20%),
-          linear-gradient(180deg, #f7f1e6 0%, #f4ecdf 46%, #f0e7d8 100%);
+        font-family: var(--serif);
+        background: var(--paper);
         color: var(--ink);
-        line-height: 1.75;
+        line-height: 1.6;
+        font-size: 18px;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        overflow-x: hidden;
       }}
-      a {{ color: inherit; }}
-      img {{ max-width: 100%; }}
-      .progress-bar {{
-        position: fixed;
-        inset: 0 0 auto;
-        height: 4px;
+      body::before {{
+        content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1;
+        opacity: 0.35;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
+        mix-blend-mode: overlay;
+      }}
+      .cursor-dot, .cursor-ring {{
+        position: fixed; top: 0; left: 0; z-index: 9999; pointer-events: none; border-radius: 50%; mix-blend-mode: difference;
+      }}
+      .cursor-dot {{ width: 6px; height: 6px; background: #fff; transform: translate(-50%, -50%); }}
+      .cursor-ring {{
+        width: 34px; height: 34px; border: 1px solid #fff; transform: translate(-50%, -50%);
+        transition: width .25s, height .25s, background .25s, opacity .25s;
+      }}
+      .cursor-ring.is-hover {{ width: 54px; height: 54px; background: rgba(255, 255, 255, 0.12); }}
+      @media (hover: none), (pointer: coarse) {{
+        .cursor-dot, .cursor-ring {{ display: none; }}
+      }}
+      img, svg, canvas {{ display: block; max-width: 100%; }}
+      a {{ color: inherit; text-decoration: none; }}
+      ::selection {{ background: var(--accent); color: #fff; }}
+      .wrap {{ width: 100%; max-width: var(--maxw); margin-inline: auto; padding-inline: var(--pad-x); }}\r\n      .section {{ position: relative; z-index: 2; }}
+
+      /* Read progress */
+      .read-progress {{
+        position: fixed; top: 0; left: 0; height: 3px; width: 100%;
         background: linear-gradient(90deg, var(--accent), var(--accent-2));
-        transform-origin: left center;
-        transform: scaleX(0);
-        z-index: 1000;
+        transform: scaleX(0); transform-origin: left; z-index: 60;
       }}
-      .shell {{ width: min(calc(100% - 36px), 1240px); margin: 0 auto; }}
-      .masthead {{
-        position: sticky;
-        top: 0;
-        z-index: 80;
-        backdrop-filter: blur(18px);
-        background: rgba(244, 236, 223, 0.86);
-        border-bottom: 1px solid rgba(20, 32, 51, 0.08);
-      }}
-      .masthead-inner {{
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 18px;
-        padding: 14px 0;
-      }}
-      .brand {{
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        text-decoration: none;
-        color: var(--ink);
-      }}
-      .brand-mark {{
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, var(--accent), var(--accent-3));
-        box-shadow: 0 0 0 8px rgba(13, 118, 110, 0.08);
-      }}
-      .brand-text {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-      }}
-      .masthead-links {{
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        color: var(--muted);
-        font-size: 13px;
-      }}
-      .masthead-links a {{
-        text-decoration: none;
-        transition: color 0.18s ease;
-      }}
-      .masthead-links a:hover {{ color: var(--ink); }}
-      .hero {{
-        padding: 34px 0 24px;
-      }}
-      .hero-frame {{
-        border: 1px solid var(--line);
-        border-radius: 34px;
-        padding: 30px;
-        background: linear-gradient(135deg, rgba(255, 250, 242, 0.92), rgba(249, 243, 233, 0.94));
-        box-shadow: var(--shadow);
-      }}
-      .hero-grid {{
-        display: grid;
-        grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.86fr);
-        gap: 28px;
-        align-items: start;
-      }}
-      .eyebrow {{
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 7px 14px;
-        border-radius: 999px;
-        background: var(--accent-soft);
-        color: var(--accent);
-        border: 1px solid rgba(13, 118, 110, 0.16);
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }}
-      .eyebrow::before {{
-        content: "";
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: var(--accent);
-      }}
-      h1, h2, h3 {{ margin: 0; color: var(--ink); }}
-      h1 {{
-        margin-top: 18px;
-        font-family: "Newsreader", Georgia, serif;
-        font-size: clamp(3rem, 7vw, 5.3rem);
-        line-height: 0.96;
-        letter-spacing: -0.05em;
-        max-width: 10.8ch;
-      }}
-      h2 {{
-        font-family: "Newsreader", Georgia, serif;
-        font-size: clamp(2rem, 3vw, 2.7rem);
-        line-height: 1.02;
-        letter-spacing: -0.04em;
-        margin-bottom: 14px;
-      }}
-      h3 {{
-        font-family: "Newsreader", Georgia, serif;
-        font-size: 1.5rem;
-        letter-spacing: -0.03em;
-      }}
-      p, li {{
-        margin: 0 0 14px;
-        color: var(--muted);
-        font-size: 1.02rem;
-      }}
-      .hero-summary {{
-        margin-top: 18px;
-        max-width: 60ch;
-        font-size: 1.08rem;
-      }}
-      .hero-context {{
-        margin-top: 14px;
-        color: var(--muted);
-        font-size: 0.92rem;
-      }}
-      .hero-meta {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 20px;
-      }}
-      .meta-pill, .keyword, .jump-chip {{
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 9px 13px;
-        border-radius: 999px;
-        border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.72);
-        color: var(--ink);
-        font-size: 12px;
-        text-decoration: none;
-      }}
-      .meta-pill-accent {{
-        border-color: rgba(13, 118, 110, 0.24);
-        background: rgba(13, 118, 110, 0.08);
-        color: var(--accent);
-      }}
-      .keyword-wrap, .jump-wrap {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 16px;
-      }}
-      .hero-image {{
-        display: block;
-        width: 100%;
-        min-height: 320px;
-        aspect-ratio: 3 / 2;
-        padding: 14px;
-        box-sizing: border-box;
-        border-radius: 26px;
-        border: 1px solid rgba(20, 32, 51, 0.10);
-        background: linear-gradient(135deg, rgba(13, 118, 110, 0.10), rgba(15, 61, 145, 0.14));
-        object-fit: contain;
-        object-position: center;
-        box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
-      }}
-      .hero-image-fallback {{
-        display: grid;
-        place-items: center;
-        color: var(--accent-3);
-        font-family: "IBM Plex Mono", monospace;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-      }}
-      .signal-board {{
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: 22px;
-      }}
-      .metric-strip {{
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-        margin-top: 14px;
-      }}
-      .metric-chip {{
-        border-radius: 14px;
-        border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.84);
-        padding: 12px 14px;
-      }}
-      .metric-label {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 10px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }}
-      .metric-value {{
-        margin-top: 4px;
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 1.06rem;
-        color: var(--ink);
-        font-weight: 600;
-      }}
-      .metric-meta {{
-        margin-top: 5px;
-        font-size: 12px;
-        color: var(--muted);
-      }}
-      .signal-card {{
-        border-radius: 20px;
-        border: 1px solid var(--line-strong);
-        padding: 18px 20px 20px;
-        background: rgba(255, 255, 255, 0.88);
-        box-shadow: 0 4px 16px rgba(20,32,51,0.05);
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }}
-      .signal-index {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 10px;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: var(--accent);
-        margin-bottom: 6px;
-      }}
-      .signal-card p {{
-        margin: 0;
-        color: var(--ink);
-        font-size: 0.93rem;
-        line-height: 1.5;
-      }}
-      .mc-lbl {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 10px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin-bottom: 2px;
-      }}
-      .mc-val {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 1.05rem;
-        font-weight: 600;
-        color: var(--ink);
-        letter-spacing: -0.02em;
-        line-height: 1.2;
-      }}
-      .mc-chg {{
-        display: inline-block;
-        margin-top: 6px;
-        padding: 3px 8px;
-        border-radius: 6px;
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-      }}
-      .mc-pos {{ background: rgba(16,185,129,0.12); color: #047857; }}
-      .mc-neg {{ background: rgba(239,68,68,0.12); color: #b91c1c; }}
-      /* ── Data list (section bullets) ─────────────── */
-      ul.data-list {{
-        list-style: none;
-        padding: 0;
-        margin: 18px 0 0;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }}
-      li.data-row {{
-        display: flex;
-        align-items: baseline;
-        gap: 10px;
-        padding: 10px 16px;
-        background: rgba(20,32,51,0.035);
-        border-left: 3px solid var(--accent);
-        border-radius: 0 10px 10px 0;
-        color: var(--ink);
-        font-size: 0.965rem;
-        line-height: 1.55;
-      }}
-      li.data-row::before {{
-        content: "→";
-        color: var(--accent);
-        font-weight: 700;
-        flex-shrink: 0;
-        font-size: 12px;
-      }}
-      main {{
-        padding: 8px 0 54px;
-      }}
-      .story-shell {{
-        display: grid;
-        grid-template-columns: minmax(0, 270px) minmax(0, 1fr);
-        gap: 24px;
-        align-items: start;
-      }}
-      .story-rail {{
-        position: sticky;
-        top: 86px;
-        display: grid;
-        gap: 16px;
-      }}
-      .rail-card {{
-        border-radius: 24px;
-        border: 1px solid var(--line);
-        background: rgba(255, 250, 242, 0.84);
-        padding: 18px 18px 20px;
-        box-shadow: 0 14px 36px rgba(15, 23, 42, 0.04);
-      }}
-      .rail-label {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin-bottom: 10px;
-      }}
-      .toc ol {{
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: grid;
-        gap: 8px;
-      }}
-      .toc a {{
-        display: block;
-        padding: 10px 12px;
-        border-radius: 14px;
-        text-decoration: none;
-        color: var(--muted);
-        transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
-      }}
-      .toc a:hover, .toc a.is-active {{
-        background: rgba(13, 118, 110, 0.08);
-        color: var(--ink);
-        transform: translateX(2px);
-      }}
-      .rail-card ul {{
-        padding-left: 18px;
-        margin: 0;
-      }}
-      .rail-card li {{
-        margin-bottom: 10px;
-        font-size: 0.93rem;
-      }}
-      .article-flow {{
-        display: grid;
-        gap: 18px;
-      }}
-      .structured-card {{
-        border-radius: 28px;
-        border: 1px solid var(--line);
-        background: rgba(255, 250, 242, 0.90);
-        padding: 24px 26px;
-        box-shadow: 0 16px 36px rgba(15, 23, 42, 0.05);
-      }}
-      .takeaway-grid {{
-        margin-top: 12px;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-      }}
-      .takeaway-card {{
-        border-radius: 14px;
-        border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.85);
-        padding: 14px;
-      }}
-      .takeaway-card h3 {{
-        margin-bottom: 8px;
-        font-size: 1.05rem;
-      }}
-      .data-table-card + .data-table-card {{
-        margin-top: 14px;
-      }}
-      .data-table-wrap {{
-        overflow-x: auto;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.9);
-      }}
-      .data-table-wrap table {{
-        width: 100%;
-        border-collapse: collapse;
-        min-width: 560px;
-      }}
-      .data-table-wrap th,
-      .data-table-wrap td {{
+
+      /* Ticker */
+      .ticker {{
+        position: relative; z-index: 40;
+        background: #03060d; color: var(--ink);
         border-bottom: 1px solid var(--line);
-        padding: 10px 12px;
-        text-align: left;
-        font-size: 0.92rem;
-        color: var(--ink);
-      }}
-      .data-table-wrap th {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }}
-      .table-footnote {{
-        margin-top: 8px;
-        font-size: 12px;
-        color: var(--muted);
-      }}
-      .visual-grid {{
-        margin-top: 10px;
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 14px;
-      }}
-      .visual-card {{
-        border-radius: 14px;
-        border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.9);
-        padding: 12px;
-      }}
-      .visual-card h3 {{
-        margin: 0 0 10px;
-        font-size: 1.05rem;
-      }}
-      .visual-card svg {{
-        width: 100%;
-        height: auto;
-        display: block;
-        border-radius: 10px;
-      }}
-      .visual-note {{
-        margin-top: 8px;
-        color: var(--muted);
-        font-size: 12px;
-      }}
-      .timeline-list {{
-        list-style: none;
-        margin: 14px 0 0;
-        padding: 0;
-        display: grid;
-        gap: 10px;
-      }}
-      .timeline-item {{
-        display: grid;
-        grid-template-columns: 130px minmax(0, 1fr);
-        gap: 12px;
-        padding: 10px 12px;
-        border-radius: 12px;
-        border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.86);
-      }}
-      .timeline-date {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        letter-spacing: 0.08em;
-        color: var(--accent);
-        text-transform: uppercase;
-      }}
-      .timeline-body h3 {{
-        margin: 0 0 6px;
-        font-size: 1.02rem;
-      }}
-      .timeline-body p {{
-        margin: 0;
-        font-size: 0.95rem;
-      }}
-      .timeline-source {{
-        margin-top: 6px;
-        font-size: 12px;
-        color: var(--muted);
-      }}
-      .evidence-grid {{
-        margin-top: 12px;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-      }}
-      .evidence-card {{
-        border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.88);
-        border-radius: 12px;
-        padding: 12px;
-      }}
-      .evidence-card p {{
-        margin-bottom: 8px;
-        color: var(--ink);
-        font-size: 0.93rem;
-      }}
-      .evidence-card a {{
-        font-size: 12px;
-        color: var(--accent-3);
-        text-decoration: underline;
-        overflow-wrap: anywhere;
-      }}
-      .section-card {{
-        border-radius: 28px;
-        border: 1px solid var(--line);
-        background: rgba(255, 250, 242, 0.86);
-        padding: 26px 28px;
-        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
-      }}
-      .section-ikg {{
-        border-color: rgba(13, 118, 110, 0.24);
-        background: linear-gradient(180deg, rgba(13, 118, 110, 0.07), rgba(255, 250, 242, 0.94));
-      }}
-      .section-kicker {{
-        margin-bottom: 10px;
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: var(--accent-2);
-      }}
-      .section-card ul {{
-        margin: 8px 0 0;
-        padding-left: 18px;
-      }}
-      .section-card li {{
-        color: var(--ink);
-      }}
-      .faq-shell {{
-        border-radius: 28px;
-        border: 1px solid var(--line);
-        background: rgba(255, 250, 242, 0.9);
-        padding: 24px 26px;
-      }}
-      .faq-grid {{
-        display: grid;
-        gap: 12px;
-        margin-top: 16px;
-      }}
-      .faq-item {{
-        border-radius: 16px;
-        border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.80);
         overflow: hidden;
-        transition: box-shadow 0.18s ease;
       }}
-      .faq-item[open] {{
-        box-shadow: 0 8px 24px rgba(20,32,51,0.07);
-        border-color: var(--line-strong);
+      .ticker-track {{
+        display: flex; gap: 0; width: max-content;
+        animation: ticker 48s linear infinite;
       }}
-      .faq-item summary {{
-        list-style: none;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 16px 20px;
-        transition: background 0.15s ease;
+      .ticker:hover .ticker-track {{ animation-play-state: paused; }}
+      @keyframes ticker {{ to {{ transform: translateX(-50%); }} }}
+      .tk {{
+        font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.02em;
+        display: inline-flex; align-items: center; gap: 0.55em;
+        padding: 0.7em 1.3em; border-right: 1px solid var(--line); white-space: nowrap;
       }}
-      .faq-item summary:hover {{ background: rgba(13,118,110,0.04); }}
+      .tk .sym {{ color: #fff; font-weight: 500; }}
+      .tk .px {{ color: var(--ink-2); }}
+      .tk .chg.up {{ color: var(--up); }}
+      .tk .chg.down {{ color: var(--down); }}
+      .tk .tri {{ font-size: 0.6rem; }}
+
+      /* Dynamic hero variants (no chart) */
+      .art-hero-panel.art-hero-data, .art-hero-panel.art-hero-brief {{ grid-template-columns: 1fr; }}
+      .art-hero-panel.art-hero-data {{ grid-template-columns: 1.4fr 1fr; }}
+      .art-chart-text {{ display: flex; flex-direction: column; justify-content: center; gap: 12px; }}
+      .art-hero-summary {{ font-family: var(--serif, Newsreader, Georgia, serif); font-size: clamp(1.05rem, 1.6vw, 1.35rem); line-height: 1.5; color: var(--ink); margin: 0; }}
+      @media (max-width: 720px) {{ .art-hero-panel.art-hero-data {{ grid-template-columns: 1fr; }} }}
+
+      /* Header */
+      .site-head {{
+        position: sticky; top: 0; z-index: 50;
+        background: color-mix(in srgb, var(--paper) 86%, transparent);
+        backdrop-filter: blur(14px) saturate(1.2);
+        -webkit-backdrop-filter: blur(14px) saturate(1.2);
+        border-bottom: 1px solid var(--line);
+      }}
+      .head-inner {{ display: flex; align-items: center; justify-content: space-between; height: 64px; gap: 20px; }}
+      .brand {{ display: inline-flex; align-items: baseline; gap: 0.6em; }}
+      .brand .mk-dot {{ width: 9px; height: 9px; border-radius: 50%; background: var(--accent); align-self: center; box-shadow: 0 0 0 3px var(--accent-soft); }}
+      .brand .mk-name {{ font-family: var(--mono); font-weight: 600; letter-spacing: 0.14em; font-size: 0.82rem; text-transform: uppercase; color: #fff; }}
+      .brand .mk-sub {{ font-family: var(--mono); font-weight: 400; letter-spacing: 0.22em; font-size: 0.62rem; text-transform: uppercase; color: var(--ink-2); }}
+      .nav {{ display: flex; align-items: center; gap: 6px; }}
+      .nav a {{ font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.6em 0.95em; border-radius: 999px; color: var(--ink-2); position: relative; transition: color .25s, background .25s; }}
+      .nav a:hover {{ color: var(--ink); background: var(--paper-3); }}
+      .nav .btn {{ font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 500; display: inline-flex; align-items: center; gap: 0.7em; padding: 0.7em 1.15em; border-radius: 999px; background: var(--accent); color: #fff; }}
+      .nav .btn:hover {{ background: var(--accent-3); }}
+      .nav .btn .arrow {{ transition: transform .25s; }}
+      .nav .btn:hover .arrow {{ transform: translateX(4px); }}
+      .burger {{ display: none; width: 42px; height: 42px; border-radius: 10px; border: 1px solid var(--line-2); align-items: center; justify-content: center; flex-direction: column; gap: 4px; }}
+      .burger span {{ width: 18px; height: 1.6px; background: var(--ink); transition: transform .3s, opacity .3s; }}
+      .m-nav {{ display: none; }}
+
+      /* Hero banner */
+      .art-hero-banner {{
+        position: relative; z-index: 2;
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        margin: 0 var(--pad-x);
+        max-width: var(--maxw);\r\n        margin-inline: auto;
+        aspect-ratio: 24 / 10;
+        background-color: var(--paper-3);
+        background-position: center;
+        background-size: cover;
+        background-repeat: no-repeat;
+      }}
+      .art-hero-banner .hero-overlay {{
+        position: absolute; inset: 0;
+        background: linear-gradient(to right, rgba(3,6,13,.94) 0%, rgba(3,6,13,.72) 50%, rgba(3,6,13,.38) 100%);
+        z-index: 1;
+      }}
+      .art-hero-content {{
+        position: relative; z-index: 2;
+        padding: clamp(32px, 5vw, 72px) clamp(28px, 4vw, 64px);
+        display: flex; flex-direction: column; justify-content: flex-end;
+        height: 100%; color: var(--ink);
+      }}
+      .art-hero-content .art-crumb {{ margin-bottom: 18px; }}
+      .art-hero-content .art-crumb,
+      .art-hero-content .art-crumb a {{ color: var(--ink-3); }}
+      .art-hero-content .art-crumb a:hover {{ color: #fff; }}
+      .art-hero-content .art-crumb .sep {{ opacity: .4; }}
+      .art-hero-content .art-cat {{ color: var(--accent); font-weight: 500; }}
+      .art-hero-content .art-title {{ color: #fff; font-family: var(--serif); font-weight: 500; font-size: clamp(1.85rem, 4.8vw, 4rem); line-height: 1.05; letter-spacing: -0.025em; max-width: 16ch; }}
+      .art-hero-content .art-dek {{ font-family: var(--sans); font-size: clamp(1rem, 1.4vw, 1.25rem); line-height: 1.55; color: var(--ink-read); max-width: 50ch; margin-top: .85em; }}
+      .art-hero-content .art-meta {{
+        display: flex; align-items: center; gap: 1.2em; margin-top: 1.4em;
+        font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em;
+        color: var(--ink-3); flex-wrap: wrap;
+      }}
+      .art-hero-content .art-meta .byline {{ color: #fff; }}
+      .art-hero-content .art-meta .av {{
+        width: 28px; height: 28px; border-radius: 50%; background: var(--accent);
+        color: #fff; display: inline-flex; align-items: center; justify-content: center;
+        font-size: 0.66rem; font-weight: 600;
+      }}
+      .art-fig-caption {{
+        max-width: var(--maxw); margin-inline: auto;
+        padding: 12px clamp(20px, 5vw, 80px) 0;
+        display: flex; align-items: center; gap: 0.7em;
+        font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.06em;
+        color: var(--ink-3); flex-wrap: wrap;
+      }}
+      .art-fig-caption .fc-tag {{ text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); }}
+      .art-fig-caption .sep {{ opacity: 0.5; }}
+      .art-tags-wrap {{ max-width: var(--maxw); margin-inline: auto; padding: 20px var(--pad-x) 0; }}\r\n      .art-tags {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+      .chip {{
+        font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.04em;
+        color: var(--ink-2); background: var(--paper-3); border: 1px solid var(--line);
+        padding: 0.5em 0.9em; border-radius: 999px; display: inline-flex; align-items: center; gap: 0.5em;
+      }}
+      .chip:hover {{ border-color: var(--accent); color: var(--accent); }}
+
+      /* Data panel */
+      .art-hero-panel {{
+        display: grid; grid-template-columns: 1.6fr 1fr; gap: 0;
+        border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden;
+        background: var(--card); margin-top: clamp(28px, 4vw, 48px);
+      }}
+      .art-chart {{ padding: clamp(20px, 2.5vw, 32px); }}
+      .art-chart-head {{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }}
+      .art-chart-head .ach-name {{ font-family: var(--mono); font-weight: 600; letter-spacing: 0.04em; font-size: 0.92rem; color: #fff; }}
+      .art-chart-head .ach-range {{ font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }}
+      .art-chart-px {{ display: flex; align-items: baseline; gap: 0.7em; margin-bottom: 14px; }}
+      .art-chart-px .px {{ font-family: var(--mono); font-size: 1.5rem; font-weight: 500; color: var(--ink); }}
+      .art-chart-px .chg {{ font-family: var(--mono); font-size: 0.82rem; }}
+      .art-chart-px .chg.up {{ color: var(--up); }}
+      .art-chart-px .chg.down {{ color: var(--down); }}
+      .art-chart canvas {{ width: 100%; height: 150px; }}
+      .art-stats {{
+        background: var(--paper-2); border-left: 1px solid var(--line);
+        padding: clamp(20px, 2.5vw, 30px);
+        display: flex; flex-direction: column; justify-content: center; gap: 0;
+      }}
+      .art-stat {{ padding: 13px 0; border-top: 1px solid var(--line); }}
+      .art-stat:first-child {{ border-top: 0; }}
+      .art-stat .as-k {{ font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }}
+      .art-stat .as-v {{ font-family: var(--mono); font-size: 1.05rem; font-weight: 500; margin-top: 3px; font-feature-settings: "tnum"; color: var(--ink); }}
+
+      /* Body grid */
+      .art-body {{
+        display: grid; grid-template-columns: clamp(230px, 20vw, 280px) minmax(0, 1fr);
+        gap: clamp(32px, 4vw, 64px); padding: clamp(36px, 5vw, 70px) 0 0; align-items: start;
+      }}
+      .art-rail {{ position: sticky; top: 92px; }}
+      .rail-block {{ margin-bottom: 36px; }}
+      .rail-block h4 {{
+        font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase;
+        color: var(--ink-3); margin-bottom: 14px; font-weight: 500;
+      }}
+      .toc {{ list-style: none; padding: 0 6px 0 0; display: flex; flex-direction: column; gap: 2px; max-height: calc(100vh - 132px); overflow: auto; }}
+      .toc a {{
+        display: block; font-family: var(--mono); font-size: 0.78rem; color: var(--ink-3);
+        padding: 7px 0 7px 14px; border-left: 2px solid var(--line);
+        transition: color .25s, border-color .25s, padding .25s; line-height: 1.3;
+      }}
+      .toc a:hover {{ color: var(--ink); }}
+      .toc a.is-active {{ color: var(--ink); border-color: var(--accent); padding-left: 18px; font-weight: 500; }}
+      .rail-takeaways {{ list-style: none; padding: 0; display: flex; flex-direction: column; gap: 12px; }}
+      .rail-takeaways li {{ font-family: var(--sans); font-size: 0.9rem; line-height: 1.5; color: var(--ink-read); padding-left: 16px; position: relative; }}
+      .rail-takeaways li strong {{ display: block; margin-bottom: 4px; font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }}
+      .rail-takeaways li span {{ display: block; }}
+      .rail-takeaways li::before {{ content: ""; position: absolute; left: 0; top: 0.55em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }}
+      .rail-related {{ list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0; }}
+      .rail-related a {{ display: block; padding: 12px 0; border-top: 1px solid var(--line); font-size: 0.88rem; line-height: 1.35; color: var(--ink); transition: color .2s; }}
+      .rail-related a:first-child {{ border-top: 0; }}
+      .rail-related a:hover {{ color: var(--accent); }}
+      .rail-related .rr-cat {{ font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); display: block; margin-bottom: 3px; }}
+      .rail-method li {{ font-family: var(--sans); font-size: 0.85rem; line-height: 1.55; color: var(--ink-read); margin-bottom: 10px; }}
+      .rail-method ul {{ list-style: none; padding: 0; }}
+      .rail-method li::before {{ content: "•"; color: var(--accent); margin-right: 8px; }}
+
+      /* Prose */
+      .prose {{ max-width: none; min-width: 0; }}
+      .prose .sec {{ margin-bottom: clamp(36px, 4vw, 56px); scroll-margin-top: 90px; }}
+      .prose .sec-label {{
+        font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.18em; text-transform: uppercase;
+        color: var(--accent); margin-bottom: 12px; display: block;
+      }}
+      .prose h2 {{ font-size: clamp(1.7rem, 2.6vw, 2.4rem); letter-spacing: -0.02em; line-height: 1.12; margin: 0 0 0.85em; color: #fff; }}
+      .prose h2 + p, .prose h2 + .lead-p {{ margin-top: 0; }}
+      .prose p {{ font-family: var(--sans); font-size: 1.0625rem; line-height: 1.75; color: var(--ink-read); margin: 0 0 1.15em; max-width: 74ch; }}
+      .prose li {{ font-family: var(--sans); color: var(--ink-read); }}
+      .prose .lead-p {{ font-family: var(--sans); font-size: 1.2rem; line-height: 1.65; color: var(--ink); margin-bottom: 1.2em; max-width: 72ch; }}
+      .prose .sec-label {{ margin-bottom: 14px !important; }}
+      /* Section breathing: stronger vertical rhythm between sections */
+      .prose .sec {{ margin-bottom: clamp(48px, 5.5vw, 72px) !important; padding-bottom: clamp(4px, 0.6vw, 12px); }}
+      .prose .sec + .sec {{ border-top: 1px solid var(--line); padding-top: clamp(40px, 4vw, 52px); }}
+      .prose .keypoints, .prose .inline-metrics, .prose .pullquote {{ margin-block: clamp(20px, 2.4vw, 32px); }}
+      .prose .lead-p:first-letter {{
+        initial-letter: 2.4; font-weight: 500; margin-right: 0.08em; color: var(--accent);
+      }}
+      .prose strong {{ font-weight: 600; color: var(--ink); }}
+      .article-lede {{ font-family: var(--sans); font-size: 1.24rem; line-height: 1.55; font-weight: 600; color: var(--ink); margin: 0 0 16px; }}
+      .article-context {{ font-family: var(--sans); font-size: 1.04rem; line-height: 1.7; color: var(--ink-read); margin: 0 0 16px; }}
+      .analyst-note {{
+        margin-top: 8px; padding: 14px 18px; border-left: 3px solid var(--accent);
+        background: var(--accent-soft); border-radius: 0 10px 10px 0;
+      }}
+      .analyst-note-label {{
+        display: block; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--accent); font-weight: 600; margin-bottom: 6px;
+      }}
+      .analyst-note p {{ font-family: var(--sans); margin: 0; font-size: 1.02rem; line-height: 1.7; color: var(--ink-read); }}
+      .narrative-lede-block {{ margin: 0 0 clamp(32px, 4vw, 48px); padding: 0 0 clamp(28px, 3vw, 36px); border-bottom: 1px solid var(--line); }}
+      .narrative-lede-block .article-lede {{ margin-bottom: 18px; }}
+      .narrative-lede-block .article-context {{ margin-bottom: 18px; }}
+      .narrative-lede-block .analyst-note {{ margin-top: 14px; padding: 16px 20px; }}
+
+      /* Key point cards */
+      .keypoints {{ display: grid; gap: 12px; margin: 24px 0 8px; }}
+      .keypoint {{
+        border: 1px solid var(--line); border-left: 3px solid var(--accent);
+        border-radius: 0 10px 10px 0; padding: 14px 18px; background: var(--paper-3);
+      }}
+      .keypoint .kp-k {{
+        font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.12em; text-transform: uppercase;
+        color: var(--ink-3); display: block; margin-bottom: 4px;
+      }}
+      .keypoint .kp-v {{ font-family: var(--sans); font-size: 0.98rem; line-height: 1.5; color: var(--ink); }}
+
+      /* Inline metric strip */
+      .inline-metrics {{ display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0; }}
+      .inline-metric {{
+        font-family: var(--mono); font-size: 0.8rem; border: 1px solid var(--line); border-radius: 8px;
+        padding: 8px 14px; display: inline-flex; gap: 0.6em; align-items: center; background: var(--paper-3);
+      }}
+      .inline-metric .im-k {{ color: var(--ink-3); }}
+      .inline-metric .im-v {{ font-weight: 500; color: var(--ink); }}
+      .inline-metric .im-chg {{ font-weight: 600; }}
+      .inline-metric .im-chg.up {{ color: var(--up); }}
+      .inline-metric .im-chg.down {{ color: var(--down); }}
+
+      /* Pull quote */
+      .pullquote {{
+        border-top: 2px solid var(--accent); border-bottom: 2px solid var(--accent);
+        padding: 26px 0; margin: 36px 0;
+      }}
+      .pullquote p {{
+        font-family: var(--serif); font-style: italic; font-size: clamp(1.4rem, 2.2vw, 2rem);
+        line-height: 1.25; color: var(--ink); max-width: none; margin: 0;
+      }}
+
+      /* Structured cards (tables, timeline, evidence, FAQ, takeaways) */
+      .structured-card {{
+        border-radius: var(--radius-lg); border: 1px solid var(--line); background: var(--paper-3);
+        padding: 24px 26px; margin-bottom: 28px;
+        transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+      }}
+      .structured-card:hover {{ border-color: var(--line-strong); box-shadow: 0 18px 50px rgba(0,0,0,0.22); }}
+      .section-kicker {{
+        margin-bottom: 10px; font-family: var(--mono); font-size: 0.66rem; font-weight: 600;
+        letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent);
+      }}
+      .takeaway-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }}
+      .takeaway-card {{ border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: var(--paper-2); }}
+      .takeaway-card h3 {{ font-size: 1.05rem; margin-bottom: 8px; color: var(--ink); }}
+      .takeaway-card p {{ font-family: var(--sans); font-size: 0.95rem; line-height: 1.55; color: var(--ink-read); margin: 0; max-width: none; }}
+      .data-table-card + .data-table-card {{ margin-top: 14px; }}
+      .data-table-wrap {{ overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2); }}
+      .data-table-wrap table {{ width: 100%; border-collapse: collapse; min-width: 560px; }}
+      .data-table-wrap th, .data-table-wrap td {{ border-bottom: 1px solid var(--line); padding: 10px 12px; text-align: left; font-size: 0.92rem; color: var(--ink); }}
+      .data-table-wrap th {{ font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }}
+      .table-footnote {{ margin-top: 8px; font-size: 12px; color: var(--ink-3); }}
+      .visual-grid {{ display: grid; gap: 14px; margin-top: 10px; }}
+      .visual-card {{ border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--paper-2); }}
+      .visual-card h3 {{ margin: 0 0 10px; font-size: 1.05rem; color: var(--ink); }}
+      .visual-card svg {{ width: 100%; height: auto; display: block; border-radius: 10px; }}
+      .visual-note {{ margin-top: 8px; color: var(--ink-3); font-size: 12px; }}
+      .timeline-list {{ list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }}
+      .timeline-item {{
+        display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px;
+        padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--paper-2);
+      }}
+      .timeline-date {{ font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; color: var(--accent); text-transform: uppercase; }}
+      .timeline-body h3 {{ margin: 0 0 6px; font-size: 1.02rem; color: var(--ink); }}
+      .timeline-body p {{ font-family: var(--sans); margin: 0; font-size: 0.95rem; line-height: 1.55; color: var(--ink-read); max-width: none; }}
+      .timeline-source {{ margin-top: 6px; font-size: 12px; color: var(--ink-3); }}
+      .evidence-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }}
+      .evidence-card {{ border: 1px solid var(--line); background: var(--paper-2); border-radius: 12px; padding: 12px; }}
+      .evidence-card p {{ font-family: var(--sans); margin-bottom: 8px; line-height: 1.55; color: var(--ink-read); font-size: 0.94rem; max-width: none; }}
+      .evidence-card a {{ font-size: 12px; color: var(--accent); text-decoration: underline; overflow-wrap: anywhere; }}
+      .source-disclosure summary {{ font-family: var(--mono); font-size: 0.8rem; color: var(--ink-3); cursor: pointer; margin-bottom: 8px; }}
+      ul.data-list {{ list-style: none; padding: 0; margin: 18px 0 0; display: flex; flex-direction: column; gap: 8px; }}
+      li.data-row {{
+        display: flex; align-items: baseline; gap: 10px; padding: 10px 16px;
+        background: rgba(96,165,250,0.04); border-left: 3px solid var(--accent);
+        border-radius: 0 10px 10px 0; color: var(--ink); font-size: 0.965rem; line-height: 1.55;
+      }}
+      li.data-row::before {{ content: "→"; color: var(--accent); font-weight: 700; flex-shrink: 0; font-size: 12px; }}
+      .metric-meta {{ font-size: 12px; color: var(--ink-3); margin-left: auto; }}
+      .faq-shell {{ border-radius: var(--radius-lg); border: 1px solid var(--line); background: var(--paper-3); padding: 24px 26px; margin-bottom: 24px; }}
+      .faq-grid {{ display: grid; gap: 12px; margin-top: 16px; }}
+      .faq-item {{ border-radius: 12px; border: 1px solid var(--line); background: var(--paper-2); overflow: hidden; transition: box-shadow 0.18s ease; }}
+      .faq-item[open] {{ box-shadow: 0 8px 24px rgba(0,0,0,0.25); border-color: var(--line-strong); }}
+      .faq-item summary {{ list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; transition: background 0.15s ease; }}
+      .faq-item summary:hover {{ background: rgba(96,165,250,0.05); }}
       .faq-item summary::-webkit-details-marker {{ display: none; }}
-      .faq-q-text {{
-        font-weight: 700;
-        color: var(--ink);
-        font-size: 1rem;
-        line-height: 1.4;
-      }}
-      .faq-chevron {{
-        font-size: 22px;
-        color: var(--accent);
-        flex-shrink: 0;
-        transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
-        display: inline-block;
-      }}
+      .faq-q-text {{ font-weight: 700; color: var(--ink); font-size: 1rem; line-height: 1.4; }}
+      .faq-chevron {{ font-size: 22px; color: var(--accent); flex-shrink: 0; transition: transform 0.22s cubic-bezier(0.4,0,0.2,1); display: inline-block; }}
       .faq-item[open] .faq-chevron {{ transform: rotate(90deg); }}
-      .faq-answer {{
-        padding: 0 20px 18px;
-        border-top: 1px solid var(--line);
+      .faq-answer {{ padding: 0 20px 18px; border-top: 1px solid var(--line); }}
+      .faq-answer p {{ margin: 14px 0 0; color: var(--ink-2); font-size: 0.98rem; line-height: 1.75; }}
+      .signal-card {{
+        border-radius: 16px; border: 1px solid var(--line-strong); padding: 18px 20px 20px;
+        background: var(--paper-3); display: flex; flex-direction: column; gap: 4px;
       }}
-      .faq-answer p {{
-        margin: 14px 0 0;
-        color: var(--muted);
-        font-size: 0.98rem;
-        line-height: 1.75;
+      .signal-index {{ font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }}
+      .signal-card p {{ margin: 0; color: var(--ink); font-size: 0.93rem; line-height: 1.5; }}
+      .mc-lbl {{ font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 2px; }}
+      .mc-val {{ font-family: var(--mono); font-size: 1.05rem; font-weight: 600; color: var(--ink); letter-spacing: -0.02em; line-height: 1.2; }}
+      .mc-chg {{ display: inline-block; margin-top: 6px; padding: 3px 8px; border-radius: 6px; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }}
+      .mc-pos {{ background: rgba(52,211,153,0.12); color: var(--up); }}
+      .mc-neg {{ background: rgba(251,113,133,0.12); color: var(--down); }}
+
+      /* Disclaimer and next story */
+      .art-disclaimer {{
+        margin-top: 40px; padding: 22px 24px; border: 1px dashed var(--line-2); border-radius: 12px;
+        font-family: var(--mono); font-size: 0.78rem; line-height: 1.6; color: var(--ink-3);
       }}
-      .footer {{
-        padding: 0 0 42px;
+      .next-story {{ margin-top: clamp(50px, 7vw, 90px); border-top: 1px solid var(--line); padding-top: 30px; }}
+      .next-story .ns-k {{ font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); }}
+      .next-story a {{ display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-top: 14px; }}
+      .next-story .ns-t {{ font-family: var(--serif); font-size: clamp(1.5rem, 2.6vw, 2.2rem); letter-spacing: -0.02em; max-width: 22ch; color: var(--ink); transition: color .3s; }}
+      .next-story a:hover .ns-t {{ color: var(--accent); }}
+      .next-story .ns-arrow {{ font-family: var(--mono); font-size: 1.4rem; color: var(--accent); }}
+
+      /* Footer */
+      .foot {{
+        position: relative; z-index: 2; background: var(--paper-3); color: var(--ink);
+        margin-top: clamp(60px, 9vw, 130px); border-top: 1px solid var(--line);
       }}
-      .footer-card {{
-        border-radius: 30px;
-        padding: 28px 30px;
-        background: linear-gradient(135deg, #15253d, #102036);
-        color: #f6f8fc;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 18px;
-        box-shadow: 0 30px 70px rgba(15, 23, 42, 0.18);
+      .foot a {{ color: var(--ink); }}
+      .foot .foot-grid {{ display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 40px; padding: clamp(50px, 7vw, 90px) 0 40px; }}
+      .foot .mk-name {{ color: #fff; }}
+      .foot-disc {{ font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.03em; color: var(--ink-3); line-height: 1.7; }}
+      .foot-col h4 {{ font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 14px; font-weight: 500; }}
+      .foot-col ul {{ list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; }}
+      .foot-col a {{ font-family: var(--mono); font-size: 0.82rem; opacity: 0.85; transition: opacity .2s, color .2s; }}
+      .foot-col a:hover {{ opacity: 1; color: #fff; }}
+      .foot-base {{ display: flex; justify-content: space-between; align-items: center; padding: 22px 0 30px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em; color: var(--ink-3); flex-wrap: wrap; gap: 14px; }}
+
+      @media (max-width: 980px) {{
+        .art-hero-panel {{ grid-template-columns: 1fr; }}
+        .art-stats {{ border-left: 0; border-top: 1px solid var(--line); flex-direction: row; flex-wrap: wrap; gap: 0 30px; }}
+        .art-body {{ grid-template-columns: 1fr; gap: 30px; }}
+        .art-rail {{ position: static; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }}
+        .art-rail .rail-block.toc-block {{ grid-column: 1 / -1; }}
       }}
-      .footer-card p {{
-        color: rgba(246, 248, 252, 0.76);
-        margin: 8px 0 0;
+      @media (max-width: 880px) {{
+        .nav {{ display: none; }}
+        .burger {{ display: flex; }}
       }}
-      .footer-link {{
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 11px 18px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.10);
-        color: #f6f8fc;
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        text-decoration: none;
-        white-space: nowrap;
+      @media (max-width: 700px) {{
+        .art-hero-banner {{ aspect-ratio: 16 / 10; margin: 0 12px; border-radius: 16px; }}
+        .art-hero-content .art-title {{ max-width: none; }}
       }}
-      @media (max-width: 1080px) {{
-        .hero-grid, .story-shell {{
-          grid-template-columns: 1fr;
-        }}
-        .story-rail {{
-          position: static;
-          order: 2;
-        }}
-        .signal-board {{
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }}
-        .metric-strip {{
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }}
-        .takeaway-grid, .evidence-grid {{
-          grid-template-columns: 1fr;
-        }}
-        .timeline-item {{
-          grid-template-columns: 1fr;
-        }}
-        h1 {{
-          max-width: 100%;
-        }}
+      @media (max-width: 620px) {{
+        body {{ font-size: 17px; }}
+        .art-rail {{ grid-template-columns: 1fr; }}
+        .prose p {{ font-size: 1.05rem; max-width: none; }}
+        .prose .lead-p {{ font-size: 1.12rem; max-width: none; }}
+        .prose .sec + .sec {{ padding-top: clamp(28px, 7vw, 40px); }}
+        .foot .foot-grid {{ grid-template-columns: 1fr; }}
+        .art-stats {{ gap: 0 22px; }}
+        .pullquote p {{ font-size: clamp(1.25rem, 6vw, 1.6rem); }}
       }}
-      @media (max-width: 720px) {{
-        .shell {{
-          width: min(calc(100% - 22px), 1240px);
-        }}
-        .masthead-inner {{
-          padding: 12px 0;
-        }}
-        .masthead-links {{
-          gap: 10px;
-          font-size: 12px;
-        }}
-        .hero-frame {{
-          padding: 22px;
-          border-radius: 26px;
-        }}
-        .section-card, .faq-shell, .rail-card {{
-          padding: 20px;
-          border-radius: 22px;
-        }}
-        .signal-board {{
-          grid-template-columns: 1fr;
-        }}
-        .metric-strip {{
-          grid-template-columns: 1fr;
-        }}
-        .footer-card {{
-          padding: 22px;
-          flex-direction: column;
-          align-items: flex-start;
-        }}
+      @media (max-width: 560px) {{
+        .takeaway-grid, .evidence-grid {{ grid-template-columns: 1fr; }}
+        .timeline-item {{ grid-template-columns: 1fr; gap: 4px; }}
+      }}
+      @media (max-width: 440px) {{
+        :root {{ --pad-x: 16px; }}
+        .art-hero-content .art-title {{ font-size: clamp(1.65rem, 8vw, 2.1rem); }}
+        .art-hero-content .art-meta {{ flex-direction: column; align-items: flex-start; gap: 0.5em; }}
+        .art-stats {{ flex-direction: column; gap: 14px 0; }}
+        .data-table-wrap table {{ min-width: 460px; }}
       }}
     </style>
     <script type=\"application/ld+json\">{json_ld}</script>
   </head>
   <body>
-    <div class=\"progress-bar\" data-progress></div>
-    <div class=\"masthead\">
-      <div class=\"shell masthead-inner\">
-        <a class=\"brand\" href=\"{esc(hub_path)}\">
-          <span class=\"brand-mark\"></span>
-          <span class=\"brand-text\">ProspektLab Research</span>
+    <div class=\"read-progress\" data-progress></div>
+
+    <header class=\"site-head\">
+      <div class=\"wrap head-inner\">
+        <a class=\"brand\" href=\"{esc(hub_path)}\" aria-label=\"ProspektLab home\">
+          <span class=\"mk-dot\"></span><span class=\"mk-name\">ProspektLab</span><span class=\"mk-sub\">Research</span>
         </a>
-        <div class=\"masthead-links\">
-          <a href=\"{esc(hub_path)}\">All insights</a>
+        <nav class=\"nav\" aria-label=\"Primary\">
+          <a href=\"{esc(hub_path)}\">Hub</a>
           <a href=\"/#/dashboard\">Dashboard</a>
           <a href=\"/#/contact\">Contact</a>
-        </div>
-      </div>
-    </div>
-    <header class=\"hero\">
-      <div class=\"shell\">
-        <section class=\"hero-frame\">
-          <div class=\"hero-grid\">
-            <div>
-              <div class=\"eyebrow\">{esc(article.hero_eyebrow)}</div>
-              <h1>{esc(article.hero_title)}</h1>
-              <p class=\"hero-summary\">{esc(article.hero_summary)}</p>
-              <p class=\"hero-context\">{esc(hero_context)}</p>
-            </div>
-            <div>{image_markup}</div>
-          </div>
-          <div class=\"signal-board\">{highlight_html}</div>
-        </section>
+          <a href=\"{esc(hub_path)}\" class=\"btn\">Open Archive <span class=\"arrow\">→</span></a>
+        </nav>
+        <button class=\"burger\" aria-label=\"Menu\"><span></span><span></span><span></span></button>
       </div>
     </header>
+
     <main>
-      <div class=\"shell story-shell\">
-        <aside class=\"story-rail\">
-          <section class=\"rail-card toc\">
-            <div class=\"rail-label\">On this page</div>
-            <ol>{''.join(toc_items)}</ol>
-          </section>
-          <section class=\"rail-card\">
-            <div class=\"rail-label\">How to read this</div>
-            <ul>{methodology_html}</ul>
-          </section>
-        </aside>
-        <article class=\"article-flow\">
-          {metric_strip_html}
-          {takeaway_html}
-          {table_html}
-          {visual_html}
-          {timeline_html}
-          {evidence_notes_html}
-          {''.join(section_html)}
-          <section class=\"faq-shell\" id=\"faq\">
-            <div class=\"section-kicker\">Retail investor FAQ</div>
-            <h2>Questions readers usually ask after the numbers</h2>
-            <div class=\"faq-grid\">{faq_items}</div>
-          </section>
-          {source_section_html}
-        </article>
-      </div>
-    </main>
-    <footer class=\"footer\">
-      <div class=\"shell\">
-        <div class=\"footer-card\">
-          <div>
-            <div class=\"rail-label\" style=\"color: rgba(246, 248, 252, 0.64);\">ProspektLab</div>
-            <h3 style=\"color:#f6f8fc;\">Research pages should feel like finished editorial products.</h3>
-            <p>This page is designed to read like a serious market note, not a raw model export.</p>
+      <article data-article>
+        <div class=\"section\" style=\"padding-top:clamp(16px,2vw,28px)\">
+          <div class=\"art-hero-banner\" {hero_img_style}>
+            <div class=\"hero-overlay\"></div>
+            <div class=\"art-hero-content\">
+              <div class=\"art-crumb\">
+                <a href=\"{esc(hub_path)}\">Insights</a><span class=\"sep\">/</span>
+                <span class=\"art-cat\">{esc(article.hero_eyebrow)}</span>
+              </div>
+              <h1 class=\"art-title\">{esc(article.hero_title)}</h1>
+              <p class=\"art-dek\">{esc(article.hero_summary)}</p>
+              <div class=\"art-meta\">
+                <span class=\"byline\"><span class=\"av\">PL</span> ProspektLab Desk</span>
+                <span>{esc(hero_context)}</span>
+                <span>Educational · No recommendation</span>
+              </div>
+            </div>
           </div>
-          <a class=\"footer-link\" href=\"{esc(article.cta_href)}\">{esc(article.cta_label)}</a>
+          <div class=\"art-fig-caption\">
+            <span class=\"fc-tag\">Generated illustration</span><span class=\"sep\">/</span>
+            <span>ChatGPT-image-2</span><span class=\"sep\">/</span>
+            <span>Editorial concept — {esc(article.title)}</span>
+          </div>
+          <div class=\"art-tags-wrap\">
+            <div class=\"art-tags\">{tag_chips}</div>
+          </div>
+        </div>
+
+        <header class=\"section\" style=\"padding: clamp(24px,3vw,40px) 0 clamp(16px,2vw,28px)\">
+          <div class=\"wrap\">
+            {hero_panel_html}
+          </div>
+        </header>
+
+        <div class=\"section\">
+          <div class=\"wrap art-body\">
+            <aside class=\"art-rail\">
+              <div class=\"rail-block toc-block\">
+                <h4>On this page</h4>
+                <ul class=\"toc\">{''.join(toc_items)}</ul>
+              </div>
+              <div class=\"rail-block\">
+                <h4>Key takeaways</h4>
+                <ul class=\"rail-takeaways\">{takeaway_rail_items}</ul>
+              </div>
+              <div class=\"rail-block\">
+                <h4>Related coverage</h4>
+                {related_html}
+              </div>
+              <div class=\"rail-block rail-method\">
+                <h4>How to read this</h4>
+                <ul>{methodology_html}</ul>
+              </div>
+            </aside>
+
+            <div class=\"prose\">
+              {narrative_html}
+              {metric_strip_html}
+              {takeaway_html}
+              {''.join(section_html)}
+              {table_html}
+              {visual_html}
+              {timeline_html}
+              {evidence_notes_html}
+              <section class=\"sec\" id=\"faq\">
+                <span class=\"sec-label\">FAQ</span>
+                <h2>Questions readers usually ask after the numbers</h2>
+                <div class=\"faq-grid\">{faq_items}</div>
+              </section>
+              {source_section_html}
+              <div class=\"art-disclaimer\">{esc(_ARTICLE_DISCLAIMER)}</div>
+              <div class=\"next-story\">
+                <span class=\"ns-k\">Next in the archive</span>
+                <a href=\"{esc(next_story_href)}\">
+                  <span class=\"ns-t\">{esc(next_story_title)}</span>
+                  <span class=\"ns-arrow\">→</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </main>
+
+    <footer class=\"foot\">
+      <div class=\"wrap\">
+        <div class=\"foot-grid\">
+          <div>
+            <a class=\"brand\" href=\"{esc(hub_path)}\"><span class=\"mk-dot\"></span><span class=\"mk-name\">ProspektLab</span><span class=\"mk-sub\">Research</span></a>
+            <p class=\"foot-disc\" style=\"margin-top:18px; max-width:42ch\">{esc(_ARTICLE_DISCLAIMER)}</p>
+          </div>
+          <div class=\"foot-col\">
+            <h4>Platform</h4>
+            <ul>
+              <li><a href=\"/#/dashboard\">Dashboard</a></li>
+              <li><a href=\"{esc(hub_path)}\">Research Archive</a></li>
+              <li><a href=\"/#/contact\">Contact</a></li>
+            </ul>
+          </div>
+          <div class=\"foot-col\">
+            <h4>Article</h4>
+            <ul>
+              <li><a href=\"{esc(current_article_href)}\">This research note</a></li>
+              <li><a href=\"{esc(hub_path)}\">More insights</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class=\"foot-base\">
+          <span>© 2026 ProspektLab Research</span>
+          <span>Built for fast reading, deeper context, repeat discovery.</span>
         </div>
       </div>
     </footer>
+
     <script>
-      (function () {{
+      (function(){{
+        var pts = [{chart_points_js}];
+        if(!pts.length) return;
+        var color = "96,165,250";
+        function draw(){{
+          var c = document.getElementById("art-chart");
+          if(!c || !c.getContext) return;
+          var ctx = c.getContext("2d");
+          var rect = c.getBoundingClientRect();
+          var dpr = window.devicePixelRatio || 1;
+          c.width = Math.round(rect.width * dpr);
+          c.height = Math.round(rect.height * dpr);
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          var w = rect.width, h = rect.height;
+          if (w === 0 || h === 0) return;
+          ctx.clearRect(0, 0, w, h);
+          var min = Math.min.apply(null, pts), max = Math.max.apply(null, pts);
+          var range = max - min || 1;
+          var pad = 10;
+          function x(i){{ return pad + (i / (pts.length - 1)) * (w - pad * 2); }}
+          function y(v){{ return h - pad - ((v - min) / range) * (h - pad * 2); }}
+          var grad = ctx.createLinearGradient(0, 0, 0, h);
+          grad.addColorStop(0, "rgba(" + color + ",0.22)");
+          grad.addColorStop(1, "rgba(" + color + ",0)");
+          ctx.beginPath();
+          ctx.moveTo(x(0), y(pts[0]));
+          pts.forEach(function(v, i){{ if(i > 0) ctx.lineTo(x(i), y(v)); }});
+          ctx.lineTo(x(pts.length - 1), h);
+          ctx.lineTo(x(0), h);
+          ctx.closePath();
+          ctx.fillStyle = grad; ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(x(0), y(pts[0]));
+          pts.forEach(function(v, i){{ if(i > 0) ctx.lineTo(x(i), y(v)); }});
+          ctx.strokeStyle = "rgba(" + color + ",0.85)";
+          ctx.lineWidth = 2;
+          ctx.lineJoin = "round"; ctx.lineCap = "round";
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(x(pts.length - 1), y(pts[pts.length - 1]), 3.5, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(" + color + ",1)";
+          ctx.fill();
+        }}
+        setTimeout(draw, 200);
+        window.addEventListener("resize", function(){{ setTimeout(draw, 50); }});
+      }})();
+    </script>
+    <script>
+      (function(){{
         'use strict';
-
-        /* ── Reading progress bar ──────────────────────── */
-        const progress = document.querySelector('[data-progress]');
-        let raf = null;
-        const updateProgress = () => {{
+        var progress = document.querySelector('[data-progress]');
+        var raf = null;
+        function updateProgress(){{
           raf = null;
-          if (!progress) return;
-          const max = document.documentElement.scrollHeight - window.innerHeight;
-          const ratio = max > 0 ? window.scrollY / max : 0;
+          if(!progress) return;
+          var max = document.documentElement.scrollHeight - window.innerHeight;
+          var ratio = max > 0 ? window.scrollY / max : 0;
           progress.style.transform = 'scaleX(' + Math.max(0, Math.min(1, ratio)) + ')';
-        }};
+        }}
         updateProgress();
-        window.addEventListener('scroll', () => {{ if (!raf) raf = requestAnimationFrame(updateProgress); }}, {{ passive: true }});
+        window.addEventListener('scroll', function(){{ if(!raf) raf = requestAnimationFrame(updateProgress); }}, {{ passive: true }});
 
-        /* ── TOC active section ─────────────────────────── */
-        const tocLinks = Array.from(document.querySelectorAll('[data-toc-link]'));
-        const sections = tocLinks
-          .map((link) => document.querySelector(link.getAttribute('href')))
-          .filter(Boolean);
-
-        if ('IntersectionObserver' in window && tocLinks.length && sections.length) {{
-          const observer = new IntersectionObserver((entries) => {{
-            entries.forEach((entry) => {{
-              if (!entry.isIntersecting) return;
-              const activeId = '#' + entry.target.id;
-              tocLinks.forEach((link) => {{
-                const isActive = link.getAttribute('href') === activeId;
-                link.classList.toggle('is-active', isActive);
+        var tocLinks = Array.from(document.querySelectorAll('[data-toc-link]'));
+        var sections = tocLinks.map(function(lnk){{ return document.querySelector(lnk.getAttribute('href')); }}).filter(Boolean);
+        if('IntersectionObserver' in window && tocLinks.length && sections.length){{
+          var observer = new IntersectionObserver(function(entries){{
+            entries.forEach(function(entry){{
+              if(!entry.isIntersecting) return;
+              var activeId = '#' + entry.target.id;
+              tocLinks.forEach(function(lnk){{
+                lnk.classList.toggle('is-active', lnk.getAttribute('href') === activeId);
               }});
             }});
           }}, {{ rootMargin: '-18% 0px -58% 0px', threshold: 0.1 }});
-          sections.forEach((section) => observer.observe(section));
+          sections.forEach(function(sec){{ observer.observe(sec); }});
         }}
 
-        /* ── Back-to-top button ─────────────────────────── */
-        const btn = document.createElement('button');
+        var btn = document.createElement('button');
         btn.id = 'btt';
         btn.setAttribute('aria-label', 'Back to top');
         btn.innerHTML = '&#8593;';
         document.body.appendChild(btn);
-
-        const bttStyle = document.createElement('style');
-        bttStyle.textContent = [
-          '#btt{{position:fixed;bottom:28px;right:28px;z-index:200;',
-          'width:44px;height:44px;border-radius:50%;border:1px solid var(--line-strong);',
-          'background:rgba(255,250,242,0.92);backdrop-filter:blur(10px);',
-          'color:var(--ink);font-size:18px;cursor:pointer;',
-          'display:flex;align-items:center;justify-content:center;',
-          'opacity:0;transform:translateY(12px);',
-          'transition:opacity .22s,transform .22s;pointer-events:none;',
-          'box-shadow:0 6px 20px rgba(20,32,51,0.12)}}',
-          '#btt.show{{opacity:1;transform:translateY(0);pointer-events:auto}}',
-          '#btt:hover{{background:rgba(13,118,110,0.12);border-color:var(--accent)}}',
-        ].join('');
+        var bttStyle = document.createElement('style');
+        bttStyle.textContent = '#btt{{position:fixed;bottom:28px;right:28px;z-index:200;width:44px;height:44px;border-radius:50%;border:1px solid var(--line-strong);background:rgba(13,31,60,0.88);backdrop-filter:blur(10px);color:var(--ink);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transform:translateY(12px);transition:opacity .22s,transform .22s;pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,0.45)}}#btt.show{{opacity:1;transform:translateY(0);pointer-events:auto}}#btt:hover{{background:var(--accent-soft);border-color:var(--accent)}}';
         document.head.appendChild(bttStyle);
+        window.addEventListener('scroll', function(){{ btn.classList.toggle('show', window.scrollY > 600); }}, {{ passive: true }});
+        btn.addEventListener('click', function(){{ window.scrollTo({{ top: 0, behavior: 'smooth' }}); }});
 
-        window.addEventListener('scroll', () => {{
-          btn.classList.toggle('show', window.scrollY > 600);
-        }}, {{ passive: true }});
-        btn.addEventListener('click', () => window.scrollTo({{ top: 0, behavior: 'smooth' }}));
-
-        /* ── Highlight change indicators in metric cards ── */
-        document.querySelectorAll('.mc-chg').forEach((el) => {{
-          const txt = el.textContent || '';
-          if (txt.startsWith('+')) el.classList.add('mc-pos');
-          else if (txt.startsWith('-')) el.classList.add('mc-neg');
-        }});
-
-        /* ── Smooth anchor scroll (override jump chips) ─── */
-        document.querySelectorAll('a.jump-chip, a[data-toc-link]').forEach((a) => {{
-          a.addEventListener('click', (e) => {{
-            const href = a.getAttribute('href');
-            if (!href || !href.startsWith('#')) return;
-            const target = document.querySelector(href);
-            if (!target) return;
+        document.querySelectorAll('a[data-toc-link]').forEach(function(a){{
+          a.addEventListener('click', function(e){{
+            var href = a.getAttribute('href');
+            if(!href || href[0] !== '#') return;
+            var target = document.querySelector(href);
+            if(!target) return;
             e.preventDefault();
-            const y = target.getBoundingClientRect().top + window.scrollY - 96;
+            var y = target.getBoundingClientRect().top + window.scrollY - 96;
             window.scrollTo({{ top: y, behavior: 'smooth' }});
           }});
         }});
       }})();
     </script>
+    <script>
+      (function(){{
+        var track = document.querySelector('.ticker-track');
+        if(!track) return;
+        function esc(s){{ return String(s == null ? '' : s).replace(/[&<>\"]/g, function(c){{ return {{'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}}[c]; }}); }}
+        function render(items){{
+          var rows = items.map(function(it){{
+            var up = Number(it.changePct) >= 0;
+            var cls = up ? 'up' : 'down';
+            var arrow = up ? '+' : '−';
+            var pct = Math.abs(Number(it.changePct) || 0).toFixed(2);
+            return '<span class=\"tk\"><span class=\"sym\">' + esc(it.symbol) + '</span>' +
+              '<span class=\"px\">' + esc(it.value) + '</span>' +
+              '<span class=\"chg ' + cls + '\">' + arrow + pct + '%</span></span>';
+          }}).join('');
+          track.innerHTML = rows + rows;
+        }}
+        function refresh(){{
+          fetch('/public/market/ticker', {{ credentials: 'omit' }})
+            .then(function(r){{ return r.ok ? r.json() : null; }})
+            .then(function(data){{
+              if(data && Array.isArray(data.items) && data.items.length) render(data.items);
+            }})
+            .catch(function(){{}});
+        }}
+        refresh();
+        setInterval(function(){{ if(document.visibilityState === 'visible') refresh(); }}, 60000);
+      }})();
+    </script>
+    <script>
+      (function(){{
+        var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if(!reduce && !window.matchMedia("(pointer: coarse)").matches){{
+          var dot = document.createElement("div"); dot.className = "cursor-dot";
+          var ring = document.createElement("div"); ring.className = "cursor-ring";
+          document.body.appendChild(dot); document.body.appendChild(ring);
+          var mx = 0, my = 0, rx = 0, ry = 0;
+          document.addEventListener("mousemove", function(e){{
+            mx = e.clientX; my = e.clientY;
+            dot.style.transform = "translate(" + mx + "px," + my + "px) translate(-50%,-50%)";
+          }});
+          (function loop(){{
+            rx += (mx - rx) * 0.18; ry += (my - ry) * 0.18;
+            ring.style.transform = "translate(" + rx + "px," + ry + "px) translate(-50%,-50%)";
+            requestAnimationFrame(loop);
+          }})();
+          document.querySelectorAll("a,button,.chip,.story-card,[data-cursor]").forEach(function(el){{
+            el.addEventListener("mouseenter", function(){{ ring.classList.add("is-hover"); }});
+            el.addEventListener("mouseleave", function(){{ ring.classList.remove("is-hover"); }});
+          }});
+        }}
+        if(!reduce && !window.matchMedia("(pointer: coarse)").matches){{
+          document.querySelectorAll(".magnetic").forEach(function(el){{
+            var str = parseFloat(el.getAttribute("data-mag")) || 0.3;
+            el.addEventListener("mousemove", function(e){{
+              var r = el.getBoundingClientRect();
+              var mx2 = e.clientX - (r.left + r.width / 2), my2 = e.clientY - (r.top + r.height / 2);
+              el.style.transform = "translate(" + mx2 * str + "px," + my2 * str + "px)";
+              var inn = el.firstElementChild;
+              if(inn) inn.style.transform = "translate(" + mx2 * str * 0.5 + "px," + my2 * str * 0.5 + "px)";
+            }});
+            el.addEventListener("mouseleave", function(){{
+              el.style.transform = "";
+              var inn = el.firstElementChild; if(inn) inn.style.transform = "";
+            }});
+          }});
+        }}
+      }})();
+    </script>
   </body>
-</html>
-"""
+</html>"""
+
 
 
 def _compose_editorial_cover_prompt(article: ContentArticlePackage) -> str:
-    profile = _topic_profile(article)
-    visual_plan = _visual_story_plan(article)
-    intent = _story_intent(article)
-    base_prompt = (article.image_prompt or "").strip()
-    if not base_prompt:
-        base_prompt = (
-            f"Premium editorial cover for {article.title}. High-end business publication look, layered market "
-            "graphics, documents, devices, and one strong central subject tied to the story."
-        )
-    return (
-        f"{base_prompt} "
-        f"Story topic: {article.title}. "
-        f"Story intent: {intent}. "
-        f"Topic direction: {profile['prompt']}. "
-        f"Central branded object: {visual_plan['hero_object']}. "
-        f"Business cues: {', '.join(visual_plan['business_cues'])}. "
-        f"Event clues: {', '.join(visual_plan['event_cues'])}. "
-        "Create one coherent scene where the main object, business model, and event signal are visually obvious at first glance. "
-        "Landscape 3:2 composition for a news-card thumbnail and report hero, with a centered safe area that survives responsive crops. "
-        "Match a light, elegant financial publication UI with cream paper tones, balanced spacing, and attractive editorial depth. "
-        "Keep all important elements fully inside frame with safe margins. "
-        "No stretched or distorted objects. Do not crop the central branded object or key evidence props. "
-        "Use clear subject separation, balanced contrast, and readable depth so the card feels interactive and professional on a light interface. "
-        "No stretched perspective, no cropped main subject, no border text, no watermark, no UI chrome. "
-        "Use rich lighting, dimensional materials, and a polished financial newsroom aesthetic."
+    """Return a ChatGPT-image-2 prompt in the ProspektLab handoff editorial style.
+
+    Style reference: dark navy (#14233B) background, cream (#EAE3D6) accents,
+    emerald (#0F7A5C), cobalt (#1F56D6) or gold (#9A6B16) accent details,
+    abstract/conceptual, no text, no people, Bloomberg/FT editorial mood.
+    """
+    directive = _story_visual_directive(article)
+    intent_key = directive["intent_key"]
+    topic = article.title or article.hero_title or intent_key.replace("_", " ")
+    mood = directive.get("mood", "professional, authoritative, minimal")
+    accent = directive.get("accent", "emerald green (#0F7A5C)")
+    iconography = directive.get("iconography", "abstract geometric shapes, subtle data points")
+    subject = directive.get("subject", "financial research concept")
+    avoid = directive.get("avoid", "text overlays, human faces, bright saturated colors, stock-photo compositions")
+    story_specific_prompt = _repair_mojibake_text(str(article.image_prompt or "")).strip()
+    if story_specific_prompt:
+        story_specific_prompt = re.sub(r"\s+", " ", story_specific_prompt)[:360]
+
+    prompt = (
+        f"Editorial illustration for a financial research article about {topic}. "
+        "Dark navy blue background (#14233B). "
+        f"Abstract composition featuring: {iconography}. "
+        "Subtle grid pattern overlay. Muted cream (#EAE3D6) accents. "
+        f"{accent} accent details. "
+        f"Mood: {mood}. "
+        f"Central subject: {subject}. "
+        "Professional, authoritative, minimal. No text, no words, no letters, no numbers, "
+        "no watermarks, no logos, no human faces. Bloomberg/Financial Times editorial style. "
+        f"STRICTLY AVOID: {avoid}. "
+        "Wide landscape 24:10 hero composition with generous margins so the subject reads cleanly inside a card."
     )
+    if story_specific_prompt:
+        prompt += (
+            " Story-specific direction from the editor: "
+            f"{story_specific_prompt}."
+        )
+    return prompt
+
+
+_INTENT_VISUAL_LIBRARY: dict[str, dict[str, Any]] = {
+    "scam_fraud": {
+        "tokens": ("scam", "fraud", "ponzi", "fake", "forged", "siphon", "money laundering", "embezzle", "deceit",
+                   "manipulation", "pump and dump", "front-running", "insider trading"),
+        "mood": "ominous, investigative, forensic",
+        "accent": "muted crimson (#C0402F) accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), muted crimson (#C0402F), cold steel-grey",
+        "iconography": ("abstract shredded document shapes caught in dim light, a magnifying-glass silhouette hovering over faint ledger lines, "
+                       "diagonal caution-geometry stripes, scattered fingerprint-dot patterns, subtle red warning accents"),
+        "subject": "financial misconduct and forensic scrutiny",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, green/growth colors, celebration tones",
+    },
+    "regulatory_action": {
+        "tokens": ("probe", "enforcement", "ed ", "raid", "sebi order", "adjudication", "litigation",
+                   "investigation", "show cause", "penalty", "fine", "ban", "summons", "compliance"),
+        "mood": "institutional, authoritative, tense",
+        "accent": "emerald green (#0F7A5C) accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), emerald green (#0F7A5C), polished brass",
+        "iconography": ("a translucent shield shape representing regulatory protection, stacked document pages with faint line patterns, "
+                       "a balance-scale motif, subtle embossed seal geometry, official letterhead silhouettes"),
+        "subject": "regulatory enforcement and compliance",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, cheerful color, casual office props",
+    },
+    "results_beat": {
+        "tokens": ("beat", "exceeded", "outperform", "record profit", "all-time high", "growth", "expansion", "margin expansion"),
+        "mood": "optimistic, momentum, confident",
+        "accent": "emerald green (#0F7A5C) accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), emerald green (#0F7A5C), soft gold",
+        "iconography": ("an upward-sloping bar chart in emerald green with gradient fill, a freshly printed earnings page silhouette, "
+                       "subtle green LED ticker dots, polished glass tower reflection, ascending line chart"),
+        "subject": "strong earnings and outperformance",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, dark shadows, warning red",
+    },
+    "results_miss": {
+        "tokens": ("miss", "below estimate", "decline", "fall", "drop in", "shortfall", "margin pressure", "weak guidance"),
+        "mood": "somber, reflective, scrutinizing",
+        "accent": "muted crimson (#C0402F) accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), muted crimson (#C0402F), cool slate grey",
+        "iconography": ("a downward-pointing arrow on a faint chart, a half-empty coffee cup silhouette beside a results sheet, "
+                       "a broken line-graph fragment, soft red highlight strokes, rain-streaked window geometry"),
+        "subject": "earnings shortfall and margin pressure",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, bright green, celebratory tones",
+    },
+    "deal_ma": {
+        "tokens": ("acquire", "acquisition", "merger", "deal", "buyout", "stake sale", "investment", "majority stake",
+                   "joint venture", "amalgamation"),
+        "mood": "strategic, corporate, decisive",
+        "accent": "gold (#9A6B16) accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), gold (#9A6B16), deep corporate blue",
+        "iconography": ("two overlapping corporate seal rings on a folded contract, a gold pen silhouette on signed paper, "
+                       "linked metal rings, subtle city skyline lines, handshake silhouette"),
+        "subject": "mergers, acquisitions and strategic deals",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, chaotic elements, warning colors",
+    },
+    "layoffs_restructure": {
+        "tokens": ("layoff", "retrench", "workforce reduction", "restructuring", "shutdown", "downsize", "exit", "wind down"),
+        "mood": "muted, human, consequential",
+        "accent": "cool slate grey accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), cool slate grey, dim warm wood",
+        "iconography": ("an empty office chair silhouette pushed back from a desk, a cardboard box shape on a surface, "
+                       "a closing door geometry, dimmed overhead light lines, faint hallway perspective"),
+        "subject": "workforce restructuring and downsizing",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, bright tones, growth charts",
+    },
+    "war_geopolitical": {
+        "tokens": ("war", "conflict", "sanction", "tariff", "trade war", "embargo", "border tension", "geopolitical"),
+        "mood": "grave, global, destabilizing",
+        "accent": "cobalt blue (#1F56D6) accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), cobalt blue (#1F56D6), deep oxidized red",
+        "iconography": ("a world-map outline with strategic arcs, layered shipping-container geometry at a port, "
+                       "a flag silhouette against smoke-toned sky, red highlighted regions on a globe, newspaper headline textures"),
+        "subject": "geopolitical conflict and trade risk",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, specific national identifiers, celebration tones",
+    },
+    "capex_growth": {
+        "tokens": ("capex", "capacity expansion", "new plant", "factory", "greenfield", "brownfield", "investment plan",
+                   "expansion", "ramp-up", "order book"),
+        "mood": "constructive, ambitious, industrial",
+        "accent": "emerald green (#0F7A5C) accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), emerald green (#0F7A5C), industrial concrete grey",
+        "iconography": ("a crane silhouette against a dusk skyline, a partially unrolled blueprint with grid lines, "
+                       "stacked geometric building blocks, steel-girder assembly shapes, ascending volume bars"),
+        "subject": "capex and capacity expansion",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, abstract finance icons, dark/threatening tones",
+    },
+    "downgrade_risk": {
+        "tokens": ("downgrade", "rating cut", "default", "stress", "distressed", "credit risk", "npa", "asset quality"),
+        "mood": "cautionary, analytical, alert",
+        "accent": "gold (#9A6B16) accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), gold (#9A6B16), cool slate grey",
+        "iconography": ("a credit-rating arrow pointing down, a stress-test gauge tilting into amber, "
+                       "warning-triangle overlay on a balance sheet, a single document under harsh cone of light"),
+        "subject": "credit downgrade and asset-quality risk",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, green, celebratory cues",
+    },
+    "ipo_listing": {
+        "tokens": ("ipo", "listing", "drhp", "rhp", "anchor allotment", "prospectus", "subscription", "grey market premium"),
+        "mood": "anticipatory, formal, milestone",
+        "accent": "gold (#9A6B16) accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), gold (#9A6B16), polished navy",
+        "iconography": ("a ceremonial bell on a polished podium silhouette, a hardbound prospectus with ribbon, "
+                       "ticker-board geometry with NEW LISTING banner shape, soft spotlight cone"),
+        "subject": "IPO listing and public-market debut",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, chaotic motion, warning colors",
+    },
+    "dividend_buyback": {
+        "tokens": ("dividend", "buyback", "interim dividend", "special dividend", "payout", "tender offer"),
+        "mood": "reassuring, shareholder-friendly, steady",
+        "accent": "soft gold accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), soft gold, sage green",
+        "iconography": ("gold coins arranged in steady stacks, a dividend-warrant silhouette, a corporate seal on a cheque-style document, "
+                       "freshly printed share certificate beside a fountain-pen shape"),
+        "subject": "dividends and buybacks",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, charts going down, cold tones",
+    },
+    "market_trend": {
+        "tokens": ("trend", "sector rotation", "macro", "policy", "market", "rally", "correction", "volatility", "flows"),
+        "mood": "observational, structural, data-dense",
+        "accent": "cobalt blue (#1F56D6) accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), cobalt blue (#1F56D6), emerald green (#0F7A5C)",
+        "iconography": ("a stacked sector-performance heatmap, a Bloomberg-style terminal screen glow, "
+                       "trading-floor monitor wall geometry, layered ticker tape, subtle grid overlay"),
+        "subject": "market trends and sector rotation",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, celebration cues, dark threatening tones",
+    },
+    "policy_macro": {
+        "tokens": ("rbi", "monetary policy", "repo rate", "inflation", "gdp", "fiscal", "budget", "gst", "mpc"),
+        "mood": "institutional, authoritative, macro-lens",
+        "accent": "gold (#9A6B16) accent",
+        "palette": "dark navy (#14233B), cream (#EAE3D6), gold (#9A6B16), marble white",
+        "iconography": ("a neoclassical central-bank colonnade silhouette, a policy document with embossed seal, "
+                       "an interest-rate dial/gauge, balance scales on a marble surface, radiating policy-wave circles"),
+        "subject": "RBI monetary policy and macro-economics",
+        "avoid": "text overlays, human faces, bright saturated colors, stock-photo compositions, individual political figures, flag-prominent imagery, chaotic tones",
+    },
+}
+
+
+def _classify_story_intent(text: str) -> tuple[str, dict[str, Any]]:
+    """Classify article into one of the visual intent buckets.
+    Returns (intent_key, visual_directive_dict)."""
+    for key, lib in _INTENT_VISUAL_LIBRARY.items():
+        if any(token in text for token in lib["tokens"]):
+            return key, lib
+    # Default: generic results / company event
+    return "results_beat", _INTENT_VISUAL_LIBRARY["results_beat"]
 
 
 def _story_intent(article: ContentArticlePackage) -> str:
+    """Legacy single-line intent for backward compat (used in cover prompt)."""
     text = _repair_mojibake_text(
         " ".join(
             [
@@ -2954,15 +3594,28 @@ def _story_intent(article: ContentArticlePackage) -> str:
             ]
         )
     ).lower()
-    if any(token in text for token in ("probe", "enforcement", "ed", "sebi", "order", "adjudication", "litigation", "investigation")):
-        return "Explain the regulatory risk, timeline pressure, and compliance consequences around the event."
-    if any(token in text for token in ("acquire", "acquisition", "stake", "deal", "merger", "investment", "majority")):
-        return "Show strategic deal logic, ownership shift, and integration consequences for the business."
-    if any(token in text for token in ("earnings", "results", "guidance", "margin", "revenue", "profit", "ebit")):
-        return "Highlight what moved in the quarter, what management signaled, and what readers should monitor next."
-    if any(token in text for token in ("trend", "sector", "macro", "policy", "market")):
-        return "Frame the wider market narrative and expose the structural drivers behind the trend."
-    return "Clarify the company event with strong business context and practical takeaways for informed readers."
+    intent_key, lib = _classify_story_intent(text)
+    return (
+        f"INTENT={intent_key.upper()}. Mood: {lib['mood']}. The reader must understand at a glance "
+        f"that the story is about {intent_key.replace('_', ' ')}."
+    )
+
+
+def _story_visual_directive(article: ContentArticlePackage) -> dict[str, Any]:
+    """Rich visual directive: mood, palette, iconography, subject, avoid."""
+    text = _repair_mojibake_text(
+        " ".join(
+            [
+                article.hero_eyebrow,
+                article.title,
+                article.description,
+                article.hero_summary,
+                *article.keywords[:10],
+            ]
+        )
+    ).lower()
+    intent_key, lib = _classify_story_intent(text)
+    return {"intent_key": intent_key, **lib}
 
 
 def _cover_seed(article: ContentArticlePackage) -> int:
@@ -3024,7 +3677,9 @@ def _resolve_image_client_config() -> _ImageClientConfig | None:
         or os.getenv("AZURE_OPENAI_IMAGE_ENDPOINT")
     )
     foundry_openai_base_url = _normalize_image_base_url(
-        os.getenv("AZURE_AI_FOUNDRY_OPENAI_BASE_URL")
+        os.getenv("AZURE_AI_FOUNDRY_IMAGE_OPENAI_BASE_URL")
+        or os.getenv("AZURE_GPT_IMAGE2_BASE_URL")
+        or os.getenv("AZURE_AI_FOUNDRY_OPENAI_BASE_URL")
         or os.getenv("AZURE_AI_PROJECTS_OPENAI_BASE_URL")
         or os.getenv("AZURE_OPENAI_BASE_URL")
     )
@@ -3045,9 +3700,15 @@ def _resolve_image_client_config() -> _ImageClientConfig | None:
         os.getenv("AZURE_AI_FOUNDRY_IMAGE_DEPLOYMENT")
         or os.getenv("AZURE_AI_PROJECTS_IMAGE_DEPLOYMENT")
         or os.getenv("AZURE_OPENAI_IMAGE_DEPLOYMENT")
-        or "chatgpt-image-2"
+        or "gpt-image-2"
     ).strip()
     foundry_deployment = _normalize_image_model(foundry_deployment)
+    if foundry_deployment.lower() == "gpt-image-2":
+        foundry_openai_base_url = _normalize_image_base_url(
+            os.getenv("AZURE_AI_FOUNDRY_IMAGE_OPENAI_BASE_URL")
+            or os.getenv("AZURE_GPT_IMAGE2_BASE_URL")
+            or "https://prospektus-resource.services.ai.azure.com/openai/v1"
+        )
     foundry_api_version = (os.getenv("AZURE_AI_FOUNDRY_IMAGE_API_VERSION") or "2025-04-01-preview").strip()
     openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
     openai_base_url = _normalize_image_base_url(os.getenv("FINAGENT_CONTENT_IMAGE_BASE_URL"))
@@ -3064,9 +3725,31 @@ def _resolve_image_client_config() -> _ImageClientConfig | None:
         if inferred_resource_endpoint:
             foundry_request_url = _foundry_image_generation_url(inferred_resource_endpoint, foundry_deployment, foundry_api_version)
 
-    # Product default: chatgpt-image-2 should use direct OpenAI credentials.
-    # This avoids provider mismatch from stale Foundry env and keeps behavior
-    # aligned with OPENAI_API_KEY-first operation.
+    # Product default: when Azure Foundry credentials + image deployment are
+    # configured (the customer-supplied path), prefer Foundry's gpt-image-2
+    # over the direct OpenAI route. Override with FINAGENT_CONTENT_IMAGE_PROVIDER=openai.
+    foundry_ready = bool(
+        foundry_key
+        and foundry_deployment
+        and (foundry_image_endpoint or foundry_openai_base_url or foundry_resource_endpoint)
+    )
+    foundry_token_ready = bool(
+        foundry_deployment
+        and foundry_deployment.lower() == "gpt-image-2"
+        and (foundry_openai_base_url or foundry_resource_endpoint)
+    )
+    if provider != "openai" and (foundry_ready or foundry_token_ready):
+        return _ImageClientConfig(
+            api_key=foundry_key,
+            model=foundry_deployment,
+            provider="azure-foundry",
+            base_url=foundry_openai_base_url or foundry_resource_endpoint,
+            image_endpoint=foundry_image_endpoint,
+            request_url=foundry_request_url,
+            api_version=foundry_api_version,
+        )
+
+    # Fallback: chatgpt-image-2 via direct OpenAI credentials if Foundry isn't set.
     if openai_key and openai_model.lower() == "chatgpt-image-2" and not force_foundry_chatgpt_image_2:
         return _ImageClientConfig(
             api_key=openai_key,
@@ -3076,7 +3759,7 @@ def _resolve_image_client_config() -> _ImageClientConfig | None:
         )
 
     if provider in {"foundry", "azure", "azure_foundry", "mai"}:
-        if foundry_key and (foundry_image_endpoint or foundry_openai_base_url or foundry_resource_endpoint) and foundry_deployment:
+        if (foundry_key and (foundry_image_endpoint or foundry_openai_base_url or foundry_resource_endpoint) and foundry_deployment) or foundry_token_ready:
             return _ImageClientConfig(
                 api_key=foundry_key,
                 model=foundry_deployment,
@@ -3086,7 +3769,11 @@ def _resolve_image_client_config() -> _ImageClientConfig | None:
                 request_url=foundry_request_url,
                 api_version=foundry_api_version,
             )
-        logger.warning("Azure Foundry image provider selected but required config is missing; falling back")
+        logger.warning(
+            "Azure Foundry image provider selected but required config is missing; "
+            "set AZURE_GPT_IMAGE2_BASE_URL + AZURE_AI_FOUNDRY_IMAGE_DEPLOYMENT=gpt-image-2 "
+            "for token auth, or provide API-key based settings."
+        )
 
     if provider == "openai":
         if openai_key and openai_model:
@@ -3098,8 +3785,8 @@ def _resolve_image_client_config() -> _ImageClientConfig | None:
             )
         logger.warning("OpenAI image provider selected but OPENAI_API_KEY or model is missing")
 
-    # Default routing: chatgpt-image-2 should use OPENAI_API_KEY unless caller
-    # explicitly forces Foundry with FINAGENT_CONTENT_IMAGE_PROVIDER=foundry.
+    # Default routing: if Foundry is unavailable, use OPENAI_API_KEY for direct
+    # chatgpt-image-2 generation when configured.
     if provider not in {"foundry", "azure", "azure_foundry", "mai"}:
         if openai_key and openai_model.lower() == "chatgpt-image-2":
             return _ImageClientConfig(
@@ -3109,7 +3796,7 @@ def _resolve_image_client_config() -> _ImageClientConfig | None:
                 base_url=openai_base_url,
             )
 
-    if foundry_key and (foundry_image_endpoint or foundry_openai_base_url or foundry_resource_endpoint) and foundry_deployment:
+    if (foundry_key and (foundry_image_endpoint or foundry_openai_base_url or foundry_resource_endpoint) and foundry_deployment) or foundry_token_ready:
         return _ImageClientConfig(
             api_key=foundry_key,
             model=foundry_deployment,
@@ -3783,7 +4470,7 @@ def render_cover_png(article: ContentArticlePackage) -> bytes | None:
     return buffer.getvalue()
 
 
-async def _generate_image(req: ContentAutomationRequest, article: ContentArticlePackage, route_base: str) -> tuple[bytes, str, str]:
+async def _generate_image(req: ContentAutomationRequest, article: ContentArticlePackage, route_base: str) -> tuple[bytes, str, str, str]:
     prompt = _compose_editorial_cover_prompt(article)
     config = _resolve_image_client_config()
     if req.include_image and config:
@@ -3795,6 +4482,83 @@ async def _generate_image(req: ContentAutomationRequest, article: ContentArticle
             )
             if config.provider == "azure-foundry":
                 import httpx
+                preferred_size = "1024x1024" if config.model.lower() == "gpt-image-2" else "1536x1024"
+
+                token_flow_error: str | None = None
+                if config.base_url and config.model.lower() == "gpt-image-2":
+                    try:
+                        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+                        from openai import OpenAI
+
+                        def _generate_with_azure_token() -> tuple[bytes | None, str | None]:
+                            proxy_keys = (
+                                "HTTP_PROXY",
+                                "HTTPS_PROXY",
+                                "ALL_PROXY",
+                                "http_proxy",
+                                "https_proxy",
+                                "all_proxy",
+                            )
+                            original_env = {key: os.environ.get(key) for key in proxy_keys}
+                            try:
+                                # Some local environments inject a dead localhost proxy (127.0.0.1:9).
+                                # Clear proxy env for token + Foundry calls so auth can complete.
+                                for key in proxy_keys:
+                                    os.environ.pop(key, None)
+                                azure_cfg = os.getenv("AZURE_CONFIG_DIR") or str(repo_root() / ".azurecli")
+                                os.environ["AZURE_CONFIG_DIR"] = azure_cfg
+                                Path(azure_cfg).mkdir(parents=True, exist_ok=True)
+
+                                token_provider = get_bearer_token_provider(
+                                    DefaultAzureCredential(),
+                                    "https://ai.azure.com/.default",
+                                )
+                                client = OpenAI(
+                                    base_url=_foundry_openai_base_url(config.base_url or ""),
+                                    api_key=token_provider,
+                                )
+                                response = client.images.generate(
+                                    model=config.model,
+                                    prompt=prompt,
+                                    n=1,
+                                    size="1024x1024",
+                                )
+                                data = response.data[0] if getattr(response, "data", None) else None
+                                if data is None:
+                                    raise RuntimeError("Azure gpt-image-2 returned an empty image payload")
+                                b64 = (
+                                    getattr(data, "b64_json", None)
+                                    or getattr(data, "image_base64", None)
+                                    or getattr(data, "base64", None)
+                                )
+                                if b64:
+                                    return base64.b64decode(b64), None
+                                image_url = getattr(data, "url", None)
+                                return None, image_url
+                            finally:
+                                for key, value in original_env.items():
+                                    if value is None:
+                                        os.environ.pop(key, None)
+                                    else:
+                                        os.environ[key] = value
+
+                        token_image_bytes, token_image_url = await asyncio.to_thread(_generate_with_azure_token)
+                        if token_image_bytes:
+                            return token_image_bytes, ".png", "image/png", f"azure-foundry:{config.model}"
+                        if token_image_url:
+                            async with httpx.AsyncClient(timeout=60.0, trust_env=False) as http_client:
+                                image_response = await http_client.get(token_image_url)
+                                image_response.raise_for_status()
+                                remote_type = (image_response.headers.get("content-type") or "image/png").split(";")[0].strip()
+                                return image_response.content, ".png", remote_type or "image/png", f"azure-foundry:{config.model}"
+                        token_flow_error = "Azure gpt-image-2 token flow returned no bytes or URL"
+                    except Exception as exc:
+                        token_flow_error = str(exc)
+                        logger.warning(
+                            "Azure gpt-image-2 token flow failed for deployment %s: %s",
+                            config.model,
+                            token_flow_error[:300],
+                        )
 
                 direct_error: str | None = None
                 if config.image_endpoint:
@@ -3805,28 +4569,28 @@ async def _generate_image(req: ContentAutomationRequest, article: ContentArticle
                     payload = {
                         "model": config.model,
                         "prompt": prompt,
-                        "size": "1536x1024",
+                        "size": preferred_size,
                     }
                     async with httpx.AsyncClient(timeout=180.0, trust_env=False) as http_client:
                         response = await http_client.post(config.image_endpoint, headers=headers, json=payload)
                     if response.is_success:
                         content_type = (response.headers.get("content-type") or "").split(";")[0].strip().lower()
                         if content_type.startswith("image/"):
-                            return response.content, ".png", content_type
+                            return response.content, ".png", content_type, f"azure-foundry:{config.model}"
                         data = response.json()
                         items = data.get("data") if isinstance(data, dict) else None
                         if isinstance(items, list) and items:
                             first = items[0] or {}
                             b64 = first.get("b64_json")
                             if b64:
-                                return base64.b64decode(b64), ".png", "image/png"
+                                return base64.b64decode(b64), ".png", "image/png", f"azure-foundry:{config.model}"
                             image_url = first.get("url")
                             if image_url:
                                 async with httpx.AsyncClient(timeout=60.0, trust_env=False) as http_client:
                                     image_response = await http_client.get(image_url)
                                     image_response.raise_for_status()
                                     remote_type = (image_response.headers.get("content-type") or "image/png").split(";")[0].strip()
-                                    return image_response.content, ".png", remote_type or "image/png"
+                                    return image_response.content, ".png", remote_type or "image/png", f"azure-foundry:{config.model}"
                     else:
                         direct_error = response.text[:400]
                         logger.warning(
@@ -3848,7 +4612,7 @@ async def _generate_image(req: ContentAutomationRequest, article: ContentArticle
                         image_args: dict[str, Any] = {
                             "model": config.model,
                             "prompt": prompt,
-                            "size": "1536x1024",
+                            "size": preferred_size,
                         }
                         response = await client.images.generate(**image_args)
                         data = response.data[0]
@@ -3858,14 +4622,14 @@ async def _generate_image(req: ContentAutomationRequest, article: ContentArticle
                             or getattr(data, "base64", None)
                         )
                         if b64:
-                            return base64.b64decode(b64), ".png", "image/png"
+                            return base64.b64decode(b64), ".png", "image/png", f"azure-foundry:{config.model}"
                         image_url = getattr(data, "url", None)
                         if image_url:
                             async with httpx.AsyncClient(timeout=60.0, trust_env=False) as http_client:
                                 image_response = await http_client.get(image_url)
                                 image_response.raise_for_status()
                                 remote_type = (image_response.headers.get("content-type") or "image/png").split(";")[0].strip()
-                                return image_response.content, ".png", remote_type or "image/png"
+                                return image_response.content, ".png", remote_type or "image/png", f"azure-foundry:{config.model}"
                     except Exception as exc:
                         v1_error = str(exc)
                         logger.warning(
@@ -3883,7 +4647,7 @@ async def _generate_image(req: ContentAutomationRequest, article: ContentArticle
                     }
                     payload = {
                         "prompt": prompt,
-                        "size": "1536x1024",
+                        "size": preferred_size,
                         "quality": "high",
                         "output_format": "png",
                     }
@@ -3891,7 +4655,27 @@ async def _generate_image(req: ContentAutomationRequest, article: ContentArticle
                         response = await http_client.post(config.request_url, headers=headers, json=payload)
                     if response.is_success:
                         content_type = (response.headers.get("content-type") or "image/png").split(";")[0].strip()
-                        return response.content, ".png", content_type or "image/png"
+                        if content_type.startswith("image/"):
+                            return response.content, ".png", content_type or "image/png", f"azure-foundry:{config.model}"
+                        try:
+                            data = response.json()
+                            items = data.get("data") if isinstance(data, dict) else None
+                            if isinstance(items, list) and items:
+                                first = items[0] or {}
+                                b64 = first.get("b64_json")
+                                if b64:
+                                    return base64.b64decode(b64), ".png", "image/png", f"azure-foundry:{config.model}"
+                                image_url = first.get("url")
+                                if image_url:
+                                    async with httpx.AsyncClient(timeout=60.0, trust_env=False) as http_client:
+                                        image_response = await http_client.get(image_url)
+                                        image_response.raise_for_status()
+                                        remote_type = (image_response.headers.get("content-type") or "image/png").split(";")[0].strip()
+                                        return image_response.content, ".png", remote_type or "image/png", f"azure-foundry:{config.model}"
+                        except Exception:
+                            logger.exception("Azure Foundry preview image response parsing failed")
+                        # If we could not extract an image, return raw bytes as a fallback
+                        return response.content, ".png", content_type or "image/png", f"azure-foundry:{config.model}"
                     logger.error(
                         "Azure Foundry preview image generation failed with status %s for deployment %s: %s",
                         response.status_code,
@@ -3902,6 +4686,8 @@ async def _generate_image(req: ContentAutomationRequest, article: ContentArticle
                         logger.error("Azure Foundry direct endpoint attempt also failed: %s", direct_error)
                     if v1_error:
                         logger.error("Azure Foundry OpenAI v1 attempt also failed: %s", v1_error[:400])
+                    if token_flow_error:
+                        logger.error("Azure gpt-image-2 token flow attempt also failed: %s", token_flow_error[:400])
                     response.raise_for_status()
             else:
                 from openai import AsyncOpenAI
@@ -3917,6 +4703,7 @@ async def _generate_image(req: ContentAutomationRequest, article: ContentArticle
                     if config.model.lower() == "chatgpt-image-2":
                         model_candidates.append("gpt-image-1")
                     response = None
+                    selected_model = config.model
                     last_error: Exception | None = None
                     for model_name in model_candidates:
                         image_args: dict[str, Any] = {
@@ -3926,6 +4713,7 @@ async def _generate_image(req: ContentAutomationRequest, article: ContentArticle
                         }
                         try:
                             response = await client.images.generate(**image_args)
+                            selected_model = model_name
                             if model_name != config.model:
                                 logger.warning(
                                     "Image model %s unavailable for current key; fallback model %s succeeded",
@@ -3962,21 +4750,64 @@ async def _generate_image(req: ContentAutomationRequest, article: ContentArticle
                     or getattr(data, "base64", None)
                 )
                 if b64:
-                    return base64.b64decode(b64), ".png", "image/png"
+                    return base64.b64decode(b64), ".png", "image/png", f"openai:{selected_model}"
                 image_url = getattr(data, "url", None)
                 if image_url:
                     async with httpx.AsyncClient(timeout=60.0, trust_env=False) as http_client:
                         image_response = await http_client.get(image_url)
                         image_response.raise_for_status()
                         content_type = (image_response.headers.get("content-type") or "image/png").split(";")[0].strip()
-                        return image_response.content, ".png", content_type or "image/png"
+                        return image_response.content, ".png", content_type or "image/png", f"openai:{selected_model}"
         except Exception:
             logger.exception("Image generation failed; falling back to local cover renderer")
     png = render_cover_png(article)
     if png:
-        return png, ".png", "image/png"
+        return png, ".png", "image/png", "local-renderer:png"
     svg = render_cover_svg(article)
-    return svg.encode("utf-8"), ".svg", "image/svg+xml"
+    return svg.encode("utf-8"), ".svg", "image/svg+xml", "local-renderer:svg"
+
+
+async def _generate_cover_for_article(
+    req: ContentAutomationRequest,
+    article: ContentArticlePackage,
+    route_base: str,
+    *,
+    publish_status: str,
+    retries: int = 3,
+    retry_delay_seconds: float = 1.5,
+) -> tuple[bytes, str, str, str]:
+    """
+    Generate a cover asset and prefer Foundry gpt-image-2 for publish-ready stories.
+
+    For published articles we always request an image (even if include_image=False on the
+    incoming request) and retry when the provider falls back away from gpt-image-2.
+    """
+    must_have_cover = str(publish_status or "").lower() == "published"
+    image_req = req.model_copy(update={"include_image": bool(req.include_image or must_have_cover)})
+
+    attempts = max(1, int(retries)) if must_have_cover else 1
+    last_result: tuple[bytes, str, str, str] | None = None
+    for attempt in range(1, attempts + 1):
+        result = await _generate_image(image_req, article, route_base)
+        last_result = result
+        provider = str(result[3] or "")
+        if not must_have_cover:
+            return result
+        if provider.startswith("azure-foundry:gpt-image-2"):
+            return result
+        if attempt < attempts:
+            logger.warning(
+                "Cover generation for %s used provider %s (attempt %s/%s); retrying for gpt-image-2",
+                article.slug,
+                provider or "unknown",
+                attempt,
+                attempts,
+            )
+            await asyncio.sleep(max(0.0, float(retry_delay_seconds)))
+
+    if last_result is None:
+        raise RuntimeError("Cover generation did not produce a result")
+    return last_result
 
 
 def render_cover_svg(article: ContentArticlePackage) -> str:
@@ -4029,8 +4860,8 @@ def render_cover_svg(article: ContentArticlePackage) -> str:
         safe = html.escape(keyword[:24])
         width = max(158, min(280, 48 + len(safe) * 10))
         chip_svg.append(
-            f'<g><rect x="{x}" y="{y}" rx="24" ry="24" width="{width}" height="56" fill="#fff7ee" fill-opacity="0.88" stroke="#17314d" stroke-opacity="0.10" />'
-            f'<text x="{x + 24}" y="{y + 36}" fill="#17314d" font-size="24" font-family="Manrope, Arial, sans-serif" font-weight="700">{safe}</text></g>'
+            f'<g><rect x="{x}" y="{y}" rx="24" ry="24" width="{width}" height="56" fill="rgba(96,165,250,0.10)" stroke="#60A5FA" stroke-opacity="0.32" />'
+            f'<text x="{x + 24}" y="{y + 36}" fill="#EAF3FF" font-size="24" font-family="Manrope, Arial, sans-serif" font-weight="700">{safe}</text></g>'
         )
         x += width + 16
         if x > 1180:
@@ -4039,23 +4870,31 @@ def render_cover_svg(article: ContentArticlePackage) -> str:
     return f"""<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1536\" height=\"1024\" viewBox=\"0 0 1536 1024\" role=\"img\" aria-label=\"{html.escape(article.hero_title)}\">
   <defs>
     <linearGradient id=\"bg\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">
-      <stop offset=\"0%\" stop-color=\"#f7f1e6\" />
-      <stop offset=\"58%\" stop-color=\"#efe6d7\" />
-      <stop offset=\"100%\" stop-color=\"#dce7f1\" />
+      <stop offset=\"0%\" stop-color=\"#03060d\" />
+      <stop offset=\"58%\" stop-color=\"#061224\" />
+      <stop offset=\"100%\" stop-color=\"#0a1838\" />
     </linearGradient>
     <linearGradient id=\"ink\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">
-      <stop offset=\"0%\" stop-color=\"#17314d\" />
-      <stop offset=\"100%\" stop-color=\"#245a8a\" />
+      <stop offset=\"0%\" stop-color=\"#EAF3FF\" />
+      <stop offset=\"100%\" stop-color=\"#60A5FA\" />
     </linearGradient>
+    <radialGradient id=\"glowCyan\" cx=\"50%\" cy=\"50%\" r=\"50%\">
+      <stop offset=\"0%\" stop-color=\"#60A5FA\" stop-opacity=\"0.32\" />
+      <stop offset=\"100%\" stop-color=\"#60A5FA\" stop-opacity=\"0\" />
+    </radialGradient>
+    <radialGradient id=\"glowViolet\" cx=\"50%\" cy=\"50%\" r=\"50%\">
+      <stop offset=\"0%\" stop-color=\"#8B5CF6\" stop-opacity=\"0.30\" />
+      <stop offset=\"100%\" stop-color=\"#8B5CF6\" stop-opacity=\"0\" />
+    </radialGradient>
   </defs>
   <rect width=\"1536\" height=\"1024\" fill=\"url(#bg)\" />
-  <circle cx=\"190\" cy=\"176\" r=\"220\" fill=\"#0d766e\" fill-opacity=\"0.10\" />
-  <circle cx=\"1330\" cy=\"164\" r=\"260\" fill=\"#1d4f91\" fill-opacity=\"0.11\" />
-  <rect x=\"54\" y=\"54\" width=\"1428\" height=\"916\" rx=\"44\" fill=\"#fffaf3\" fill-opacity=\"0.92\" stroke=\"#17314d\" stroke-opacity=\"0.10\" />
-  <rect x=\"862\" y=\"164\" width=\"528\" height=\"548\" rx=\"32\" fill=\"#17314d\" fill-opacity=\"0.96\" />
-  <path d=\"M910 618 C1018 468 1118 552 1212 430 C1274 350 1328 326 1364 318\" fill=\"none\" stroke=\"#66d2c4\" stroke-width=\"10\" stroke-linecap=\"round\" />
-  <path d=\"M910 654 C1010 596 1108 616 1210 534 C1280 478 1334 458 1364 452\" fill=\"none\" stroke=\"#f9bf71\" stroke-width=\"7\" stroke-linecap=\"round\" stroke-opacity=\"0.92\" />
-  <g fill=\"#fff2df\">
+  <circle cx=\"190\" cy=\"176\" r=\"260\" fill=\"url(#glowCyan)\" />
+  <circle cx=\"1330\" cy=\"164\" r=\"300\" fill=\"url(#glowViolet)\" />
+  <rect x=\"54\" y=\"54\" width=\"1428\" height=\"916\" rx=\"44\" fill=\"rgba(8,16,32,0.78)\" stroke=\"#60A5FA\" stroke-opacity=\"0.22\" stroke-width=\"1\" />
+  <rect x=\"862\" y=\"164\" width=\"528\" height=\"548\" rx=\"32\" fill=\"rgba(10,22,44,0.92)\" stroke=\"#60A5FA\" stroke-opacity=\"0.28\" />
+  <path d=\"M910 618 C1018 468 1118 552 1212 430 C1274 350 1328 326 1364 318\" fill=\"none\" stroke=\"#34D399\" stroke-width=\"10\" stroke-linecap=\"round\" />
+  <path d=\"M910 654 C1010 596 1108 616 1210 534 C1280 478 1334 458 1364 452\" fill=\"none\" stroke=\"#8B5CF6\" stroke-width=\"7\" stroke-linecap=\"round\" stroke-opacity=\"0.85\" />
+  <g fill=\"#C7D2FE\" opacity=\"0.85\">
     <rect x=\"930\" y=\"720\" width=\"32\" height=\"122\" rx=\"12\" />
     <rect x=\"986\" y=\"664\" width=\"32\" height=\"178\" rx=\"12\" />
     <rect x=\"1042\" y=\"610\" width=\"32\" height=\"232\" rx=\"12\" />
@@ -4063,10 +4902,10 @@ def render_cover_svg(article: ContentArticlePackage) -> str:
     <rect x=\"1154\" y=\"564\" width=\"32\" height=\"278\" rx=\"12\" />
     <rect x=\"1210\" y=\"706\" width=\"32\" height=\"136\" rx=\"12\" />
   </g>
-  <text x=\"96\" y=\"132\" fill=\"#0d766e\" font-size=\"26\" font-family=\"IBM Plex Mono, monospace\" font-weight=\"600\" letter-spacing=\"4\">PROSPEKTLAB INSIGHT</text>
+  <text x=\"96\" y=\"132\" fill=\"#60A5FA\" font-size=\"26\" font-family=\"IBM Plex Mono, monospace\" font-weight=\"600\" letter-spacing=\"4\">PROSPEKTLAB INSIGHT</text>
   <text x=\"96\" y=\"250\" fill=\"url(#ink)\" font-size=\"94\" font-family=\"Newsreader, Georgia, serif\" font-weight=\"700\">{title_svg}</text>
-  <text x=\"96\" y=\"560\" fill=\"#5f6778\" font-size=\"30\" font-family=\"Manrope, Arial, sans-serif\" font-weight=\"600\">{subtitle_svg}</text>
-  <text x=\"96\" y=\"714\" fill=\"#17314d\" font-size=\"26\" font-family=\"IBM Plex Mono, monospace\" font-weight=\"500\" letter-spacing=\"3\">EDITORIAL REPORT</text>
+  <text x=\"96\" y=\"560\" fill=\"#A8B4C8\" font-size=\"30\" font-family=\"Manrope, Arial, sans-serif\" font-weight=\"600\">{subtitle_svg}</text>
+  <text x=\"96\" y=\"714\" fill=\"#C7D2FE\" font-size=\"26\" font-family=\"IBM Plex Mono, monospace\" font-weight=\"500\" letter-spacing=\"3\">EDITORIAL REPORT</text>
   {''.join(chip_svg)}
 </svg>
 """
@@ -4275,7 +5114,15 @@ async def generate_article_automation(req: ContentAutomationRequest, *, requeste
     article = await _llm_generate_article(req, slug, context)
     article.slug = slug
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    image_bytes, image_ext, _mime = await _generate_image(req, article, route_base)
+    confidence_score, publish_reasons = _score_publishability(req, article, sources)
+    publish_status = "published" if (req.force_publish or confidence_score >= 70) else "draft"
+
+    image_bytes, image_ext, image_mime, cover_provider = await _generate_cover_for_article(
+        req,
+        article,
+        route_base,
+        publish_status=publish_status,
+    )
     image_name = f"cover{image_ext}"
     html_relative_image = f"/{route_base}/{slug}/{image_name}"
     html_text = render_article_html(
@@ -4292,9 +5139,6 @@ async def generate_article_automation(req: ContentAutomationRequest, *, requeste
     _write_bytes(image_path, image_bytes)
     _write_text(html_path, html_text)
 
-    confidence_score, publish_reasons = _score_publishability(req, article, sources)
-    publish_status = "published" if (req.force_publish or confidence_score >= 70) else "draft"
-
     result = ContentAutomationResult(
         slug=slug,
         title=article.title,
@@ -4304,6 +5148,8 @@ async def generate_article_automation(req: ContentAutomationRequest, *, requeste
         html_path=str(html_path),
         json_path=str(json_path),
         image_path=str(image_path),
+        image_mime=image_mime,
+        cover_provider=cover_provider,
         generated_at=generated_at,
         sources_used=sources,
         confidence_score=confidence_score,
@@ -4331,6 +5177,8 @@ async def generate_article_automation(req: ContentAutomationRequest, *, requeste
         "mirrored_public_path": public_mirror,
         "mirrored_sitemap": mirrored_sitemap,
         "requested_by": requested_by,
+        "image_mime": image_mime,
+        "cover_provider": cover_provider,
         "article": article.model_dump(),
     }
     _write_text(json_path, json.dumps(payload, indent=2, ensure_ascii=True))
@@ -4469,6 +5317,54 @@ async def ingest_market_event_triggers(req: ContentEventIngestionRequest, *, req
 
 # ── Publish / unpublish helpers (used by flash engine and API routes) ─────────
 
+def _fallback_cover_svg_for_publish(title: str) -> str:
+    clean_title = " ".join(str(title or "").strip().split()) or "ProspektLab Research"
+    words = clean_title.split(" ")
+    wrapped: list[str] = []
+    current = ""
+    for word in words:
+        candidate = (current + " " + word).strip()
+        if len(candidate) <= 34:
+            current = candidate
+            continue
+        if current:
+            wrapped.append(current)
+        current = word
+    if current:
+        wrapped.append(current)
+    wrapped = wrapped[:3] or ["ProspektLab Research"]
+
+    text_lines: list[str] = []
+    y = 300
+    for line in wrapped:
+        safe = html.escape(line)
+        text_lines.append(
+            f'<text x="96" y="{y}" fill="#EAF3FF" font-size="72" font-family="Newsreader, Georgia, serif" '
+            f'font-weight="700">{safe}</text>'
+        )
+        y += 88
+
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024" role="img" '
+        f'aria-label="{html.escape(clean_title)} cover">\n'
+        "  <defs>\n"
+        '    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">\n'
+        '      <stop offset="0%" stop-color="#03060d"/>\n'
+        '      <stop offset="58%" stop-color="#061224"/>\n'
+        '      <stop offset="100%" stop-color="#0a1838"/>\n'
+        "    </linearGradient>\n"
+        "  </defs>\n"
+        '  <rect width="1536" height="1024" fill="url(#bg)"/>\n'
+        '  <circle cx="190" cy="176" r="240" fill="#60A5FA" fill-opacity="0.18"/>\n'
+        '  <circle cx="1320" cy="200" r="280" fill="#8B5CF6" fill-opacity="0.14"/>\n'
+        '  <rect x="54" y="54" width="1428" height="916" rx="44" fill="rgba(8,16,32,0.72)" stroke="#60A5FA" stroke-opacity="0.24"/>\n'
+        '  <text x="96" y="132" fill="#60A5FA" font-size="24" font-family="IBM Plex Mono, monospace" font-weight="600" letter-spacing="4">PROSPEKTLAB INSIGHT</text>\n'
+        f"  {' '.join(text_lines)}\n"
+        '  <text x="96" y="860" fill="#A8B4C8" font-size="30" font-family="Manrope, Arial, sans-serif">Image fallback rendered automatically</text>\n'
+        "</svg>\n"
+    )
+
+
 def publish_article(slug: str, route_base: str = _DEFAULT_ARTICLE_ROUTE) -> dict[str, Any]:
     """
     Flip an article's publish_status to 'published', mirror HTML+image to the
@@ -4503,7 +5399,30 @@ def publish_article(slug: str, route_base: str = _DEFAULT_ARTICLE_ROUTE) -> dict
         pub_dirs = _public_article_dirs(route_base, slug)
 
         # Mirror image(s) and article HTML to every public tree we ship.
-        cover_files = list(_article_dir(route_base, slug).glob("cover.*"))
+        article_dir = _article_dir(route_base, slug)
+        cover_files = list(article_dir.glob("cover.*"))
+        if not cover_files:
+            fallback_cover = article_dir / "cover.svg"
+            _write_text(
+                fallback_cover,
+                _fallback_cover_svg_for_publish(str(manifest.get("title") or slug)),
+            )
+            cover_files = [fallback_cover]
+            manifest["image_path"] = str(fallback_cover)
+            manifest["image_mime"] = "image/svg+xml"
+            manifest["cover_provider"] = str(manifest.get("cover_provider") or "local-renderer:svg")
+        else:
+            if not manifest.get("image_path"):
+                manifest["image_path"] = str(cover_files[0])
+            if not manifest.get("image_mime"):
+                ext = cover_files[0].suffix.lower()
+                manifest["image_mime"] = {
+                    ".png": "image/png",
+                    ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                    ".webp": "image/webp",
+                    ".svg": "image/svg+xml",
+                }.get(ext, "application/octet-stream")
         for pub_dir in pub_dirs:
             _write_text(pub_dir / "index.html", html_text)
             for img_file in cover_files:

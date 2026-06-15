@@ -47,10 +47,11 @@ from finagent.content_automation import (
     _public_article_dir,
     _public_article_dirs,
     _safe_route_base,
+    _find_cover_asset_name,
     _write_bytes,
     _write_text,
     _upsert_sitemap,
-    _generate_image,
+    _generate_cover_for_article,
     _event_fingerprint,
     _load_event_state,
     _save_event_state,
@@ -66,12 +67,453 @@ from finagent.content.editorial import (
     sanitize_article_package,
     sanitize_public_text,
 )
+from finagent.output.compliance import is_ra_licensed, CHAT_DISCLAIMER
+from finagent.output.fact_check import extract_numeric_claims, triangulate_claims
 from finagent.seo.google_search_console import submit_sitemap
 from finagent.events import BUS
 from finagent.run_agent import AgentLoopConfig, run_research_session
 from finagent.runtime_provider import resolve_openai_config
 
 logger = logging.getLogger("finagent.content.flash_engine")
+
+
+_HUB_EDITORIAL_CSS = """
+/* ── ProspektLab Research Hub — dark-blue editorial theme ── */
+  :root {
+    color-scheme: dark;
+    --paper:   #03060d;
+    --paper-2: rgba(8,16,32,0.7);
+    --paper-3: #0a1628;
+    --card:    #0d1f3c;
+    --ink:     #EAE3D6;
+    --ink-2:   #A8B4C8;
+    --ink-3:   #5F7088;
+    --muted:   #5F7088;
+    --ink-on-dark: #EAE3D6;
+    --line:        rgba(148,163,184,0.10);
+    --line-2:      rgba(147,197,253,0.18);
+    --line-strong: rgba(147,197,253,0.30);
+    --accent:      #60A5FA;
+    --accent-deep: #3B82F6;
+    --accent-soft: rgba(96,165,250,0.12);
+    --up:   #34D399;
+    --down: #FB7185;
+    --dark:   #060e1e;
+    --dark-2: #0d1928;
+    --bg-elevated: rgba(10,22,44,0.78);
+    --serif: "Newsreader", Georgia, "Times New Roman", serif;
+    --mono:  "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --gap: clamp(16px, 2.2vw, 28px);
+    --pad-x: clamp(20px, 5vw, 80px);
+    --maxw: 1320px;
+    --radius: 14px;
+    --radius-lg: 22px;
+    --shadow-sm: 0 1px 0 rgba(0,0,0,0.2), 0 1px 4px rgba(0,0,0,0.3);
+    --shadow:    0 2px 8px rgba(0,0,0,0.4), 0 20px 50px -16px rgba(0,0,0,0.6);
+    --shadow-lg: 0 30px 70px -30px rgba(0,0,0,0.7);
+    --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  * { margin: 0; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body {
+    font-family: var(--serif); background: var(--paper); color: var(--ink);
+    line-height: 1.6; font-size: 18px; -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility; overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse 700px 450px at 10% 5%, rgba(37,99,235,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 560px 380px at 88% 12%, rgba(96,165,250,0.08) 0%, transparent 60%);
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1;
+    opacity: 0.35;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+  }
+  img, svg, canvas { display: block; max-width: 100%; }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; color: inherit; cursor: pointer; border: none; background: none; }
+  input, textarea { font: inherit; }
+  ::selection { background: var(--accent); color: #03060d; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.15); border-radius: 10px; }
+
+  .wrap { width: 100%; max-width: var(--maxw); margin-inline: auto; padding-inline: var(--pad-x); }
+  .section { position: relative; z-index: 2; padding: clamp(32px,5vw,60px) 0; }
+  .divider { height: 1px; background: var(--line); border: 0; }
+
+  /* ── Typography ── */
+  .eyebrow {
+    font-family: var(--mono); font-size: 0.7rem; font-weight: 500;
+    letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3);
+    display: inline-flex; align-items: center; gap: 0.6em;
+  }
+  .eyebrow .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .display {
+    font-family: var(--serif); font-weight: 500;
+    font-size: clamp(2.8rem, 6.4vw, 6rem);
+    line-height: 0.97; letter-spacing: -0.025em; font-optical-sizing: auto;
+  }
+  .display .it { font-style: italic; font-weight: 460; color: var(--accent); }
+  h1,h2,h3,h4 { font-family: var(--serif); font-weight: 560; letter-spacing: -0.018em; line-height: 1.05; }
+  .h2 { font-size: clamp(1.9rem, 3.4vw, 3rem); }
+  .lede { font-size: clamp(1.05rem, 1.5vw, 1.3rem); line-height: 1.55; color: var(--ink-2); }
+  .muted { color: var(--ink-3); }
+  .mono { font-family: var(--mono); }
+  .serif-it { font-style: italic; color: var(--accent); }
+
+  /* ── Buttons ── */
+  .btn {
+    font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase;
+    font-weight: 500; display: inline-flex; align-items: center; gap: 0.7em;
+    padding: 0.95em 1.5em; border-radius: 999px;
+    background: var(--ink); color: var(--paper);
+    transition: transform .4s var(--ease), background .3s, box-shadow .4s var(--ease);
+  }
+  .btn:hover { background: var(--accent-deep); color: #fff; box-shadow: var(--shadow); }
+  .btn .arrow { transition: transform .4s var(--ease); }
+  .btn:hover .arrow { transform: translateX(4px); }
+  .btn--ghost { background: transparent; color: var(--ink); border: 1px solid var(--line-2); }
+  .btn--ghost:hover { background: rgba(96,165,250,0.1); border-color: var(--accent); color: var(--accent); }
+  .btn--accent { background: var(--accent); color: #03060d; border: none; }
+  .btn--accent:hover { background: var(--accent-deep); color: #fff; }
+  .btn--sm { padding: 0.7em 1.15em; font-size: 0.68rem; }
+  .magnetic { display: inline-block; }
+
+  /* ── Chips ── */
+  .chip {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.04em; color: var(--ink-2);
+    background: rgba(255,255,255,0.04); border: 1px solid var(--line);
+    padding: 0.5em 0.9em; border-radius: 999px; display: inline-flex; align-items: center; gap: 0.5em;
+    transition: border-color .25s, color .25s, background .25s, transform .25s var(--ease);
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+  .chip.is-active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  /* ── Header ── */
+  .site-head {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(3,6,13,0.88); backdrop-filter: blur(18px) saturate(1.2);
+    border-bottom: 1px solid transparent; transition: border-color .3s;
+  }
+  .site-head.is-stuck { border-color: var(--line); }
+  .head-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; gap: 20px; }
+  .brand { display: inline-flex; align-items: baseline; gap: 0.6em; }
+  .brand .mk-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); align-self: center; box-shadow: 0 0 0 3px var(--accent-soft); }
+  .brand .mk-name { font-family: var(--mono); font-weight: 600; letter-spacing: 0.14em; font-size: 0.82rem; text-transform: uppercase; color: #fff; }
+  .brand .mk-sub { font-family: var(--mono); font-weight: 400; letter-spacing: 0.22em; font-size: 0.62rem; text-transform: uppercase; color: var(--ink-3); }
+  .nav { display: flex; align-items: center; gap: 6px; }
+  .nav a:not(.btn) {
+    font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 0.6em 0.95em; border-radius: 999px; color: var(--ink-2);
+    position: relative; transition: color .25s, background .25s;
+  }
+  .nav a:not(.btn):hover { color: var(--ink); background: rgba(255,255,255,0.06); }
+  .nav a:not(.btn).is-current { color: var(--ink); }
+  .nav a:not(.btn).is-current::after {
+    content: ""; position: absolute; left: 0.95em; right: 0.95em; bottom: 0.35em; height: 1.5px; background: var(--accent);
+  }
+  .nav-cta { margin-left: 8px; }
+  .burger { display: none; width: 42px; height: 42px; border-radius: 10px; border: 1px solid var(--line-2); align-items: center; justify-content: center; flex-direction: column; gap: 4px; }
+  .burger span { width: 18px; height: 1.6px; background: var(--ink); transition: transform .3s var(--ease), opacity .3s; }
+  .burger.is-open span:nth-child(1) { transform: translateY(5.6px) rotate(45deg); }
+  .burger.is-open span:nth-child(2) { opacity: 0; }
+  .burger.is-open span:nth-child(3) { transform: translateY(-5.6px) rotate(-45deg); }
+  .m-nav {
+    position: fixed; inset: 0; z-index: 49; background: rgba(3,6,13,0.97);
+    backdrop-filter: blur(20px); padding: 90px var(--pad-x) 40px;
+    display: flex; flex-direction: column; gap: 8px;
+    transform: translateY(-100%); transition: transform .5s var(--ease); visibility: hidden;
+  }
+  .m-nav.is-open { transform: translateY(0); visibility: visible; }
+  .m-nav a { font-family: var(--serif); font-size: 2rem; padding: 0.3em 0; border-bottom: 1px solid var(--line); }
+  .m-nav a .n-num { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-3); margin-right: 1em; }
+
+  /* ── Ticker ── */
+  .ticker {
+    position: relative; z-index: 40; background: var(--dark); color: var(--ink-on-dark);
+    border-bottom: 1px solid rgba(255,255,255,0.06); overflow: hidden; height: 36px;
+  }
+  .ticker-track { display: flex; gap: 0; width: max-content; height: 100%; animation: ticker 24s linear infinite; align-items: center; }
+  .ticker:hover .ticker-track { animation-play-state: paused; }
+  @keyframes ticker { to { transform: translateX(-50%); } }
+  .tk {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.02em;
+    display: inline-flex; align-items: center; gap: 0.55em;
+    padding: 0.7em 1.3em; border-right: 1px solid rgba(255,255,255,0.07); white-space: nowrap;
+    height: 100%;
+  }
+  .tk .sym { color: #fff; font-weight: 500; }
+  .tk .px { color: var(--ink-2); }
+  .tk .chg.up { color: #4FCF8E; }
+  .tk .chg.down { color: #F2876F; }
+  .tk .tri { font-size: 0.6rem; }
+
+  /* ── Reveal — default visible, animate when JS adds .in (no-JS safe) ── */
+  [data-reveal] { opacity: 1; transform: none; transition: opacity .7s var(--ease), transform .7s var(--ease); }
+  [data-reveal-stagger] > * { opacity: 1; transform: none; transition: opacity .6s var(--ease), transform .6s var(--ease); }
+  /* Only hide if JS explicitly opts-in by adding .pre class to <html>;
+     belt-and-braces: 60 ms safety force-reveal in JS clears any pre state. */
+  html.pre-reveal [data-reveal] { opacity: 0; transform: translateY(18px); }
+  html.pre-reveal [data-reveal].in { opacity: 1; transform: none; }
+  html.pre-reveal [data-reveal-stagger] > * { opacity: 0; transform: translateY(18px); }
+  html.pre-reveal [data-reveal-stagger].in > * { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+    [data-reveal], [data-reveal-stagger] > * { opacity: 1 !important; transform: none !important; }
+  }
+
+  /* ── Hero ── */
+  .hero { padding: clamp(48px, 8vw, 110px) 0 clamp(40px, 6vw, 72px); }
+  .hero-grid { display: grid; grid-template-columns: 1.45fr 1fr; gap: clamp(28px, 4vw, 64px); align-items: end; }
+  .hero-head .display { margin: 0.35em 0 0; max-width: 14ch; }
+  .hero-lede { margin-top: 1.3em; max-width: 46ch; }
+  .hero-actions { margin-top: 2em; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+
+  /* ── Market Snapshot ── */
+  .snap {
+    background: var(--card); border: 1px solid var(--line-2); border-radius: var(--radius-lg);
+    padding: clamp(18px,2vw,26px); box-shadow: var(--shadow); position: relative; overflow: hidden;
+  }
+  .snap::after { content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); }
+  .snap-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .snap-live { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--up); display: inline-flex; align-items: center; gap: 0.5em; }
+  .snap-live .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--up); position: relative; }
+  .snap-live .pulse::after { content:""; position:absolute; inset:0; border-radius:50%; background: var(--up); animation: pulse 2s var(--ease) infinite; }
+  @keyframes pulse { 0%{transform:scale(1);opacity:.7} 70%{transform:scale(2.6);opacity:0} 100%{opacity:0} }
+  .idx-row { display: flex; justify-content: space-between; align-items: center; padding: 13px 0; border-top: 1px solid var(--line); }
+  .idx-row:first-of-type { border-top: 0; }
+  .idx-meta .idx-name { font-family: var(--mono); font-size: 0.78rem; font-weight: 500; letter-spacing: 0.02em; }
+  .idx-meta .idx-sub { font-family: var(--mono); font-size: 0.62rem; color: var(--ink-3); letter-spacing: 0.04em; }
+  .idx-spark { width: 96px; height: 34px; }
+  .idx-val { text-align: right; min-width: 92px; }
+  .idx-val .idx-px { font-family: var(--mono); font-size: 0.84rem; font-weight: 500; font-feature-settings:"tnum"; }
+  .idx-val .idx-chg { font-family: var(--mono); font-size: 0.66rem; margin-top: 2px; }
+  .idx-chg.up { color: var(--up); }
+  .idx-chg.down { color: var(--down); }
+
+  /* ── Market Band ── */
+  .market-band { padding: clamp(8px,1vw,16px) 0 clamp(36px,5vw,60px); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--paper-2); }
+  .mb-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+  .mb-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 16px 12px; transition: transform .4s var(--ease), border-color .3s, box-shadow .4s var(--ease);
+  }
+  .mb-card:hover { transform: translateY(-3px); border-color: var(--line-2); box-shadow: var(--shadow-sm); }
+  .mb-card .mb-name { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+  .mb-card .mb-px { font-family: var(--mono); font-size: 1.05rem; font-weight: 500; margin: 6px 0 2px; font-feature-settings:"tnum"; }
+  .mb-card .mb-chg { font-family: var(--mono); font-size: 0.7rem; display: inline-flex; gap: 0.3em; }
+  .mb-card canvas { width: 100%; height: 30px; margin-top: 8px; }
+
+  /* ── Section header ── */
+  .sec-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: clamp(24px,3vw,40px); flex-wrap: wrap; }
+  .sec-head .sec-title { max-width: 22ch; }
+  .sec-num { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.16em; color: var(--ink-3); }
+
+  /* ── Publishing Model ── */
+  .pubmodel { padding: clamp(40px,6vw,80px) 0; }
+  .pubmodel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px,4vw,60px); align-items: start; }
+  .pubmodel .chips-wrap { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+
+  /* ── Story cards ── */
+  .stories { display: grid; grid-template-columns: repeat(12, 1fr); gap: var(--gap); }
+  .story { grid-column: span 4; display: flex; flex-direction: column; }
+  .story--feature { grid-column: span 12; }
+  .story-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-lg);
+    padding: clamp(20px,2.2vw,30px); height: 100%; display: flex; flex-direction: column;
+    transition: transform .5s var(--ease), box-shadow .5s var(--ease), border-color .4s;
+    position: relative; overflow: hidden;
+  }
+  .story-card:hover { transform: translateY(-5px); box-shadow: var(--shadow); border-color: var(--line-2); }
+  .story-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background: var(--accent); transform: scaleY(0); transform-origin: top; transition: transform .5s var(--ease); }
+  .story-card:hover::before { transform: scaleY(1); }
+  .story-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .story-cat { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.14em; text-transform: uppercase; }
+  .story-read { font-family: var(--mono); font-size: 0.64rem; color: var(--ink-3); letter-spacing: 0.04em; }
+  .story-title { font-family: var(--serif); font-weight: 560; line-height: 1.1; letter-spacing: -0.015em; font-size: clamp(1.3rem, 1.7vw, 1.65rem); margin-bottom: 0.5em; }
+  .story--feature .story-title { font-size: clamp(1.9rem, 3.2vw, 2.9rem); max-width: 18ch; line-height: 1.06; }
+  .story-dek { color: var(--ink-2); font-size: 0.98rem; line-height: 1.55; }
+  .story--feature .story-dek { font-size: clamp(1.05rem,1.4vw,1.25rem); max-width: 52ch; }
+  .story-foot { margin-top: auto; padding-top: 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .story-date { font-family: var(--mono); font-size: 0.66rem; color: var(--ink-3); letter-spacing: 0.04em; }
+  .story-go { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); display: inline-flex; align-items: center; gap: 0.5em; transition: gap .3s var(--ease), color .3s; }
+  .story-card:hover .story-go { gap: 0.9em; color: var(--accent); }
+  .story-metric { display: inline-flex; align-items: center; gap: 0.6em; font-family: var(--mono); font-size: 0.72rem; padding: 0.4em 0.7em; border: 1px solid var(--line); border-radius: 8px; }
+  .story-metric canvas { width: 60px; height: 22px; }
+  .story--feature .story-card { display: flex; flex-direction: column; gap: clamp(22px,2.5vw,30px); }
+  .story--feature .feat-thumb { display: block; width: 100%; aspect-ratio: 21/9; border-radius: var(--radius); overflow: hidden; object-fit: cover; }
+  .story--feature .feat-row { display: grid; grid-template-columns: 1.5fr 1fr; gap: 40px; align-items: center; }
+  .story--feature .feat-row > *:first-child { display: flex; flex-direction: column; }
+  .story--feature .feat-side { border-left: 1px solid var(--line); padding-left: 36px; }
+  .feat-side-label { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); display: block; }
+  .feat-brief-accent { display: flex; align-items: flex-end; gap: 3px; height: 26px; margin: 16px 0 18px; }
+  .feat-brief-accent span { flex: 1; border-radius: 2px; background: linear-gradient(180deg, var(--accent), rgba(96,165,250,0.15)); }
+  .feat-brief-accent span:nth-child(1) { height: 45%; }
+  .feat-brief-accent span:nth-child(2) { height: 70%; }
+  .feat-brief-accent span:nth-child(3) { height: 55%; }
+  .feat-brief-accent span:nth-child(4) { height: 100%; }
+  .feat-brief-accent span:nth-child(5) { height: 75%; }
+  .feat-brief-accent span:nth-child(6) { height: 88%; }
+  .feat-brief-accent span:nth-child(7) { height: 60%; }
+  .feat-brief { display: flex; flex-direction: column; gap: 13px; }
+  .feat-brief-row { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .feat-brief-row:last-child { border-bottom: 0; padding-bottom: 0; }
+  .feat-brief-row span { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+  .feat-brief-row strong { font-family: var(--serif); font-size: 1.02rem; font-weight: 600; color: var(--ink); text-align: right; }
+  .feat-brief-tag { display: inline-flex; align-items: center; margin-top: 18px; padding: 0.45em 0.85em; border-radius: 999px; border: 1px solid rgba(96,165,250,0.35); background: rgba(96,165,250,0.08); color: var(--accent); font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; }
+  .story-thumb { display: block; width: 100%; aspect-ratio: 16/10; border-radius: var(--radius); overflow: hidden; margin-bottom: 20px; object-fit: cover; }
+
+  /* Search & filter */
+  #archive-search {
+    width: min(340px,100%); border: 1px solid var(--line); border-radius: var(--radius);
+    background: rgba(255,255,255,0.03); padding: 11px 14px; color: var(--ink);
+    font-family: var(--mono); font-size: 0.82rem; outline: none; transition: border-color .2s;
+  }
+  #archive-search:focus { border-color: var(--accent); background: rgba(96,165,250,0.04); }
+  #archive-search::placeholder { color: var(--ink-3); }
+  .filter-strip { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+  [data-filter] {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.55em 1em; border-radius: 999px; border: 1px solid var(--line);
+    background: rgba(255,255,255,0.03); color: var(--ink-2); cursor: pointer;
+    display: inline-flex; align-items: center; gap: 0.5em;
+    transition: border-color .2s, color .2s, background .2s, transform .2s var(--ease);
+  }
+  [data-filter]:hover, [data-filter].is-active { border-color: var(--accent); color: var(--accent); background: rgba(96,165,250,0.08); transform: translateY(-1px); }
+  [data-filter] span { font-family: var(--mono); font-size: 0.62rem; color: var(--ink-3); }
+  #story-count { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-3); letter-spacing: 0.06em; }
+
+  /* ── Principles ── */
+  .principles { padding: clamp(40px,6vw,80px) 0; background: var(--paper-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .principle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap); }
+  .principle { border-top: 2px solid rgba(96,165,250,0.3); padding-top: 22px; }
+  .principle .p-num { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.16em; color: var(--accent); margin-bottom: 14px; display: block; }
+  .principle h3 { font-size: clamp(1.3rem,1.8vw,1.7rem); line-height: 1.12; margin-bottom: 0.55em; }
+  .principle p { color: var(--ink-2); font-size: 0.98rem; line-height: 1.6; }
+
+  /* ── Contact ── */
+  .contact { padding: clamp(50px,7vw,100px) 0; }
+  .contact-card {
+    background: var(--dark); color: var(--ink-on-dark); border-radius: var(--radius-lg);
+    border: 1px solid var(--line-2);
+    padding: clamp(34px,5vw,72px); display: grid; grid-template-columns: 1.2fr 1fr;
+    gap: clamp(30px,4vw,64px); position: relative; overflow: hidden;
+  }
+  .contact-card .eyebrow { color: rgba(234,227,214,0.6); }
+  .contact-card .eyebrow .dot { box-shadow: 0 0 0 3px rgba(255,255,255,0.08); }
+  .contact-card h2 { color: #fff; font-size: clamp(1.9rem,3.2vw,3rem); margin-top: 0.4em; }
+  .contact-card .c-lede { color: rgba(234,227,214,0.7); margin-top: 1em; max-width: 40ch; }
+  .contact-form { display: flex; flex-direction: column; gap: 14px; }
+  .field label { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(234,227,214,0.55); display: block; margin-bottom: 7px; }
+  .field input, .field textarea {
+    width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+    padding: 12px 14px; color: #fff; font-family: var(--mono); font-size: 0.86rem; transition: border-color .25s, background .25s;
+  }
+  .field input:focus, .field textarea:focus { outline: none; border-color: var(--accent); background: rgba(255,255,255,0.08); }
+  .field textarea { resize: vertical; min-height: 84px; }
+  .contact-form .btn--accent { justify-content: center; margin-top: 4px; }
+  .c-details { display: flex; flex-direction: column; gap: 18px; margin-top: 30px; }
+  .c-detail { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 14px; }
+  .c-detail .cd-k { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(234,227,214,0.5); }
+  .c-detail .cd-v { font-family: var(--serif); font-size: 1.15rem; margin-top: 4px; }
+
+  /* ── Footer ── */
+  .foot { position: relative; z-index: 2; background: var(--dark); color: var(--ink-on-dark); margin-top: clamp(60px, 9vw, 130px); }
+  .foot a { color: var(--ink-on-dark); }
+  .foot .foot-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 40px; padding: clamp(50px,7vw,90px) 0 40px; }
+  .foot .mk-name { color: #fff; }
+  .foot-disc { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.03em; color: rgba(234,227,214,0.55); line-height: 1.7; }
+  .foot-col h4 { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(234,227,214,0.5); margin-bottom: 14px; font-weight: 500; }
+  .foot-col ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .foot-col a { font-family: var(--mono); font-size: 0.82rem; opacity: 0.85; transition: opacity .2s, color .2s; }
+  .foot-col a:hover { opacity: 1; color: #fff; }
+  .foot-base { display: flex; justify-content: space-between; align-items: center; padding: 22px 0 30px; border-top: 1px solid rgba(255,255,255,0.08); font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em; color: rgba(234,227,214,0.5); flex-wrap: wrap; gap: 14px; }
+
+  /* ── Custom cursor ── */
+  .cursor-dot, .cursor-ring { position: fixed; top: 0; left: 0; z-index: 9999; pointer-events: none; border-radius: 50%; mix-blend-mode: difference; }
+  .cursor-dot { width: 6px; height: 6px; background: #fff; transform: translate(-50%,-50%); }
+  .cursor-ring { width: 34px; height: 34px; border: 1px solid #fff; transform: translate(-50%,-50%); transition: width .25s var(--ease), height .25s var(--ease), background .25s, opacity .25s; }
+  .cursor-ring.is-hover { width: 54px; height: 54px; background: rgba(255,255,255,0.12); }
+  @media (hover: none), (pointer: coarse) { .cursor-dot, .cursor-ring { display: none; } }
+
+  /* ── Responsive ── */
+  @media (max-width: 1080px) { .mb-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 880px) { .nav { display: none; } .burger { display: flex; } .foot .foot-grid { grid-template-columns: 1fr 1fr; gap: 30px; } }
+  @media (max-width: 900px) {
+    .hero-grid { grid-template-columns: 1fr; align-items: start; }
+    .hero-head .display { max-width: 18ch; }
+    .pubmodel-grid { grid-template-columns: 1fr; }
+    .story { grid-column: span 6; }
+    .story--feature .feat-row { grid-template-columns: 1fr; gap: 24px; }
+    .story--feature .feat-side { border-left: 0; border-top: 1px solid var(--line); padding-left: 0; padding-top: 24px; }
+    .principle-grid { grid-template-columns: 1fr; gap: 30px; }
+    .contact-card { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 620px) {
+    .mb-grid { grid-template-columns: repeat(2, 1fr); }
+    .story, .story--feature { grid-column: span 12; }
+  }
+  @media (max-width: 560px) { .foot .foot-grid { grid-template-columns: 1fr; } }
+
+  /* ── Live Market Snapshot (real-time from /public/market/ticker) ── */
+  .market-snapshot {
+    margin: clamp(20px, 3vw, 36px) 0 clamp(28px, 4vw, 48px);
+    padding: 22px 24px 26px;
+    background: var(--bg-elevated, rgba(10,22,44,0.78));
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    box-shadow: var(--shadow);
+  }
+  .snap-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+  .snap-kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 11px; color: var(--accent);
+    text-transform: uppercase; letter-spacing: 0.10em; font-weight: 600;
+  }
+  .snap-pulse {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 0 0 rgba(96,165,250,0.55);
+    animation: snap-pulse 1.6s ease-out infinite;
+  }
+  @keyframes snap-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(96,165,250,0.55); }
+    70% { box-shadow: 0 0 0 10px rgba(96,165,250,0); }
+    100% { box-shadow: 0 0 0 0 rgba(96,165,250,0); }
+  }
+  .snap-sub { font-family: var(--mono); font-size: 10.5px; color: var(--muted); letter-spacing: 0.06em; }
+  .snap-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .snap-card {
+    position: relative; padding: 14px 14px 12px;
+    background: rgba(3, 8, 20, 0.62);
+    border: 1px solid var(--line);
+    border-radius: 14px; min-height: 96px;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+  .snap-card:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+  .snap-card .sc-name { font-family: var(--mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .snap-card .sc-spark { margin: 4px 0 6px; height: 30px; width: 100%; display: block; }
+  .snap-card .sc-row { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+  .snap-card .sc-val { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .snap-card .sc-chg { font-family: var(--mono); font-size: 11px; font-weight: 600; }
+  .snap-card .sc-chg.up   { color: #34D399; }
+  .snap-card .sc-chg.down { color: #FB7185; }
+  .snap-card.snap-skel .sk-name, .snap-card.snap-skel .sk-spark, .snap-card.snap-skel .sk-val {
+    background: linear-gradient(90deg, rgba(96,165,250,0.05) 25%, rgba(96,165,250,0.12) 50%, rgba(96,165,250,0.05) 75%);
+    background-size: 200% 100%; animation: skel-shimmer 1.4s linear infinite; border-radius: 6px;
+  }
+  .snap-card.snap-skel .sk-name  { height: 9px; width: 50%; margin-bottom: 8px; }
+  .snap-card.snap-skel .sk-spark { height: 28px; width: 100%; margin-bottom: 8px; }
+  .snap-card.snap-skel .sk-val   { height: 14px; width: 70%; }
+  @keyframes skel-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+"""
 
 _FLASH_PASSES = int(os.getenv("FINAGENT_CONTENT_FLASH_PASSES", "3"))
 _DEEP_PASSES = int(os.getenv("FINAGENT_CONTENT_DEEP_PASSES", "8"))
@@ -97,7 +539,6 @@ _TRUSTED_SUPPORTING_DOMAIN_HINTS = (
     "reuters.com",
     "bloomberg.com",
     "moneycontrol.com",
-    "livemint.com",
     "thehindu.com",
     "economictimes.indiatimes.com",
     "business-standard.com",
@@ -105,6 +546,8 @@ _TRUSTED_SUPPORTING_DOMAIN_HINTS = (
     "financialexpress.com",
     "ndtvprofit.com",
 )
+# Hard block: never publish Livemint as a primary or supporting source.
+_BLOCKED_PUBLIC_DOMAIN_HINTS = ("livemint.com",)
 _LIMITED_DATA_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\blimited data\b", re.I),
     re.compile(r"\binsufficient data\b", re.I),
@@ -238,30 +681,38 @@ _CONTENT_FLASH_OBJECTIVES: list[str] = [
     ),
     # Pass 2 — Full article synthesis (always last, emits memo)
     (
-        "ARTICLE SYNTHESIS — FINAL: Write a complete publication-ready financial article that is more "
-        "informative than any professional research analyst. Return ONLY valid JSON matching the "
-        "ContentArticlePackage schema with these exact fields:\n"
-        "  slug (URL-safe, 2-80 chars)\n"
-        "  title (50-70 chars, SEO-optimised)\n"
-        "  description (140-170 chars, meta description)\n"
-        "  hero_eyebrow (short category label, max 40 chars)\n"
-        "  hero_title (compelling headline, max 100 chars)\n"
-        "  hero_summary (2-3 engaging sentences, 100-300 chars)\n"
-        "  audience (target reader)\n"
-        "  keywords (list of 8-12 precise terms)\n"
-        "  key_takeaways (3-6 objects: {heading, detail})\n"
-        "  metrics (4-8 objects: {label, value, change?, period?, source?})\n"
-        "  tables (1-3 objects: {title, columns, rows, footnote?})\n"
-        "  visuals (1-2 objects: {kind, title, points[{label,value}], note?})\n"
-        "  timeline (0-8 objects: {date, event, detail?, source?})\n"
-        "  evidence_notes (0-10 objects: {claim, source_title, source_url})\n"
-        "  sections (list of 5-7 objects: {heading, paragraphs: [2-3 str], bullets: [0-5 str]})\n"
-        "  faqs (list of 4-5 objects: {question, answer} retail investors actually ask)\n"
-        "  cta_label (max 40 chars)\n"
-        "  cta_href (link, usually '/#/contact')\n"
-        "  image_prompt (detailed visual description for image generation)\n"
-        "SEBI compliance mandatory: NO buy/sell/hold/accumulate/exit/target price/rebalancing. "
-        "Every factual claim must cite its source inline. Zero filler sentences."
+        "ARTICLE SYNTHESIS — FINAL: You are a senior markets correspondent at a top Indian business daily. "
+        "Write a publication-ready financial article with the authority and depth of LiveMint or Hindu BusinessLine.\n\n"
+        "VOICE & STRUCTURE RULES:\n"
+        "- LEDE: Open with stakes — what happened, why it matters, and what changes for the reader. No throat-clearing.\n"
+        "- PARAGRAPH 2: 'Why now' — the catalyst, trigger, or timing that makes this story urgent today.\n"
+        "- EVERY substantive section: at least one historical comparison OR sector benchmark with specific numbers.\n"
+        "- ATTRIBUTION: 'The street had expected...', 'Management guided for...', 'Analysts at X estimated...' — never unattributed opinion.\n"
+        "- CLOSE: Forward-looking — upcoming catalysts, next data point, what smart money is watching.\n"
+        "- BANNED FILLER: 'significant growth', 'strong performance', 'notable development', 'robust numbers', "
+        "'going forward', 'it remains to be seen', 'only time will tell'. Use specific numbers instead.\n\n"
+        "Return ONLY valid JSON matching the ContentArticlePackage schema:\n"
+        "  slug (URL-safe, 2-80 chars),\n"
+        "  title (LiveMint-style headline, 60-100 chars, MUST anchor on a specific number/named entity, not generic SEO),\n"
+        "  description (140-170 chars), hero_eyebrow, hero_title (max 100 chars),\n"
+        "  hero_summary (2-3 sentences, 100-300 chars), audience, keywords (8-12),\n"
+        "  narrative_lede (REQUIRED 40-70 words: inverted-pyramid opener, key number first, flowing prose),\n"
+        "  market_context (REQUIRED 50-90 words: index/sector/peer/macro backdrop with numbers in sentences),\n"
+        "  analyst_commentary (REQUIRED 50-90 words: estimate revisions, valuation, drivers, as continuous prose),\n"
+        "  key_takeaways (3-6: {heading, detail}), metrics (4-8: {label, value, change?, period?, source?}),\n"
+        "  tables (1-3: {title, columns, rows, footnote?}),\n"
+        "  visuals (1-2: {kind, title, points[{label,value}], note?}),\n"
+        "  timeline (0-8: {date, event, detail?, source?}),\n"
+        "  evidence_notes (0-10: {claim, source_title, source_url}),\n"
+        "  sections (5-7: {heading, paragraphs: [2-3 str], bullets: [0-5 str]}),\n"
+        "  faqs (4-5: {question, answer} — real retail investor questions),\n"
+        "  cta_label, cta_href,\n"
+        "  image_prompt (REQUIRED — premium editorial cover for the ProspektLab dark research terminal: "
+        "3:2 ratio, deep navy/near-black backdrop with cyan and violet accent glow, layered financial UI panels, "
+        "one strong central subject tied to the story, soft volumetric lighting, "
+        "dark-mode Bloomberg-meets-LiveMint aesthetic, India market context, no headline text, no watermark)\n"
+        "SEBI compliance: NO buy/sell/hold/accumulate/exit/target price/rebalancing. "
+        "Cite every statistic. Zero filler."
     ),
 ]
 
@@ -326,19 +777,45 @@ _CONTENT_DEEP_OBJECTIVES: list[str] = [
     ),
     # Pass 7 — synthesis (always last, emits memo as JSON)
     (
-        "DEEP ARTICLE SYNTHESIS — FINAL: Integrate ALL 7 prior research passes into a landmark "
-        "investigative financial article — more informative than any professional research analyst. "
+        "DEEP ARTICLE SYNTHESIS — FINAL: You are a senior markets correspondent writing the definitive "
+        "investigative piece on this company/event. Your standard is LiveMint's long-form business coverage "
+        "— thorough, authoritative, and impossible to skim without learning something.\n\n"
+        "Integrate ALL 7 prior research passes. VOICE & STRUCTURE:\n"
+        "- LEDE: Stakes first — the single most important number or event, and why it matters NOW.\n"
+        "- PARAGRAPH 2: 'Why now' — the catalyst that makes this story land today, not last week.\n"
+        "- HISTORICAL DEPTH: Every substantive claim gets a comparison (vs prior quarter, vs peer, vs sector, vs 3-year average).\n"
+        "- ATTRIBUTION: 'The street expected X', 'Management guided for Y', 'SEBI's order noted...' — never naked opinion.\n"
+        "- GOVERNANCE SECTION: One section MUST examine verified ownership, governance, and filing signals "
+        "(promoter pledges, RPTs, auditor tenure, SEBI enforcement where records exist).\n"
+        "- CLOSE: Forward-looking — upcoming catalysts, next reporting date, what institutional money is watching.\n"
+        "- BANNED FILLER: 'significant', 'strong', 'notable', 'robust', 'going forward', 'it remains to be seen', "
+        "'only time will tell', 'amid concerns'. Replace every one with a specific number or fact.\n\n"
         "Return ONLY valid JSON matching ContentArticlePackage schema:\n"
-        "  slug, title (50-70 chars), description (140-170 chars), hero_eyebrow, hero_title, "
-        "  hero_summary, audience, keywords (10-12), "
-        "  key_takeaways, metrics, tables, visuals, timeline, evidence_notes, "
-        "  sections (7-9 rich objects: {heading, paragraphs: [2-4 str each], bullets: [0-6 str]})\n"
-        "  — one section MUST examine verified ownership, governance, and filing signals covering "
-        "    promoter pledges, RPTs, auditor tenure, and SEBI enforcement where records support it\n"
-        "  faqs (5-6 objects: real investor questions with data-backed answers)\n"
-        "  cta_label, cta_href, image_prompt\n"
+        "  slug,\n"
+        "  title (LiveMint-style headline, 60-100 chars, MUST anchor on a specific number or named entity — "
+        "e.g. 'TCS Q3 profit jumps 12% to Rs 11,400 crore as deal pipeline hits $42 bn'; never a generic SEO title),\n"
+        "  description (140-170 chars), hero_eyebrow, hero_title, hero_summary, audience, keywords (10-12),\n"
+        "  narrative_lede (REQUIRED, 40-70 words: inverted-pyramid opener that front-loads the single most important "
+        "number and insight in the first sentence, written as flowing prose, not bullets),\n"
+        "  market_context (REQUIRED, 50-90 words: situate the story in the index level, sector move, peer comparison, "
+        "and macro backdrop with hard numbers woven into sentences),\n"
+        "  analyst_commentary (REQUIRED, 50-90 words: analyst-grade interpretation — estimate revisions, valuation "
+        "multiples, margin/growth drivers — woven as continuous prose, NOT a bullet dump),\n"
+        "  key_takeaways, metrics, tables, visuals, timeline, evidence_notes,\n"
+        "  sections (7-9: {heading, paragraphs: [2-4 str of 60+ words each, numbers embedded INSIDE the sentences], "
+        "bullets: [0-3 str — prefer prose over bullets]}),\n"
+        "  faqs (5-6: real investor questions with data-backed answers),\n"
+        "  cta_label, cta_href,\n"
+        "  image_prompt (REQUIRED — premium editorial cover for the ProspektLab dark research terminal: "
+        "3:2 ratio, deep navy/near-black backdrop with cyan and violet accent glow, layered financial UI panels, "
+        "one strong central subject tied to the story, soft volumetric lighting, "
+        "dark-mode Bloomberg-meets-LiveMint aesthetic, India market context, no headline text, no watermark)\n"
+        "EDITORIAL STANDARD: Write like a LiveMint/Mint finance journalist — data-led, narrative-driven, "
+        "inverted pyramid (key numbers first, then context, then analysis, then forward implications). "
+        "Integrate numbers into continuous prose; never leave data stranded only in metric blocks. "
+        "Vary sentence length for journalistic cadence.\n"
         "SEBI compliance: NO buy/sell/hold/accumulate/exit/target price. "
-        "Attribute every statistic to its source. Zero filler. Return raw JSON only."
+        "Cite every statistic. Zero filler. Return raw JSON only."
     ),
 ]
 
@@ -520,12 +997,14 @@ def _build_insights_hub_html_editorial(route_base: str = "insights") -> str:
     ikg_count = sum(1 for article in published if bool(article.get("ikg_covered")))
     now_str = datetime.now(timezone.utc).strftime("%B %d, %Y")
 
+    # Identity accents tuned to ProspektLab dark theme — distinguishable but
+    # all in the cyan/violet/coral/ice family so the hub reads as one product.
     type_meta: dict[str, dict[str, str]] = {
-        "earnings": {"label": "Earnings", "accent": "#0d766e"},
-        "sebi": {"label": "SEBI", "accent": "#b4233c"},
-        "trend": {"label": "Trend", "accent": "#0f3d91"},
-        "company": {"label": "Company", "accent": "#6b46c1"},
-        "manual": {"label": "Insight", "accent": "#845d1f"},
+        "earnings": {"label": "Earnings", "accent": "#60A5FA"},   # cyan
+        "sebi":     {"label": "SEBI",     "accent": "#FB7185"},   # coral
+        "trend":    {"label": "Trend",    "accent": "#C7D2FE"},   # ice
+        "company":  {"label": "Company",  "accent": "#8B5CF6"},   # violet
+        "manual":   {"label": "Insight",  "accent": "#34D399"},   # mint
     }
 
     def _story_score(article: dict[str, Any]) -> int:
@@ -563,8 +1042,11 @@ def _build_insights_hub_html_editorial(route_base: str = "insights") -> str:
         slug = str(article.get("slug") or "").strip()
         if not slug:
             return "/prospektlab-logo.svg"
+        detected_cover = _find_cover_asset_name(route_base, slug)
+        if detected_cover:
+            return f"/{route_base}/{slug}/{detected_cover}"
         suffix = Path(str(article.get("image_path") or "")).suffix.lower()
-        ext = suffix if suffix in {".png", ".jpg", ".jpeg", ".webp", ".svg"} else ".svg"
+        ext = suffix if suffix in {".png", ".jpg", ".jpeg", ".webp", ".svg"} else ".png"
         return f"/{route_base}/{slug}/cover{ext}"
 
     def _search_blob(article: dict[str, Any]) -> str:
@@ -701,811 +1183,871 @@ def _build_insights_hub_html_editorial(route_base: str = "insights") -> str:
         ensure_ascii=True,
     )
 
+    def _read_mins(article: dict[str, Any]) -> str:
+        wc = 0
+        for field in ("body", "hero_summary", "description"):
+            txt = str(article.get(field) or "")
+            wc += len(txt.split())
+        mins = max(2, round(wc / 200))
+        return f"{mins} min read"
+
+    def _article_live_symbol(article: dict[str, Any]) -> str:
+        text = " ".join(
+            str(article.get(field) or "")
+            for field in ("title", "slug", "hero_title", "description", "hero_summary", "keywords")
+        ).upper()
+        padded = f" {text} "
+        symbol_hints = (
+            ("BRITANNIA", "BRITANNIA"),
+            ("TATA CONSULTANCY", "TCS"),
+            (" TCS ", "TCS"),
+            ("INFOSYS", "INFY"),
+            ("HDFC BANK", "HDFCBANK"),
+            ("HDFC", "HDFCBANK"),
+            ("ICICI", "ICICIBANK"),
+            ("RELIANCE", "RELIANCE"),
+            ("STATE BANK", "SBIN"),
+            (" SBI ", "SBIN"),
+            ("BHARTI", "BHARTIARTL"),
+            ("AIRTEL", "BHARTIARTL"),
+            ("ITC", "ITC"),
+            ("LARSEN", "LT"),
+            ("L&T", "LT"),
+        )
+        for hint, symbol in symbol_hints:
+            if hint in padded:
+                return symbol
+        return ""
+
+    def _story_card_v3(article: dict[str, Any], *, featured: bool = False, index: int = 0) -> str:
+        slug = str(article.get("slug") or "").strip()
+        title_raw = str(article.get("title") or slug or "Untitled insight")
+        summary_raw = str(article.get("hero_summary") or article.get("description") or "").strip()
+        content_type = str(article.get("content_type") or "manual").strip().lower() or "manual"
+        meta = type_meta.get(content_type, type_meta["manual"])
+        accent = meta["accent"]
+        cat_label = meta["label"]
+        local_url = f"/{route_base}/{slug}/" if slug else "#"
+        date_label = _format_date(str(article.get("published_at") or article.get("generated_at") or ""))
+        cover_href = html.escape(_image_href(article))
+        title = html.escape(sanitize_public_text(title_raw))
+        deck_raw = sanitize_public_text(summary_raw[:240] if featured else summary_raw[:160])
+        deck = html.escape(deck_raw or "Publication-ready market research.")
+        read_time = _read_mins(article)
+        search_attr = html.escape(_search_blob(article), quote=True)
+        ikg = bool(article.get("ikg_covered"))
+        ikg_attr = "yes" if ikg else "no"
+        live_symbol = _article_live_symbol(article)
+        live_attr = f' data-live-symbol="{html.escape(live_symbol)}"' if live_symbol else ""
+        live_quote = (
+            f'<div class="story-live-mini" aria-label="Live market quote for {html.escape(live_symbol)}">'
+            f'<span>{html.escape(live_symbol)}</span><strong data-live-price>Live quote</strong>'
+            '<em data-live-move>...</em></div>'
+            if live_symbol else ""
+        )
+
+        if featured:
+            # Feature card — full width, horizontal layout with side panel.
+            # The side panel is a static editorial "Briefing" built only from
+            # metadata that is always present, so it never gets stuck waiting on
+            # live market data (the old live-quote table had no styling and hung
+            # on "Fetching..." for macro/sector stories with no linked symbol).
+            ikg_badge = '<span class="feat-brief-tag">IKG-verified coverage</span>' if ikg else ''
+            side_panel = (
+                '<div class="feat-side">'
+                '<span class="feat-side-label">Briefing</span>'
+                '<div class="feat-brief-accent" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>'
+                '<div class="feat-brief">'
+                f'<div class="feat-brief-row"><span>Category</span><strong style="color:{html.escape(accent)}">{html.escape(cat_label)}</strong></div>'
+                f'<div class="feat-brief-row"><span>Reading time</span><strong>{html.escape(read_time)}</strong></div>'
+                f'<div class="feat-brief-row"><span>Published</span><strong>{html.escape(date_label)}</strong></div>'
+                '</div>'
+                f'{ikg_badge}'
+                '</div>'
+            )
+            feat_row = (
+                '<div class="feat-row">'
+                '<div>'
+                f'<div class="story-top"><span class="story-cat" style="color:{html.escape(accent)}">{html.escape(cat_label)}</span><span class="story-read">{html.escape(read_time)}</span></div>'
+                f'<h2 class="story-title">{title}</h2>'
+                f'<p class="story-dek">{deck}</p>'
+                '<div class="story-foot">'
+                f'<span class="story-date">{html.escape(date_label)}</span>'
+                f'<span class="story-go">Read story <span class="arrow">&#x2192;</span></span>'
+                '</div>'
+                '</div>'
+                + side_panel +
+                '</div>'
+            )
+            return (
+                f'<article class="story story--feature" data-story data-type="{html.escape(content_type)}" data-ikg="{ikg_attr}" data-search="{search_attr}"{live_attr}>'
+                f'<a href="{html.escape(local_url)}" class="story-card" data-cursor>'
+                f'<img class="feat-thumb" src="{cover_href}" alt="{title} cover" loading="lazy" />'
+                + feat_row +
+                '</a></article>'
+            )
+        else:
+            # Standard card
+            return (
+                f'<article class="story" data-story data-type="{html.escape(content_type)}" data-ikg="{ikg_attr}" data-search="{search_attr}"{live_attr}>'
+                f'<a href="{html.escape(local_url)}" class="story-card" data-cursor>'
+                f'<img class="story-thumb" src="{cover_href}" alt="{title} cover" loading="lazy" />'
+                f'<div class="story-top"><span class="story-cat" style="color:{html.escape(accent)}">{html.escape(cat_label)}</span><span class="story-read">{html.escape(read_time)}</span></div>'
+                f'<h2 class="story-title">{title}</h2>'
+                f'<p class="story-dek">{deck}</p>'
+                f'{live_quote}'
+                '<div class="story-foot">'
+                f'<span class="story-date">{html.escape(date_label)}</span>'
+                f'<span class="story-go">Read story <span class="arrow">&#x2192;</span></span>'
+                '</div>'
+                '</a></article>'
+            )
+
+    if published:
+        stories_html_v3 = "\n".join(
+            _story_card_v3(article, featured=(i == 0), index=i)
+            for i, article in enumerate(published)
+        )
+    else:
+        stories_html_v3 = (
+            '<div id="archive-empty" style="grid-column:1/-1;text-align:center;padding:60px 20px;border:1px dashed rgba(255,255,255,0.12);border-radius:22px">'
+            '<div class="eyebrow" style="justify-content:center;margin-bottom:16px"><span class="dot"></span> No stories yet</div>'
+            '<h2 style="font-family:var(--serif);font-size:clamp(1.8rem,3vw,2.4rem);letter-spacing:-0.04em;margin-bottom:12px">The archive is warming up.</h2>'
+            '<p style="color:var(--ink-2);max-width:46ch;margin:0 auto;line-height:1.65">High-conviction stories appear here as they clear editorial review and publish checks.</p>'
+            '<a href="/" class="btn" style="margin-top:28px;display:inline-flex">Go to Dashboard <span class="arrow">&#x2192;</span></a>'
+            '</div>'
+        )
+
+    latest_href = (
+        f"/{route_base}/{published[0].get('slug', '')}/"
+        if published and published[0].get("slug")
+        else f"/{route_base}/research/"
+    )
+
     return f"""<!doctype html>
-<html lang="en-IN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ProspektLab Research Hub | Indian Market Intelligence</title>
-    <meta
-      name="description"
-      content="Editorial-style financial research for Indian markets, covering earnings, regulation, company intelligence, and market trends in direct, searchable URLs."
-    />
-    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
-    <meta name="theme-color" content="#f4ecdf" />
-    <link rel="canonical" href="{html.escape(_SITE_URL)}/insights/research/" />
-    <link rel="icon" type="image/svg+xml" href="/prospektlab-favicon-v2.svg" />
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="ProspektLab" />
-    <meta property="og:title" content="ProspektLab Research Hub | Indian Market Intelligence" />
-    <meta
-      property="og:description"
-      content="A public archive of editorial-style research pages for Indian market participants."
-    />
-    <meta property="og:url" content="{html.escape(_SITE_URL)}/insights/research/" />
-    <meta property="og:image" content="{html.escape(featured_image)}" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="ProspektLab Research Hub | Indian Market Intelligence" />
-    <meta
-      name="twitter:description"
-      content="Editorial-style research pages for earnings, regulation, companies, and market trends."
-    />
-    <meta name="twitter:image" content="{html.escape(featured_image)}" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap"
-      rel="stylesheet"
-    />
-    <style>
-      :root {{
-        color-scheme: light;
-        --paper: #f4ecdf;
-        --paper-soft: #fffaf3;
-        --ink: #142033;
-        --muted: #5f6778;
-        --line: rgba(20, 32, 51, 0.12);
-        --line-strong: rgba(20, 32, 51, 0.18);
-        --accent: #0d766e;
-        --accent-blue: #0f3d91;
-        --accent-gold: #ad6a1f;
-        --shadow: 0 26px 80px rgba(15, 23, 42, 0.08);
-      }}
-      * {{
-        box-sizing: border-box;
-      }}
-      html {{
-        scroll-behavior: smooth;
-      }}
-      body {{
-        margin: 0;
-        font-family: "Manrope", Arial, sans-serif;
-        background:
-          radial-gradient(circle at top left, rgba(13, 118, 110, 0.1), transparent 24%),
-          radial-gradient(circle at 100% 0%, rgba(15, 61, 145, 0.1), transparent 20%),
-          linear-gradient(180deg, #f7f1e6 0%, #f4ecdf 45%, #f1e8d8 100%);
-        color: var(--ink);
-        line-height: 1.75;
-      }}
-      a {{
-        color: inherit;
-        text-decoration: none;
-      }}
-      img {{
-        max-width: 100%;
-        display: block;
-      }}
-      .shell {{
-        width: min(calc(100% - 34px), 1240px);
-        margin: 0 auto;
-      }}
-      .masthead {{
-        position: sticky;
-        top: 0;
-        z-index: 40;
-        backdrop-filter: blur(18px);
-        background: rgba(244, 236, 223, 0.84);
-        border-bottom: 1px solid rgba(20, 32, 51, 0.08);
-      }}
-      .masthead-inner {{
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 18px;
-        padding: 14px 0;
-      }}
-      .brand {{
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-      }}
-      .brand-mark {{
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, var(--accent), var(--accent-blue));
-        box-shadow: 0 0 0 8px rgba(13, 118, 110, 0.08);
-      }}
-      .brand-text {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-      }}
-      .masthead-links {{
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        color: var(--muted);
-        font-size: 13px;
-      }}
-      .masthead-links a:hover {{
-        color: var(--ink);
-      }}
-      .hero {{
-        padding: 34px 0 26px;
-      }}
-      .hero-panel {{
-        border: 1px solid var(--line);
-        border-radius: 34px;
-        padding: 30px;
-        background: linear-gradient(135deg, rgba(255, 250, 243, 0.95), rgba(249, 243, 232, 0.96));
-        box-shadow: var(--shadow);
-      }}
-      .hero-grid {{
-        display: grid;
-        grid-template-columns: minmax(0, 1.12fr) minmax(300px, 0.88fr);
-        gap: 26px;
-        align-items: start;
-      }}
-      .eyebrow {{
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 7px 14px;
-        border-radius: 999px;
-        background: rgba(13, 118, 110, 0.1);
-        color: var(--accent);
-        border: 1px solid rgba(13, 118, 110, 0.16);
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }}
-      .eyebrow::before {{
-        content: "";
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: var(--accent);
-      }}
-      h1,
-      h2,
-      h3 {{
-        margin: 0;
-        color: var(--ink);
-      }}
-      h1 {{
-        margin-top: 18px;
-        font-family: "Newsreader", Georgia, serif;
-        font-size: clamp(3.05rem, 7vw, 5.7rem);
-        line-height: 0.94;
-        letter-spacing: -0.05em;
-        max-width: 10.5ch;
-      }}
-      h2 {{
-        font-family: "Newsreader", Georgia, serif;
-        font-size: clamp(1.8rem, 3vw, 2.35rem);
-        line-height: 1.02;
-        letter-spacing: -0.04em;
-      }}
-      p {{
-        margin: 0;
-        color: var(--muted);
-      }}
-      .hero-copy {{
-        margin-top: 18px;
-        max-width: 62ch;
-        font-size: 1.05rem;
-      }}
-      .stat-grid {{
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: 24px;
-      }}
-      .stat-card {{
-        border: 1px solid var(--line);
-        border-radius: 22px;
-        padding: 16px 18px;
-        background: rgba(255, 255, 255, 0.62);
-      }}
-      .stat-value {{
-        font-family: "Newsreader", Georgia, serif;
-        font-size: 2rem;
-        line-height: 1;
-        letter-spacing: -0.05em;
-      }}
-      .stat-label {{
-        margin-top: 6px;
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }}
-      .hero-aside {{
-        display: grid;
-        gap: 16px;
-      }}
-      .aside-card {{
-        border: 1px solid var(--line);
-        border-radius: 26px;
-        padding: 22px;
-        background: rgba(255, 250, 243, 0.84);
-        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.04);
-      }}
-      .aside-label,
-      .section-label {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--accent-gold);
-      }}
-      .capability-list {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 14px;
-      }}
-      .capability-chip,
-      .meta-pill,
-      .story-keyword {{
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 9px 13px;
-        border-radius: 999px;
-        border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.76);
-        color: var(--ink);
-        font-size: 12px;
-      }}
-      .capability-chip {{
-        color: var(--muted);
-      }}
-      .controls {{
-        padding: 10px 0 18px;
-      }}
-      .controls-top {{
-        display: flex;
-        align-items: end;
-        justify-content: space-between;
-        gap: 16px;
-        flex-wrap: wrap;
-      }}
-      .controls-copy {{
-        max-width: 56ch;
-      }}
-      .controls-copy p {{
-        margin-top: 8px;
-      }}
-      .result-count {{
-        margin-top: 8px;
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 12px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }}
-      .search-shell {{
-        min-width: min(100%, 340px);
-      }}
-      .search-label {{
-        display: block;
-        margin-bottom: 8px;
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }}
-      .search-input {{
-        width: 100%;
-        border: 1px solid var(--line);
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.76);
-        padding: 14px 16px;
-        color: var(--ink);
-        font: inherit;
-        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.03);
-      }}
-      .search-input:focus {{
-        outline: none;
-        border-color: rgba(13, 118, 110, 0.35);
-        box-shadow: 0 0 0 4px rgba(13, 118, 110, 0.08);
-      }}
-      .filter-strip {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 16px;
-      }}
-      .filter-button {{
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.76);
-        color: var(--muted);
-        border-radius: 999px;
-        padding: 10px 14px;
-        font: inherit;
-        font-size: 13px;
-        cursor: pointer;
-        transition: transform 0.18s ease, border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
-      }}
-      .filter-button span {{
-        padding: 2px 8px;
-        border-radius: 999px;
-        background: rgba(20, 32, 51, 0.06);
-        color: var(--ink);
-        font-size: 11px;
-      }}
-      .filter-button:hover,
-      .filter-button.is-active {{
-        transform: translateY(-1px);
-        border-color: rgba(13, 118, 110, 0.24);
-        background: rgba(13, 118, 110, 0.08);
-        color: var(--ink);
-      }}
-      .stories-grid {{
-        display: grid;
-        grid-template-columns: repeat(12, minmax(0, 1fr));
-        gap: 20px;
-        padding-bottom: 26px;
-      }}
-      .story-card {{
-        grid-column: span 4;
-        display: flex;
-        flex-direction: column;
-        border: 1px solid var(--line);
-        border-radius: 28px;
-        overflow: hidden;
-        background: rgba(255, 250, 243, 0.88);
-        box-shadow: var(--shadow);
-        transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
-      }}
-      .story-card:hover {{
-        transform: translateY(-4px);
-        border-color: rgba(20, 32, 51, 0.18);
-        box-shadow: 0 30px 90px rgba(15, 23, 42, 0.11);
-      }}
-      .story-card-featured {{
-        grid-column: 1 / -1;
-        display: grid;
-        grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
-      }}
-      .story-media {{
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 240px;
-        aspect-ratio: 3 / 2;
-        overflow: hidden;
-        background: linear-gradient(180deg, rgba(255, 250, 243, 0.96), rgba(241, 233, 222, 0.94));
-      }}
-      .story-card-featured .story-media {{
-        min-height: 100%;
-        aspect-ratio: auto;
-        order: 2;
-      }}
-      .story-image {{
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-        object-position: center;
-        transition: transform 0.25s ease;
-      }}
-      .story-card:hover .story-image {{
-        transform: none;
-      }}
-      .story-body {{
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        padding: 22px 24px 24px;
-      }}
-      .feature-note {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--card-accent);
-      }}
-      .story-overline {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        align-items: center;
-      }}
-      .type-pill {{
-        display: inline-flex;
-        align-items: center;
-        padding: 8px 13px;
-        border-radius: 999px;
-        background: var(--card-accent-soft);
-        color: var(--card-accent);
-        border: 1px solid rgba(20, 32, 51, 0.08);
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }}
-      .meta-pill {{
-        font-size: 11px;
-        color: var(--muted);
-      }}
-      .meta-pill-accent {{
-        color: var(--accent);
-        border-color: rgba(13, 118, 110, 0.24);
-        background: rgba(13, 118, 110, 0.08);
-      }}
-      .story-title {{
-        font-family: "Newsreader", Georgia, serif;
-        font-size: 2rem;
-        line-height: 1.02;
-        letter-spacing: -0.04em;
-      }}
-      .story-card-featured .story-title {{
-        font-size: clamp(2.5rem, 5vw, 4rem);
-      }}
-      .story-title a:hover {{
-        color: var(--card-accent);
-      }}
-      .story-summary {{
-        font-size: 1rem;
-        color: var(--ink);
-      }}
-      .story-description {{
-        font-size: 0.96rem;
-      }}
-      .story-keywords {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }}
-      .story-keyword {{
-        font-size: 11px;
-        color: var(--muted);
-        padding: 8px 12px;
-      }}
-      .story-footer {{
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-        flex-wrap: wrap;
-        margin-top: auto;
-        padding-top: 8px;
-      }}
-      .story-source {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--muted);
-      }}
-      .story-score {{
-        display: inline-flex;
-        align-items: center;
-        border-radius: 999px;
-        padding: 8px 12px;
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }}
-      .score-strong {{
-        color: #0d766e;
-        background: rgba(13, 118, 110, 0.1);
-      }}
-      .score-mid {{
-        color: #0f3d91;
-        background: rgba(15, 61, 145, 0.09);
-      }}
-      .score-soft {{
-        color: #845d1f;
-        background: rgba(173, 106, 31, 0.1);
-      }}
-      .story-link {{
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 11px 18px;
-        border-radius: 999px;
-        border: 1px solid rgba(20, 32, 51, 0.12);
-        background: var(--ink);
-        color: #f8fafc;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-      }}
-      .story-link:hover {{
-        background: var(--card-accent);
-      }}
-      .empty-state {{
-        grid-column: 1 / -1;
-        width: 100%;
-        min-width: 0;
-        border: 1px dashed rgba(20, 32, 51, 0.18);
-        border-radius: 30px;
-        padding: 46px 28px;
-        background: rgba(255, 250, 243, 0.74);
-        text-align: center;
-        overflow-wrap: anywhere;
-      }}
-      .empty-state h2 {{
-        margin-top: 10px;
-        font-size: clamp(2rem, 5vw, 3.2rem);
-        max-width: 11ch;
-        margin-left: auto;
-        margin-right: auto;
-      }}
-      .empty-state p {{
-        margin: 12px auto 22px;
-        max-width: 54ch;
-      }}
-      .empty-kicker {{
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 11px;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        color: var(--accent);
-      }}
-      .method-grid {{
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-        padding-bottom: 58px;
-      }}
-      .method-card {{
-        border: 1px solid var(--line);
-        border-radius: 24px;
-        padding: 20px 22px;
-        background: rgba(255, 250, 243, 0.86);
-        box-shadow: 0 16px 38px rgba(15, 23, 42, 0.05);
-      }}
-      .method-card p {{
-        margin-top: 10px;
-        font-size: 0.95rem;
-      }}
-      .footer {{
-        padding: 0 0 42px;
-      }}
-      .footer-card {{
-        border-radius: 30px;
-        padding: 28px 30px;
-        background: linear-gradient(135deg, #15253d, #102036);
-        color: #f6f8fc;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 18px;
-        box-shadow: 0 30px 70px rgba(15, 23, 42, 0.18);
-      }}
-      .footer-card p {{
-        margin-top: 8px;
-        color: rgba(246, 248, 252, 0.76);
-      }}
-      .footer-link {{
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 11px 18px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.1);
-        color: #f6f8fc;
-        border: 1px solid rgba(255, 255, 255, 0.18);
-      }}
-      .is-hidden {{
-        display: none !important;
-      }}
-      @media (max-width: 1180px) {{
-        .hero-grid,
-        .story-card-featured {{
-          grid-template-columns: 1fr;
-        }}
-        .story-card {{
-          grid-column: span 6;
-        }}
-        .story-card-featured .story-media {{
-          order: 0;
-        }}
-        .stat-grid,
-        .method-grid {{
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }}
-      }}
-      @media (max-width: 760px) {{
-        .shell {{
-          width: min(calc(100% - 22px), 1240px);
-        }}
-        .masthead-inner {{
-          padding: 12px 0;
-        }}
-        .masthead-links {{
-          gap: 10px;
-          font-size: 12px;
-        }}
-        .hero-panel {{
-          padding: 22px;
-          border-radius: 26px;
-        }}
-        .stat-grid,
-        .method-grid {{
-          grid-template-columns: 1fr;
-        }}
-        .stories-grid {{
-          gap: 16px;
-        }}
-        .story-card {{
-          grid-column: 1 / -1;
-        }}
-        .story-body,
-        .aside-card,
-        .method-card {{
-          padding: 18px;
-        }}
-        .footer-card {{
-          padding: 22px;
-          flex-direction: column;
-          align-items: flex-start;
-        }}
-      }}
-    </style>
-    <script type="application/ld+json">{schema}</script>
-  </head>
-  <body>
-    <div class="masthead">
-      <div class="shell masthead-inner">
-        <a class="brand" href="/{html.escape(route_base)}/research/">
-          <span class="brand-mark"></span>
-          <span class="brand-text">ProspektLab Research</span>
-        </a>
-        <div class="masthead-links">
-          <a href="/#/dashboard">Dashboard</a>
-          <a href="/#/contact">Contact</a>
+<html lang="en-IN" data-page="hub">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ProspektLab Research Hub | Indian Market Intelligence</title>
+  <meta name="description" content="Earnings, regulation, company moves, and sector shifts — published as clean, searchable research pages built for fast reading and repeat discovery." />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+  <meta name="theme-color" content="#03060d" />
+  <link rel="canonical" href="{html.escape(_SITE_URL)}/insights/research/" />
+  <link rel="icon" type="image/svg+xml" href="/prospektlab-favicon-v2.svg" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ProspektLab" />
+  <meta property="og:title" content="ProspektLab Research Hub | Indian Market Intelligence" />
+  <meta property="og:description" content="A public archive of editorial-style research pages for Indian market participants." />
+  <meta property="og:url" content="{html.escape(_SITE_URL)}/insights/research/" />
+  <meta property="og:image" content="{html.escape(featured_image)}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..560&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script type="application/ld+json">{schema}</script>
+  <style>
+{_HUB_EDITORIAL_CSS}
+  </style>
+  <script>
+    /* Reveal-state opt-in: opt INTO the hidden state only if motion is allowed
+       AND the page is being viewed by a real user. A safety timer guarantees
+       all data-reveal elements become visible within 800 ms even if any later
+       JS errors out — the page is never stuck blank. */
+    (function () {{
+      var html = document.documentElement;
+      var ok = !window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (ok) html.classList.add('pre-reveal');
+      // Hard safety: force-reveal everything no matter what after 800 ms.
+      setTimeout(function () {{
+        var nodes = document.querySelectorAll('[data-reveal], [data-reveal-stagger]');
+        for (var i = 0; i < nodes.length; i++) nodes[i].classList.add('in');
+      }}, 800);
+    }})();
+  </script>
+</head>
+<body>
+
+<!-- Ticker -->
+<div class="ticker" aria-hidden="true">
+  <div class="ticker-track" id="ticker-track"></div>
+</div>
+
+<!-- Header -->
+<header class="site-head">
+  <div class="wrap head-inner">
+    <a class="brand" href="/{html.escape(route_base)}/research/" aria-label="ProspektLab Research home">
+      <span class="mk-dot"></span>
+      <span class="mk-name">ProspektLab</span>
+      <span class="mk-sub">Research</span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="/{html.escape(route_base)}/research/" class="is-current">Dashboard</a>
+      <a href="#contact">Contact</a>
+      <span class="magnetic nav-cta" data-mag="0.35"><a href="#archive" class="btn btn--sm">Open Archive <span class="arrow">&#x2192;</span></a></span>
+    </nav>
+    <button class="burger" id="burger-btn" aria-label="Menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<!-- Mobile nav -->
+<div class="m-nav" id="m-nav">
+  <a href="/{html.escape(route_base)}/research/"><span class="n-num">01</span>Dashboard</a>
+  <a href="#archive"><span class="n-num">02</span>Archive</a>
+  <a href="#contact"><span class="n-num">03</span>Contact</a>
+</div>
+
+<main>
+  <!-- HERO -->
+  <section class="section hero">
+    <div class="wrap hero-grid">
+      <div class="hero-head" data-reveal>
+        <span class="eyebrow"><span class="dot"></span> Public Research</span>
+        <h1 class="display">Indian market stories with the <span class="it">context</span> serious readers actually need.</h1>
+        <p class="lede hero-lede">Earnings, regulation, company moves, and sector shifts are published here as clean, searchable pages built for fast reading, deeper context, and repeat discovery.</p>
+        <div class="hero-actions">
+          <span class="magnetic" data-mag="0.3"><a href="#archive" class="btn">Browse the archive <span class="arrow">&#x2192;</span></a></span>
+          <span class="magnetic" data-mag="0.3"><a href="{html.escape(latest_href)}" class="btn btn--ghost">Read latest story</a></span>
+        </div>
+      </div>
+      <aside class="snap" data-reveal>
+        <div class="snap-head">
+          <span class="eyebrow" style="font-size:.62rem">Market Snapshot</span>
+          <span class="snap-live"><span class="pulse"></span> Live</span>
+        </div>
+        <div class="idx-row">
+          <div class="idx-meta"><div class="idx-name">NIFTY 50</div><div class="idx-sub">NSE &middot; INDEX</div></div>
+          <canvas class="idx-spark" data-spark="100,101,99,102,103,101,104,106,105,108" data-dir="up" id="spark-nifty50"></canvas>
+          <div class="idx-val"><div class="idx-px" id="px-nifty50" data-count="24218.45" data-dec="2">24,218.45</div><div class="idx-chg up" id="chg-nifty50">+0.94%</div></div>
+        </div>
+        <div class="idx-row">
+          <div class="idx-meta"><div class="idx-name">SENSEX</div><div class="idx-sub">BSE &middot; INDEX</div></div>
+          <canvas class="idx-spark" data-spark="100,100.5,101,100.2,101.5,102,101.8,103,102.6,103.4" data-dir="up" id="spark-sensex"></canvas>
+          <div class="idx-val"><div class="idx-px" id="px-sensex" data-count="79476.19" data-dec="2">79,476.19</div><div class="idx-chg up" id="chg-sensex">+0.81%</div></div>
+        </div>
+        <div class="idx-row">
+          <div class="idx-meta"><div class="idx-name">BANK NIFTY</div><div class="idx-sub">NSE &middot; INDEX</div></div>
+          <canvas class="idx-spark" data-spark="100,99,98.5,99.2,98,97.4,98.1,97,96.4,96.8" data-dir="down" id="spark-banknifty"></canvas>
+          <div class="idx-val"><div class="idx-px" id="px-banknifty" data-count="52104.30" data-dec="2">52,104.30</div><div class="idx-chg down" id="chg-banknifty">&#x2212;0.37%</div></div>
+        </div>
+        <div class="idx-row">
+          <div class="idx-meta"><div class="idx-name">INR / USD</div><div class="idx-sub">FX &middot; SPOT</div></div>
+          <canvas class="idx-spark" data-spark="100,100.1,100.05,100.2,100.3,100.25,100.4,100.5,100.45,100.6" data-dir="up" id="spark-inrusd"></canvas>
+          <div class="idx-val"><div class="idx-px" id="px-inrusd" data-count="83.42" data-dec="2">83.42</div><div class="idx-chg up" id="chg-inrusd">+0.06%</div></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <hr class="divider wrap" style="background:transparent" />
+
+  <!-- PUBLISHING MODEL -->
+  <section class="section pubmodel">
+    <div class="wrap pubmodel-grid">
+      <div data-reveal>
+        <span class="eyebrow"><span class="dot"></span> Publishing Model</span>
+        <h2 class="h2" style="margin-top:.5em; max-width:14ch;">Built for search, reading, and <span class="serif-it">trust</span>.</h2>
+      </div>
+      <div data-reveal>
+        <p class="lede">Each article lives at a direct route, carries search metadata, and keeps the focus on the story rather than the workflow behind it.</p>
+        <div class="chips-wrap">
+          <span class="chip">Evidence-led reporting</span>
+          <span class="chip">Continuous market watch</span>
+          <span class="chip">Verified company context</span>
+          <span class="chip">Compliance-safe language</span>
         </div>
       </div>
     </div>
+  </section>
 
-    <header class="hero">
-      <div class="shell">
-        <section class="hero-panel">
-          <div class="hero-grid">
-            <div>
-              <div class="eyebrow">Public research</div>
-              <h1>Indian market stories with the context serious readers actually need.</h1>
-              <p class="hero-copy">
-                Earnings, regulation, company moves, and sector shifts are published here as clean, searchable pages built for fast reading, deeper context, and repeat discovery.
-              </p>
-            </div>
-            <div class="hero-aside">
-              <section class="aside-card">
-                <div class="aside-label">Publishing model</div>
-                <h2 style="margin-top:10px;">Built for search, reading, and trust.</h2>
-                <p style="margin-top:12px;">
-                  Each article lives at a direct route, carries search metadata, and keeps the focus on the story rather than the workflow behind it.
-                </p>
-                <div class="capability-list">
-                  <span class="capability-chip">Evidence-led reporting</span>
-                  <span class="capability-chip">Continuous market watch</span>
-                  <span class="capability-chip">Verified company context</span>
-                  <span class="capability-chip">Compliance-safe language</span>
-                </div>
-              </section>
-            </div>
-          </div>
-        </section>
-      </div>
-    </header>
-
-    <main class="shell">
-      <section class="controls">
-        <div class="controls-top">
-          <div class="controls-copy">
-            <div class="section-label">Latest research</div>
-            <h2 style="margin-top:10px;">Filter by topic, company, or coverage angle.</h2>
-            <p>Search by company, theme, or keyword, then narrow the archive by story type or verified context.</p>
-            <div class="result-count" data-result-count>{published_count} stories visible</div>
-          </div>
-          <label class="search-shell">
-            <span class="search-label">Search archive</span>
-            <input
-              class="search-input"
-              type="search"
-              placeholder="Search company, theme, or keyword"
-              data-search-input
-            />
-          </label>
+  <!-- LATEST RESEARCH -->
+  <section id="archive" class="section archive-section">
+    <div class="wrap">
+      <div class="sec-head" data-reveal>
+        <div>
+          <span class="eyebrow"><span class="dot"></span> Latest Research</span>
+          <h2 class="h2 sec-title" style="margin-top:.4em">Filter by topic, company, or coverage angle.</h2>
         </div>
-        <div class="filter-strip">{filter_buttons}</div>
-      </section>
+        <span class="magnetic" data-mag="0.3"><a href="#archive" class="btn btn--ghost btn--sm">All research <span class="arrow">&#x2192;</span></a></span>
+      </div>
 
-      <section class="stories-grid" data-story-grid>
-        {stories_html}
-      </section>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+        <input type="search" id="archive-search" placeholder="Search company, theme, or keyword&hellip;" />
+        <span id="story-count" style="font-family:var(--mono);font-size:0.72rem;color:var(--ink-3)">{published_count} stories</span>
+      </div>
+      <div class="filter-strip">{filter_buttons}</div>
 
-      <section class="method-grid">
-        <article class="method-card">
-            <div class="section-label">Evidence first</div>
-            <h3 style="margin-top:10px;">Primary-source bias is deliberate.</h3>
-            <p>Official filings, exchange disclosures, company material, and transcripts outrank generic summaries. The archive is designed to make that discipline easy to spot.</p>
-          </article>
-          <article class="method-card">
-            <div class="section-label">Graph where useful</div>
-            <h3 style="margin-top:10px;">Company context appears only when it adds real depth.</h3>
-            <p>Ownership, governance, and filing context should sharpen the story, not decorate it. Thin coverage should stay clearly disclosed.</p>
-          </article>
-          <article class="method-card">
-            <div class="section-label">Editorial finish</div>
-            <h3 style="margin-top:10px;">The output should feel publishable on first open.</h3>
-            <p>Sharper typography, calmer hierarchy, and cleaner routes make the archive feel closer to a financial publication than a content dump.</p>
-          </article>
-      </section>
-    </main>
+      <div class="stories" style="margin-top:clamp(28px,3.5vw,48px)" data-reveal-stagger data-stagger="90">
+        {stories_html_v3}
+      </div>
+      <div id="archive-empty" style="display:none;text-align:center;padding:60px 20px;border:1px dashed var(--line);border-radius:var(--radius-lg);margin-top:24px">
+        <div class="eyebrow" style="justify-content:center;margin-bottom:14px"><span class="dot"></span>No matches</div>
+        <h2 style="font-family:var(--serif);font-size:clamp(1.6rem,2.5vw,2.2rem);letter-spacing:-0.04em">No stories match that filter.</h2>
+        <p style="color:var(--ink-2);max-width:44ch;margin:12px auto;font-size:0.98rem;line-height:1.65">Try a different keyword or reset the filter to see all published research.</p>
+      </div>
+    </div>
+  </section>
 
-    <footer class="footer">
-      <div class="shell">
-        <div class="footer-card">
-          <div>
-            <div class="section-label" style="color: rgba(246, 248, 252, 0.64);">ProspektLab</div>
-            <h3 style="color:#f6f8fc; margin-top:8px;">Research pages should feel deliberate and trustworthy.</h3>
-            <p>Educational content only. No buy, sell, hold, or target-price language is published here.</p>
-          </div>
-          <a class="footer-link" href="/#/dashboard">ProspektLab Dashboard</a>
+  <!-- PRINCIPLES -->
+  <section class="section principles" style="background:var(--paper-2); border-top:1px solid var(--line); border-bottom:1px solid var(--line)">
+    <div class="wrap">
+      <div class="sec-head" data-reveal>
+        <span class="eyebrow"><span class="dot"></span> Editorial Standards</span>
+        <span class="sec-num">How pages are built</span>
+      </div>
+      <div class="principle-grid" data-reveal-stagger data-stagger="110">
+        <div class="principle">
+          <span class="p-num">01 &mdash; Evidence first</span>
+          <h3>Primary-source bias is deliberate.</h3>
+          <p>Official filings, exchange disclosures, company material, and transcripts outrank generic summaries. The archive is designed to make that discipline easy to spot.</p>
+        </div>
+        <div class="principle">
+          <span class="p-num">02 &mdash; Context where useful</span>
+          <h3>Company context appears only when it adds real depth.</h3>
+          <p>Ownership, governance, and filing context should sharpen the story, not decorate it. Thin coverage should stay clearly disclosed.</p>
+        </div>
+        <div class="principle">
+          <span class="p-num">03 &mdash; Editorial finish</span>
+          <h3>The output should feel publishable on first open.</h3>
+          <p>Sharper typography, calmer hierarchy, and clearer routes make the archive feel closer to a financial publication than a content dump.</p>
         </div>
       </div>
-    </footer>
+    </div>
+  </section>
 
-    <script>
-      (function () {{
-        const buttons = Array.from(document.querySelectorAll("[data-filter-button]"));
-        const stories = Array.from(document.querySelectorAll("[data-story]"));
-        const searchInput = document.querySelector("[data-search-input]");
-        const resultCount = document.querySelector("[data-result-count]");
-        const emptyState = document.querySelector("[data-empty-state]");
-        let activeFilter = "all";
+  <!-- CONTACT -->
+  <section class="section contact" id="contact">
+    <div class="wrap">
+      <div class="contact-card" data-reveal>
+        <div>
+          <span class="eyebrow"><span class="dot"></span> Contact</span>
+          <h2>Research pages should feel deliberate and trustworthy.</h2>
+          <p class="c-lede">Have a correction, a filing we should cover, or a partnership question? Reach the desk directly &mdash; we read everything.</p>
+          <div class="c-details">
+            <div class="c-detail"><div class="cd-k">Editorial desk</div><div class="cd-v">desk@prospektlab.in</div></div>
+            <div class="c-detail"><div class="cd-k">Corrections</div><div class="cd-v">corrections@prospektlab.in</div></div>
+            <div class="c-detail"><div class="cd-k">Location</div><div class="cd-v">Mumbai &middot; Bengaluru</div></div>
+          </div>
+        </div>
+        <form class="contact-form" onsubmit="event.preventDefault();this.reset();this.querySelector('.btn').textContent='Sent \u2014 thank you';">
+          <div class="field"><label>Name</label><input type="text" placeholder="Your name" required /></div>
+          <div class="field"><label>Email</label><input type="email" placeholder="you@firm.com" required /></div>
+          <div class="field"><label>Message</label><textarea placeholder="What should we look into?" required></textarea></div>
+          <button type="submit" class="btn btn--accent">Send message <span class="arrow">&#x2192;</span></button>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
 
-        const update = () => {{
-          const query = String(searchInput && searchInput.value ? searchInput.value : "").trim().toLowerCase();
-          let visible = 0;
-          stories.forEach((story) => {{
-            const type = String(story.getAttribute("data-type") || "");
-            const ikg = String(story.getAttribute("data-ikg") || "no");
-            const search = String(story.getAttribute("data-search") || "");
-            const matchesFilter = activeFilter === "all"
-              ? true
-              : activeFilter === "ikg"
-                ? ikg === "yes"
-                : type === activeFilter;
-            const matchesSearch = !query || search.indexOf(query) !== -1;
-            const show = matchesFilter && matchesSearch;
-            story.classList.toggle("is-hidden", !show);
-            if (show) visible += 1;
-          }});
+<!-- FOOTER -->
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <a class="brand" href="/{html.escape(route_base)}/research/"><span class="mk-dot"></span><span class="mk-name">ProspektLab</span><span class="mk-sub">Research</span></a>
+        <p class="foot-disc" style="margin-top:18px; max-width:42ch">Educational content only. No buy, sell, hold, or target-price language is published here. Research pages are informational and not investment advice.</p>
+      </div>
+      <div class="foot-col">
+        <h4>Platform</h4>
+        <ul>
+          <li><a href="/{html.escape(route_base)}/research/">Dashboard</a></li>
+          <li><a href="#archive">Research Archive</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </div>
+      <div class="foot-col">
+        <h4>Coverage</h4>
+        <ul>
+          <li><a href="#archive">SEBI &amp; Regulation</a></li>
+          <li><a href="#archive">Earnings</a></li>
+          <li><a href="#archive">Banking &amp; NBFC</a></li>
+          <li><a href="#archive">Sectors</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-base">
+      <span>&copy; 2026 ProspektLab Research</span>
+      <span>Built for fast reading, deeper context, repeat discovery.</span>
+    </div>
+  </div>
+</footer>
 
-          if (resultCount) {{
-            resultCount.textContent = visible === 1 ? "1 story visible" : visible + " stories visible";
-          }}
-          if (emptyState && stories.length) {{
-            emptyState.hidden = visible !== 0;
-          }}
-        }};
+<script>
+/* ─── ProspektLab Hub — interactions + live data ─── */
+(function(){{
+  "use strict";
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-        buttons.forEach((button) => {{
-          button.addEventListener("click", () => {{
-            activeFilter = String(button.getAttribute("data-filter") || "all");
-            buttons.forEach((item) => item.classList.toggle("is-active", item === button));
-            update();
-          }});
-        }});
+  /* ── Sticky header ── */
+  var head = document.querySelector(".site-head");
+  function onScroll(){{ if(head) head.classList.toggle("is-stuck", window.scrollY > 8); }}
+  window.addEventListener("scroll", onScroll, {{passive:true}});
+  onScroll();
 
-        if (searchInput) {{
-          searchInput.addEventListener("input", update);
+  /* ── Mobile burger ── */
+  var burger = document.getElementById("burger-btn");
+  var mnav = document.getElementById("m-nav");
+  if(burger && mnav){{
+    burger.addEventListener("click", function(){{
+      var open = mnav.classList.toggle("is-open");
+      burger.classList.toggle("is-open", open);
+      burger.setAttribute("aria-expanded", open ? "true" : "false");
+      document.body.style.overflow = open ? "hidden" : "";
+    }});
+    mnav.querySelectorAll("a").forEach(function(a){{
+      a.addEventListener("click", function(){{
+        mnav.classList.remove("is-open");
+        burger.classList.remove("is-open");
+        document.body.style.overflow = "";
+      }});
+    }});
+  }}
+
+  /* ── Visibility engine ── */
+  var watchers = [];
+  function watch(el, cb, ratio){{ watchers.push({{el:el, cb:cb, off:ratio==null?0.88:ratio, done:false}}); }}
+  function inView(el, ratio){{
+    var r = el.getBoundingClientRect();
+    var vh = window.innerHeight || document.documentElement.clientHeight;
+    if(r.height===0 && r.width===0) return false;
+    return r.top < vh * ratio && r.bottom > -40;
+  }}
+  var ticking = false;
+  function checkWatchers(){{
+    ticking = false;
+    for(var i=0;i<watchers.length;i++){{
+      var w=watchers[i]; if(w.done) continue;
+      if(inView(w.el, w.off)){{ w.done=true; w.cb(w.el); }}
+    }}
+  }}
+  function onWatchScroll(){{ if(!ticking){{ ticking=true; requestAnimationFrame(checkWatchers); setTimeout(checkWatchers,60); }} }}
+  window.addEventListener("scroll", onWatchScroll, {{passive:true}});
+  window.addEventListener("resize", onWatchScroll, {{passive:true}});
+  if (document.readyState === "complete") {{ onWatchScroll(); }}
+  else {{ window.addEventListener("load", onWatchScroll); }}
+
+  /* ── Scroll reveal ── */
+  function finalizeReveal(el){{
+    el.style.transition="none"; el.style.opacity="1"; el.style.transform="none";
+    if(el.hasAttribute("data-reveal-stagger")){{
+      for(var i=0;i<el.children.length;i++){{
+        var c=el.children[i]; c.style.transition="none"; c.style.opacity="1"; c.style.transform="none";
+      }}
+    }}
+  }}
+  document.querySelectorAll("[data-reveal], [data-reveal-stagger]").forEach(function(el){{
+    if(reduce){{ el.classList.add("in"); finalizeReveal(el); return; }}
+    watch(el, function(t){{
+      if(t.hasAttribute("data-reveal-stagger")){{
+        var kids=t.children, base=parseFloat(t.getAttribute("data-stagger"))||80;
+        for(var i=0;i<kids.length;i++) kids[i].style.transitionDelay=(i*base)+"ms";
+      }}
+      t.classList.add("in");
+      var delay=t.hasAttribute("data-reveal-stagger")?1100+t.children.length*90:1050;
+      setTimeout(function(){{ finalizeReveal(t); }}, delay);
+    }});
+  }});
+
+  /* ── Animated counters ── */
+  function fmtNum(n, dec, prefix, suffix){{
+    var s = n.toLocaleString("en-IN", {{minimumFractionDigits:dec, maximumFractionDigits:dec}});
+    return prefix + s + suffix;
+  }}
+  function animateCount(el){{
+    if (el.getAttribute("data-count") === null) return;
+    var target = parseFloat(el.getAttribute("data-count"));
+    var dec = parseInt(el.getAttribute("data-dec")||"0", 10);
+    var prefix = el.getAttribute("data-prefix")||"";
+    var suffix = el.getAttribute(\"data-suffix\")||\"\";\r\n    var from = el._lastValue || 0;\r\n    var dur = 1300, start = null;
+    if(el._countRAF){{ cancelAnimationFrame(el._countRAF); el._countRAF = null; }}\r\n    if(el._countTimer){{ clearTimeout(el._countTimer); el._countTimer = null; }}\r\n    el._countTimer = setTimeout(function(){{ el.textContent = fmtNum(target,dec,prefix,suffix); el._countTimer = null; }}, 1450);
+    if(reduce){{ el.textContent = fmtNum(target,dec,prefix,suffix); return; }}
+    function step(ts){{
+      if(!start) start=ts;
+      var p = Math.min((ts-start)/dur, 1);
+      var eased = 1-Math.pow(1-p,3);
+      el.textContent = fmtNum(from + (target-from)*eased, dec, prefix, suffix);
+      if(p<1){{ el._countRAF = requestAnimationFrame(step); }}
+      else {{ el._countRAF = null; el._lastValue = target; }}\r\n    }}\r\n    el._countRAF = requestAnimationFrame(step);
+  }}
+  document.querySelectorAll("[data-count]").forEach(function(el){{ watch(el, animateCount, 0.97); }});
+
+  /* ── Sparklines ── */
+  function drawSpark(canvas, animate){{
+    var raw = canvas.getAttribute("data-spark"); if(!raw) return;
+    var pts = raw.split(",").map(parseFloat);
+    var up = canvas.getAttribute("data-dir") !== "down";
+    var color = up ? "#34D399" : "#FB7185";
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var w = rect.width || 96, h = rect.height || 34;
+    canvas.width = Math.round(w*dpr); canvas.height = Math.round(h*dpr);
+    var ctx = canvas.getContext("2d"); ctx.scale(dpr,dpr);
+    var mn=Math.min.apply(null,pts), mx=Math.max.apply(null,pts), rng=mx-mn||1, pad=3;
+    function x(i){{ return pad+(i/(pts.length-1))*(w-pad*2); }}
+    function y(v){{ return h-pad-((v-mn)/rng)*(h-pad*2); }}
+    function render(prog){{
+      ctx.clearRect(0,0,w,h);
+      var n = Math.max(2, Math.round(pts.length*prog));
+      var grad = ctx.createLinearGradient(0,0,0,h);
+      grad.addColorStop(0, color+"33"); grad.addColorStop(1, color+"00");
+      ctx.beginPath(); ctx.moveTo(x(0),y(pts[0]));
+      for(var i=1;i<n;i++) ctx.lineTo(x(i),y(pts[i]));
+      ctx.lineTo(x(n-1),h); ctx.lineTo(x(0),h); ctx.closePath();
+      ctx.fillStyle=grad; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x(0),y(pts[0]));
+      for(var j=1;j<n;j++) ctx.lineTo(x(j),y(pts[j]));
+      ctx.strokeStyle=color; ctx.lineWidth=1.6; ctx.lineJoin="round"; ctx.lineCap="round"; ctx.stroke();
+      ctx.beginPath(); ctx.arc(x(n-1),y(pts[n-1]),2.2,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
+    }}
+    render(reduce||!animate ? 1 : 0.001);
+    if(reduce||!animate) return;
+    var stt=null, dur=850, raf;
+    function stepFn(ts){{ if(!stt) stt=ts; var p=Math.min((ts-stt)/dur,1); render(1-Math.pow(1-p,2)); if(p<1) raf=requestAnimationFrame(stepFn); }}
+    raf = requestAnimationFrame(stepFn);
+    setTimeout(function(){{ if(raf) cancelAnimationFrame(raf); render(1); }}, 950);
+  }}
+  var sparkEls = document.querySelectorAll("[data-spark]");
+  sparkEls.forEach(function(c){{ watch(c, function(t){{ drawSpark(t,true); }}, 0.97); }});
+  function redrawSparks(){{ sparkEls.forEach(function(c){{ drawSpark(c,false); }}); }}
+  window.addEventListener("resize", function(){{ clearTimeout(window._sparkTimer); window._sparkTimer = setTimeout(redrawSparks,200); }});
+
+  /* ── Custom cursor ── */
+  if(!window.matchMedia("(pointer: coarse)").matches){{
+    var dot=document.createElement("div"); dot.className="cursor-dot";
+    var ring=document.createElement("div"); ring.className="cursor-ring";
+    document.body.appendChild(dot); document.body.appendChild(ring);
+    var mx=0,my=0,rx=0,ry=0;
+    document.addEventListener("mousemove", function(e){{
+      mx=e.clientX; my=e.clientY;
+      dot.style.transform="translate("+mx+"px,"+my+"px) translate(-50%,-50%)";
+    }});
+    (function loop(){{ rx+=(mx-rx)*0.18; ry+=(my-ry)*0.18; ring.style.transform="translate("+rx+"px,"+ry+"px) translate(-50%,-50%)"; requestAnimationFrame(loop); }})();
+    document.querySelectorAll("a,button,.chip,.story-card,[data-cursor]").forEach(function(el){{
+      el.addEventListener("mouseenter",function(){{ring.classList.add("is-hover");}});
+      el.addEventListener("mouseleave",function(){{ring.classList.remove("is-hover");}});
+    }});
+  }}
+
+  /* ── Magnetic buttons ── */
+  if(!reduce && !window.matchMedia("(pointer: coarse)").matches){{
+    document.querySelectorAll(".magnetic").forEach(function(el){{
+      var str = parseFloat(el.getAttribute("data-mag"))||0.3;
+      el.addEventListener("mousemove",function(e){{
+        var r=el.getBoundingClientRect();
+        var mx2=e.clientX-(r.left+r.width/2), my2=e.clientY-(r.top+r.height/2);
+        el.style.transform="translate("+mx2*str+"px,"+my2*str+"px)";
+        var inn=el.firstElementChild; if(inn) inn.style.transform="translate("+mx2*str*0.5+"px,"+my2*str*0.5+"px)";
+      }});
+      el.addEventListener("mouseleave",function(){{
+        el.style.transform=""; var inn=el.firstElementChild; if(inn) inn.style.transform="";
+      }});
+    }});
+  }}
+
+  /* ── Ticker + Live quotes ── */
+  function buildTickerHtml(data){{
+    return data.map(function(d){{
+      return '<span class="tk"><span class="sym">'+d[0]+'</span><span class="px">'+d[1]+'</span><span class="chg '+d[3]+'"><span class="tri">'+(d[3]==="up"?"&#x25B2;":"&#x25BC;")+'</span>'+d[2]+'</span></span>';
+    }}).join("");
+  }}
+  var tt = document.getElementById("ticker-track");
+  if(tt){{ tt.innerHTML='<span class="tk"><span class="sym">LIVE MARKET DATA</span><span class="px">Loading...</span></span>'; }}
+
+  /* ── Archive filter + search ── */
+  window.__plArchive = true;
+  (function(){{
+    var search = document.getElementById("archive-search");
+    var chips = document.querySelectorAll("[data-filter]");
+    var items = document.querySelectorAll("[data-story]");
+    var countEl = document.getElementById("story-count");
+    var empty = document.getElementById("archive-empty");
+    var active = "all", q = "";
+    function apply(){{
+      var n=0;
+      items.forEach(function(it){{
+        var type = it.getAttribute("data-type")||"";
+        var ikg = it.getAttribute("data-ikg")||"no";
+        var text = (it.getAttribute("data-search")||"").toLowerCase();
+        var mf = active==="all" ? true : active==="ikg" ? ikg==="yes" : type===active;
+        var ms = !q || text.indexOf(q)>-1;
+        it.style.display = (mf&&ms) ? "" : "none";
+        if(mf&&ms) n++;
+      }});
+      if(countEl) countEl.textContent = n+" "+(n===1?"story":"stories");
+      if(empty) empty.style.display = (items.length>0&&n===0)?"block":"none";
+    }}
+    if(search) search.addEventListener("input", function(){{ q=search.value.toLowerCase().trim(); apply(); }});
+    chips.forEach(function(c){{
+      c.addEventListener("click", function(){{
+        chips.forEach(function(x){{x.classList.remove("is-active");}});
+        c.classList.add("is-active");
+        active = c.getAttribute("data-filter");
+        apply();
+      }});
+    }});
+    apply();
+  }})();
+
+  /* ── Init ── */
+  checkWatchers();
+  setTimeout(checkWatchers, 120);
+  setTimeout(checkWatchers, 600);
+}})();
+
+/* ─────────────────────────────────────────────────────────────────────────
+   LIVE MARKET DATA — hydrates the marquee ticker + Snapshot grid from
+   /public/market/ticker. Re-polls every 60 s. Graceful fallback to the
+   server-rendered placeholders if the endpoint is unreachable.
+   ───────────────────────────────────────────────────────────────────────── */
+(function () {{
+  var DARK_UP = "#34D399", DARK_DOWN = "#FB7185", ACCENT = "#60A5FA";
+
+  function drawSparkFromPoints(canvas, pts, isUp) {{
+    if (!pts || pts.length < 2) return;
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var w = rect.width || 140, h = rect.height || 30;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    var ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr);
+    var min = Math.min.apply(null, pts), max = Math.max.apply(null, pts);
+    var range = (max - min) || 1, pad = 2;
+    var color = isUp ? DARK_UP : DARK_DOWN;
+    function x(i) {{ return pad + (i / (pts.length - 1)) * (w - pad * 2); }}
+    function y(v) {{ return h - pad - ((v - min) / range) * (h - pad * 2); }}
+    var grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, color + "33"); grad.addColorStop(1, color + "00");
+    ctx.beginPath(); ctx.moveTo(x(0), y(pts[0]));
+    for (var i = 1; i < pts.length; i++) ctx.lineTo(x(i), y(pts[i]));
+    ctx.lineTo(x(pts.length - 1), h); ctx.lineTo(x(0), h); ctx.closePath();
+    ctx.fillStyle = grad; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x(0), y(pts[0]));
+    for (var j = 1; j < pts.length; j++) ctx.lineTo(x(j), y(pts[j]));
+    ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x(pts.length - 1), y(pts[pts.length - 1]), 2.2, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+  }}
+
+  function fmtChg(item) {{
+    var n = Number(item.changePct);
+    if (!isFinite(n)) return item.change || "—";
+    var sign = n > 0 ? "+" : (n < 0 ? "" : "");
+    return sign + n.toFixed(2) + "%";
+  }}
+
+  function renderTicker(items) {{
+    var track = document.getElementById("ticker-track");
+    if (!track) return;
+    var rows = items.map(function (it) {{
+      var up = Number(it.changePct) >= 0;
+      var cls = up ? "up" : "down";
+      var pct = Math.abs(Number(it.changePct) || 0).toFixed(2);
+      var arrow = up ? '&#x25B2;' : '&#x25BC;';
+      var sign = up ? '+' : '&#x2212;';
+      return '<span class="tk"><span class="sym">' + esc(it.symbol) + '</span>' +
+             '<span class="px">' + esc(it.value) + '</span>' +
+             '<span class="chg ' + cls + '"><span class="tri">' + arrow + '</span>' + sign + pct + '%</span></span>';
+    }}).join("");
+    // duplicate sequence so the CSS animation loops without visible seam
+    track.innerHTML = rows + rows;
+    var count = Math.max(1, items.length);
+    var seconds = Math.max(14, Math.min(28, count * 2));
+    track.style.animationDuration = seconds + "s";
+  }}
+
+  function renderSnapshot(items) {{
+    var grid = document.getElementById("snap-grid");
+    if (!grid) return;
+    var html = items.map(function (it, idx) {{
+      var up = Number(it.changePct) >= 0;
+      var cls = up ? "up" : "down";
+      var pct = Math.abs(Number(it.changePct) || 0).toFixed(2);
+      var arrow = up ? "▲" : "▼";
+      return '<div class="snap-card" data-idx="' + idx + '">' +
+        '<div class="sc-name">' + esc(it.symbol) + '</div>' +
+        '<canvas class="sc-spark" aria-hidden="true"></canvas>' +
+        '<div class="sc-row"><span class="sc-val">' + esc(it.value) + '</span>' +
+        '<span class="sc-chg ' + cls + '">' + arrow + ' ' + (up ? "+" : "−") + pct + '%</span></div>' +
+        '</div>';
+    }}).join("");
+    grid.innerHTML = html;
+    // draw sparklines after layout
+    items.forEach(function (it, idx) {{
+      var card = grid.querySelector('[data-idx="' + idx + '"]');
+      if (!card) return;
+      var canvas = card.querySelector(".sc-spark");
+      var pts = Array.isArray(it.sparkData) ? it.sparkData.filter(function (v) {{ return typeof v === "number" && isFinite(v); }}) : [];
+      if (pts.length >= 2) drawSparkFromPoints(canvas, pts, Number(it.changePct) >= 0);
+    }});
+  }}
+
+  function applyLiveToHero(items) {{
+    var HERO = {{
+      "NIFTY 50": {{ px: "px-nifty50", chg: "chg-nifty50", kind: "idx" }},
+      "SENSEX": {{ px: "px-sensex", chg: "chg-sensex", kind: "idx" }},
+      "NIFTY BANK": {{ px: "px-banknifty", chg: "chg-banknifty", kind: "idx" }},
+      "USD/INR": {{ px: "px-inrusd", chg: "chg-inrusd", kind: "idx" }},
+      "NIFTY IT": {{ px: "mb-niftyit", chg: "mbchg-niftyit", kind: "mb" }},
+      "NIFTY AUTO": {{ px: "mb-niftyauto", chg: "mbchg-niftyauto", kind: "mb" }},
+      "NIFTY FMCG": {{ px: "mb-niftyfmcg", chg: "mbchg-niftyfmcg", kind: "mb" }},
+      "CRUDE OIL": {{ px: "mb-crude", chg: "mbchg-crude", kind: "mb" }},
+      "GOLD": {{ px: "mb-gold", chg: "mbchg-gold", kind: "mb" }},
+      "INDIA 10Y": {{ px: "mb-in10y", chg: "mbchg-in10y", kind: "mb" }}
+    }};
+
+    var HERO_ALIASES = {{
+      "BANK NIFTY": "NIFTY BANK",
+      "NIFTYBANK": "NIFTY BANK",
+      "USDINR": "USD/INR",
+      "USD INR": "USD/INR",
+      "GOLD (10G)": "GOLD",
+      "CRUDE": "CRUDE OIL",
+      "CRUDE (WTI)": "CRUDE OIL",
+      "INDIA 10Y YIELD": "INDIA 10Y"
+    }};
+
+    function updateChange(el, up, pct, kind) {{
+      if (!el) return;
+      var abs = Math.abs(pct || 0).toFixed(2);
+      el.className = (kind === "mb" ? "mb-chg " : "idx-chg ") + (up ? "up" : "down");
+      el.textContent = kind === "mb"
+        ? (up ? "▲ +" : "▼ −") + abs + "%"
+        : (up ? "+" : "−") + abs + "%";
+    }}
+
+    items.forEach(function (it) {{
+      var sym = String(it.symbol || "").toUpperCase();
+      var map = HERO[sym] || HERO[HERO_ALIASES[sym] || ""];
+      if (!map) return;
+      var pxEl = document.getElementById(map.px);
+      var chgEl = document.getElementById(map.chg);
+      if (!pxEl) return;
+      var up = Number(it.changePct) >= 0;
+      var pct = Number(it.changePct) || 0;
+      if (pxEl._countTimer) {{ clearTimeout(pxEl._countTimer); pxEl._countTimer = null; }}
+      if (pxEl._countRAF) {{ cancelAnimationFrame(pxEl._countRAF); pxEl._countRAF = null; }}
+      var dec = parseInt(pxEl.getAttribute("data-dec") || "0", 10);
+      var prefix = pxEl.getAttribute("data-prefix") || "";
+      var suffix = pxEl.getAttribute("data-suffix") || "";
+      var rawVal = String(it.value || "").replace(/[^0-9.\-]/g, "");
+      var numVal = parseFloat(rawVal);
+      if (isFinite(numVal)) {{ var oldVal = pxEl._lastValue || parseFloat(String(pxEl.textContent).replace(/[^0-9.\-]/g, "")) || 0; pxEl.setAttribute("data-count", numVal); pxEl._lastValue = oldVal; if (inView(pxEl, 0.97)) {{ animateCount(pxEl); }} else {{ pxEl.textContent = fmtNum(numVal, dec, prefix, suffix); pxEl._lastValue = numVal; }} }} else {{ pxEl.textContent = it.value; pxEl.removeAttribute("data-count"); }}
+      updateChange(chgEl, up, pct, map.kind);
+      var card = pxEl.closest ? (pxEl.closest(".idx-row") || pxEl.closest(".mb-card")) : null;
+      if (card && Array.isArray(it.sparkData) && it.sparkData.length >= 2) {{
+        var canvas = card.querySelector("canvas[data-spark]");
+        if (canvas) {{
+          canvas.setAttribute("data-spark", it.sparkData.join(","));
+          canvas.setAttribute("data-dir", up ? "up" : "down");
         }}
-        update();
-      }})();
-    </script>
-  </body>
+      }}
+    }});
+  }}
+
+  function applyLiveToStoryCards(items) {{
+    var bySymbol = {{}};
+    var byNorm = {{}};
+    function normSymbol(v) {{ return String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); }}
+    items.forEach(function (it) {{
+      if (!(it && it.symbol)) return;
+      var raw = String(it.symbol).toUpperCase();
+      bySymbol[raw] = it;
+      byNorm[normSymbol(raw)] = it;
+    }});
+    document.querySelectorAll("[data-live-symbol]").forEach(function (card) {{
+      var sym = String(card.getAttribute("data-live-symbol") || "").toUpperCase();
+      var it = bySymbol[sym] || byNorm[normSymbol(sym)];
+      if (!it) {{
+        card.querySelectorAll("[data-live-price]").forEach(function (el) {{ el.textContent = "Live unavailable"; }});
+        card.querySelectorAll("[data-live-marketcap]").forEach(function (el) {{ el.textContent = "Not available"; }});
+        card.querySelectorAll("[data-live-move]").forEach(function (el) {{
+          el.textContent = "?";
+          el.classList.remove("up");
+          el.classList.remove("down");
+        }});
+        card.querySelectorAll(".story-live-spark").forEach(function (canvas) {{
+          var ctx = canvas.getContext && canvas.getContext("2d");
+          if (ctx) ctx.clearRect(0, 0, canvas.width || 0, canvas.height || 0);
+        }});
+        return;
+      }}
+      var up = Number(it.changePct) >= 0;
+      var move = fmtChg(it);
+      card.querySelectorAll("[data-live-price]").forEach(function (el) {{
+        el.textContent = it.value || "Unavailable";
+      }});
+      card.querySelectorAll("[data-live-marketcap]").forEach(function (el) {{
+        el.textContent = it.marketCap || "Not available";
+      }});
+      card.querySelectorAll("[data-live-move]").forEach(function (el) {{
+        el.textContent = move;
+        el.classList.toggle("up", up);
+        el.classList.toggle("down", !up);
+      }});
+      card.querySelectorAll(".story-live-spark").forEach(function (canvas) {{
+        var pts = Array.isArray(it.sparkData)
+          ? it.sparkData.filter(function (v) {{ return typeof v === "number" && isFinite(v); }})
+          : [];
+        if (pts.length >= 2) drawSparkFromPoints(canvas, pts, up);
+      }});
+    }});
+  }}
+
+  function esc(s) {{
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {{
+      return {{"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}}[c];
+    }});
+  }}
+
+  var marketRefreshBusy = false;
+
+  function refresh() {{
+    if (marketRefreshBusy) return;
+    marketRefreshBusy = true;
+
+    var controller = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    var timeout = setTimeout(function () {{ if (controller) controller.abort(); }}, 12000);
+
+    fetch("/public/market/ticker", {{ credentials: "omit", signal: controller ? controller.signal : undefined }})
+      .then(function (r) {{ return r.ok ? r.json() : null; }})
+      .then(function (data) {{
+        if (!data || !Array.isArray(data.items) || data.items.length === 0) return;
+        renderTicker(data.items);
+        renderSnapshot(data.items);
+        applyLiveToHero(data.items);
+        applyLiveToStoryCards(data.items);
+      }})
+      .catch(function () {{
+        var track = document.getElementById("ticker-track");
+        if (track && !track.children.length) {{
+          track.innerHTML = '<span class="tk"><span class="sym">LIVE MARKET DATA</span><span class="px">Unavailable</span></span>';
+        }}
+      }})
+      .finally(function () {{
+        clearTimeout(timeout);
+        marketRefreshBusy = false;
+      }});
+  }}
+
+  refresh();
+  // poll every 60 s while the tab is visible
+  var pollTimer = setInterval(function () {{
+    if (document.visibilityState === "visible") refresh();
+  }}, 60000);
+  document.addEventListener("visibilitychange", function () {{
+    if (document.visibilityState === "visible") refresh();
+  }});
+  // redraw on resize so sparkline canvases stay crisp
+  var resizeTimer;
+  window.addEventListener("resize", function () {{
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(refresh, 220);
+  }});
+}})();
+</script>
+</body>
 </html>
 """
 async def _build_ikg_context(target: str) -> dict[str, Any]:
@@ -2071,10 +2613,12 @@ def _assemble_article_from_pipeline(
         cta_label="Explore ProspektLab",
         cta_href="/#/contact",
         image_prompt=(
-            f"Premium editorial cover for '{target_display}'. Create a sharp 3:2 business-news composition "
-            "with layered financial screens, documents, market cues, and one strong central subject tied to the story. "
-            "Keep the full subject comfortably inside frame with generous margins so it reads well in a report card. "
-            "Rich lighting, serious publication aesthetic, India market context, no headline text, no watermark."
+            f"Premium editorial cover for '{target_display}', styled for the ProspektLab dark research terminal. "
+            "Composition: 3:2 ratio, deep navy and near-black backdrop with subtle cyan and violet glow highlights, "
+            "layered floating financial UI panels (charts, ticker rows, document snippets), one strong central subject "
+            "tied to the story, soft volumetric lighting from a single accent source. Aesthetic: Bloomberg-meets-LiveMint, "
+            "premium dark-mode financial journalism, India market context (Nifty, BSE, SEBI references where relevant). "
+            "No headline text, no watermark, no logos. Generous margins so the subject reads cleanly inside a card."
         ),
     )
 
@@ -2202,13 +2746,19 @@ async def _direct_json_article_call(
     heading_line = ", ".join(section_headings)
 
     system_prompt = (
-        "You are a senior financial editor at ProspektLab. Your task is to convert "
-        "research notes into a structured JSON article that reads like a top-tier Indian "
-        "financial publication and is more informative than a generic broker recap. "
-        "SEBI compliance is MANDATORY: Do NOT use the words buy, sell, hold, accumulate, "
-        "exit, or include target prices or rebalancing instructions anywhere. "
-        "Use only the evidence present in the notes and cite the source of each important number inline. "
-        "Do not pad the article with textbook company descriptions or stale market-cap trivia. "
+        "You are a senior markets correspondent at a top Indian business daily (LiveMint / Hindu BusinessLine). "
+        "Convert research notes into a structured JSON article with professional editorial voice.\n\n"
+        "VOICE RULES:\n"
+        "- LEDE: Open with the single most important number or event and why it matters to the reader RIGHT NOW.\n"
+        "- PARAGRAPH 2: 'Why now' — the specific catalyst or trigger that makes this story timely.\n"
+        "- Each substantive section: at least one historical comparison or sector benchmark with specific numbers.\n"
+        "- Attribute all sentiment: 'the street had expected', 'management guided for', 'analysts pencilled in'.\n"
+        "- Close with a forward-looking paragraph: upcoming catalysts, next data point, what to watch.\n"
+        "- BANNED: 'significant growth', 'strong performance', 'notable development', 'robust numbers', "
+        "'going forward', 'it remains to be seen', 'only time will tell'. Replace with concrete figures.\n\n"
+        "SEBI compliance: Do NOT use buy, sell, hold, accumulate, exit, target price, or rebalancing. "
+        "Use only the evidence present in the notes; cite the source of each important number inline. "
+        "Do not pad with textbook company descriptions or stale market-cap trivia. "
         "Return ONLY valid JSON — no markdown, no code fences, no explanation."
     )
 
@@ -3361,7 +3911,7 @@ def _evaluate_publish_gate(
         reasons.append("insufficient_substantive_sections")
     if contains_internal_language(article_text):
         reasons.append("internal_language")
-    if _advisory_language_present(article):
+    if _advisory_language_present(article) and not is_ra_licensed():
         reasons.append("advisory_language")
     limited_data_hits = sum(1 for pattern in _LIMITED_DATA_PATTERNS if pattern.search(article_text))
     if limited_data_hits >= 2:
@@ -3477,12 +4027,21 @@ async def generate_flash_article(
     slug_src = req.objective[:80] if req.objective else req.target[:80]
     slug = slugify(f"{req.content_type}-{slug_src}")
 
-    # Return existing if no overwrite
+    # Return existing if no overwrite; version up if overwriting
+    is_update = False
+    from finagent.content_automation import load_generated_article
     if not req.overwrite:
-        from finagent.content_automation import load_generated_article
         existing = load_generated_article(slug, route_base=route_base)
         if existing:
             return ContentAutomationResult.model_validate(existing)
+    else:
+        existing = load_generated_article(slug, route_base=route_base)
+        if existing:
+            is_update = True
+            version = 2
+            while load_generated_article(f"{slug}-v{version}", route_base=route_base):
+                version += 1
+            slug = f"{slug}-v{version}"
 
     if req.mode == "flash":
         objectives = _CONTENT_FLASH_OBJECTIVES
@@ -3744,8 +4303,88 @@ async def generate_flash_article(
                         f"metrics {len(article.metrics)}; visuals {len(article.visuals)})."
                     ),
                 )
+    # ── Specialist research wave (10 parallel agents) ────────────────────────
+    specialist_summary: dict[str, Any] = {}
+    specialist_quality = 0
+    if os.getenv("FINAGENT_SPECIALIST_WAVE_DISABLED", "").lower() not in {"1", "true", "yes"}:
+        try:
+            from finagent.content.specialist_agents import (
+                run_specialist_wave,
+                summarise_wave,
+                wave_to_prompt_block,
+            )
+            llm_cfg_wave = resolve_openai_config(complexity="moderate")
+            if llm_cfg_wave is not None:
+                try:
+                    import openai as _openai_wave
+                    wave_client = _openai_wave.AsyncOpenAI(
+                        api_key=llm_cfg_wave.api_key,
+                        base_url=llm_cfg_wave.base_url,
+                    )
+
+                    async def _wave_llm(system_prompt: str, user_prompt: str) -> str:
+                        resp = await wave_client.chat.completions.create(
+                            model=os.getenv("FINAGENT_SPECIALIST_MODEL") or os.getenv("FINAGENT_SYNTH_MODEL") or llm_cfg_wave.model or "gpt-5.4-mini",
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            temperature=0.25,
+                            max_completion_tokens=900,
+                            response_format={"type": "json_object"},
+                            timeout=40,
+                        )
+                        return (resp.choices[0].message.content or "").strip()
+
+                    context_blob = (req.source_markdown or "")[:3500]
+                    if ikg_ctx.get("narrative"):
+                        context_blob += "\n\n" + str(ikg_ctx.get("narrative") or "")[:2500]
+                    memos = await run_specialist_wave(req.target, context_blob, _wave_llm, timeout_s=42.0)
+                    specialist_summary = summarise_wave(memos)
+                    specialist_quality = int(specialist_summary.get("quality_score") or 0)
+                    wave_block = wave_to_prompt_block(memos)
+                    if wave_block:
+                        evidence_pack.setdefault("summary", {})
+                        evidence_pack["summary"]["specialist_kinds_covered"] = specialist_summary.get("kinds_covered", [])
+                        evidence_pack["specialist_memos"] = [m.to_dict() for m in memos.values()]
+                    BUS.emit(
+                        job_id, "log", source="flash_engine", level="info",
+                        message=(
+                            f"Specialist wave covered {len(specialist_summary.get('kinds_covered') or [])}/10; "
+                            f"quality_score={specialist_quality}"
+                        ),
+                    )
+                except Exception as exc:
+                    logger.warning("Specialist wave failed: %s", exc)
+        except Exception as exc:
+            logger.warning("Specialist wave module unavailable: %s", exc)
+
     BUS.emit(job_id, "phase", phase="content_generation", note="Running editorial review and revision")
-    article, editorial_review = await run_editorial_revision_loop(article, target=req.target, max_rounds=4)
+    # Strip any Livemint URLs from the evidence pack before review/gate — Livemint
+    # is never an allowed source on the public surface, even when other trusted
+    # press is permitted as supporting context.
+    from finagent.content.livemint_blocker import sanitise_evidence_pack
+    evidence_pack, livemint_dropped = sanitise_evidence_pack(evidence_pack)
+    if livemint_dropped:
+        BUS.emit(
+            job_id,
+            "log",
+            source="flash_engine",
+            level="warning",
+            message=f"Dropped {livemint_dropped} Livemint source(s) from evidence pack before publish gate.",
+        )
+    pre_evidence_claims = _build_evidence_claims(article, evidence_pack)
+    is_official_source = _is_official_update_request(req)
+    blended_quality = max(int(round(max(quality_score, 0.0))), int(specialist_quality or 0))
+    article, editorial_review = await run_editorial_revision_loop(
+        article,
+        target=req.target,
+        max_rounds=4,
+        is_official_source=is_official_source,
+        quality_score=blended_quality,
+        evidence_claim_count=len(pre_evidence_claims),
+        livemint_source_violations=livemint_dropped,
+    )
     article = sanitize_article_package(article)
     editorial_score = editorial_review.total_score
     urgency_score = editorial_review.urgency_score
@@ -3759,6 +4398,18 @@ async def generate_flash_article(
     )
     article = sanitize_article_package(article)
     evidence_claims = _build_evidence_claims(article, evidence_pack)
+
+    # ── Fact triangulation ────────────────────────────────────────────────────
+    article_text = _article_plain_text(article)
+    fact_claims = extract_numeric_claims(article_text)
+    enrichment_data = evidence_pack.get("enrichment") or evidence_pack.get("ikg") or {}
+    if isinstance(enrichment_data, dict):
+        fact_claims = triangulate_claims(fact_claims, enrichment_data)
+    conflicting_facts = [c for c in fact_claims if c.status == "conflicting"]
+    single_source_facts = [c for c in fact_claims if c.status == "single_source"]
+    if conflicting_facts:
+        logger.warning("[FACT-CHECK] %d conflicting claims found for %s", len(conflicting_facts), req.target)
+
     publish_gate = _evaluate_publish_gate(
         req=req,
         article=article,
@@ -3767,21 +4418,38 @@ async def generate_flash_article(
         evidence_pack=evidence_pack,
         evidence_claims=evidence_claims,
     )
+    if specialist_summary:
+        gate_metrics = publish_gate.setdefault("metrics", {})
+        gate_metrics["specialist_quality_score"] = int(specialist_quality or 0)
+        gate_metrics["specialist_kinds_covered"] = list(specialist_summary.get("kinds_covered") or [])
+        gate_metrics["specialist_kinds_failed"] = list(specialist_summary.get("kinds_failed") or [])
+    if livemint_dropped:
+        publish_gate.setdefault("metrics", {})["livemint_sources_dropped"] = int(livemint_dropped)
     confidence = int(publish_gate.get("score") or 0)
     reasons = list(publish_gate.get("reasons") or [])
     publish_status = "published" if str(publish_gate.get("status") or "draft") == "publish" else "draft"
     review_reason = str(publish_gate.get("review_reason") or "")
     generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
+    if is_update:
+        article = article.model_copy(update={
+            "hero_summary": f"[Updated] {article.hero_summary}",
+        })
+
     # ── Render HTML + image ───────────────────────────────────────────────────
     fake_req = ContentAutomationRequest(
         topic=req.target,
         slug=slug,
-        include_image=req.include_image,
+        include_image=bool(req.include_image or publish_status == "published"),
         route_base=route_base,
         force_publish=req.force_publish,
     )
-    image_bytes, image_ext, _mime = await _generate_image(fake_req, article, route_base)
+    image_bytes, image_ext, image_mime, cover_provider = await _generate_cover_for_article(
+        fake_req,
+        article,
+        route_base,
+        publish_status=publish_status,
+    )
     image_name = f"cover{image_ext}"
     public_url = f"{_SITE_URL}/{route_base}/{slug}/"
     img_href = f"/{route_base}/{slug}/{image_name}"
@@ -3806,6 +4474,30 @@ async def generate_flash_article(
     json_path = adir / "article.json"
     img_path = adir / image_name
     _write_bytes(img_path, image_bytes)
+
+    # ── Render real chart PNGs from article visuals ──────────────────────────
+    try:
+        from finagent.output.chart_generator import generate_article_visual
+        article_visuals = list(article.visuals or []) if hasattr(article, "visuals") else []
+        for vi, visual in enumerate(article_visuals):
+            vdata = visual.model_dump() if hasattr(visual, "model_dump") else (visual if isinstance(visual, dict) else {})
+            pts = vdata.get("points") or []
+            if len(pts) < 2:
+                continue
+            chart_filename = f"chart_{vi}.png"
+            chart_path = str(adir / chart_filename)
+            result_chart = generate_article_visual(vdata, output_path=chart_path)
+            if result_chart:
+                if publish_status == "published":
+                    for pub_dir in _public_article_dirs(route_base, slug):
+                        pub_chart = pub_dir / chart_filename
+                        pub_chart.parent.mkdir(parents=True, exist_ok=True)
+                        import shutil
+                        if Path(chart_path).exists():
+                            shutil.copy2(chart_path, str(pub_chart))
+    except Exception:
+        logger.debug("Chart rendering skipped: %s", slug, exc_info=True)
+
     _write_text(html_path, html_text)
 
     # ── Score publishability ──────────────────────────────────────────────────
@@ -3841,6 +4533,8 @@ async def generate_flash_article(
         html_path=str(html_path),
         json_path=str(json_path),
         image_path=str(img_path),
+        image_mime=image_mime,
+        cover_provider=cover_provider,
         generated_at=generated_at,
         sources_used=[
             {
@@ -3865,6 +4559,8 @@ async def generate_flash_article(
         "content_type": effective_content_type,
         "requested_content_type": req.content_type,
         "quality_score": combined_quality,
+        "image_mime": image_mime,
+        "cover_provider": cover_provider,
         "ikg_covered": ikg_ctx.get("covered", False),
         "source_evidence_meta": req.source_evidence_meta or {},
         "publish_gate": publish_gate,
