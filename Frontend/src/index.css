@@ -578,8 +578,10 @@ button[style*="06B6D4"]:hover {
 
 /* Keep the chart header (and its benchmark dropdown) above the chart canvas
    that follows it in the same panel, so the open menu never paints behind the
-   chart lines. */
-.chart-panel-header {
+   chart lines or loses clicks to it. Must out-specify the global
+   `.data-panel > * { z-index: 1 }` rule below, which otherwise traps the header
+   at z-index 1 (tied with the chart wrapper, which then wins on DOM order). */
+.data-panel > .chart-panel-header {
   position: relative;
   z-index: 30;
 }
