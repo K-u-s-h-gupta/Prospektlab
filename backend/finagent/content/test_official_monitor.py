@@ -4,12 +4,26 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock
 
+import pytest
+
+from finagent.content import official_monitor as _om
 from finagent.content.official_monitor import (
     _triage_event,
     get_monitor_status,
     record_scheduler_heartbeat,
     run_official_monitor,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_cross_source_seen():
+    """The official monitor module keeps a runtime cross-source dedup cache
+    (_CROSS_SOURCE_SEEN) so the same event from NSE/BSE/SEBI is generated only
+    once per process. Tests reuse identical titles across cases, which would
+    otherwise leak the fingerprint between tests and cause spurious skips."""
+    _om._CROSS_SOURCE_SEEN.clear()
+    yield
+    _om._CROSS_SOURCE_SEEN.clear()
 
 
 def test_triage_event_skips_low_value_notice():
@@ -62,7 +76,7 @@ def test_official_monitor_generates_for_material_event(monkeypatch, tmp_path: Pa
     monkeypatch.setattr("finagent.content.official_monitor._STATE_PATH", state_path)
     monkeypatch.setattr(
         "finagent.content.official_monitor.get_listed_companies",
-        lambda nifty500_only=True: [
+        lambda *args, **kwargs: [
             {
                 "company_name": "ABC Limited",
                 "nse_symbol": "ABC",
@@ -129,7 +143,7 @@ def test_official_monitor_holds_material_but_evidence_thin(monkeypatch, tmp_path
     monkeypatch.setattr("finagent.content.official_monitor._STATE_PATH", state_path)
     monkeypatch.setattr(
         "finagent.content.official_monitor.get_listed_companies",
-        lambda nifty500_only=True: [
+        lambda *args, **kwargs: [
             {
                 "company_name": "ABC Limited",
                 "nse_symbol": "ABC",
@@ -191,7 +205,7 @@ def test_official_monitor_propagates_publish_gate_blockers(monkeypatch, tmp_path
     monkeypatch.setattr("finagent.content.official_monitor._STATE_PATH", state_path)
     monkeypatch.setattr(
         "finagent.content.official_monitor.get_listed_companies",
-        lambda nifty500_only=True: [
+        lambda *args, **kwargs: [
             {
                 "company_name": "ABC Limited",
                 "nse_symbol": "ABC",
@@ -281,7 +295,7 @@ def test_official_monitor_skips_official_items_older_than_24_hours(monkeypatch, 
     monkeypatch.setattr("finagent.content.official_monitor._STATE_PATH", state_path)
     monkeypatch.setattr(
         "finagent.content.official_monitor.get_listed_companies",
-        lambda nifty500_only=True: [
+        lambda *args, **kwargs: [
             {
                 "company_name": "ABC Limited",
                 "nse_symbol": "ABC",
@@ -373,7 +387,7 @@ def test_fallback_can_publish_multiple_articles_in_single_sweep(monkeypatch, tmp
     monkeypatch.setattr("finagent.content.official_monitor._STATE_PATH", state_path)
     monkeypatch.setattr(
         "finagent.content.official_monitor.get_listed_companies",
-        lambda nifty500_only=True: [
+        lambda *args, **kwargs: [
             {
                 "company_name": "ABC Limited",
                 "nse_symbol": "ABC",

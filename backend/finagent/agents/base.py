@@ -1,0 +1,290 @@
+"""Base contracts for specialist subagents.
+
+Each specialist agent answers ONE focused question (financial health,
+competitor landscape, near-term news risk, etc.) using a shared
+SubAgentContext. They run in parallel under the Orchestrator and return
+typed `Finding` objects so the synthesis layer can stitch a memo out of
+verified, structured pieces instead of raw blobs of HTML.
+
+Design parallels Hermes' subagent pattern: ABC base class, common
+context, structured outputs, deterministic priority/dependency graph.
+"""
+
+from __future__ import annotations
+
+import abc
+import asyncio
+import logging
+import time
+from dataclasses import dataclass, field
+from typing import Any, Awaitable, Callable
+
+from finagent.accuracy_validator import Claim
+from finagent.geo.entity_resolver import ResolvedEntity
+from finagent.ikg.service import IKGCompanyBundle
+from finagent.geo.query_localizer import localize_search_query
+from finagent.synthesis import EnrichmentBundle
+from finagent.tools.web.scraper import ScrapedDoc
+
+logger = logging.getLogger("finagent.agents")
+
+
+@dataclass
+class Finding:
+    """One atomic finding from a subagent.
+
+    `kind` is used by the synthesis layer to bucket findings into the
+    correct memo section. `evidence` is a list of source URLs that
+    support the claim.
+    """
+
+    agent: str
+    kind: str  # financial | risk | sentiment | competitor | macro | technical | news | governance
+    headline: str
+    detail: str
+    confidence: str  # HIGH | MEDIUM | LOW
+    evidence: list[str] = field(default_factory=list)
+    metrics: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {
+            "agent": self.agent,
+            "kind": self.kind,
+            "headline": self.headline,
+            "detail": self.detail,
+            "confidence": self.confidence,
+            "evidence": self.evidence,
+            "metrics": self.metrics,
+        }
+
+
+@dataclass
+class AgentTaskResult:
+    """Returned by every subagent."""
+
+    agent_name: str
+    status: str = "ok"  # ok | partial | failed | skipped
+    findings: list[Finding] = field(default_factory=list)
+    claims: list[Claim] = field(default_factory=list)
+    new_docs: list[ScrapedDoc] = field(default_factory=list)
+    queries_used: list[str] = field(default_factory=list)
+    elapsed_ms: int = 0
+    error: str | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    def summary_dict(self) -> dict:
+        """JSON-safe summary for SSE / persistence."""
+        return {
+            "agent_name": self.agent_name,
+            "status": self.status,
+            "findings_count": len(self.findings),
+            "claims_count": len(self.claims),
+            "new_docs_count": len(self.new_docs),
+            "queries_used": self.queries_used[:8],
+            "elapsed_ms": self.elapsed_ms,
+            "error": self.error,
+            "extra": self.extra,
+        }
+
+
+@dataclass
+class SubAgentContext:
+    """Read-only inputs handed to every subagent.
+
+    The shared bundle and docs are read-only by convention — subagents
+    append to their own `new_docs` list instead of mutating the shared
+    pool. The orchestrator merges everything in once all agents return.
+    """
+
+    target: str
+    canonical_label: str
+    objective: str
+    bundle: EnrichmentBundle
+    seed_docs: list[ScrapedDoc]
+    session_id: str
+    # Subagents may use this to emit live progress events without knowing
+    # about the SSE bus. Set by the orchestrator.
+    emit: Callable[..., None] | None = None
+    # Where to register new docs for downstream deduplication. The
+    # orchestrator passes in a shared set.
+    seen_urls: set[str] = field(default_factory=set)
+    # Per-agent budgets
+    deadline_ms: int = 45_000
+    max_queries: int = 6
+    resolved_entity: ResolvedEntity | None = None
+    ikg_bundle: IKGCompanyBundle | None = None
+    agent_contexts: dict[str, dict[str, Any]] = field(default_factory=dict)
+    preferred_domains: list[str] = field(default_factory=list)
+    query_cache: dict[str, list[ScrapedDoc]] | None = None
+    bypass_crawl4ai: bool = False
+    lite_crawl: bool = False
+    portfolio_symbols: list[str] = field(default_factory=list)
+    portfolio_risk: dict[str, Any] = field(default_factory=dict)
+    runtime_rules: list[str] = field(default_factory=list)
+    # Wall-clock guard shared with the main agent loop.
+    budget_exceeded: Callable[[], bool] | None = None
+
+    def agent_context(self, agent_name: str) -> dict[str, Any]:
+        return self.agent_contexts.get(agent_name, {})
+
+
+class BaseSubAgent(abc.ABC):
+    """Subagent abstract base class.
+
+    Subclasses implement:
+        name: short kebab id, e.g. "financials"
+        display: human label, e.g. "Financial Health"
+        priority: lower runs earlier in the wave (default 50)
+        dependencies: list of agent names this one waits for
+        run(ctx) -> AgentTaskResult
+    """
+
+    name: str = ""
+    display: str = ""
+    priority: int = 50
+    dependencies: tuple[str, ...] = ()
+    # If True, the orchestrator skips this agent when its enabling
+    # precondition fails (e.g. financials skipped if no SEC bundle).
+    skippable: bool = True
+
+    def precondition(self, ctx: SubAgentContext) -> tuple[bool, str]:
+        """Return (run?, reason). Default: always run."""
+        return True, ""
+
+    @abc.abstractmethod
+    async def execute(self, ctx: SubAgentContext) -> AgentTaskResult:
+        ...
+
+    async def run(self, ctx: SubAgentContext) -> AgentTaskResult:
+        """Wrap execute() with timing, error handling, and emission."""
+        t0 = time.perf_counter()
+        emit = ctx.emit or (lambda *_a, **_kw: None)
+        ok, reason = self.precondition(ctx)
+        if not ok:
+            logger.info("Subagent '%s' (%s) precondition evaluation failed: %s (skippable=%s)", self.name, self.display, reason, self.skippable)
+            if self.skippable:
+                emit(
+                    "subagent_skipped",
+                    agent=self.name,
+                    display=self.display,
+                    reason=reason,
+                )
+                return AgentTaskResult(
+                    agent_name=self.name,
+                    status="skipped",
+                    error=reason,
+                    elapsed_ms=0,
+                )
+        logger.info("[SUBAGENT-START] Specialist '%s' (%s) started | priority=%d", self.name, self.display, self.priority)
+        try:
+            from finagent.state.session_context import record_agent
+            record_agent(self.display)
+        except ImportError:
+            pass
+        emit(
+            "subagent_started",
+            agent=self.name,
+            display=self.display,
+            priority=self.priority,
+        )
+        try:
+            result = await asyncio.wait_for(
+                self.execute(ctx),
+                timeout=ctx.deadline_ms / 1000.0,
+            )
+            result.elapsed_ms = int((time.perf_counter() - t0) * 1000)
+            if result.status == "ok" and not result.findings:
+                result.status = "partial"
+            emit(
+                "subagent_done",
+                agent=self.name,
+                display=self.display,
+                **result.summary_dict(),
+            )
+            logger.info("[SUBAGENT-DONE] Specialist '%s' completed | status=%s | findings=%d | new_docs=%d | elapsed=%dms",
+                        self.name, result.status, len(result.findings), len(result.new_docs), result.elapsed_ms)
+            return result
+        except asyncio.TimeoutError:
+            elapsed = int((time.perf_counter() - t0) * 1000)
+            logger.warning("[SUBAGENT-TIMEOUT] Specialist '%s' (%s) timed out after %dms", self.name, self.display, elapsed)
+            emit(
+                "subagent_done",
+                agent=self.name,
+                display=self.display,
+                status="failed",
+                error="timeout",
+                elapsed_ms=elapsed,
+            )
+            return AgentTaskResult(
+                agent_name=self.name,
+                status="failed",
+                error="timeout",
+                elapsed_ms=elapsed,
+            )
+        except Exception as exc:  # noqa: BLE001
+            elapsed = int((time.perf_counter() - t0) * 1000)
+            logger.error("[SUBAGENT-FAILURE] Specialist '%s' (%s) failed after %dms: %s", self.name, self.display, elapsed, exc, exc_info=True)
+            emit(
+                "subagent_done",
+                agent=self.name,
+                display=self.display,
+                status="failed",
+                error=str(exc),
+                elapsed_ms=elapsed,
+            )
+            return AgentTaskResult(
+                agent_name=self.name,
+                status="failed",
+                error=str(exc),
+                elapsed_ms=elapsed,
+            )
+
+
+# Convenience helper used by every subagent: search the web with a
+# per-query timeout and merge results into the shared seen-set.
+async def search_and_dedupe(
+    ctx: SubAgentContext,
+    queries: list[str],
+    *,
+    per_query_limit: int = 5,
+    per_query_timeout: float = 15.0,
+) -> tuple[list[ScrapedDoc], list[str]]:
+    from finagent.tools.web.scraper import search_web
+
+    used: list[str] = []
+    out: list[ScrapedDoc] = []
+
+    async def _one(q: str):
+        localized = localize_search_query(q, ctx.resolved_entity) if ctx.resolved_entity else q
+        try:
+            return await asyncio.wait_for(
+                search_web(
+                    localized,
+                    max_results=per_query_limit,
+                    preferred_domains=ctx.preferred_domains,
+                    entity=ctx.resolved_entity,
+                    query_cache=ctx.query_cache,
+                    bypass_crawl4ai=ctx.bypass_crawl4ai,
+                    lite_crawl=ctx.lite_crawl,
+                ),
+                timeout=per_query_timeout,
+            )
+        except asyncio.TimeoutError:
+            return []
+        except Exception as exc:
+            logger.warning("search_and_dedupe query failed for %s: %s", localized, exc)
+            if ctx.emit:
+                ctx.emit("agent_task", task=f"search {localized}", status="error", error=str(exc))
+            return []
+
+
+    batches = await asyncio.gather(*(_one(q) for q in queries[: ctx.max_queries]))
+    for q, batch in zip(queries, batches):
+        used.append(q)
+        for d in batch:
+            key = (d.final_url or d.url or "").split("#", 1)[0]
+            if not key or key in ctx.seen_urls:
+                continue
+            ctx.seen_urls.add(key)
+            out.append(d)
+    return out, used

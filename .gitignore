@@ -11,12 +11,15 @@ ENV/
 
 # Local / agent state
 .finagent/
-finagent/.env
+backend/finagent/.env
+frontend/.env
 *.sqlite3
 *.sqlite
+*.db
+*.db-journal
 *.log
 sqlite_probe*
-finagent/data/
+backend/finagent/data/
 uv.lock
 
 # IDE / OS
@@ -28,8 +31,16 @@ Thumbs.db
 
 # Build artifacts
 backend.zip
+frontend.zip
 deploy-package.zip
 deploy-package-v2.zip
+
+# Vendored upstream clones + clone test dirs (reference only, own nested .git)
+backend/finagent/ikg/scrapers/captcha_solver_repo*/
+
+# Pytest temp
+.tmp_pytest/
+pytest-cache-files-*/
 
 # Temp / scratch files
 scratch_*.py
@@ -38,6 +49,19 @@ web_changes.diff
 
 # K6 load test
 load_test.js
+
+# SSH keys and certificates
+*.pem
+id_rsa
+id_rsa.pub
+*_id_rsa
+*_id_rsa.pub
+*-aadcert.pub
+deployment/az_ssh_config/
+deployment/id_rsa
+deployment/id_rsa.pub
+deployment/known_hosts
+deployment/known_hosts.old
 
 # Environment
 .env
@@ -48,10 +72,10 @@ outreach/leads*.csv
 !outreach/leads.sample.csv
 
 # Frontend (Vite/React)
-Frontend/app/node_modules/
-Frontend/app/dist/
-Frontend/app/.vite/
-Frontend/app/.env.local
-Frontend/app/.env.*.local
-Frontend/app/*.log
-Frontend/app/npm-debug.log*
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env.local
+frontend/.env.*.local
+frontend/*.log
+frontend/npm-debug.log*

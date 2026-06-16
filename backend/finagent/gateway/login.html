@@ -1,0 +1,637 @@
+<!doctype html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in · ProspektLab</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#e9feff",
+            "surface": "#131314",
+            "background": "#0a0a0b",
+            "obsidian-base": "#0a0a0b",
+            "electric-cyan": "#00f5ff",
+            "crimson-risk": "#ff3b30",
+            "glass-stroke": "rgba(255, 255, 255, 0.08)",
+            "charcoal-surface": "#141416",
+            "on-surface": "#e5e2e3",
+            "on-surface-variant": "#b9caca",
+            "outline": "#849495",
+            "outline-variant": "#3a494a",
+          },
+          fontFamily: {
+            manrope: ["Manrope", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background-color: #0A0A0B;
+      color: #e5e2e3;
+      font-family: 'Manrope', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .glass-card {
+      background: rgba(20, 20, 22, 0.6);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    }
+    .aurora {
+      position: absolute;
+      inset: -25%;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(closest-side, rgba(0, 245, 255, 0.12), transparent 70%),
+        radial-gradient(closest-side, rgba(167, 139, 250, 0.06), transparent 70%);
+      background-position: 20% 30%, 80% 70%;
+      background-size: 600px 600px, 500px 500px;
+      background-repeat: no-repeat;
+      filter: blur(30px);
+      opacity: 0.7;
+    }
+    .grid-bg {
+      background-image: linear-gradient(rgba(0, 245, 255, 0.02) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0, 245, 255, 0.02) 1px, transparent 1px);
+      background-size: 56px 56px;
+    }
+    .toast {
+      position: fixed;
+      top: 1rem;
+      left: 50%;
+      transform: translate(-50%, -150%);
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      transition: transform 0.3s ease;
+      z-index: 100;
+    }
+    .toast.visible {
+      transform: translate(-50%, 0);
+    }
+  </style>
+</head>
+<body class="min-h-screen overflow-x-hidden flex items-center justify-center relative py-12">
+  <div class="aurora"></div>
+  <div class="absolute inset-0 grid-bg opacity-30 pointer-events-none"></div>
+
+  <div class="w-full max-w-[460px] relative z-10 px-4">
+    <!-- Centered Glass Card -->
+    <div class="glass-card rounded-[24px] p-8 md:p-10 relative overflow-hidden">
+      
+      <!-- 3D Profile Orb -->
+      <div class="flex justify-center mb-6">
+        <div class="w-20 h-20 rounded-full bg-gradient-to-b from-electric-cyan/20 to-transparent p-[1px] border border-glass-stroke flex items-center justify-center relative shadow-lg shadow-electric-cyan/5">
+          <div class="w-full h-full rounded-full bg-[#0A0A0B]/85 flex items-center justify-center overflow-hidden">
+            <svg class="w-10 h-10 text-electric-cyan opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <div class="absolute inset-0 rounded-full bg-electric-cyan/10 blur-sm pointer-events-none"></div>
+        </div>
+      </div>
+
+      <div class="text-center mb-8">
+        <h1 class="text-2xl font-bold tracking-tight text-on-surface mb-2">Secure Access</h1>
+        <p class="text-sm text-on-surface-variant/70">Enter the sovereign vault of ProspektLab</p>
+      </div>
+
+      <!-- Tab Headers -->
+      <div class="flex border-b border-glass-stroke mb-8 relative justify-around">
+        <a href="/login" class="text-electric-cyan border-b-2 border-electric-cyan pb-2 text-[11px] font-mono font-bold tracking-widest text-center flex-1 uppercase">Login</a>
+        <a href="/signup" class="text-on-surface-variant hover:text-on-surface pb-2 text-[11px] font-mono font-bold tracking-widest text-center flex-1 uppercase">Sign Up</a>
+      </div>
+
+      <!-- Section: Login Form -->
+      <div id="loginFormSection">
+        <form id="loginForm" class="space-y-6">
+          <div>
+            <label class="font-mono text-[10px] text-zinc-500 tracking-wider uppercase block mb-2">Email Address</label>
+            <div class="relative">
+              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-mono">@</span>
+              <input id="email" type="email" required placeholder="name@prospektlab.com" autocomplete="email"
+                     class="w-full bg-transparent border border-glass-stroke rounded-xl pl-10 pr-4 py-3 text-sm focus:border-electric-cyan focus:ring-1 focus:ring-electric-cyan outline-none placeholder-zinc-700" />
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="font-mono text-[10px] text-zinc-500 tracking-wider uppercase block">Password</label>
+              <button type="button" id="forgotPwLink" class="text-[10px] font-mono text-electric-cyan hover:underline bg-transparent border-0 p-0 cursor-pointer">Forgot?</button>
+            </div>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-[18px]">lock</span>
+              <input id="password" type="password" required minlength="6" placeholder="••••••••" autocomplete="current-password"
+                     class="w-full bg-transparent border border-glass-stroke rounded-xl pl-10 pr-12 py-3 text-sm focus:border-electric-cyan focus:ring-1 focus:ring-electric-cyan outline-none placeholder-zinc-700" />
+              <button id="togglePw" type="button" class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-text p-1" aria-label="Toggle password visibility">
+                <span class="material-symbols-outlined text-[18px]">visibility</span>
+              </button>
+            </div>
+          </div>
+
+          <label class="flex items-center gap-2.5 text-xs text-on-surface-variant cursor-pointer select-none">
+            <input id="remember" type="checkbox" class="rounded border-glass-stroke bg-transparent text-electric-cyan focus:ring-electric-cyan/30" />
+            <span>Keep me signed in for 30 days</span>
+          </label>
+
+          <button type="submit" id="loginBtn" class="w-full bg-electric-cyan hover:opacity-95 text-black font-mono font-bold py-3.5 rounded-xl text-xs tracking-wider transition-all flex items-center justify-center gap-2 uppercase">
+            <span id="loginBtnLabel" class="flex items-center gap-2">Initiate Session <span class="material-symbols-outlined text-sm">arrow_forward</span></span>
+            <span id="loginBtnSpinner" class="hidden">
+              <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            </span>
+          </button>
+        </form>
+
+        <div class="flex items-center gap-3 text-xs text-zinc-600 my-6">
+          <div class="flex-1 h-px bg-glass-stroke"></div>
+          <span class="font-mono text-[9px] tracking-wider uppercase">Third-party verification</span>
+          <div class="flex-1 h-px bg-glass-stroke"></div>
+        </div>
+
+        <!-- OAuth Grid -->
+        <div class="grid grid-cols-2 gap-4">
+          <div class="relative">
+            <button id="googleBtn" type="button" class="w-full bg-transparent border border-glass-stroke rounded-xl py-3 text-[10px] font-mono font-bold tracking-widest text-on-surface hover:bg-white/5 transition flex items-center justify-center gap-2">
+              GOOGLE
+            </button>
+            <div id="googleBtnOverlay" class="absolute inset-0 opacity-[0.001] z-10 overflow-hidden pointer-events-auto cursor-pointer"></div>
+          </div>
+          <button type="button" class="w-full bg-transparent border border-glass-stroke rounded-xl py-3 text-[10px] font-mono font-bold tracking-widest text-zinc-600 cursor-not-allowed flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined text-[16px]">account_balance</span>
+            BANK ID
+          </button>
+        </div>
+      </div>
+
+      <!-- Section: Forgot Password Section -->
+      <div id="forgotPasswordSection" class="hidden">
+        <h2 class="text-xl font-bold tracking-tight mb-2">Reset Password</h2>
+        <p class="text-xs text-on-surface-variant/70 mb-6">Enter your email and choose whether the reset code should arrive by email or SMS.</p>
+
+        <form id="forgotForm" class="space-y-4">
+          <div>
+            <label class="font-mono text-[10px] text-zinc-500 tracking-wider block mb-2">Email Address</label>
+            <div class="relative">
+              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-mono">@</span>
+              <input id="forgotEmail" type="email" required placeholder="name@prospektlab.com"
+                     class="w-full bg-transparent border border-glass-stroke rounded-xl pl-10 pr-4 py-3 text-sm focus:border-electric-cyan focus:ring-1 focus:ring-electric-cyan outline-none placeholder-zinc-700" />
+            </div>
+          </div>
+
+          <div>
+            <label class="font-mono text-[10px] text-zinc-500 tracking-wider block mb-2 uppercase">Reset Delivery</label>
+            <div class="grid grid-cols-2 gap-2 rounded-xl border border-glass-stroke p-1">
+              <label class="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs text-on-surface-variant cursor-pointer has-[:checked]:bg-electric-cyan/10 has-[:checked]:text-electric-cyan">
+                <input name="reset_channel" type="radio" value="email" checked class="sr-only" />
+                <span class="material-symbols-outlined text-[16px]">mail</span>
+                <span>Email code</span>
+              </label>
+              <label class="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs text-on-surface-variant cursor-pointer has-[:checked]:bg-electric-cyan/10 has-[:checked]:text-electric-cyan">
+                <input name="reset_channel" type="radio" value="sms" class="sr-only" />
+                <span class="material-symbols-outlined text-[16px]">sms</span>
+                <span>SMS code</span>
+              </label>
+            </div>
+            <p id="resetDeliveryHint" class="mt-2 text-[11px] text-on-surface-variant/70">SMS uses the mobile number already saved on your ProspektLab account.</p>
+          </div>
+
+          <button type="submit" id="sendResetBtn" class="w-full bg-electric-cyan hover:opacity-95 text-black font-mono font-bold py-3.5 rounded-xl text-xs tracking-wider transition-all flex items-center justify-center gap-2 uppercase">
+            <span id="sendResetLabel">Send Reset Code</span>
+            <span id="sendResetSpinner" class="hidden">
+              <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            </span>
+          </button>
+        </form>
+
+        <!-- Code Validation & New Password form -->
+        <form id="resetForm" class="hidden mt-6 space-y-4 pt-6 border-t border-glass-stroke">
+          <div>
+            <label class="font-mono text-[10px] text-zinc-500 tracking-wider block mb-2">6-Digit Reset Code</label>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-[18px]">verified_user</span>
+              <input id="resetCode" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" required placeholder="6-digit code"
+                     class="w-full bg-transparent border border-glass-stroke rounded-xl pl-10 pr-4 py-3 text-sm focus:border-electric-cyan focus:ring-1 focus:ring-electric-cyan outline-none placeholder-zinc-700" />
+            </div>
+          </div>
+
+          <div>
+            <label class="font-mono text-[10px] text-zinc-500 tracking-wider block mb-2">New Password</label>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-[18px]">lock</span>
+              <input id="newPassword" type="password" required minlength="8" placeholder="At least 8 characters"
+                     class="w-full bg-transparent border border-glass-stroke rounded-xl pl-10 pr-4 py-3 text-sm focus:border-electric-cyan focus:ring-1 focus:ring-electric-cyan outline-none placeholder-zinc-700" />
+            </div>
+          </div>
+
+          <button type="submit" id="resetBtn" class="w-full bg-electric-cyan hover:opacity-95 text-black font-mono font-bold py-3.5 rounded-xl text-xs tracking-wider transition-all flex items-center justify-center gap-2 uppercase">
+            Update Password
+          </button>
+        </form>
+
+        <p class="text-center text-xs mt-6">
+          <a href="#" id="backToLoginLink" class="text-electric-cyan hover:underline font-medium">Back to Login</a>
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Under Card Footer Status -->
+    <div class="flex items-center justify-between mt-6 px-4 text-[10px] font-mono text-zinc-600 uppercase tracking-widest">
+      <div class="flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-electric-cyan shadow-sm shadow-electric-cyan"></span>
+        <span>System Online</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <span class="material-symbols-outlined text-[12px] -mt-0.5">shield</span>
+        <span>AES-256 Secured</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast bg-crimson-risk/15 border border-crimson-risk/30 text-crimson-risk">
+    <div class="flex items-center gap-2">
+      <span class="material-symbols-outlined text-[16px]">error</span>
+      <span id="toastMsg">Something went wrong.</span>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    // ── API base URL ────────────────────────────────────────────────────
+    const _API_GATEWAY_URL = "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com";
+    const API_BASE = (function() {
+      const host = window.location.hostname || "";
+      if (host.includes("amplifyapp.com") || host.includes("prospektlab")) {
+        return _API_GATEWAY_URL;
+      }
+      return "";  // local dev: use relative paths
+    })();
+
+    function workspaceLaunchUrl(token) {
+      return `/app?token=${encodeURIComponent(token)}`;
+    }
+
+    function showToast(msg, kind = "error") {
+      let text = msg;
+      if (msg && typeof msg === "object") {
+        if (Array.isArray(msg)) {
+          text = msg.map(err => err.msg || JSON.stringify(err)).join(", ");
+        } else {
+          text = msg.message || msg.detail || JSON.stringify(msg);
+        }
+      }
+      const t = $("toast");
+      $("toastMsg").textContent = text;
+      t.className = `toast border visible ${kind === "error" ? "bg-crimson-risk/15 border-crimson-risk/30 text-crimson-risk" : "bg-electric-cyan/15 border-electric-cyan/30 text-electric-cyan"}`;
+      setTimeout(() => t.classList.remove("visible"), 3500);
+    }
+
+    $("togglePw").addEventListener("click", () => {
+      const pw = $("password");
+      pw.type = pw.type === "password" ? "text" : "password";
+      $("togglePw").firstElementChild.textContent = pw.type === "password" ? "visibility" : "visibility_off";
+    });
+
+    const GOOGLE_CLIENT_ID = "140159239234-l6g7cqb4okkkb1g8g5fsbs6oiqmgpk5n.apps.googleusercontent.com"; 
+
+    function showMobileNumberModal(userData, remember) {
+      if (document.getElementById("mobile-modal")) return;
+
+      const modal = document.createElement("div");
+      modal.id = "mobile-modal";
+      modal.className = "fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0A0A0B]/90 backdrop-blur-md";
+      modal.innerHTML = `
+        <div class="w-full max-w-md glass-card rounded-3xl p-8 border border-glass-stroke shadow-2xl relative overflow-hidden">
+          <div class="absolute inset-0 bg-gradient-to-tr from-electric-cyan/10 via-transparent to-transparent pointer-events-none"></div>
+          <div class="relative z-10">
+            <div class="w-12 h-12 rounded-2xl bg-electric-cyan/20 border border-electric-cyan/30 flex items-center justify-center text-electric-cyan mb-6">
+              <span class="material-symbols-outlined text-[28px]">phone_iphone</span>
+            </div>
+            <h3 class="text-xl font-bold tracking-tight text-on-surface mb-2">Complete Your Profile</h3>
+            <p class="text-sm text-on-surface-variant/70 mb-6">Please enter your mobile number to complete registration and secure your account.</p>
+            <form id="mobile-form" class="space-y-5">
+              <div>
+                <label for="modal-mobile" class="block font-mono text-[10px] text-zinc-500 tracking-wider mb-2 uppercase">Mobile Number</label>
+                <div class="relative">
+                  <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-zinc-500 text-sm">+91</span>
+                  <input 
+                    type="tel" 
+                    id="modal-mobile" 
+                    name="mobile" 
+                    placeholder="9876543210" 
+                    required 
+                    pattern="[6-9][0-9]{9}"
+                    title="Please enter a valid 10-digit mobile number"
+                    class="w-full pl-12 pr-4 py-3 bg-transparent border border-glass-stroke rounded-xl text-on-surface placeholder-zinc-700 focus:outline-none focus:border-electric-cyan/50 text-sm"
+                  />
+                </div>
+              </div>
+              <button 
+                type="submit" 
+                id="modal-submit"
+                class="w-full py-3.5 bg-electric-cyan hover:opacity-95 text-black font-mono font-bold rounded-xl text-xs tracking-wider transition-all flex items-center justify-center gap-2 uppercase"
+              >
+                <span id="modal-submit-text">Verify & Continue</span>
+                <span class="material-symbols-outlined text-sm">arrow_forward</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      const form = document.getElementById("mobile-form");
+      form.addEventListener("submit", function(e) {
+        e.preventDefault();
+        const mobileVal = document.getElementById("modal-mobile").value.trim();
+        const formattedMobile = "+91" + mobileVal;
+        
+        const btn = document.getElementById("modal-submit");
+        const btnText = document.getElementById("modal-submit-text");
+        btn.disabled = true;
+        btnText.textContent = "Saving...";
+        btn.style.opacity = "0.7";
+
+        fetch(API_BASE + '/auth/google/update-mobile', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + userData.token
+          },
+          body: JSON.stringify({ mobile: formattedMobile })
+        })
+        .then(res => res.json().then(data => ({ ok: res.ok, body: data })))
+        .then(res => {
+          if (res.ok) {
+            showToast("Profile completed successfully!", "success");
+            userData.mobile = formattedMobile;
+            userData.require_mobile = false;
+            try {
+              if (remember) {
+                localStorage.setItem('prospektlab_user', JSON.stringify(userData));
+                sessionStorage.removeItem('prospektlab_user');
+              } else {
+                sessionStorage.setItem('prospektlab_user', JSON.stringify(userData));
+                localStorage.removeItem('prospektlab_user');
+              }
+              localStorage.removeItem('prospektlab_session_id');
+              sessionStorage.removeItem('prospektlab_session_id');
+            } catch (_) {}
+            setTimeout(() => {
+              modal.remove();
+              window.location.href = workspaceLaunchUrl(userData.token);
+            }, 800);
+          } else {
+            showToast(res.body.detail || "Failed to save mobile number.", "error");
+            btn.disabled = false;
+            btnText.textContent = "Verify & Continue";
+            btn.style.opacity = "1";
+          }
+        })
+        .catch(err => {
+          showToast("Network error. Could not save mobile number.", "error");
+          btn.disabled = false;
+          btnText.textContent = "Verify & Continue";
+          btn.style.opacity = "1";
+        });
+      });
+    }
+
+    function handleCredentialResponse(response) {
+      showToast("Authenticating with Google...", "success");
+      fetch(API_BASE + '/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential })
+      })
+      .then(res => res.json().then(data => ({ status: res.status, ok: res.ok, body: data })))
+      .then(res => {
+        if (res.ok && res.body.token) {
+          const remember = $("remember") ? $("remember").checked : false;
+          if (res.body.require_mobile) {
+            showMobileNumberModal(res.body, remember);
+          } else {
+            try {
+              if (remember) {
+                localStorage.setItem('prospektlab_user', JSON.stringify(res.body));
+                sessionStorage.removeItem('prospektlab_user');
+              } else {
+                sessionStorage.setItem('prospektlab_user', JSON.stringify(res.body));
+                localStorage.removeItem('prospektlab_user');
+              }
+              localStorage.removeItem('prospektlab_session_id');
+              sessionStorage.removeItem('prospektlab_session_id');
+            } catch (_) {}
+            showToast("Signed in. Redirecting...", "success");
+            setTimeout(() => { window.location.href = workspaceLaunchUrl(res.body.token); }, 400);
+          }
+        } else {
+          showToast(res.body.detail || "Google authentication failed.", "error");
+        }
+      })
+      .catch(err => {
+        showToast("Network error. Could not connect to gateway.", "error");
+      });
+    }
+
+    let googleInitialized = false;
+    function initGoogleSignIn() {
+      if (googleInitialized) return;
+      if (!window.google) return;
+      try {
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleCredentialResponse
+        });
+        const overlay = $("googleBtnOverlay");
+        if (overlay) {
+          const btnWidth = $("googleBtn").offsetWidth || 200;
+          google.accounts.id.renderButton(overlay, {
+            theme: "outline",
+            size: "large",
+            width: btnWidth,
+            type: "standard"
+          });
+          googleInitialized = true;
+        }
+      } catch (err) {
+        /* Google init failed */
+      }
+    }
+
+    let googleInitAttempts = 0;
+    function checkAndInitGoogle() {
+      if (window.google) {
+        initGoogleSignIn();
+      } else if (googleInitAttempts < 50) {
+        googleInitAttempts++;
+        setTimeout(checkAndInitGoogle, 100);
+      } else {
+        $("googleBtn").addEventListener("click", () => {
+          showToast("Google script failed to load.", "error");
+        });
+      }
+    }
+
+    checkAndInitGoogle();
+
+    function selectedResetChannel() {
+      return document.querySelector('input[name="reset_channel"]:checked')?.value || "email";
+    }
+
+    function syncResetChannelUi() {
+      const channel = selectedResetChannel();
+      $("resetDeliveryHint").textContent = channel === "sms"
+        ? "SMS uses the mobile number already saved on your ProspektLab account."
+        : "Email sends the reset code to your account email address.";
+      $("sendResetLabel").textContent = channel === "sms" ? "Send SMS Reset Code" : "Send Reset Code";
+    }
+
+    document.querySelectorAll('input[name="reset_channel"]').forEach((input) => {
+      input.addEventListener("change", syncResetChannelUi);
+    });
+    syncResetChannelUi();
+
+    $("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = $("email").value.trim();
+      const password = $("password").value;
+      const remember = $("remember").checked;
+      $("loginBtn").disabled = true;
+      $("loginBtnLabel").classList.add("hidden");
+      $("loginBtnSpinner").classList.remove("hidden");
+      try {
+        const r = await fetch(API_BASE + "/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, remember }),
+        });
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({}));
+          showToast(data.detail || "Could not sign in. Check your credentials.");
+          return;
+        }
+        const data = await r.json();
+        try {
+          const stored = { ...data.user, token: data.token };
+          if (remember) {
+            localStorage.setItem("prospektlab_user", JSON.stringify(stored));
+            sessionStorage.removeItem("prospektlab_user");
+          } else {
+            sessionStorage.setItem("prospektlab_user", JSON.stringify(stored));
+            localStorage.removeItem("prospektlab_user");
+          }
+          localStorage.removeItem("prospektlab_session_id");
+          sessionStorage.removeItem("prospektlab_session_id");
+        } catch (_) {}
+        showToast("Signed in. Redirecting…", "success");
+        setTimeout(() => { window.location.href = workspaceLaunchUrl(data.token); }, 400);
+      } catch (e) {
+        showToast("Network error — is the gateway running?");
+      } finally {
+        $("loginBtn").disabled = false;
+        $("loginBtnLabel").classList.remove("hidden");
+        $("loginBtnSpinner").classList.add("hidden");
+      }
+    });
+
+    $("forgotPwLink").addEventListener("click", () => {
+      $("loginFormSection").classList.add("hidden");
+      $("forgotPasswordSection").classList.remove("hidden");
+    });
+
+    $("backToLoginLink").addEventListener("click", (e) => {
+      e.preventDefault();
+      $("forgotPasswordSection").classList.add("hidden");
+      $("loginFormSection").classList.remove("hidden");
+    });
+
+    $("forgotForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = $("forgotEmail").value.trim();
+      const channel = selectedResetChannel();
+      
+      $("sendResetBtn").disabled = true;
+      $("sendResetLabel").classList.add("hidden");
+      $("sendResetSpinner").classList.remove("hidden");
+
+      try {
+        const res = await fetch(API_BASE + "/auth/forgot-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, channel })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(channel === "sms" ? "Reset code sent by SMS!" : "Reset code sent successfully!", "success");
+          $("resetForm").classList.remove("hidden");
+        } else {
+          showToast(data.detail || "Error generating reset code.");
+        }
+      } catch (e) {
+        showToast("Network error — could not connect to server.");
+      } finally {
+        $("sendResetBtn").disabled = false;
+        $("sendResetLabel").classList.remove("hidden");
+        $("sendResetSpinner").classList.add("hidden");
+        syncResetChannelUi();
+      }
+    });
+
+    $("resetForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = $("forgotEmail").value.trim();
+      const code = $("resetCode").value.trim();
+      const new_password = $("newPassword").value;
+
+      try {
+        const res = await fetch(API_BASE + "/auth/reset-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, code, new_password })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast("Password updated successfully! You can now log in.", "success");
+          $("forgotForm").reset();
+          $("resetForm").reset();
+          $("resetForm").classList.add("hidden");
+          $("forgotPasswordSection").classList.add("hidden");
+          $("loginFormSection").classList.remove("hidden");
+        } else {
+          showToast(data.detail || "Failed to reset password.");
+        }
+      } catch (e) {
+        showToast("Network error — could not connect to server.");
+      }
+    });
+  </script>
+
+  <script>
+    (function(){ try {
+      document.querySelectorAll('.material-symbols-outlined').forEach(function(s){
+        if (!s.hasAttribute('aria-hidden') && !s.getAttribute('aria-label') && !s.closest('[role="button"],button,a')) {
+          s.setAttribute('aria-hidden','true');
+        }
+      });
+    } catch(e){} })();
+  </script>
+</body>
+</html>

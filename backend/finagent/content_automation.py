@@ -3129,11 +3129,11 @@ def render_article_html(
               </div>
             </div>
           </div>
-          <div class=\"art-fig-caption\">
-            <span class=\"fc-tag\">Generated illustration</span><span class=\"sep\">/</span>
-            <span>ChatGPT-image-2</span><span class=\"sep\">/</span>
-            <span>Editorial concept — {esc(article.title)}</span>
-          </div>
+        #   <div class=\"art-fig-caption\">
+        #     <span class=\"fc-tag\">Generated illustration</span><span class=\"sep\">/</span>
+        #     <span>ChatGPT-image-2</span><span class=\"sep\">/</span>
+        #     <span>Editorial concept — {esc(article.title)}</span>
+        #   </div>
           <div class=\"art-tags-wrap\">
             <div class=\"art-tags\">{tag_chips}</div>
           </div>

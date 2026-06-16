@@ -1,7 +1,7 @@
 """24/7 official-source monitor for research article automation.
 
-Polls official NSE, BSE, and SEBI sources, triages material events, and routes
-only worthwhile items into the editorial research pipeline.
+Polls official NSE, BSE, SEBI, RBI, and MCA sources, triages material events,
+and routes only worthwhile items into the editorial research pipeline.
 """
 
 from __future__ import annotations
@@ -38,6 +38,9 @@ from finagent.ikg.scrapers.sebi_corporate_filings import (
 )
 from finagent.news.dedupe import deduplicate
 from finagent.news.scorer import VERIFIED_DOMAINS, parse_published_at, score_item, tag_category
+from finagent.content.editorial_calendar import get_daily_plan, pick_topic_for_archetype
+from finagent.news.sources.mca_updates import fetch_mca_updates
+from finagent.news.sources.rbi_press import fetch_rbi_press_releases
 from finagent.news.sources.sebi_rss import fetch_sebi_news
 from finagent.paths import finagent_data_path, repo_root
 from finagent.seo.google_search_console import get_search_console_status
@@ -80,6 +83,32 @@ _OFFICIAL_UPLOAD_LOOKBACK = timedelta(hours=_OFFICIAL_UPLOAD_LOOKBACK_HOURS)
 _FALLBACK_TOPIC_LOOKBACK_DAYS = 14
 _FALLBACK_PUBLISH_THRESHOLD = _env_int("FINAGENT_FALLBACK_MIN_CONFIDENCE", 92, minimum=0, maximum=100)
 _FALLBACK_QUALITY_FIRST = _env_bool("FINAGENT_FALLBACK_QUALITY_FIRST", True)
+
+# ── Cross-source dedup ────────────────────────────────────────────────────────
+_CROSS_SOURCE_SEEN: dict[str, str] = {}
+_CROSS_SOURCE_MAX = 4096
+
+
+def _cross_source_fingerprint(event: dict[str, Any], company_name: str = "") -> str:
+    """Source-agnostic fingerprint for deduping the same event across NSE/BSE/SEBI/RBI/MCA."""
+    title = re.sub(r"[^a-z0-9 ]+", "", str(event.get("title") or "").lower()).strip()
+    words = title.split()[:12]
+    norm_title = " ".join(words)
+    company = re.sub(r"[^a-z0-9]+", "", (company_name or "").lower())[:30]
+    return hashlib.md5(f"{company}|{norm_title}".encode()).hexdigest()[:16]
+
+
+def _is_cross_source_duplicate(event: dict[str, Any], company_name: str = "") -> bool:
+    """Check if this event was already processed from another source."""
+    fp = _cross_source_fingerprint(event, company_name)
+    if fp in _CROSS_SOURCE_SEEN:
+        return True
+    if len(_CROSS_SOURCE_SEEN) > _CROSS_SOURCE_MAX:
+        keys = list(_CROSS_SOURCE_SEEN.keys())
+        for k in keys[:len(keys) // 2]:
+            del _CROSS_SOURCE_SEEN[k]
+    _CROSS_SOURCE_SEEN[fp] = datetime.now(timezone.utc).isoformat()
+    return False
 _OFFICIAL_ATTACHMENT_STAGE_VERSION = 1
 _OFFICIAL_TRIAGE_MIN_MATERIALITY = _env_int("FINAGENT_OFFICIAL_MIN_MATERIALITY", 75, minimum=0, maximum=100)
 _OFFICIAL_TRIAGE_MIN_URGENCY = _env_int("FINAGENT_OFFICIAL_MIN_URGENCY", 65, minimum=0, maximum=100)
@@ -1272,6 +1301,97 @@ async def _run_fallback_publication(
     else:
         fallback["next_eligible_at"] = ""
 
+    # ── Editorial calendar fill: archetype-driven topics for remaining quota ──
+    editorial_remaining = max(0, _FALLBACK_DAILY_TARGET - int(fallback.get("published_today") or 0))
+    if editorial_remaining > 0 and not dry_run and published_this_sweep < _FALLBACK_MAX_PER_SWEEP:
+        try:
+            from datetime import datetime as _dt
+            ist_now = _dt.now(_IST)
+            ed_plan = get_daily_plan(
+                now=ist_now,
+                published_today=int(fallback.get("published_today") or 0),
+                existing_slugs=used_topic_keys,
+            )
+            ed_limit = min(
+                len(ed_plan),
+                _FALLBACK_MAX_PER_SWEEP - published_this_sweep,
+                editorial_remaining,
+            )
+            market_movers_for_cal: list[dict[str, Any]] = []
+            trending_for_cal: list[str] = [
+                str(c.get("company_name") or c.get("symbol") or "")
+                for c in universe[:20]
+                if c.get("company_name") or c.get("symbol")
+            ]
+            for ed_item in ed_plan[:ed_limit]:
+                if int(fallback.get("published_today") or 0) >= _FALLBACK_DAILY_TARGET:
+                    break
+                try:
+                    topic = await pick_topic_for_archetype(
+                        ed_item,
+                        market_movers=market_movers_for_cal,
+                        trending_entities=trending_for_cal,
+                    )
+                    _append_activity(
+                        state,
+                        message=f"Editorial calendar generating: {topic['archetype_name']} — {topic['target'][:60]}",
+                        phase="fallback_editorial",
+                        source="editorial_calendar",
+                    )
+                    save_monitor_state(state)
+                    req = FlashGenerationRequest(
+                        mode="research",
+                        content_type=topic["content_type"],
+                        target=topic["target"],
+                        objective=topic["objective"],
+                        route_base=route_base,
+                        include_image=True,
+                        overwrite=True,
+                    )
+                    result = await generate_flash_article(
+                        req,
+                        job_id=f"{(job_id or uuid.uuid4().hex)[:8]}-ed",
+                        requested_by="editorial_calendar",
+                    )
+                    generated += 1
+                    gate_snapshot = _load_article_gate_snapshot(result.slug, route_base)
+                    is_pub = str(result.publish_status or "").lower() == "published"
+                    confidence = int(result.confidence_score or 0)
+                    held_reason_ed = ""
+                    if is_pub and gate_snapshot.get("publish_gate_status") != "publish":
+                        unpublish_article(result.slug, route_base)
+                        is_pub = False
+                        held_reason_ed = str(gate_snapshot.get("review_reason") or "publish_gate_not_met")
+                    if is_pub and _FALLBACK_QUALITY_FIRST and confidence < _FALLBACK_PUBLISH_THRESHOLD:
+                        unpublish_article(result.slug, route_base)
+                        is_pub = False
+                        held_reason_ed = "quality_threshold_not_met"
+                    if is_pub:
+                        published += 1
+                        published_this_sweep += 1
+                        fallback["published_today"] = int(fallback.get("published_today") or 0) + 1
+                        fallback["daily_count"] = int(fallback.get("published_today") or 0)
+                        fallback["last_published_at"] = _utcnow_iso()
+                    else:
+                        drafts += 1
+                        fallback["held_today"] = int(fallback.get("held_today") or 0) + 1
+                        review_reasons.append(held_reason_ed or "editorial_gate_not_met")
+                    recent_items.append({
+                        "source": "editorial_calendar",
+                        "title": result.title,
+                        "status": "published" if is_pub else "draft",
+                        "slug": result.slug,
+                        "timestamp": result.generated_at,
+                        "archetype": topic.get("archetype_id", ""),
+                    })
+                    logger.info("[EDITORIAL-CAL] %s | %s | %s", topic["archetype_name"], topic["target"][:50], "published" if is_pub else "draft")
+                except Exception as ed_exc:
+                    logger.warning("[EDITORIAL-CAL] Failed %s: %s", ed_item.get("name", ""), ed_exc)
+            fallback["generated_today"] = int(fallback.get("generated_today") or 0) + generated
+            fallback["remaining_today"] = max(0, _FALLBACK_DAILY_TARGET - int(fallback.get("published_today") or 0))
+        except Exception as cal_exc:
+            logger.warning("[EDITORIAL-CAL] Calendar integration error: %s", cal_exc)
+
     if published > 0:
         fallback["last_action"] = f"Fallback published {published} high-quality article(s) this sweep"
     elif drafts > 0:
@@ -1321,7 +1441,7 @@ def _load_fallback_universe(limit: int = 120) -> list[dict[str, Any]]:
 
 
 def _load_watch_universe() -> list[dict[str, Any]]:
-    companies = get_listed_companies(nifty500_only=True)
+    companies = get_listed_companies(indexed_only=True)
     if companies:
         return companies
     return _load_fallback_universe()
@@ -1926,7 +2046,7 @@ async def run_official_monitor(
         discovered += 1
         if company and company.get("company_name") and not event.get("company_name"):
             event["company_name"] = company.get("company_name")
-        if source in {"nse", "bse", "sebi"} and not _official_record_is_recent(event, now=official_window_now):
+        if source in {"nse", "bse", "sebi", "rbi", "mca"} and not _official_record_is_recent(event, now=official_window_now):
             _append_activity(
                 state,
                 message=f"Skipped {source.upper()} item older than {_OFFICIAL_UPLOAD_LOOKBACK_HOURS} hours: {str(event.get('title') or 'Untitled update')[:120]}",
@@ -1953,6 +2073,12 @@ async def run_official_monitor(
             )
             return
         seen_event_ids[fingerprint] = _utcnow_iso()
+
+        company_name_for_dedup = str((company or {}).get("company_name") or watch.company_name or "")
+        if _is_cross_source_duplicate(event, company_name_for_dedup):
+            skipped_seen += 1
+            logger.info("[DEDUP] Cross-source duplicate skipped: %s from %s", str(event.get("title") or "")[:80], source)
+            return
 
         triage = _triage_event(source, event, company)
         event["attachment_required"] = bool(triage.get("attachment_required"))
@@ -2408,6 +2534,32 @@ async def run_official_monitor(
         logger.warning("Official monitor SEBI fetch failed: %s", exc)
         _mark_source_health(state, "sebi", ok=False, error=str(exc))
         failures.append({"source": "sebi", "error": str(exc)[:400]})
+
+    # ── RBI press releases and circulars ──────────────────────────────────
+    try:
+        _append_activity(state, message="Checking RBI feed for monetary/regulatory items", phase="fetching_rbi", source="rbi")
+        save_monitor_state(state)
+        rbi_items = await asyncio.to_thread(fetch_rbi_press_releases, 8)
+        _mark_source_health(state, "rbi", ok=True)
+        for item in rbi_items:
+            await _process_event("rbi", item, ContentEventWatch(source="rbi", company_name="RBI"))
+    except Exception as exc:
+        logger.warning("Official monitor RBI fetch failed: %s", exc)
+        _mark_source_health(state, "rbi", ok=False, error=str(exc))
+        failures.append({"source": "rbi", "error": str(exc)[:400]})
+
+    # ── MCA circulars and notifications ───────────────────────────────────
+    try:
+        _append_activity(state, message="Checking MCA feed for corporate-law updates", phase="fetching_mca", source="mca")
+        save_monitor_state(state)
+        mca_items = await asyncio.to_thread(fetch_mca_updates, 6)
+        _mark_source_health(state, "mca", ok=True)
+        for item in mca_items:
+            await _process_event("mca", item, ContentEventWatch(source="mca", company_name="MCA"))
+    except Exception as exc:
+        logger.warning("Official monitor MCA fetch failed: %s", exc)
+        _mark_source_health(state, "mca", ok=False, error=str(exc))
+        failures.append({"source": "mca", "error": str(exc)[:400]})
 
     for index, company in enumerate(batch, start=1):
         company_name = str(company.get("company_name") or company.get("nse_symbol") or company.get("isin") or "Listed company")
