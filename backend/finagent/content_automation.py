@@ -2845,7 +2845,10 @@ def render_article_html(
       /* Body grid */
       .art-body {{
         display: grid; grid-template-columns: clamp(230px, 20vw, 280px) minmax(0, 1fr);
-        gap: clamp(32px, 4vw, 64px); padding: clamp(36px, 5vw, 70px) 0 0; align-items: start;
+        gap: clamp(32px, 4vw, 64px);
+        /* Keep the side gutter (--pad-x) here — the bare `0` horizontal padding
+           let the prose run edge-to-edge below the 1440px max-width (all mobile). */
+        padding: clamp(36px, 5vw, 70px) var(--pad-x) 0; align-items: start;
       }}
       .art-rail {{ position: sticky; top: 92px; }}
       .rail-block {{ margin-bottom: 36px; }}
@@ -3057,7 +3060,10 @@ def render_article_html(
         .burger {{ display: flex; }}
       }}
       @media (max-width: 700px) {{
-        .art-hero-banner {{ aspect-ratio: 16 / 10; margin: 0 12px; border-radius: 16px; }}
+        /* Drop the fixed aspect-ratio so the banner grows to fit the overlaid
+           title/dek instead of clipping them (mobile hero overflow bug). */
+        .art-hero-banner {{ aspect-ratio: auto; height: auto; min-height: 320px; margin: 0 12px; border-radius: 16px; }}
+        .art-hero-content {{ height: auto; padding: 26px 22px; }}
         .art-hero-content .art-title {{ max-width: none; }}
       }}
       @media (max-width: 620px) {{
@@ -3067,8 +3073,11 @@ def render_article_html(
         .prose .lead-p {{ font-size: 1.12rem; max-width: none; }}
         .prose .sec + .sec {{ padding-top: clamp(28px, 7vw, 40px); }}
         .foot .foot-grid {{ grid-template-columns: 1fr; }}
-        .art-stats {{ gap: 0 22px; }}
         .pullquote p {{ font-size: clamp(1.25rem, 6vw, 1.6rem); }}
+        /* Even 2x2 stat grid instead of uneven flex-wrap. */
+        .art-stats {{ display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; row-gap: 0; }}
+        .art-stat {{ border-top: 1px solid var(--line); }}
+        .art-stat:first-child, .art-stat:nth-child(2) {{ border-top: 0; }}
       }}
       @media (max-width: 560px) {{
         .takeaway-grid, .evidence-grid {{ grid-template-columns: 1fr; }}
@@ -3076,9 +3085,8 @@ def render_article_html(
       }}
       @media (max-width: 440px) {{
         :root {{ --pad-x: 16px; }}
-        .art-hero-content .art-title {{ font-size: clamp(1.65rem, 8vw, 2.1rem); }}
+        .art-hero-content .art-title {{ font-size: clamp(1.6rem, 8vw, 2.1rem); }}
         .art-hero-content .art-meta {{ flex-direction: column; align-items: flex-start; gap: 0.5em; }}
-        .art-stats {{ flex-direction: column; gap: 14px 0; }}
         .data-table-wrap table {{ min-width: 460px; }}
       }}
     </style>

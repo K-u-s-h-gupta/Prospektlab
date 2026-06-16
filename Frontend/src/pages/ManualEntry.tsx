@@ -237,11 +237,8 @@ export const ManualEntry: React.FC = () => {
           </div>
         </div>
 
-        {/* Header row */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1.6fr 0.8fr 0.9fr 1fr 40px',
-          gap: '10px',
+        {/* Header row — hidden on mobile (fields stack with their own placeholders) */}
+        <div className="manual-entry-head" style={{
           fontSize: '10px',
           color: 'var(--text-secondary)',
           textTransform: 'uppercase',
@@ -262,13 +259,8 @@ export const ManualEntry: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', position: 'relative', zIndex: 30 }}>
           {rows.map((row) => (
             <div key={row.id} style={{ position: 'relative' }}>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1.6fr 0.8fr 0.9fr 1fr 40px',
-                gap: '10px',
-                alignItems: 'center'
-              }}>
-                <div style={{ position: 'relative' }}>
+              <div className="manual-entry-grid">
+                <div className="me-c-ticker" style={{ position: 'relative' }}>
                   <input
                     ref={(el) => { inputRefs.current[row.id] = el; }}
                     type="text"
@@ -301,29 +293,33 @@ export const ManualEntry: React.FC = () => {
                   type="number"
                   min="0"
                   step="1"
-                  placeholder="0"
+                  placeholder="Qty"
                   value={row.quantity}
                   onChange={(e) => updateRow(row.id, 'quantity', e.target.value)}
+                  className="me-c-qty"
                   style={{ fontSize: '13px', padding: '10px 12px', width: '100%' }}
                 />
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  placeholder="₹0"
+                  placeholder="Avg ₹"
                   value={row.avgCost}
                   onChange={(e) => updateRow(row.id, 'avgCost', e.target.value)}
+                  className="me-c-avg"
                   style={{ fontSize: '13px', padding: '10px 12px', width: '100%' }}
                 />
                 <input
                   type="date"
                   value={row.datePurchased}
                   onChange={(e) => updateRow(row.id, 'datePurchased', e.target.value)}
+                  className="me-c-date"
                   style={{ fontSize: '13px', padding: '10px 12px', width: '100%', colorScheme: 'dark' }}
                 />
                 <button
                   type="button"
                   onClick={() => removeRow(row.id)}
+                  className="me-c-del"
                   style={{
                     background: 'transparent',
                     border: 'none',

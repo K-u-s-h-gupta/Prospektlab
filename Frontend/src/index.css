@@ -674,6 +674,34 @@ button[style*="06B6D4"]:hover {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+/* ── Manual holding entry grid (ManualEntry page) ── */
+.manual-entry-head,
+.manual-entry-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 0.8fr 0.9fr 1fr 40px;
+  gap: 10px;
+  align-items: center;
+}
+
+/* On phones the 5-column row is uncomfortably cramped, so reflow it: ticker on
+   its own line, qty + avg + delete on one line, date on its own line. */
+@media (max-width: 640px) {
+  .manual-entry-head { display: none; }
+  .manual-entry-grid {
+    grid-template-columns: 1fr 1fr 44px;
+    grid-template-areas:
+      "ticker ticker ticker"
+      "qty    avg    del"
+      "date   date   date";
+    gap: 8px;
+  }
+  .me-c-ticker { grid-area: ticker; }
+  .me-c-qty { grid-area: qty; }
+  .me-c-avg { grid-area: avg; }
+  .me-c-date { grid-area: date; }
+  .me-c-del { grid-area: del; justify-self: center; }
+}
+
 /* Comparative-returns header: stack the title and benchmark selector on narrow
    screens so the dropdown trigger never collides with the chart title. */
 @media (max-width: 620px) {
