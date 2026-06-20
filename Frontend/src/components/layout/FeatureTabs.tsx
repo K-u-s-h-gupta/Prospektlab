@@ -54,14 +54,12 @@ export const FeatureTabs: React.FC<FeatureTabsProps> = ({ active, onChange }) =>
     syncIndicator();
     // Keep the active tab in view on mobile when it changes.
     btnRefs.current[active]?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   useEffect(() => {
     const onResize = () => syncIndicator();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   return (

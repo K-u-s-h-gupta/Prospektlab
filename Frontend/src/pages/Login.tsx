@@ -301,11 +301,12 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
 
   // Google login trigger for the fallback button
   const handleGoogleSocialClick = async () => {
-    // @ts-ignore
-    if (window.google?.accounts?.id) {
+    const google = (window as Window & {
+      google?: { accounts?: { id?: { prompt?: () => void } } };
+    }).google;
+    if (google?.accounts?.id?.prompt) {
       // GIS is loaded, trigger the popup
-      // @ts-ignore
-      window.google.accounts.id.prompt();
+      google.accounts.id.prompt();
     } else {
       // GIS not available — likely blocked by ad blocker or network issue
       showToast('Google Sign-In is not available. Please check your ad blocker or try email login.', 'error');

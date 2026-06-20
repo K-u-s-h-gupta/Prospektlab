@@ -1582,7 +1582,7 @@ export function streamSession(
     let streamEnded = false;
 
     try {
-      while (true) {
+      for (;;) {
         const { done, value } = await reader.read();
         if (done) {
           streamEnded = true;

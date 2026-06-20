@@ -969,7 +969,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       if (isMF) {
         resolvedAssetClass = 'Mutual Fund';
         {
-          let mf = POPULAR_MUTUAL_FUNDS.find(
+          const mf = POPULAR_MUTUAL_FUNDS.find(
             f => f.symbol.toUpperCase() === targetSym || 
                  f.name.toLowerCase() === nameLower
           );
@@ -1901,7 +1901,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
     // Pick active conversation
     if (savedConversations.length > 0) {
-      let firstConv = savedConversations[0];
+      const firstConv = savedConversations[0];
       if (firstConv.id === '1') {
         const migratedId = `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         firstConv.id = migratedId;

@@ -161,7 +161,7 @@ const toCsv = (rows: Array<Array<string | number | null | undefined>>) => rows
   .map((row) => row.map((cell) => {
     if (cell === null || cell === undefined) return '';
     const textCell = String(cell);
-    if (/[\",\n]/.test(textCell)) {
+    if (/["\n,]/.test(textCell)) {
       return `"${textCell.replace(/"/g, '""')}"`;
     }
     return textCell;
@@ -183,7 +183,6 @@ class ScreenerRenderBoundary extends React.Component<
 
   componentDidCatch(error: unknown) {
     // Keep rendering safe while still logging for diagnostics.
-    // eslint-disable-next-line no-console
     console.error('Screener render failed', error);
   }
 
