@@ -427,8 +427,11 @@ Resources:
                   - ecr:CompleteLayerUpload
                   - ecr:PutImage
                   - ecr:BatchCheckLayerAvailability
+                  - ecs:DescribeTaskDefinition
+                  - ecs:RegisterTaskDefinition
                   - ecs:UpdateService
                   - ecs:DescribeServices
+                  - iam:PassRole
                   - s3:GetObject
                   - s3:GetObjectVersion
                 Resource: '*'
