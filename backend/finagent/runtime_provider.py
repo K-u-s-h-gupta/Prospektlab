@@ -37,10 +37,16 @@ def _normalize_openai_base_url(raw: str | None) -> str | None:
     if not value:
         return None
     lowered = value.lower()
+    for suffix in ("/responses", "/chat/completions", "/embeddings"):
+        if lowered.endswith(suffix):
+            value = value[: -len(suffix)].rstrip("/")
+            lowered = value.lower()
+            break
     if lowered.endswith("/openai/v1") or lowered.endswith("/v1"):
         return value
     if "/openai/" in lowered:
-        return value
+        marker = lowered.find("/openai/")
+        return f"{value[:marker]}/openai/v1"
     return f"{value}/openai/v1"
 
 
@@ -166,6 +172,7 @@ def resolve_openai_config(complexity: str = "moderate") -> OpenAIConfig | None:
 
     key = os.getenv("OPENAI_API_KEY")
     if key:
+        base_url = _normalize_openai_base_url(os.getenv("OPENAI_BASE_URL"))
         if complexity == "micro":
             # High-volume, low-reasoning tier (news triage, sentiment, tagging,
             # dedup). Point this at the cheapest capable model to cut token spend
@@ -188,7 +195,7 @@ def resolve_openai_config(complexity: str = "moderate") -> OpenAIConfig | None:
                 os.getenv("FINAGENT_OPENAI_MODEL")
                 or "gpt-4o-mini"
             )
-        return OpenAIConfig(api_key=key, model=model)
+        return OpenAIConfig(api_key=key, model=model, base_url=base_url)
 
     xai_key = os.getenv("XAI_API_KEY")
     if xai_key:

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -20,6 +21,7 @@ import {
 import { getMarketQuotes, getWatchlistSnapshot, MarketHistoryPeriod } from '../../api/client';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../../data/indianStocks';
 import type { WatchlistStock } from './WatchlistCard';
+import { buildProspektCover } from '../../utils/coverArt';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -160,14 +162,15 @@ const formatMovementLabel = (ts: number): string =>
 const toINR = (value: number) =>
   Number.isFinite(value) ? `\u20B9${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '\u20B9--';
 
-const fallbackCover = (seed: string) => {
-  const palette = ['#0e7490', '#b45309', '#4338ca', '#0f766e', '#9f1239', '#365314'];
-  let hash = 0;
-  for (let idx = 0; idx < seed.length; idx += 1) hash = ((hash << 5) - hash + seed.charCodeAt(idx)) | 0;
-  const color = palette[Math.abs(hash) % palette.length];
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675"><rect width="1200" height="675" fill="${color}"/><rect width="1200" height="675" fill="url(#g)"/><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="rgba(255,255,255,0.2)"/><stop offset="100%" stop-color="rgba(0,0,0,0.25)"/></linearGradient></defs><text x="72" y="580" fill="#e8f7ff" font-family="Segoe UI, Arial, sans-serif" font-size="56" font-weight="700">Watchlist</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-};
+const fallbackCover = (seed: string, title = '', symbol = '', source = '') =>
+  buildProspektCover({
+    seed,
+    title: title || seed,
+    source,
+    symbol,
+    kind: 'watchlist',
+    label: 'Watchlist Brief',
+  });
 
 const findDisplayName = (symbol: string, fallbackName = '') => {
   const clean = normalizeSymbol(symbol);
@@ -331,16 +334,17 @@ export const WatchlistWorkspace: React.FC<WatchlistWorkspaceProps> = ({
           const symbol = normalizeSymbol(String(item.symbol || ''));
           const headline = String(item.headline || item.title || '').trim();
           const url = normalizeNewsUrl(String(item.url || item.link || ''));
-          const image = String(item.image || item.image_url || '').trim();
+          const source = String(item.source || 'News');
+          const image = fallbackCover(`${symbol}:${source}:${headline || idx}`, headline, symbol, source);
           return {
             id: String(item.id || `${symbol}-${idx}-${headline.slice(0, 18)}`),
             symbol,
             headline,
-            source: String(item.source || 'News'),
+            source,
             time: String(item.time || item.published || 'Just now'),
             url,
             image,
-            fallbackImage: fallbackCover(`${symbol}:${headline || idx}`),
+            fallbackImage: fallbackCover(`${symbol}:${headline || idx}`, headline, symbol, source),
           } as WatchlistNewsItem;
         }).filter((item: WatchlistNewsItem) => item.headline);
         setWatchlistNews(newsItems.slice(0, 18));
@@ -1060,7 +1064,7 @@ export const WatchlistWorkspace: React.FC<WatchlistWorkspaceProps> = ({
         </div>
       )}
 
-      {isManageOpen && (
+      {isManageOpen && createPortal((
         <div
           role="dialog"
           aria-modal="true"
@@ -1069,7 +1073,7 @@ export const WatchlistWorkspace: React.FC<WatchlistWorkspaceProps> = ({
             inset: 0,
             background: 'rgba(3,7,18,0.72)',
             backdropFilter: 'blur(4px)',
-            zIndex: 90,
+            zIndex: 1300,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1214,7 +1218,7 @@ export const WatchlistWorkspace: React.FC<WatchlistWorkspaceProps> = ({
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 };

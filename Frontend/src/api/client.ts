@@ -398,6 +398,10 @@ export async function getAuthMe(): Promise<AuthUser | null> {
   if (_cachedUserPromise) {
     return _cachedUserPromise;
   }
+  if (!getStoredAuthToken()) {
+    _cachedUser = null;
+    return null;
+  }
   _cachedUserPromise = (async () => {
     try {
       const res = await fetchApi(apiUrl('/auth/me'), {

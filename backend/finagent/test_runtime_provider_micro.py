@@ -10,6 +10,7 @@ import finagent.runtime_provider as rp
 def _clear(monkeypatch):
     for k in (
         "AZURE_AI_FOUNDRY_API_KEY", "AZURE_AI_PROJECTS_API_KEY", "AZURE_OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
         "XAI_API_KEY",
         "FINAGENT_OPENAI_MODEL", "FINAGENT_SYNTH_MODEL",
         "FINAGENT_OPENAI_MODEL_SIMPLE", "FINAGENT_OPENAI_MODEL_MINI",
@@ -53,3 +54,13 @@ def test_micro_xai_fallback(monkeypatch):
     cfg = rp.resolve_openai_config("micro")
     assert cfg is not None
     assert cfg.model == "grok-3-mini"
+
+
+def test_openai_base_url_is_used_with_api_key(monkeypatch):
+    _clear(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "compatible-test-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://example.services.ai.azure.com/openai/v1/responses")
+    cfg = rp.resolve_openai_config("moderate")
+    assert cfg is not None
+    assert cfg.api_key == "compatible-test-key"
+    assert cfg.base_url == "https://example.services.ai.azure.com/openai/v1"

@@ -26,9 +26,11 @@ import {
   getPortfolioAnalytics,
   getPortfolioMirror,
   replacePortfolioMirror,
+  syncManualPortfolio,
   AgentEventData,
   getMarketIndices,
   getMarketQuotes,
+  getMarketHistory,
   getMarketNews,
   getPortfolioNews,
   getPortfolioBrief,
@@ -40,8 +42,32 @@ import {
 } from '../api/client';
 import { Search, Sparkles, MessageSquare, ChevronRight, ChevronDown, ChevronLeft, Activity, TrendingDown, ExternalLink } from 'lucide-react';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
+import { buildProspektCover } from '../utils/coverArt';
 
 type DashboardFeatureTab = 'overview' | 'portfolio' | 'watchlist' | 'screener' | 'earnings' | 'governance';
+
+const CHAT_WIDTH_STORAGE_KEY = 'prospektlab_chat_width';
+const MIN_CHAT_WIDTH = 320;
+const DEFAULT_CHAT_WIDTH = 360;
+const MAX_CHAT_WIDTH = 440;
+
+const getViewportWidth = () => (typeof window === 'undefined' ? 1440 : window.innerWidth);
+
+const getMaxChatWidth = () => {
+  const viewport = getViewportWidth();
+  if (viewport < 1180) return MIN_CHAT_WIDTH;
+  if (viewport < 1400) return DEFAULT_CHAT_WIDTH;
+  return MAX_CHAT_WIDTH;
+};
+
+const getDefaultChatWidth = () => Math.min(DEFAULT_CHAT_WIDTH, getMaxChatWidth());
+
+const normalizeChatWidth = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  const maxWidth = getMaxChatWidth();
+  const minWidth = Math.min(MIN_CHAT_WIDTH, maxWidth);
+  return Math.min(Math.max(value, minWidth), maxWidth);
+};
 
 interface DashboardProps {
   initialFeatureTab?: DashboardFeatureTab;
@@ -115,20 +141,6 @@ const normalizeNewsUrl = (raw: string) => {
   }
 };
 
-const normalizeNewsImage = (raw: string) => {
-  const value = String(raw || '').trim();
-  if (!value) return '';
-  if (value.startsWith('//')) return `https:${value}`;
-  return value;
-};
-
-const isRemoteHttpUrl = (raw: string) => /^https?:\/\//i.test(String(raw || '').trim());
-
-const isRemoteNewsImage = (raw: string) => {
-  const value = normalizeNewsImage(raw);
-  return isRemoteHttpUrl(value);
-};
-
 const extractNewsDomain = (raw: string) => {
   const value = String(raw || '').trim();
   if (!value) return '';
@@ -157,8 +169,6 @@ const dedupeAndDiversifyNews = (items: NewsFeedItem[], limit = 18): NewsFeedItem
   const ranked = [...(items || [])]
     .filter((item) => Boolean(item && item.headline))
     .sort((a, b) => {
-      const imgRank = Number(isRemoteNewsImage(b.image)) - Number(isRemoteNewsImage(a.image));
-      if (imgRank !== 0) return imgRank;
       const sourceRank = (b.sourceCount || 0) - (a.sourceCount || 0);
       if (sourceRank !== 0) return sourceRank;
       return parseNewsTimestamp(b.time) - parseNewsTimestamp(a.time);
@@ -195,74 +205,18 @@ const dedupeAndDiversifyNews = (items: NewsFeedItem[], limit = 18): NewsFeedItem
   return selected.slice(0, limit);
 };
 
-const buildNewsFallbackCover = (seed: string) => {
-  const palette = ['#0f172a', '#082f49', '#0c4a6e', '#1e293b', '#1f2937', '#064e3b'];
-  let hash = 0;
-  for (let idx = 0; idx < seed.length; idx += 1) {
-    hash = ((hash << 5) - hash + seed.charCodeAt(idx)) | 0;
-  }
-  const color = palette[Math.abs(hash) % palette.length];
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675"><rect width="1200" height="675" fill="${color}"/><rect width="1200" height="675" fill="url(#g)"/><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="rgba(255,255,255,0.2)"/><stop offset="100%" stop-color="rgba(0,0,0,0.2)"/></linearGradient></defs><text x="64" y="588" fill="#e2e8f0" font-family="Segoe UI, Arial, sans-serif" font-size="52" font-weight="700">Market News</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-};
-
-const ARTICLE_COVER_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg'] as const;
-
-const normalizeArticlePublicPath = (raw: string) => {
-  const value = String(raw || '').trim();
-  if (!value) return '';
-  try {
-    const parsed = value.startsWith('/')
-      ? new URL(`https://prospektlab.com${value}`)
-      : new URL(value);
-    const path = parsed.pathname || '';
-    return path.endsWith('/') ? path : `${path}/`;
-  } catch {
-    if (value.startsWith('/')) {
-      return value.endsWith('/') ? value : `${value}/`;
-    }
-    return '';
-  }
-};
-
-const buildArticleCoverCandidates = (rawPath: string, publicUrl: string) => {
-  const value = String(rawPath || '').trim();
-  const candidates: string[] = [];
-
-  if (isRemoteHttpUrl(value)) {
-    candidates.push(value);
-  } else if (value.startsWith('//')) {
-    candidates.push(`https:${value}`);
-  } else if (value.startsWith('/insights/')) {
-    candidates.push(value);
-  } else if (value.startsWith('insights/')) {
-    candidates.push(`/${value.replace(/^\/+/, '')}`);
-  } else if (value) {
-    const normalized = value.replace(/\\/g, '/');
-    const insightsPart = normalized.match(/\/public\/(insights\/[^?]+)$/i)?.[1] || normalized.match(/(insights\/[^?]+)$/i)?.[1] || '';
-    if (insightsPart) {
-      candidates.push(`/${insightsPart.replace(/^\/+/, '')}`);
-    }
-  }
-
-  const publicPath = normalizeArticlePublicPath(publicUrl);
-  if (publicPath) {
-    const extFromPath = String(value || '').match(/cover(\.[a-z0-9]+)$/i)?.[1]?.toLowerCase() || '';
-    if (extFromPath) {
-      candidates.push(`${publicPath}cover${extFromPath}`);
-    }
-    ARTICLE_COVER_EXTENSIONS.forEach((ext) => {
-      candidates.push(`${publicPath}cover${ext}`);
-    });
-  }
-
-  return Array.from(new Set(candidates.filter(Boolean)));
-};
-
-const resolveArticleImagePath = (rawPath: string, publicUrl: string) => {
-  const candidates = buildArticleCoverCandidates(rawPath, publicUrl);
-  return candidates[0] || '';
-};
+const buildNewsFallbackCover = (
+  seed: string,
+  title = '',
+  source = '',
+  kind: 'market' | 'research' | 'watchlist' = 'market',
+) => buildProspektCover({
+  seed,
+  title: title || seed,
+  source,
+  kind,
+  label: kind === 'research' ? 'Research Note' : kind === 'watchlist' ? 'Watchlist Brief' : 'Market News',
+});
 
 const parseNewsTimestamp = (value: string) => {
   const text = String(value || '').trim();
@@ -858,13 +812,13 @@ const writeCachedMarketMovers = (items: MarketMoverItem[]) => {
 // 250 and Nifty Next 50 were removed — Yahoo returns no usable history for them —
 // and the midcap entry is now labelled correctly (^NSEMDCP50 = Nifty Midcap 50).
 const BENCHMARKS = [
-  { id: 'NIFTY50', name: 'Nifty 50' },
-  { id: 'SENSEX', name: 'SENSEX' },
-  { id: 'NIFTYBANK', name: 'Nifty Bank' },
-  { id: 'NIFTYIT', name: 'Nifty IT' },
-  { id: 'MIDCAP50', name: 'Nifty Midcap 50' },
-  { id: 'NIFTY100', name: 'Nifty 100' },
-  { id: 'NIFTY500', name: 'Nifty 500' }
+  { id: 'NIFTY50', name: 'Nifty 50', historySymbol: 'NIFTY50' },
+  { id: 'SENSEX', name: 'SENSEX', historySymbol: 'SENSEX' },
+  { id: 'NIFTYBANK', name: 'Nifty Bank', historySymbol: 'NIFTY BANK' },
+  { id: 'NIFTYIT', name: 'Nifty IT', historySymbol: 'NIFTY IT' },
+  { id: 'MIDCAP50', name: 'Nifty Midcap 50', historySymbol: '^NSEMDCP50' },
+  { id: 'NIFTY100', name: 'Nifty 100', historySymbol: '^CNX100' },
+  { id: 'NIFTY500', name: 'Nifty 500', historySymbol: '^CRSLDX' }
 ];
 
 // Canonical aliases for common ISIN-led symbols seen in eCAS / broker exports.
@@ -1114,12 +1068,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
   // Resizable chat rail state
   const [chatWidth, setChatWidth] = useState<number>(() => {
-    const saved = localStorage.getItem('prospektlab_chat_width');
-    return saved ? parseInt(saved, 10) : 380;
+    const saved = localStorage.getItem(CHAT_WIDTH_STORAGE_KEY);
+    return saved ? normalizeChatWidth(parseInt(saved, 10)) : getDefaultChatWidth();
   });
   const [isDraggingChat, setIsDraggingChat] = useState(false);
   const [isChatHidden, setIsChatHidden] = useState(() => {
-    const savedWidth = localStorage.getItem('prospektlab_chat_width');
+    const savedWidth = localStorage.getItem(CHAT_WIDTH_STORAGE_KEY);
     return savedWidth ? parseInt(savedWidth, 10) <= 0 : false;
   });
 
@@ -1272,6 +1226,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
   const [portfolioAnalytics, setPortfolioAnalytics] = useState<any>(null);
   const [portfolioAnalyticsError, setPortfolioAnalyticsError] = useState<string | null>(null);
+  const [benchmarkHistoryFallback, setBenchmarkHistoryFallback] = useState<{ labels: string[]; values: number[] } | null>(null);
+  const [benchmarkHistoryLoading, setBenchmarkHistoryLoading] = useState(false);
   const [mfAnalytics, setMfAnalytics] = useState<any>(null);
   const [taxSummary, setTaxSummary] = useState<any>(null);
   const [commentary, setCommentary] = useState<any>(null);
@@ -1355,19 +1311,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       const sourceHost = String(item.source_host || item.source || '').trim();
       const source = sourceHost || extractNewsDomain(sourceUrl) || 'News';
       const displayTime = ageLabel || publishedAt || 'Just now';
-      const normalizedImage = normalizeNewsImage(
-        String(
-          item.image ||
-          item.image_url ||
-          item.thumbnail ||
-          item.cover_image ||
-          item.og_image ||
-          item.hero_image ||
-          item.banner ||
-          item.enclosure ||
-          '',
-        ),
-      );
 
       return {
         id: item.id || `${sourcePrefix}-${idx}-${normalizeNewsHeadlineKey(title).slice(0, 24) || 'news'}`,
@@ -1378,7 +1321,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
         sentiment,
         tickers: Array.from(tickers),
         url: sourceUrl,
-        image: normalizedImage,
+        image: buildNewsFallbackCover(`${sourcePrefix}:${source}:${title}:${idx}`, title, source),
         sourceCount: Number(item.source_count || item.sources_count || 0),
       };
     }).filter((newsItem: NewsFeedItem) => newsItem.headline);
@@ -1477,6 +1420,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       clearInterval(interval);
     };
   }, [isPortfolioFeature, enrichedPortfolio.length, selectedBenchmark, portfolioMirrorVersion]);
+
+  useEffect(() => {
+    if (!isPortfolioFeature) {
+      setBenchmarkHistoryFallback(null);
+      setBenchmarkHistoryLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const selected = BENCHMARKS.find((bench) => bench.id === selectedBenchmark) || BENCHMARKS[0];
+    const symbol = selected.historySymbol || selected.id;
+    setBenchmarkHistoryLoading(true);
+
+    getMarketHistory(symbol, '1Y', 'index')
+      .then((history) => {
+        if (cancelled) return;
+        const rows = (history.dates || [])
+          .map((date, idx) => ({ date, price: finiteNumber(history.prices?.[idx]) }))
+          .filter((row) => Boolean(row.date) && row.price > 0);
+        setBenchmarkHistoryFallback(rows.length > 1
+          ? {
+              labels: rows.map((row) => row.date),
+              values: rows.map((row) => row.price),
+            }
+          : null);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.warn('Benchmark history fallback failed', err);
+          setBenchmarkHistoryFallback(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setBenchmarkHistoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isPortfolioFeature, selectedBenchmark]);
 
   const applyIndicesPayload = (payload: any) => {
     const normalized = normalizeIndicesPayload(payload);
@@ -1683,12 +1666,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
         setIsChatHidden(true);
       } else {
         setIsChatHidden(false);
-        if (newWidth > 480) {
-          newWidth = 480;
-        }
+        newWidth = normalizeChatWidth(newWidth);
       }
       setChatWidth(newWidth);
-      localStorage.setItem('prospektlab_chat_width', newWidth.toString());
+      localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, newWidth.toString());
     };
 
     const handleMouseUp = () => {
@@ -1854,6 +1835,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
           }));
           setPortfolio(mapped);
           setPortfolioMirrorVersion((version) => version + 1);
+          const syncPayload = mapped
+            .filter((item) => item.symbol && item.qty > 0 && item.avgCost > 0)
+            .map((item) => ({
+              symbol: normalizeMarketSymbol(item.symbol),
+              quantity: item.qty,
+              avg_cost: item.avgCost,
+            }));
+          if (syncPayload.length > 0) {
+            void syncManualPortfolio(syncPayload)
+              .then(() => setPortfolioMirrorVersion((version) => version + 1))
+              .catch((syncErr) => console.warn('Manual portfolio mirror sync failed', syncErr));
+          }
           return;
         }
       } catch (err) {
@@ -1939,14 +1932,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
   const fetchBackendAnalytics = async () => {
     // Each widget fetch is independent — one failure must not blank the others.
-    getMfAnalytics().then(setMfAnalytics).catch(() => {});
-    getTodayQueue().then(q => setActionQueue(q.items || [])).catch(() => {});
-    getTaxSummary().then(setTaxSummary).catch(() => {});
-    getPortfolioCommentary().then(setCommentary).catch(() => {});
+    if (isAuthenticated) {
+      getMfAnalytics().then(setMfAnalytics).catch(() => {});
+      getTodayQueue().then(q => setActionQueue(q.items || [])).catch(() => {});
+      getTaxSummary().then(setTaxSummary).catch(() => {});
+      getPortfolioCommentary().then(setCommentary).catch(() => {});
+    } else {
+      setCommentary(null);
+    }
   };
 
   useEffect(() => {
-    if (!isAuthenticated || !isPortfolioFeature || enrichedPortfolio.length === 0) return;
+    if (!isPortfolioFeature || enrichedPortfolio.length === 0) return;
     fetchBackendAnalytics();
   }, [isAuthenticated, isPortfolioFeature, enrichedPortfolio.length, portfolioMirrorVersion]);
 
@@ -1995,9 +1992,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   useEffect(() => {
     const node = chatContainerRef.current;
     if (!node) return;
+    const hasActiveChat = messages.some((msg, index) => msg.sender === 'user' || index > 0);
 
     const scrollToBottom = () => {
-      node.scrollTop = node.scrollHeight;
+      node.scrollTop = hasActiveChat || isThinking ? node.scrollHeight : 0;
     };
 
     const frame = window.requestAnimationFrame(scrollToBottom);
@@ -2096,7 +2094,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
         const currentValue = item.qty * livePrice;
         const pnl = currentValue - costBasis;
         const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
-        return { ...item, current: livePrice, currentValue, pnl, pnlPct };
+        return {
+          ...item,
+          current: livePrice,
+          currentValue,
+          pnl,
+          pnlPct,
+          dayChangePct: finiteNumber(liveQuote?.change_pct, finiteNumber(item.dayChangePct)),
+        };
       })
   ).filter((item: any) => Number.isFinite(item.currentValue) && item.currentValue >= 0);
 
@@ -2306,8 +2311,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
         : alignedPort.map((_value: number, idx: number) => `T-${minLen - idx - 1}`);
       return {
         labels,
-        portValues: alignedPort,
-        benchValues: alignedBench,
+        portValues: normalizeTo100(alignedPort),
+        benchValues: normalizeTo100(alignedBench),
+      };
+    }
+
+    if (benchmarkHistoryFallback && benchmarkHistoryFallback.labels.length > 1) {
+      return {
+        labels: benchmarkHistoryFallback.labels,
+        portValues: [],
+        benchValues: normalizeTo100(benchmarkHistoryFallback.values),
       };
     }
 
@@ -2316,7 +2329,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       portValues: [],
       benchValues: [],
     };
-  }, [portfolioAnalytics]);
+  }, [portfolioAnalytics, benchmarkHistoryFallback]);
 
   // Portfolio derived risk metrics from backend live analytics.
   const portfolioStats = (() => {
@@ -2353,6 +2366,91 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
     return { best, worst, winners, losers, topSector, topSectorPct, beta, hhi, var95 };
   })();
+
+  const localPortfolioHealth = useMemo(() => {
+    if (computedPortfolioDetails.length === 0) return null;
+    const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+    const totalValue = portfolioSummary.totalValue || computedPortfolioDetails.reduce((sum, item) => sum + item.currentValue, 0);
+    const weights = computedPortfolioDetails
+      .map((item) => totalValue > 0 ? item.currentValue / totalValue : 0)
+      .sort((a, b) => b - a);
+    const topWeightPct = (weights[0] || 0) * 100;
+    const top5WeightPct = weights.slice(0, 5).reduce((sum, weight) => sum + weight, 0) * 100;
+    const sectorCount = Math.max(1, sectorEntries.length);
+    const diversification = clamp(computedPortfolioDetails.length * 3 + sectorCount * 2.5, 4, 25);
+    const concentration = clamp(15 - Math.max(0, topWeightPct - 22) * 0.28 - Math.max(0, top5WeightPct - 72) * 0.12, 2, 15);
+    const riskAdjustedReturn = clamp(14 + portfolioTotalReturnPct * 0.25, 3, 25);
+    const winnerRatio = computedPortfolioDetails.filter((item) => item.pnl >= 0).length / computedPortfolioDetails.length;
+    const drawdownResilience = clamp(7 + winnerRatio * 13, 3, 20);
+    const avgAbsDayMove = computedPortfolioDetails.reduce((sum, item) => sum + Math.abs(finiteNumber(item.dayChangePct)), 0) / computedPortfolioDetails.length;
+    const volatility = clamp(15 - avgAbsDayMove * 1.6, 5, 15);
+    const score = Math.round(diversification + riskAdjustedReturn + drawdownResilience + volatility + concentration);
+    const band = score >= 75 ? 'Healthy' : score >= 55 ? 'Balanced' : score >= 35 ? 'Watchlist' : 'At Risk';
+
+    return {
+      score: clamp(score, 0, 100),
+      band,
+      components: {
+        diversification,
+        risk_adjusted_return: riskAdjustedReturn,
+        drawdown_resilience: drawdownResilience,
+        volatility,
+        concentration,
+      },
+      max_components: {
+        diversification: 25,
+        risk_adjusted_return: 25,
+        drawdown_resilience: 20,
+        volatility: 15,
+        concentration: 15,
+      },
+      source: 'local-fallback',
+      insufficient_history: true,
+    };
+  }, [computedPortfolioDetails, portfolioSummary.totalValue, portfolioTotalReturnPct, sectorEntries]);
+
+  const dailyReadFallback = useMemo(() => {
+    if (computedPortfolioDetails.length === 0) return null;
+    const totalValue = portfolioSummary.totalValue || computedPortfolioDetails.reduce((sum, item) => sum + item.currentValue, 0);
+    const largestHolding = [...computedPortfolioDetails].sort((a, b) => b.currentValue - a.currentValue)[0];
+    const topHoldingWeightPct = largestHolding && totalValue > 0 ? (largestHolding.currentValue / totalValue) * 100 : 0;
+    const largestSector = [...sectorEntries].sort((a, b) => b[1] - a[1])[0];
+    const topSectorPct = largestSector && totalValue > 0 ? (finiteNumber(largestSector[1]) / totalValue) * 100 : 0;
+    const dayMove = computedPortfolioDetails.reduce((sum, item) => (
+      sum + item.currentValue * (finiteNumber(item.dayChangePct) / 100)
+    ), 0);
+    const dayMovePct = totalValue > 0 ? (dayMove / totalValue) * 100 : 0;
+    const sectorLine = largestSector
+      ? `${largestSector[0]} is the largest exposure at ${topSectorPct.toFixed(1)}%.`
+      : 'Sector exposure is still being classified.';
+    const holdingLine = largestHolding
+      ? `${largestHolding.symbol} is the biggest position at ${topHoldingWeightPct.toFixed(1)}% of the book.`
+      : 'No single top holding is available yet.';
+
+    return {
+      commentary: [
+        `I can read the local portfolio while backend history catches up. The book is worth ${fmtINRWhole(totalValue)} with ${fmtINRWhole(portfolioSummary.totalPnL)} unrealized P&L (${portfolioTotalReturnPct.toFixed(1)}%).`,
+        `${holdingLine} ${sectorLine}`,
+        'The useful next check is concentration: if the top holding and top sector are both large, one earnings or macro shock can drive more of the book than the index headline suggests.',
+      ].join(' '),
+      source: 'local',
+      highlights: [
+        { label: 'Value', value: fmtINRWhole(totalValue), tone: 'neutral' },
+        { label: 'P&L', value: `${fmtINRWhole(portfolioSummary.totalPnL)} (${portfolioTotalReturnPct.toFixed(1)}%)`, tone: portfolioSummary.totalPnL >= 0 ? 'up' : 'down' },
+        { label: 'Day move', value: `${fmtINRWhole(dayMove)} (${dayMovePct.toFixed(2)}%)`, tone: dayMove >= 0 ? 'up' : 'down' },
+      ],
+    };
+  }, [computedPortfolioDetails, portfolioSummary.totalValue, portfolioSummary.totalPnL, portfolioTotalReturnPct, sectorEntries]);
+
+  const visiblePortfolioHealth = portfolioAnalytics?.health?.score != null
+    ? portfolioAnalytics.health
+    : localPortfolioHealth;
+
+  const backendCommentaryUsable = Boolean(
+    commentary?.commentary &&
+    !(hasPortfolioHoldings && /add holdings|no portfolio data/i.test(String(commentary.commentary)))
+  );
+  const visibleCommentary = backendCommentaryUsable ? commentary : dailyReadFallback;
 
   // Tracked universe movers — resolve live change_pct by normalizing symbol format
   // quotesData may be keyed as "RELIANCE.NS" but portfolio symbols may be "RELIANCE"
@@ -2992,9 +3090,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     // Auto-open chat if it's hidden
     if (isChatHidden) {
       setIsChatHidden(false);
-      const w = 380;
+      const w = getDefaultChatWidth();
       setChatWidth(w);
-      localStorage.setItem('prospektlab_chat_width', w.toString());
+      localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, w.toString());
     }
     // Set pending query — ChatInput will pick this up and auto-populate
     setPendingChatQuery({ id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, text: query, depth });
@@ -3232,7 +3330,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
     return latest.slice(0, DISCOVER_MAX_CARDS).map((item) => ({
       ...item,
-      image: isRemoteNewsImage(item.image) ? item.image : buildNewsFallbackCover(`${item.source}:${item.headline}`),
+      image: buildNewsFallbackCover(`${item.source}:${item.headline}:${item.time}`, item.headline, item.source),
     }));
   }, [newsFeed]);
 
@@ -3628,12 +3726,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                           style={{ cursor: item.url ? 'pointer' : 'default' }}
                         >
                           <img
-                            src={item.image || buildNewsFallbackCover(item.headline)}
+                            src={item.image || buildNewsFallbackCover(item.headline, item.headline, item.source)}
                             alt={`${item.headline} cover`}
                             className="discover-card-image"
                             loading="lazy"
                             onError={(event) => {
-                              event.currentTarget.src = buildNewsFallbackCover(item.headline);
+                              event.currentTarget.src = buildNewsFallbackCover(item.headline, item.headline, item.source);
                             }}
                           />
                           <div className="discover-card-content">
@@ -3683,13 +3781,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                     {researchTitles.length === 0 ? (
                       <div className="overview-article-empty">Latest generated articles are loading...</div>
                     ) : researchTitles.map((article) => {
-                      const coverCandidates = buildArticleCoverCandidates(
-                        article.image_path || '',
-                        article.public_url || '',
+                      const primaryCover = buildNewsFallbackCover(
+                        `research:${article.slug}:${article.title}`,
+                        article.title,
+                        article.content_type || 'Research',
+                        'research',
                       );
-                      const primaryCover =
-                        resolveArticleImagePath(article.image_path || '', article.public_url || '') ||
-                        buildNewsFallbackCover(`research:${article.title}`);
 
                       return (
                         <article
@@ -3702,22 +3799,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                         >
                           <img
                             src={primaryCover}
-                            data-fallback-covers={coverCandidates.slice(1).join('|')}
                             alt={`${article.title} cover`}
                             className="overview-article-image"
                             loading="lazy"
                             onError={(event) => {
-                              const queue = String(event.currentTarget.dataset.fallbackCovers || '')
-                                .split('|')
-                                .map((item) => item.trim())
-                                .filter(Boolean);
-                              if (queue.length > 0) {
-                                const [next, ...rest] = queue;
-                                event.currentTarget.dataset.fallbackCovers = rest.join('|');
-                                event.currentTarget.src = next;
-                                return;
-                              }
-                              event.currentTarget.src = buildNewsFallbackCover(`research:${article.slug}`);
+                              event.currentTarget.src = buildNewsFallbackCover(`research:${article.slug}`, article.title, article.content_type || 'Research', 'research');
                             }}
                           />
                           <div className="overview-article-body">
@@ -3881,7 +3967,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
               <InteractiveChart
                 labels={compareChartData.labels}
                 data={compareChartData.portValues.length > 1 ? compareChartData.portValues : compareChartData.benchValues}
-                title={compareChartData.portValues.length > 1 ? "Your Portfolio (base = 100)" : "Benchmark (base = 100)"}
+                title={compareChartData.portValues.length > 1 ? "Your Portfolio (base = 100)" : `${BENCHMARKS.find(b => b.id === selectedBenchmark)?.name || 'Benchmark'} (base = 100)`}
                 unit=""
                 comparisonData={compareChartData.portValues.length > 1 && compareChartData.benchValues.length > 1 ? compareChartData.benchValues : undefined}
                 comparisonTitle={BENCHMARKS.find(b => b.id === selectedBenchmark)?.name || 'Benchmark'}
@@ -3889,12 +3975,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
               />
             ) : (
               <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                {portfolioAnalyticsError || 'Syncing portfolio history from backend...'}
+                {benchmarkHistoryLoading
+                  ? 'Loading benchmark history...'
+                  : portfolioAnalyticsError || 'Syncing portfolio history from backend...'}
               </div>
             )}
 
             <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span>{portfolioAnalyticsError || (compareChartData.portValues.length > 1 ? 'Comparison is indexed to 100 using live backend portfolio analytics' : compareChartData.labels.length > 0 ? 'Benchmark history shown as portfolio history builds' : 'Portfolio history is not available yet')}</span>
+              <span>{compareChartData.portValues.length > 1
+                ? 'Comparison is indexed to 100 using live backend portfolio analytics'
+                : compareChartData.labels.length > 0
+                  ? 'Benchmark history shown while portfolio return history builds'
+                  : portfolioAnalyticsError || 'Portfolio history is syncing; local risk panels are available below'}</span>
               {compareChartData.labels.length > 0 && (
                 <span style={{ marginLeft: 'auto', color: 'var(--accent-cyan)', cursor: 'pointer' }}
                   onClick={() => handleSuggestQuery(`Explain how my portfolio is performing compared to ${selectedBenchmark}.`, 'standard')}
@@ -3913,8 +4005,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                   <div className="data-panel-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Activity size={15} color="var(--accent-cyan)" /> Portfolio Health</div>
                   <span className="section-sublabel">LIVE SCORE</span>
                 </div>
-                {portfolioAnalytics?.health?.score != null ? (
-                  <HealthGauge health={portfolioAnalytics.health} />
+                {visiblePortfolioHealth?.score != null ? (
+                  <>
+                    <HealthGauge health={visiblePortfolioHealth} />
+                    {visiblePortfolioHealth.source === 'local-fallback' && (
+                      <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)' }}>
+                        Local score shown while backend price history finishes syncing.
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div style={{ padding: '24px 8px', color: 'var(--text-muted)', fontSize: 12 }}>Building your health score from live price history…</div>
                 )}
@@ -3922,14 +4021,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
               <div className="data-panel">
                 <div className="data-panel-head">
                   <div className="data-panel-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Sparkles size={15} color="var(--accent-cyan)" /> Arthik's daily read</div>
-                  <span className="section-sublabel">{commentary?.source === 'llm' ? 'AI' : 'AUTO'} • {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                  <span className="section-sublabel">{visibleCommentary?.source === 'llm' ? 'AI' : visibleCommentary?.source === 'local' ? 'LOCAL' : 'AUTO'} • {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
                 </div>
-                {commentary?.commentary ? (
+                {visibleCommentary?.commentary ? (
                   <>
-                    <div style={{ fontSize: 13.5, lineHeight: 1.6, color: 'var(--text-primary)' }}>{commentary.commentary}</div>
-                    {Array.isArray(commentary.highlights) && commentary.highlights.length > 0 && (
+                    <div style={{ fontSize: 13.5, lineHeight: 1.6, color: 'var(--text-primary)' }}>{visibleCommentary.commentary}</div>
+                    {Array.isArray(visibleCommentary.highlights) && visibleCommentary.highlights.length > 0 && (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-                        {commentary.highlights.map((h: any, i: number) => (
+                        {visibleCommentary.highlights.map((h: any, i: number) => (
                           <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '6px 10px' }}>
                             <div style={{ fontSize: 9.5, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: 0.3 }}>{h.label}</div>
                             <div style={{ fontSize: 12.5, fontWeight: 700, fontFamily: 'var(--font-mono)', color: h.tone === 'up' ? 'var(--profit)' : h.tone === 'down' ? 'var(--loss)' : 'var(--text-primary)' }}>{h.value}</div>
@@ -4777,7 +4876,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
           display: 'flex',
           flexDirection: 'column',
           borderLeft: isChatHidden ? 'none' : undefined,
-          overflow: 'visible',
+          overflow: 'hidden',
+          minWidth: 0,
           transition: isDraggingChat ? 'none' : 'box-shadow 0.4s ease',
           boxShadow: isChatHighlighted ? '0 0 0 2px rgba(56, 189, 248, 0.45), -4px 0 24px rgba(56, 189, 248, 0.08)' : undefined
         }}>
@@ -4797,7 +4897,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
             onClick={() => {
               setIsChatHidden(true);
               setChatWidth(0);
-              localStorage.setItem('prospektlab_chat_width', '0');
+              localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, '0');
             }}
             aria-label="Close chat"
           >
@@ -4817,7 +4917,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                <button className="chat-rail-iconbtn" title="Collapse Chat" onClick={() => {
                  setIsChatHidden(true);
                  setChatWidth(0);
-                 localStorage.setItem('prospektlab_chat_width', '0');
+                 localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, '0');
                }}>
                  <ChevronRight size={16} color="#38BDF8" style={{ minWidth: 16, minHeight: 16, display: 'block' }} />
                </button>
@@ -5001,7 +5101,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
           onClick={() => {
             setIsChatHidden(true);
             setChatWidth(0);
-            localStorage.setItem('prospektlab_chat_width', '0');
+            localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, '0');
           }}
         />
       )}
@@ -5012,9 +5112,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
           className="chat-restore-btn"
           onClick={() => {
             setIsChatHidden(false);
-            const w = 380;
+            const w = getDefaultChatWidth();
             setChatWidth(w);
-            localStorage.setItem('prospektlab_chat_width', w.toString());
+            localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, w.toString());
           }}
           title="Restore chat workspace"
         >

@@ -915,7 +915,9 @@ button[style*="06B6D4"]:hover {
 .workbench {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 400px;
-  height: 100vh;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
   width: 100%;
   overflow: hidden;
   background: var(--bg-deep);
@@ -925,6 +927,7 @@ button[style*="06B6D4"]:hover {
 .workspace-tabs-wrap {
   position: relative;
   z-index: 1195;
+  flex: 0 0 auto;
   padding: 14px 20px 8px;
   border-bottom: 1px solid var(--border-subtle);
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.52), rgba(15, 23, 42, 0.2));
@@ -1122,7 +1125,8 @@ button[style*="06B6D4"]:hover {
 }
 
 .workbench-data {
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 24px 32px 60px;
@@ -1132,7 +1136,9 @@ button[style*="06B6D4"]:hover {
 }
 
 .workbench-chat {
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.35), rgba(3, 7, 18, 0.5));
@@ -3650,7 +3656,8 @@ button[style*="06B6D4"]:hover {
   .workbench {
     display: flex !important;
     flex-direction: column !important;
-    height: 100vh !important;
+    height: 100% !important;
+    min-height: 0 !important;
     overflow-y: auto !important;
     grid-template-columns: 1fr !important;
   }

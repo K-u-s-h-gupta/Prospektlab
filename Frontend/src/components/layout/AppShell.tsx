@@ -54,6 +54,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       {/* Main App Content Viewport - Full Height Cockpit */}
       <div className="main-viewport-container" style={{
         flex: 1,
+        minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
@@ -78,8 +79,11 @@ export const AppShell: React.FC<AppShellProps> = ({
 
         <main style={{
           flex: 1,
+          minHeight: 0,
           width: '100%',
           height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
           overflow: 'hidden',
           position: 'relative'
         }}>
