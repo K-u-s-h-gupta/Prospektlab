@@ -229,7 +229,7 @@ export const WatchlistWorkspace: React.FC<WatchlistWorkspaceProps> = ({
 
   useEffect(() => {
     if (symbols.length === 0) return;
-    const intervalMs = range === '1D' ? 20000 : 45000;
+    const intervalMs = range === '1D' ? 45000 : 90000;
     const interval = window.setInterval(() => {
       setRefreshNonce((prev) => prev + 1);
     }, intervalMs);

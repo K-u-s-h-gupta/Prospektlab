@@ -2556,7 +2556,7 @@ async def get_watchlist_snapshot(
 
     async def _fetch_symbol_news(symbol: str) -> list[dict[str, Any]]:
         name = quote_map.get(symbol, {}).get("name") or symbol
-        items = await fetch_news(f"{symbol} {name} stock India", limit=4)
+        items = await fetch_news(f"{symbol} {name} stock India", limit=4, enrich_images=False)
         rows: list[dict[str, Any]] = []
         for item in items[:4]:
             headline = str(item.title or "").strip()
@@ -2815,6 +2815,8 @@ async def get_market_quotes(symbols: str, current_user: dict | None = Depends(ge
     # Keep this high enough for batch tabs (overview/watchlist) but bounded.
     symbol_list = symbol_list[:120]
     results = {}
+    if not symbol_list:
+        return results
     
     async def fetch_one(sym: str):
         cache_key = f"quote:{sym}"
@@ -2823,8 +2825,8 @@ async def get_market_quotes(symbols: str, current_user: dict | None = Depends(ge
             return sym, cached
 
         # Use NSE/BSE-first live quote data for dashboard prices and movers.
-        quote_timeout = _gateway_float_setting("FINAGENT_MARKET_QUOTE_TIMEOUT_S", 5.0)
-        yahoo_timeout = _gateway_float_setting("FINAGENT_MARKET_QUOTE_YAHOO_TIMEOUT_S", 16.0)
+        quote_timeout = _gateway_float_setting("FINAGENT_MARKET_QUOTE_TIMEOUT_S", 3.0)
+        yahoo_timeout = _gateway_float_setting("FINAGENT_MARKET_QUOTE_YAHOO_TIMEOUT_S", 4.0)
 
         try:
             snap = await asyncio.wait_for(fetch_nse_snapshot(sym), timeout=quote_timeout)
@@ -2900,8 +2902,33 @@ async def get_market_quotes(symbols: str, current_user: dict | None = Depends(ge
             await app_cache.set(f"quote:{s}", result, ttl=60)
         return s, result
 
-    tasks = [fetch_one_cached(sym) for sym in symbol_list]
-    fetched = await asyncio.gather(*tasks)
+    quote_concurrency = max(4, min(int(os.getenv("FINAGENT_MARKET_QUOTES_CONCURRENCY", "20") or 20), 40))
+    quote_total_timeout = _gateway_float_setting("FINAGENT_MARKET_QUOTES_TOTAL_TIMEOUT_S", 10.0)
+    quote_semaphore = asyncio.Semaphore(quote_concurrency)
+
+    async def fetch_one_limited(sym: str):
+        async with quote_semaphore:
+            return await fetch_one_cached(sym)
+
+    tasks = [asyncio.create_task(fetch_one_limited(sym)) for sym in symbol_list]
+    done, pending = await asyncio.wait(tasks, timeout=quote_total_timeout)
+    if pending:
+        logger.warning(
+            "market quotes timed out after %.1fs; returning %d/%d completed symbols",
+            quote_total_timeout,
+            len(done),
+            len(tasks),
+        )
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+
+    fetched = []
+    for task in done:
+        try:
+            fetched.append(task.result())
+        except Exception as exc:
+            logger.debug("market quote task failed: %s", exc)
     for sym, res in fetched:
         if res:
             results[sym] = res
@@ -2911,13 +2938,18 @@ async def get_market_quotes(symbols: str, current_user: dict | None = Depends(ge
 
 
 @app.get("/market/news")
-async def get_market_news(query: str = "India market", limit: int = 10, current_user: dict | None = Depends(get_current_user_optional)):
+async def get_market_news(
+    query: str = "India market",
+    limit: int = 10,
+    images: bool = False,
+    current_user: dict | None = Depends(get_current_user_optional),
+):
     safe_limit = max(1, min(int(limit or 10), 60))
-    cache_key = f"news:{query.lower().strip()}:{safe_limit}"
+    cache_key = f"news:{query.lower().strip()}:{safe_limit}:images={int(images)}"
     cached = await app_cache.get(cache_key)
     if cached is not None:
         return cached
-    news_items = await fetch_news(query, limit=safe_limit)
+    news_items = await fetch_news(query, limit=safe_limit, enrich_images=images)
     result = [
         {
             "title": item.title,
@@ -3045,8 +3077,36 @@ async def get_market_indices(current_user: dict | None = Depends(get_current_use
             logger.error(f"Error fetching index {ticker}: {e}")
         return cat_name, None
 
-    tasks = [fetch_one(cat_name, tick, name) for cat_name, tick, name in flat_targets]
-    fetched = await asyncio.gather(*tasks)
+    index_concurrency = max(4, min(int(os.getenv("FINAGENT_MARKET_INDICES_CONCURRENCY", "12") or 12), 24))
+    index_total_timeout = _gateway_float_setting("FINAGENT_MARKET_INDICES_TOTAL_TIMEOUT_S", 14.0)
+    index_semaphore = asyncio.Semaphore(index_concurrency)
+
+    async def fetch_one_index_limited(cat_name: str, ticker: str, name: str):
+        async with index_semaphore:
+            return await fetch_one(cat_name, ticker, name)
+
+    tasks = [
+        asyncio.create_task(fetch_one_index_limited(cat_name, tick, name))
+        for cat_name, tick, name in flat_targets
+    ]
+    done, pending = await asyncio.wait(tasks, timeout=index_total_timeout)
+    if pending:
+        logger.warning(
+            "market indices timed out after %.1fs; returning %d/%d completed tickers",
+            index_total_timeout,
+            len(done),
+            len(tasks),
+        )
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+
+    fetched = []
+    for task in done:
+        try:
+            fetched.append(task.result())
+        except Exception as exc:
+            logger.debug("market index task failed: %s", exc)
 
     results = {
         "india": [],
@@ -3753,6 +3813,62 @@ async def cancel_portfolio_extraction(current_user: dict = Depends(get_current_u
     return {"ok": True, "status": "IDLE"}
 
 
+def _portfolio_positions_signature(positions: list[Any]) -> str:
+    rows: list[dict[str, Any]] = []
+    for pos in positions[:250]:
+        rows.append({
+            "symbol": getattr(pos, "symbol", ""),
+            "exchange": getattr(pos, "exchange", ""),
+            "quantity": getattr(pos, "quantity", 0),
+            "market_value": getattr(pos, "market_value", 0),
+            "cost_basis": getattr(pos, "cost_basis", 0),
+            "avg_cost": getattr(pos, "avg_cost", 0),
+            "last_price": getattr(pos, "last_price", 0),
+            "as_of": getattr(pos, "as_of", ""),
+        })
+    raw = json.dumps(rows, sort_keys=True, default=str)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+async def _compute_portfolio_analytics_cached(
+    positions: list[Any],
+    *,
+    benchmark: str = "NIFTY50",
+    period: str = "1y",
+    timeout_s: float | None = None,
+) -> dict[str, Any]:
+    cache_ttl = max(15, int(os.getenv("FINAGENT_ANALYTICS_CACHE_TTL_S", "120") or 120))
+    cache_key = (
+        f"portfolio:analytics:{str(benchmark or 'NIFTY50').upper()}:"
+        f"{str(period or '1y').lower()}:{_portfolio_positions_signature(positions)}"
+    )
+    cached = await app_cache.get(cache_key)
+    if isinstance(cached, dict):
+        return dict(cached)
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(compute_portfolio_analytics, positions, benchmark=benchmark, period=period),
+            timeout=timeout_s if timeout_s is not None else _gateway_float_setting("FINAGENT_ANALYTICS_TIMEOUT_S", 18.0),
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Portfolio analytics timed out; returning lightweight analytics fallback")
+        result = {
+            "status": "ANALYTICS_TIMEOUT",
+            "positions": [],
+            "risk": {},
+            "sector_breakdown": {},
+            "kind_breakdown": {},
+        }
+        await app_cache.set(cache_key, result, ttl=15)
+        return dict(result)
+
+    if not isinstance(result, dict):
+        result = {}
+    await app_cache.set(cache_key, result, ttl=cache_ttl)
+    return dict(result)
+
+
 @app.get("/portfolio/analytics")
 async def get_portfolio_analytics(
     current_user: dict = Depends(get_current_user_or_guest),
@@ -3767,16 +3883,7 @@ async def get_portfolio_analytics(
     """
     tenant_id = current_user.get("tenant_id")
     positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/analytics")
-    # compute_portfolio_analytics does blocking yfinance I/O; run it off the event
-    # loop and cap total time so a throttled Yahoo can't stall the request forever.
-    try:
-        result = await asyncio.wait_for(
-            asyncio.to_thread(compute_portfolio_analytics, positions, benchmark=benchmark, period=period),
-            timeout=_gateway_float_setting("FINAGENT_ANALYTICS_TIMEOUT_S", 25.0),
-        )
-    except asyncio.TimeoutError:
-        logger.warning("Portfolio analytics timed out for tenant %s; returning empty analytics", tenant_id)
-        result = {"status": "ANALYTICS_TIMEOUT", "positions": [], "risk": {}, "sector_breakdown": {}, "kind_breakdown": {}}
+    result = await _compute_portfolio_analytics_cached(positions, benchmark=benchmark, period=period)
     if isinstance(result, dict):
         result["store_unavailable"] = store_unavailable
     _record_metric_event(current_user, "portfolio_view")
@@ -4077,7 +4184,15 @@ async def _load_optional_portfolio_positions(tenant_id: str | None, endpoint: st
 async def get_portfolio_news(limit: int = 12, current_user: dict = Depends(get_current_user_or_guest)):
     tenant_id = current_user.get("tenant_id")
     positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/news")
-    items = fetch_portfolio_news(positions, limit=limit)
+    safe_limit = max(1, min(int(limit or 12), 30))
+    try:
+        items = await asyncio.wait_for(
+            asyncio.to_thread(fetch_portfolio_news, positions, limit=safe_limit),
+            timeout=_gateway_float_setting("FINAGENT_PORTFOLIO_NEWS_TIMEOUT_S", 8.0),
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Portfolio news timed out for tenant %s", tenant_id)
+        items = []
     return {
         "items": items,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
@@ -4122,7 +4237,7 @@ async def get_portfolio_alerts(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
     positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/alerts")
     from finagent.portfolio.alerts import compute_alerts
-    analytics = compute_portfolio_analytics(positions)
+    analytics = await _compute_portfolio_analytics_cached(positions, timeout_s=10.0)
     return {"alerts": compute_alerts(positions, analytics), "store_unavailable": store_unavailable}
 
 
@@ -4185,7 +4300,7 @@ async def get_today_queue(current_user: dict = Depends(get_current_user)):
     tenant_id = current_user.get("tenant_id")
     positions, store_unavailable = await _load_optional_portfolio_positions(tenant_id, "portfolio/today")
     from finagent.portfolio.action_queue import build_action_queue
-    analytics = compute_portfolio_analytics(positions)
+    analytics = await _compute_portfolio_analytics_cached(positions, timeout_s=10.0)
     return {"items": build_action_queue(positions, analytics), "store_unavailable": store_unavailable}
 
 
@@ -4199,7 +4314,7 @@ async def get_portfolio_brief(current_user: dict = Depends(get_current_user)):
     if not positions:
         return {"brief": "No portfolio data available.", "store_unavailable": False}
     
-    analytics = compute_portfolio_analytics(positions)
+    analytics = await _compute_portfolio_analytics_cached(positions, timeout_s=10.0)
     
     # Build enhanced brief with key insights
     count = len(positions)
@@ -4236,9 +4351,27 @@ async def get_portfolio_commentary(current_user: dict = Depends(get_current_user
     if store_unavailable:
         return {"commentary": "Portfolio data is temporarily unavailable.", "source": "error",
                 "highlights": [], "store_unavailable": True}
-    analytics = await asyncio.to_thread(compute_portfolio_analytics, positions)
-    from finagent.portfolio.commentary import generate_commentary
-    result = await generate_commentary(analytics)
+    commentary_key = f"portfolio:commentary:{_portfolio_positions_signature(positions)}"
+    cached = await app_cache.get(commentary_key)
+    if isinstance(cached, dict):
+        cached["store_unavailable"] = False
+        return cached
+
+    analytics = await _compute_portfolio_analytics_cached(positions, timeout_s=10.0)
+    from finagent.portfolio.commentary import build_highlights, generate_commentary, template_commentary
+    try:
+        result = await asyncio.wait_for(
+            generate_commentary(analytics),
+            timeout=_gateway_float_setting("FINAGENT_PORTFOLIO_COMMENTARY_TIMEOUT_S", 6.0),
+        )
+    except asyncio.TimeoutError:
+        result = {
+            "commentary": template_commentary(analytics),
+            "source": "template-timeout",
+            "highlights": build_highlights(analytics),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    await app_cache.set(commentary_key, result, ttl=300)
     result["store_unavailable"] = False
     _record_metric_event(current_user, "commentary_view")
     return result

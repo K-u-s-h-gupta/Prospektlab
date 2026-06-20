@@ -375,8 +375,9 @@ async def fetch_news(
     hl: str = "en-IN",
     gl: str = "IN",
     ceid: str = "IN:en",
+    enrich_images: bool = True,
 ) -> list[NewsItem]:
-    cache_key = f"{query}:{limit}:{hl}:{gl}:{ceid}"
+    cache_key = f"{query}:{limit}:{hl}:{gl}:{ceid}:{int(enrich_images)}"
     now = time.time()
     if cache_key in _NEWS_CACHE:
         cached_time, cached_items = _NEWS_CACHE[cache_key]
@@ -479,21 +480,22 @@ async def fetch_news(
             break
 
     res_items = items if items else fallbacks
-    missing_image_positions = [i for i, news in enumerate(res_items) if not news.image and news.link][: _IMAGE_ENRICH_LIMIT]
-    if missing_image_positions:
-        resolved = await asyncio.gather(
-            *[_resolve_source_image(res_items[i].link) for i in missing_image_positions],
-            return_exceptions=True,
-        )
-        for pos, img in zip(missing_image_positions, resolved):
-            if isinstance(img, str) and img:
-                res_items[pos].image = img
+    if enrich_images:
+        missing_image_positions = [i for i, news in enumerate(res_items) if not news.image and news.link][: _IMAGE_ENRICH_LIMIT]
+        if missing_image_positions:
+            resolved = await asyncio.gather(
+                *[_resolve_source_image(res_items[i].link) for i in missing_image_positions],
+                return_exceptions=True,
+            )
+            for pos, img in zip(missing_image_positions, resolved):
+                if isinstance(img, str) and img:
+                    res_items[pos].image = img
 
-    # When top headlines are image-poor (common with google wrapper links),
-    # backfill a subset with source-backed fallback stories so Discover cards
-    # still render remote cover images.
-    if items:
-        res_items = await _backfill_with_fallback_images(res_items, fallbacks, limit=limit)
+        # When top headlines are image-poor (common with google wrapper links),
+        # backfill a subset with source-backed fallback stories so Discover cards
+        # still render remote cover images.
+        if items:
+            res_items = await _backfill_with_fallback_images(res_items, fallbacks, limit=limit)
     if res_items:
         _NEWS_CACHE[cache_key] = (now, res_items)
     return res_items[:limit]

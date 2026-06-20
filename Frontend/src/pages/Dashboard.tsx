@@ -640,10 +640,10 @@ const DISCOVER_MARKET_QUERIES = [
   'India sector movers today',
   'RBI policy and macro signals India market',
 ] as const;
-const DISCOVER_MARKET_LIMIT_PER_QUERY = 20;
+const DISCOVER_MARKET_LIMIT_PER_QUERY = 8;
 const DISCOVER_CARDS_PER_SLIDE = 3;
 const DISCOVER_MAX_CARDS = 15;
-const DISCOVER_FEED_CAP = 120;
+const DISCOVER_FEED_CAP = 45;
 const OVERVIEW_MOVER_LIMIT = 5;
 const buildDiscoverMarketQuery = (baseQuery: string) => `${baseQuery} latest`.trim();
 const MARKET_MOVER_UNIVERSE_SYMBOLS = [
@@ -1581,7 +1581,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       }
     };
     fetchNews();
-    const interval = setInterval(fetchNews, activeFeatureTab === 'overview' ? 90000 : 150000);
+    const interval = setInterval(fetchNews, activeFeatureTab === 'overview' ? 300000 : 420000);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -1598,7 +1598,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       ]),
     )
       .filter(Boolean)
-      .slice(0, 120);
+      .slice(0, 60);
     const stockBySymbol = new Map(
       INDIAN_STOCKS.map((stock) => [String(stock.symbol || '').split('.')[0].toUpperCase().trim(), stock]),
     );

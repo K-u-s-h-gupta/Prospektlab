@@ -61,9 +61,9 @@ export const AppContent: React.FC = () => {
         <Route path="/signup" element={<Navigate to="/dashboard/overview" replace />} />
 
         <Route path="/dashboard" element={<Navigate to="/dashboard/overview" replace />} />
-        <Route path="/dashboard/:featureTab" element={<DashboardRoute />} />
         <Route path="/dashboard/earnings" element={<DashboardEarningsPage />} />
         <Route path="/dashboard/governance" element={<DashboardGovernancePage />} />
+        <Route path="/dashboard/:featureTab" element={<DashboardRoute />} />
         <Route path="/insights-studio" element={<InsightsStudio />} />
 
         <Route path="*" element={<Navigate to="/dashboard/overview" replace />} />

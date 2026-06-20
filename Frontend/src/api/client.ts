@@ -1731,10 +1731,11 @@ export async function getMarketQuotes(symbols: string[]): Promise<any> {
   return parseJsonSanitized(res);
 }
 
-export async function getMarketNews(query?: string, limit: number = 10): Promise<any> {
+export async function getMarketNews(query?: string, limit: number = 10, includeImages = false): Promise<any> {
   const params = new URLSearchParams();
   if (query) params.set('query', query);
   params.set('limit', String(Math.max(1, Math.min(60, Number(limit) || 10))));
+  params.set('images', includeImages ? '1' : '0');
   const qStr = params.toString();
   const res = await fetchWithTimeout(
     apiUrl(`/market/news${qStr ? `?${qStr}` : ''}`),

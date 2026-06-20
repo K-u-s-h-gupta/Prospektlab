@@ -16,7 +16,8 @@ const pageContainerStyle: React.CSSProperties = {
 const contentStyle: React.CSSProperties = {
   flex: 1,
   overflowY: 'auto',
-  padding: '24px 32px 60px',
+  minWidth: 0,
+  padding: 'clamp(16px, 3vw, 24px) clamp(14px, 4vw, 32px) 60px',
 };
 
 export const DashboardEarningsPage: React.FC = () => {
