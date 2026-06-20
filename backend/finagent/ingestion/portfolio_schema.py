@@ -56,6 +56,31 @@ class PortfolioPositionSchema(StrictBaseModel):
         return " ".join(str(value or "").split())
 
 
+class PortfolioTransactionSchema(StrictBaseModel):
+    date: str = Field(default="", max_length=40)
+    txn_type: str = Field(default="", max_length=80)
+    amount: float = 0.0
+    units: float = 0.0
+    nav: float = Field(default=0.0, ge=0)
+    isin: str = Field(default="", max_length=16)
+    amfi: str = Field(default="", max_length=24)
+    symbol: str = Field(default="", max_length=64)
+    name: str = Field(default="", max_length=180)
+    scheme_type: str = Field(default="", max_length=80)
+    kind: AssetKind = "other"
+    raw_evidence: str = Field(default="", max_length=500)
+
+    @field_validator("isin", "amfi", "symbol", "txn_type", "scheme_type", mode="before")
+    @classmethod
+    def _upper_compact(cls, value: object) -> str:
+        return str(value or "").strip().upper()
+
+    @field_validator("date", "name", "raw_evidence", mode="before")
+    @classmethod
+    def _clean_text(cls, value: object) -> str:
+        return " ".join(str(value or "").split())
+
+
 class PortfolioExtractionSchema(BaseModel):
     """Primary Python-side extraction result.
 
@@ -71,6 +96,7 @@ class PortfolioExtractionSchema(BaseModel):
     broker_or_vendor: str = Field(default="", max_length=80)
     investor: dict[str, str | None] = Field(default_factory=dict)
     positions: list[PortfolioPositionSchema] = Field(default_factory=list)
+    transactions: list[PortfolioTransactionSchema] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.0, ge=0, le=1)
     diagnostics: dict = Field(default_factory=dict)
