@@ -224,16 +224,27 @@ async function postEnvelopes(envelopes: TelemetryEnvelope[]): Promise<void> {
 
   const payload = JSON.stringify(envelopes);
 
-  if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-    const blob = new Blob([payload], { type: 'application/json' });
-    if (navigator.sendBeacon(ingestionUrl, blob)) {
-      return;
+  // Use sendBeacon only for same-origin endpoints; for cross-origin telemetry use
+  // fetch with credentials omitted so wildcard CORS responses are accepted.
+  if (typeof window !== 'undefined') {
+    try {
+      const parsedUrl = new URL(ingestionUrl, window.location.href);
+      const isSameOrigin = parsedUrl.origin === window.location.origin;
+      if (isSameOrigin && typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+        const blob = new Blob([payload], { type: 'application/json' });
+        if (navigator.sendBeacon(ingestionUrl, blob)) {
+          return;
+        }
+      }
+    } catch (_) {
+      // Fall through to fetch below.
     }
   }
 
   await fetch(ingestionUrl, {
     method: 'POST',
     mode: 'cors',
+    credentials: 'omit',
     keepalive: true,
     headers: {
       'Content-Type': 'application/json',

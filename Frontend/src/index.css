@@ -923,6 +923,8 @@ button[style*="06B6D4"]:hover {
 }
 
 .workspace-tabs-wrap {
+  position: relative;
+  z-index: 1195;
   padding: 14px 20px 8px;
   border-bottom: 1px solid var(--border-subtle);
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.52), rgba(15, 23, 42, 0.2));

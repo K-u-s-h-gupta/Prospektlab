@@ -23,7 +23,7 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
     const costBasis = item.qty * item.avgCost;
     const currentValue = item.qty * item.current;
     const pnl = currentValue - costBasis;
-    const pnlPct = (pnl / costBasis) * 100;
+    const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
     return { ...item, currentValue, pnl, pnlPct };
   });
 
