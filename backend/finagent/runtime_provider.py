@@ -1,13 +1,14 @@
 """Resolve LLM provider configuration (Azure Foundry/OpenAI primary, xAI fallback).
 
-Default model routing:
-- micro    -> gpt-5.4-mini  (FINAGENT_OPENAI_MODEL_MICRO/_NANO — news triage, sentiment, tagging)
-- simple   -> gpt-5.4-mini  (FINAGENT_OPENAI_MODEL_SIMPLE)
-- moderate -> gpt-5.4-mini  (FINAGENT_OPENAI_MODEL)
-- complex  -> gpt-5.4-mini  (FINAGENT_OPENAI_MODEL)
+Default model routing (cheap subagents, separate synthesis model):
+- micro    -> gpt-4o-mini  (FINAGENT_OPENAI_MODEL_MICRO/_NANO — news triage, sentiment, tagging)
+- simple   -> gpt-4o-mini  (FINAGENT_OPENAI_MODEL_SIMPLE)
+- moderate -> gpt-4o-mini  (FINAGENT_OPENAI_MODEL)
+- complex  -> gpt-4o-mini  (FINAGENT_OPENAI_MODEL)
 
-The "micro" tier lets the high-volume, low-reasoning agents point at a cheaper
-model via env without changing analysis-heavy agents.
+Synthesis/final-report generation is controlled separately by FINAGENT_SYNTH_MODEL
+and defaults to gpt-5.4-mini. The "micro" tier lets the high-volume, low-reasoning
+agents point at a cheaper model via env without changing analysis-heavy agents.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ _XAI_BASE_URL = "https://api.x.ai/v1"
 @dataclass
 class OpenAIConfig:
     api_key: str
-    model: str = "gpt-5.4-mini"
+    model: str = "gpt-4o-mini"
     base_url: str | None = None
 
 
@@ -83,7 +84,7 @@ def _resolve_azure_foundry_openai_config(complexity: str = "moderate") -> OpenAI
         or os.getenv("AZURE_AI_PROJECTS_CHAT_DEPLOYMENT")
         or os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT")
         or os.getenv("AZURE_OPENAI_DEPLOYMENT")
-        or "gpt-5.4-mini"
+        or "gpt-4o-mini"
     ).strip()
 
     if complexity == "micro":
@@ -93,22 +94,20 @@ def _resolve_azure_foundry_openai_config(complexity: str = "moderate") -> OpenAI
             or os.getenv("FINAGENT_OPENAI_MODEL_SIMPLE")
             or os.getenv("FINAGENT_OPENAI_MODEL_MINI")
             or deployment
-            or "gpt-5.4-mini"
+            or "gpt-4o-mini"
         )
     elif complexity == "simple":
         model = (
             os.getenv("FINAGENT_OPENAI_MODEL_SIMPLE")
             or os.getenv("FINAGENT_OPENAI_MODEL_MINI")
-            or os.getenv("FINAGENT_SYNTH_MODEL_FAST")
             or deployment
-            or "gpt-5.4-mini"
+            or "gpt-4o-mini"
         )
     else:
         model = (
             os.getenv("FINAGENT_OPENAI_MODEL")
-            or os.getenv("FINAGENT_SYNTH_MODEL")
             or deployment
-            or "gpt-5.4-mini"
+            or "gpt-4o-mini"
         )
 
     return OpenAIConfig(api_key=key, model=model, base_url=base_url)
@@ -176,20 +175,18 @@ def resolve_openai_config(complexity: str = "moderate") -> OpenAIConfig | None:
                 or os.getenv("FINAGENT_OPENAI_MODEL_NANO")
                 or os.getenv("FINAGENT_OPENAI_MODEL_SIMPLE")
                 or os.getenv("FINAGENT_OPENAI_MODEL_MINI")
-                or "gpt-5.4-mini"
+                or "gpt-4o-mini"
             )
         elif complexity == "simple":
             model = (
                 os.getenv("FINAGENT_OPENAI_MODEL_SIMPLE")
                 or os.getenv("FINAGENT_OPENAI_MODEL_MINI")
-                or os.getenv("FINAGENT_SYNTH_MODEL_FAST")
-                or "gpt-5.4-mini"
+                or "gpt-4o-mini"
             )
         else:
             model = (
                 os.getenv("FINAGENT_OPENAI_MODEL")
-                or os.getenv("FINAGENT_SYNTH_MODEL")
-                or "gpt-5.4-mini"
+                or "gpt-4o-mini"
             )
         return OpenAIConfig(api_key=key, model=model)
 

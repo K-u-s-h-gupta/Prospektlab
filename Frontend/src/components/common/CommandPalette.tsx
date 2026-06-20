@@ -20,12 +20,12 @@ interface Command {
 
 const BASE_COMMANDS: Command[] = [
   { id: 'go-dashboard', label: 'Go to Dashboard', icon: LayoutDashboard, keywords: 'dashboard home portfolio overview',
-    run: (nav) => nav('/dashboard') },
+    run: (nav) => nav('/dashboard/overview') },
   { id: 'go-governance', label: 'Portfolio Governance X-Ray', hint: 'forensic risk', icon: ShieldAlert,
     keywords: 'governance risk forensic pledge enforcement xray',
-    run: (nav) => nav('/dashboard?panel=governance') },
+    run: (nav) => nav('/dashboard/governance') },
   { id: 'go-analytics', label: 'Portfolio Analytics', icon: TrendingUp, keywords: 'analytics beta volatility risk performance',
-    run: (nav) => nav('/dashboard?panel=analytics') },
+    run: (nav) => nav('/dashboard/portfolio') },
 ];
 
 function fuzzyScore(query: string, text: string): number {

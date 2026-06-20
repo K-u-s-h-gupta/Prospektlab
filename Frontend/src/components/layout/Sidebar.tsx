@@ -1,19 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   MessageSquarePlus,
   Trash2,
-  ArrowUpRight,
-  ShieldCheck,
-  Compass,
   LogOut,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAuth } from '../../context/AuthContext';
-import { deletePortfolioMirror } from '../../api/client';
 
 interface SidebarProps {
   conversations: Array<{ id: string; title: string; date: string }>;
@@ -37,38 +33,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectConversation,
   onNewConversation,
   activeConversationId,
-  portfolioSummary,
-  tokenUsage
+  tokenUsage,
 }) => {
   const navigate = useNavigate();
-  const { user, logout, setOnboarded, showToast } = useAuth();
-  
-  // Drag-to-resize state
+  const { user, logout } = useAuth();
+
   const [width, setWidth] = useState<number>(() => {
     const saved = localStorage.getItem('prospektlab_sidebar_width');
     return saved ? parseInt(saved, 10) : 260;
   });
   const [isDragging, setIsDragging] = useState(false);
-  const [isResettingSetup, setIsResettingSetup] = useState(false);
   const dragRef = useRef<HTMLDivElement>(null);
 
   const isCollapsed = width <= 120;
 
-  // Handle drag listeners
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = (event: MouseEvent) => {
       if (!isDragging) return;
-      let newWidth = e.clientX;
-      
-      // Snapping logic
-      if (newWidth < 120) {
-        newWidth = 56; // collapsed
-      } else if (newWidth > 320) {
-        newWidth = 320; // maximum width
-      }
-      
-      setWidth(newWidth);
-      localStorage.setItem('prospektlab_sidebar_width', newWidth.toString());
+      let nextWidth = event.clientX;
+      if (nextWidth < 120) nextWidth = 56;
+      if (nextWidth > 320) nextWidth = 320;
+      setWidth(nextWidth);
+      localStorage.setItem('prospektlab_sidebar_width', String(nextWidth));
     };
 
     const handleMouseUp = () => {
@@ -97,78 +83,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleNewChatClick = () => {
     dismissSidebarOnMobile();
-    if (onNewConversation) {
-      onNewConversation();
-    }
+    onNewConversation?.();
   };
 
   const handleSelectChatClick = (id: string) => {
     dismissSidebarOnMobile();
-    if (onSelectConversation) {
-      onSelectConversation(id);
-    }
+    onSelectConversation?.(id);
   };
 
   const handleSignOut = async () => {
     dismissSidebarOnMobile();
     await logout();
-    navigate('/login');
+    navigate('/dashboard/overview');
   };
 
-  const clearPortfolioWorkspace = () => {
-    localStorage.removeItem('prospektlab_portfolio');
-    localStorage.removeItem('prospektlab_manual_portfolio');
-    localStorage.removeItem('prospektlab_conversations');
-    localStorage.removeItem('prospektlab_onboarding_step');
-    localStorage.removeItem('prospektlab_watchlist');
-
-    const conversationKeys: string[] = [];
-    const messageKeys: string[] = [];
-    const watchlistKeys: string[] = [];
-    for (let index = 0; index < localStorage.length; index += 1) {
-      const key = localStorage.key(index);
-      if (key && (key === 'prospektlab_conversations' || key.startsWith('prospektlab_conversations:'))) {
-        conversationKeys.push(key);
-      }
-      if (key && (key.startsWith('prospektlab_messages_') || key.startsWith('prospektlab_messages:'))) {
-        messageKeys.push(key);
-      }
-      if (key && key.startsWith('prospektlab_watchlist:')) {
-        watchlistKeys.push(key);
-      }
-    }
-    conversationKeys.forEach((key) => localStorage.removeItem(key));
-    messageKeys.forEach((key) => localStorage.removeItem(key));
-    watchlistKeys.forEach((key) => localStorage.removeItem(key));
-  };
-
-  const handleRerunSetup = async () => {
-    if (isResettingSetup) return;
-    setIsResettingSetup(true);
-    dismissSidebarOnMobile();
-
-    if (!user) {
-      clearPortfolioWorkspace();
-      navigate('/get-started');
-      setIsResettingSetup(false);
-      return;
-    }
-
-    try {
-      await deletePortfolioMirror();
-      clearPortfolioWorkspace();
-      setOnboarded(false);
-      showToast('Setup reset. Upload the new holdings file to rebuild the dashboard.', 'success');
-      navigate('/get-started');
-    } catch (error: any) {
-      console.error('Failed to reset synced portfolio before rerun', error);
-      showToast(error?.message || 'Could not reset the current holdings. Please retry rerun.', 'error');
-    } finally {
-      setIsResettingSetup(false);
-    }
-  };
-
-  // Initials for avatar
   const getInitials = (name?: string) => {
     if (!name) return 'U';
     const parts = name.trim().split(/\s+/);
@@ -178,10 +106,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return name.slice(0, 2).toUpperCase();
   };
 
-  const hasPortfolio = portfolioSummary && portfolioSummary.totalValue > 0;
 
   return (
-    <div 
+    <div
       className={`sidebar-container ${isCollapsed ? 'sidebar-collapsed' : ''}`}
       style={{
         position: 'relative',
@@ -189,49 +116,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
         height: '100%',
         display: 'flex',
         flexShrink: 0,
-        zIndex: 20
+        zIndex: 20,
       }}
     >
-      <aside style={{
-        width: '100%',
-        background: 'rgba(15, 23, 42, 0.45)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderRight: '1px solid rgba(255, 255, 255, 0.06)',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden'
-      }}>
-        {/* Header Logo */}
-        <div className="logo-container animate-fade-in-right" style={{
-          padding: isCollapsed ? '20px 0' : '24px 20px',
+      <aside
+        style={{
+          width: '100%',
+          background: 'rgba(15, 23, 42, 0.45)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+          height: '100%',
           display: 'flex',
-          flexDirection: isCollapsed ? 'column' : 'row',
-          alignItems: 'center',
-          justifyContent: isCollapsed ? 'center' : 'flex-start',
-          gap: isCollapsed ? '12px' : '10px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
-          cursor: 'pointer',
-          flexShrink: 0
-        }} onClick={() => {
-          if (isCollapsed) {
-            setWidth(260);
-            localStorage.setItem('prospektlab_sidebar_width', '260');
-          } else {
-            dismissSidebarOnMobile();
-            navigate('/dashboard');
-          }
+          flexDirection: 'column',
+          overflow: 'hidden',
         }}
-        title={isCollapsed ? "Expand Sidebar" : undefined}>
+      >
+        <div
+          className="logo-container animate-fade-in-right"
+          style={{
+            padding: isCollapsed ? '20px 0' : '24px 20px',
+            display: 'flex',
+            flexDirection: isCollapsed ? 'column' : 'row',
+            alignItems: 'center',
+            justifyContent: isCollapsed ? 'center' : 'flex-start',
+            gap: isCollapsed ? '12px' : '10px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+          onClick={() => {
+            if (isCollapsed) {
+              setWidth(260);
+              localStorage.setItem('prospektlab_sidebar_width', '260');
+              return;
+            }
+            dismissSidebarOnMobile();
+            navigate('/dashboard/overview');
+          }}
+          title={isCollapsed ? 'Expand Sidebar' : undefined}
+        >
           {isCollapsed ? (
             <>
               <Logo size={24} />
               <button
                 className="sidebar-toggle-btn collapsed"
                 title="Expand Sidebar"
-                onClick={(e) => {
-                  e.stopPropagation();
+                onClick={(event) => {
+                  event.stopPropagation();
                   setWidth(260);
                   localStorage.setItem('prospektlab_sidebar_width', '260');
                 }}
@@ -242,29 +174,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ) : (
             <>
               <Logo size={24} />
-              <span className="sidebar-header-title text-gradient text-gradient-animated" style={{
-                fontWeight: 800,
-                fontSize: '14px',
-                color: 'var(--text-primary)',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                whiteSpace: 'nowrap',
-                flexShrink: 0
-              }}>
+              <span
+                className="sidebar-header-title text-gradient text-gradient-animated"
+                style={{
+                  fontWeight: 800,
+                  fontSize: '14px',
+                  color: 'var(--text-primary)',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
                 Prospekt Lab
               </span>
-              <span className="badge badge-premium nav-text" style={{
-                fontSize: '8px',
-                padding: '2px 5px',
-                marginRight: '8px',
-                whiteSpace: 'nowrap',
-                flexShrink: 0
-              }}>
+              <span
+                className="badge badge-premium nav-text"
+                style={{
+                  fontSize: '8px',
+                  padding: '2px 5px',
+                  marginRight: '8px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
                 PRO
               </span>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
+                onClick={(event) => {
+                  event.stopPropagation();
                   setWidth(56);
                   localStorage.setItem('prospektlab_sidebar_width', '56');
                 }}
@@ -273,15 +211,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 style={{
                   width: '24px',
                   height: '24px',
-                  marginLeft: 'auto'
+                  marginLeft: 'auto',
                 }}
               >
                 <ChevronLeft size={14} color="#38BDF8" style={{ minWidth: 14, minHeight: 14, display: 'block' }} />
               </button>
-              {/* Mobile close button */}
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
+                onClick={(event) => {
+                  event.stopPropagation();
                   dismissSidebarOnMobile();
                 }}
                 className="sidebar-close-btn"
@@ -290,7 +227,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   width: '28px',
                   height: '28px',
                   marginLeft: 'auto',
-                  display: 'none'
+                  display: 'none',
                 }}
               >
                 <X size={14} color="#FB7185" style={{ minWidth: 14, minHeight: 14, display: 'block' }} />
@@ -299,7 +236,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* New Chat Button */}
         <div style={{ padding: isCollapsed ? '16px 8px' : '16px 20px 8px', flexShrink: 0 }}>
           <button
             onClick={handleNewChatClick}
@@ -316,7 +252,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               gap: '8px',
               fontWeight: 600,
               fontSize: '13px',
-              border: '1px solid rgba(255, 255, 255, 0.08)'
+              border: '1px solid rgba(255, 255, 255, 0.08)',
             }}
           >
             <MessageSquarePlus size={16} color="var(--accent-cyan)" />
@@ -324,38 +260,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* Conversation List */}
         {!isCollapsed && (
-          <div style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '0 20px 16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px'
-          }}>
+          <div
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '0 20px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+            }}
+          >
             <div>
-              <div style={{
-                fontSize: '10px',
-                color: 'var(--text-secondary)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: '8px',
-                fontWeight: 700
-              }}>
+              <div
+                style={{
+                  fontSize: '10px',
+                  color: 'var(--text-secondary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: '8px',
+                  fontWeight: 700,
+                }}
+              >
                 History
               </div>
-              
               {conversations.length === 0 ? (
-                <div style={{
-                  fontSize: '12px',
-                  color: 'var(--text-secondary)',
-                  padding: '12px',
-                  textAlign: 'center',
-                  background: 'rgba(255, 255, 255, 0.01)',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255, 255, 255, 0.04)'
-                }}>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    color: 'var(--text-secondary)',
+                    padding: '12px',
+                    textAlign: 'center',
+                    background: 'rgba(255, 255, 255, 0.01)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255, 255, 255, 0.04)',
+                  }}
+                >
                   No past sessions
                 </div>
               ) : (
@@ -368,7 +308,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         style={{
                           position: 'relative',
                           display: 'flex',
-                          alignItems: 'center'
+                          alignItems: 'center',
                         }}
                       >
                         <button
@@ -387,21 +327,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             paddingRight: '32px',
-                            transition: 'var(--transition)'
+                            transition: 'var(--transition)',
                           }}
-                          onMouseEnter={(e) => {
-                            if (!isActive) e.currentTarget.style.color = 'var(--text-primary)';
+                          onMouseEnter={(event) => {
+                            if (!isActive) event.currentTarget.style.color = 'var(--text-primary)';
                           }}
-                          onMouseLeave={(e) => {
-                            if (!isActive) e.currentTarget.style.color = 'var(--text-secondary)';
+                          onMouseLeave={(event) => {
+                            if (!isActive) event.currentTarget.style.color = 'var(--text-secondary)';
                           }}
                         >
                           {chat.title}
                         </button>
                         {onDeleteConversation && (
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            onClick={(event) => {
+                              event.stopPropagation();
                               if (conversations.length <= 1) return;
                               onDeleteConversation(chat.id);
                             }}
@@ -418,13 +358,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               alignItems: 'center',
                               justifyContent: 'center',
                               cursor: conversations.length <= 1 ? 'not-allowed' : 'pointer',
-                              transition: 'opacity 0.2s ease'
+                              transition: 'opacity 0.2s ease',
                             }}
-                            onMouseEnter={(e) => {
-                              if (conversations.length > 1) e.currentTarget.style.opacity = '1';
+                            onMouseEnter={(event) => {
+                              if (conversations.length > 1) event.currentTarget.style.opacity = '1';
                             }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.opacity = conversations.length <= 1 ? '0.2' : (isActive ? '0.8' : '0.4');
+                            onMouseLeave={(event) => {
+                              event.currentTarget.style.opacity = conversations.length <= 1 ? '0.2' : (isActive ? '0.8' : '0.4');
                             }}
                             title={conversations.length <= 1 ? 'At least one session must remain' : 'Delete session'}
                           >
@@ -440,69 +380,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* Portfolio Value Summary Card */}
-        {hasPortfolio && portfolioSummary && !isCollapsed && (
-          <div style={{ padding: '0 20px 16px', flexShrink: 0 }}>
-            <div 
-              style={{
-                background: 'rgba(15, 23, 42, 0.5)',
-                border: '1px solid rgba(56, 189, 248, 0.15)',
-                borderRadius: '12px',
-                padding: '14px 16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px',
-                position: 'relative',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.02em' }}>
-                <ShieldCheck size={12} color="var(--accent-cyan)" />
-                <span>PORTFOLIO VALUE</span>
-              </div>
-              
-              <div className="animate-number-reveal" style={{ 
-                fontSize: '18px', 
-                fontWeight: 700, 
-                color: 'var(--text-primary)',
-                fontFamily: 'var(--font-mono)',
-                letterSpacing: '-0.5px'
-              }}>
-                ₹{portfolioSummary.totalValue.toLocaleString('en-IN')}
-              </div>
-
-              <div className="animate-number-reveal" style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '4px', 
-                fontSize: '11px',
-                fontWeight: 600,
-                color: portfolioSummary.totalPnL >= 0 ? 'var(--profit)' : 'var(--loss)'
-              }}>
-                <ArrowUpRight size={12} style={{ transform: portfolioSummary.totalPnL >= 0 ? 'none' : 'rotate(90deg)' }} />
-                <span>
-                  {portfolioSummary.totalPnL >= 0 ? '+' : ''}
-                  ₹{portfolioSummary.totalPnL.toLocaleString('en-IN')} ({portfolioSummary.totalReturnPct.toFixed(1)}%)
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* User Profile Card (New Addition) */}
         {user ? (
           <>
-            <div className="profile-container" style={{
-              padding: isCollapsed ? '12px 6px' : '14px 16px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.04)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: isCollapsed ? 'center' : 'space-between',
-              gap: '10px',
-              flexShrink: 0
-            }}>
+            <div
+              className="profile-container"
+              style={{
+                padding: isCollapsed ? '12px 6px' : '14px 16px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.04)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: isCollapsed ? 'center' : 'space-between',
+                gap: '10px',
+                flexShrink: 0,
+              }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
-                <div 
+                <div
                   className="animate-pulse-glow"
                   style={{
                     width: '32px',
@@ -515,25 +408,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     justifyContent: 'center',
                     fontWeight: 700,
                     fontSize: '12px',
-                    flexShrink: 0
+                    flexShrink: 0,
                   }}
                 >
                   {getInitials(user.name)}
                 </div>
                 {!isCollapsed && (
                   <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    <span className="profile-text" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span
+                      className="profile-text"
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        color: 'var(--text-primary)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
                       {user.name}
                     </span>
-                    <span className="profile-text" style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span
+                      className="profile-text"
+                      style={{
+                        fontSize: '11px',
+                        color: 'var(--text-muted)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
                       {user.email}
                     </span>
                   </div>
                 )}
               </div>
-
               {!isCollapsed ? (
-                <button 
+                <button
                   onClick={handleSignOut}
                   title="Sign Out"
                   style={{
@@ -545,37 +456,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderRadius: '4px'
+                    borderRadius: '4px',
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = 'var(--loss)';
-                    e.currentTarget.style.background = 'rgba(251, 113, 133, 0.06)';
+                  onMouseEnter={(event) => {
+                    event.currentTarget.style.color = 'var(--loss)';
+                    event.currentTarget.style.background = 'rgba(251, 113, 133, 0.06)';
                   }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = 'var(--text-secondary)';
-                    e.currentTarget.style.background = 'transparent';
+                  onMouseLeave={(event) => {
+                    event.currentTarget.style.color = 'var(--text-secondary)';
+                    event.currentTarget.style.background = 'transparent';
                   }}
                 >
                   <LogOut size={14} />
                 </button>
-              ) : (
-                <button 
-                  onClick={handleSignOut}
-                  title="Sign Out"
-                  style={{
-                    display: 'none' // hidden or click avatar instead
-                  }}
-                />
-              )}
+              ) : null}
             </div>
             {!isCollapsed && tokenUsage && (
-              <div style={{
-                padding: '0 16px 12px 16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '4px',
-                flexShrink: 0
-              }}>
+              <div
+                style={{
+                  padding: '0 16px 12px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                  flexShrink: 0,
+                }}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-secondary)' }}>
                   <span>Weekly Usage</span>
                   <span style={{ fontFamily: 'monospace' }}>
@@ -583,12 +488,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </span>
                 </div>
                 <div style={{ width: '100%', height: '4px', background: 'rgba(255, 255, 255, 0.06)', borderRadius: '2px', overflow: 'hidden' }}>
-                  <div style={{
-                    width: `${Math.min(100, (tokenUsage.usage / tokenUsage.limit) * 100)}%`,
-                    height: '100%',
-                    background: tokenUsage.usage >= tokenUsage.limit ? 'var(--loss)' : 'var(--accent-cyan)',
-                    borderRadius: '2px'
-                  }}></div>
+                  <div
+                    style={{
+                      width: `${Math.min(100, (tokenUsage.usage / tokenUsage.limit) * 100)}%`,
+                      height: '100%',
+                      background: tokenUsage.usage >= tokenUsage.limit ? 'var(--loss)' : 'var(--accent-cyan)',
+                      borderRadius: '2px',
+                    }}
+                  />
                 </div>
                 <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>
                   {tokenUsage.usage.toLocaleString()} / {tokenUsage.limit.toLocaleString()} tokens
@@ -596,49 +503,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             )}
           </>
-        ) : (
-          <div style={{
-            padding: isCollapsed ? '12px 6px' : '14px 16px',
-            borderTop: '1px solid rgba(255, 255, 255, 0.04)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            flexShrink: 0
-          }}>
-            {!isCollapsed && (
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                Sign up to save your portfolio and unlock AI chat.
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => navigate('/login?redirect=/dashboard')}
-              className="primary"
-              style={{
-                fontSize: '12px',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px'
-              }}
-            >
-              Sign Up / Log In
-            </button>
-          </div>
-        )}
+        ) : null}
 
-        {/* Footer Settings & Clear */}
-        <div style={{
-          padding: isCollapsed ? '8px 4px' : '16px 20px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.04)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '10px',
-          flexShrink: 0
-        }}>
-          {onClearHistory && conversations.length > 0 && !isCollapsed && (
+        {onClearHistory && conversations.length > 0 && !isCollapsed && (
+          <div
+            style={{
+              padding: '16px 20px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.04)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              flexShrink: 0,
+            }}
+          >
             <button
               onClick={onClearHistory}
               style={{
@@ -652,69 +529,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '6px'
+                gap: '6px',
               }}
             >
               <Trash2 size={11} />
                Clear History
             </button>
-          )}
-          {(!isCollapsed ? (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '11px',
-              color: 'var(--text-secondary)',
-              padding: '2px 4px'
-            }}>
-              <Compass size={12} />
-               <span>Setup</span>
-              <a
-                href="/"
-                onClick={(e) => {
-                  e.preventDefault();
-                  void handleRerunSetup();
-                }}
-                style={{
-                  marginLeft: 'auto',
-                  color: 'var(--accent-cyan)',
-                  textDecoration: 'none',
-                  fontWeight: 600,
-                  pointerEvents: isResettingSetup ? 'none' : 'auto',
-                  opacity: isResettingSetup ? 0.65 : 1,
-                }}
-              >
-                {isResettingSetup ? 'Resetting...' : 'Re-run'}
-              </a>
-            </div>
-          ) : (
-            <button
-              title="Re-run Setup"
-              onClick={() => {
-                void handleRerunSetup();
-              }}
-              disabled={isResettingSetup}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-muted)',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '4px',
-                opacity: isResettingSetup ? 0.65 : 1,
-              }}
-            >
-              <Compass size={14} />
-            </button>
-          ))}
-        </div>
+          </div>
+        )}
       </aside>
 
-      {/* Resize Drag Handle */}
-      <div 
+      <div
         ref={dragRef}
         className={`drag-handle-vertical drag-handle-right ${isDragging ? 'dragging' : ''}`}
         onMouseDown={() => setIsDragging(true)}
@@ -722,4 +547,5 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </div>
   );
 };
+
 export default Sidebar;

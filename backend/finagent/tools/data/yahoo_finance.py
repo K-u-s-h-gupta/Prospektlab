@@ -60,6 +60,10 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from urllib.parse import quote as url_quote
+
+import httpx
 
 logger = logging.getLogger("finagent.yahoo")
 
@@ -80,10 +84,15 @@ _HISTORY_LOOKBACK_S = 365 * 24 * 60 * 60 * 10
 # Shared in-process cache + rate limiter for yfinance to avoid 429s
 # ---------------------------------------------------------------------------
 _FETCH_CACHE: dict[str, tuple[float, YahooQuote | None]] = {}
+_CHART_CACHE: dict[str, tuple[float, YahooQuote | None]] = {}
+_CHART_CACHE_TTL_SECONDS = 90
 _CACHE_TTL_SECONDS = 900  # default 15 minutes; callers can request fresher reads
 _LAST_YF_CALL_TIME: float = 0.0
 _MIN_YF_INTERVAL_SECONDS = _float_env("FINAGENT_YF_MIN_INTERVAL_S", 0.15)
+_MIN_CHART_INTERVAL_SECONDS = _float_env("FINAGENT_YAHOO_CHART_MIN_INTERVAL_S", 0.25)
+_LAST_CHART_CALL_TIME: float = 0.0
 _YF_RATE_LIMIT_LOCK = threading.Lock()
+_CHART_RATE_LIMIT_LOCK = threading.Lock()
 
 
 def _cached_yahoo_quote(ticker: str, *, ttl_s: float | None = None) -> YahooQuote | None:
@@ -204,6 +213,7 @@ def _fetch_yfinance_sync(ticker: str) -> YahooQuote | None:
             "book_value": "bookValue",
             "enterprise_value": "enterpriseValue",
             "market_cap": "marketCap",
+            "beta": "beta",
         }
         for key, yf_key in metric_map.items():
             v = _safe_float(info.get(yf_key))
@@ -295,6 +305,109 @@ def _fetch_yfinance_sync(ticker: str) -> YahooQuote | None:
     except Exception as exc:
         logger.warning("yfinance fetch failed for %s: %s", ticker, exc)
         return None
+
+
+def _cached_yahoo_chart(ticker: str, *, ttl_s: float | None = None) -> YahooQuote | None:
+    cached = _CHART_CACHE.get(ticker)
+    max_age = _CHART_CACHE_TTL_SECONDS if ttl_s is None else max(0.0, float(ttl_s))
+    if cached and (time.time() - cached[0]) < max_age:
+        return cached[1]
+    return None
+
+
+def _set_yahoo_chart_cache(ticker: str, result: YahooQuote | None) -> None:
+    _CHART_CACHE[ticker] = (time.time(), result)
+
+
+async def fetch_yahoo_chart(
+    ticker: str,
+    *,
+    range_: str = "5y",
+    interval: str = "1d",
+    timeout_s: float = 4.0,
+    cache_ttl_s: float | None = None,
+) -> YahooQuote | None:
+    """Fetch lightweight quote/history from Yahoo chart JSON without yfinance."""
+    ticker = (ticker or "").strip().upper()
+    if not ticker:
+        return None
+    cached = _cached_yahoo_chart(ticker, ttl_s=cache_ttl_s)
+    if cached is not None:
+        return cached
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{url_quote(ticker, safe='')}"
+        f"?range={url_quote(range_)}&interval={url_quote(interval)}&includePrePost=false"
+    )
+    headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+    result: YahooQuote | None = None
+    global _LAST_CHART_CALL_TIME
+    if _MIN_CHART_INTERVAL_SECONDS > 0:
+        with _CHART_RATE_LIMIT_LOCK:
+            elapsed = time.time() - _LAST_CHART_CALL_TIME
+            if elapsed < _MIN_CHART_INTERVAL_SECONDS:
+                time.sleep(_MIN_CHART_INTERVAL_SECONDS - elapsed)
+            _LAST_CHART_CALL_TIME = time.time()
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s, headers=headers, trust_env=_httpx_trust_env()) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                _set_yahoo_chart_cache(ticker, None)
+                return None
+            data = resp.json()
+        chart = (data.get("chart") or {}) if isinstance(data, dict) else {}
+        rows = chart.get("result") or []
+        if not rows:
+            _set_yahoo_chart_cache(ticker, None)
+            return None
+        row = rows[0] or {}
+        meta = row.get("meta") or {}
+        quote_rows = ((row.get("indicators") or {}).get("quote") or [{}])
+        quote_data = quote_rows[0] if quote_rows else {}
+        timestamps = row.get("timestamp") or []
+        closes = quote_data.get("close") or []
+        series_dates: list[str] = []
+        series_closes: list[float] = []
+        for idx, raw_close in enumerate(closes):
+            close = _safe_float(raw_close)
+            if close is None:
+                continue
+            ts = timestamps[idx] if idx < len(timestamps) else None
+            date_text = ""
+            if isinstance(ts, (int, float)):
+                try:
+                    date_text = datetime.fromtimestamp(int(ts), tz=timezone.utc).date().isoformat()
+                except Exception:
+                    date_text = ""
+            series_dates.append(date_text)
+            series_closes.append(close)
+        last_close = series_closes[-1] if series_closes else None
+        price = _safe_float(meta.get("regularMarketPrice")) or last_close
+        prev = _safe_float(meta.get("chartPreviousClose") or meta.get("previousClose"))
+        change_pct = ((price - prev) / prev * 100.0) if (price is not None and prev) else None
+        if not any([price, series_closes]):
+            _set_yahoo_chart_cache(ticker, None)
+            return None
+        result = YahooQuote(
+            ticker=ticker,
+            name=meta.get("longName") or meta.get("shortName") or meta.get("symbol"),
+            currency=meta.get("currency"),
+            exchange=meta.get("exchangeName") or meta.get("fullExchangeName"),
+            price=price,
+            previous_close=prev,
+            change_pct=change_pct,
+            market_cap=None,
+            fifty_two_week_high=_safe_float(meta.get("fiftyTwoWeekHigh")),
+            fifty_two_week_low=_safe_float(meta.get("fiftyTwoWeekLow")),
+            series_dates=series_dates,
+            series_closes=series_closes,
+            source_url=f"https://finance.yahoo.com/quote/{ticker}",
+        )
+        return result
+    except Exception as exc:
+        logger.debug("Yahoo chart fetch failed for %s: %s", ticker, exc)
+        return None
+    finally:
+        _set_yahoo_chart_cache(ticker, result)
 
 
 async def fetch_yahoo_quote(

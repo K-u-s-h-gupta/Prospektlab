@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" fill="none">
+  <rect width="1200" height="500" fill="#14233B"></rect>
+  <defs><linearGradient id="gb1" x1="0" y1="0" x2="1200" y2="500"><stop offset="0" stop-color="#167A53" stop-opacity=".15"></stop><stop offset="1" stop-color="#14233B"></stop></linearGradient></defs>
+  <rect width="1200" height="500" fill="url(#gb1)"></rect>
+  <g stroke="rgba(234,227,214,.05)" stroke-width="1">
+    <line x1="200" y1="0" x2="200" y2="500"></line><line x1="400" y1="0" x2="400" y2="500"></line><line x1="600" y1="0" x2="600" y2="500"></line><line x1="800" y1="0" x2="800" y2="500"></line><line x1="1000" y1="0" x2="1000" y2="500"></line>
+    <line x1="0" y1="125" x2="1200" y2="125"></line><line x1="0" y1="250" x2="1200" y2="250"></line><line x1="0" y1="375" x2="1200" y2="375"></line>
+  </g>
+  
+  <g transform="translate(450,60)">
+    <rect x="0" y="100" width="40" height="180" fill="rgba(22,122,83,.15)" stroke="rgba(22,122,83,.25)"></rect>
+    <rect x="60" y="60" width="40" height="220" fill="rgba(22,122,83,.2)" stroke="rgba(22,122,83,.3)"></rect>
+    <rect x="120" y="120" width="40" height="160" fill="rgba(22,122,83,.15)" stroke="rgba(22,122,83,.25)"></rect>
+    <rect x="180" y="40" width="40" height="240" fill="rgba(22,122,83,.25)" stroke="rgba(22,122,83,.35)"></rect>
+    <rect x="240" y="80" width="40" height="200" fill="rgba(22,122,83,.18)" stroke="rgba(22,122,83,.28)"></rect>
+    
+    <path d="M-20,100 L160,20 L340,100" stroke="rgba(234,227,214,.12)" stroke-width="2" fill="none"></path>
+  </g>
+  
+  <path d="M80,350 Q300,280 500,300 T900,200 1120,220" stroke="#167A53" stroke-width="2" fill="none" opacity=".6"></path>
+  <path d="M80,300 Q300,340 500,330 T900,360 1120,340" stroke="#C0402F" stroke-width="2" fill="none" opacity=".5" stroke-dasharray="6 4"></path>
+  
+  <text x="1050" y="210" fill="rgba(22,122,83,.5)" font-family="monospace" font-size="10">DEPOSIT</text>
+  <text x="1050" y="350" fill="rgba(192,64,47,.4)" font-family="monospace" font-size="10">LENDING</text>
+  <text x="600" y="460" text-anchor="middle" fill="rgba(234,227,214,.1)" font-family="monospace" font-size="11" letter-spacing="6">BANKING · NET INTEREST MARGIN · DEPOSITS</text>
+</svg>

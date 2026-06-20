@@ -306,7 +306,7 @@ def _reset_target_sequences(conn: psycopg.Connection, tables: Iterable[str]) -> 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Migrate IKG tables from Supabase to worker Postgres")
-    parser.add_argument("--env-file", default="finagent/.env", help="Local env file with source credentials")
+    parser.add_argument("--env-file", default="backend/finagent/.env", help="Local env file with source credentials")
     parser.add_argument("--source-url", default="", help="Supabase/Postgres source URL")
     parser.add_argument("--target-url", default="", help="Worker Postgres target URL")
     parser.add_argument("--bootstrap-sql", default="deployment/ikg_db_bootstrap.sql")

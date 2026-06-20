@@ -1,0 +1,36 @@
+{
+  "name": "prospektlab-app",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "generate:sitemap": "node ./scripts/generate-sitemap.mjs",
+    "dev": "node ./node_modules/vite/bin/vite.js --config ./vite.config.mjs",
+    "build": "npm run generate:sitemap && tsc && node ./node_modules/vite/bin/vite.js build --config ./vite.config.mjs",
+    "dev:sandbox": "powershell -ExecutionPolicy Bypass -File ./scripts/sandbox-dev.ps1",
+    "build:sandbox": "powershell -ExecutionPolicy Bypass -File ./scripts/sandbox-build.ps1",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "node ./node_modules/vite/bin/vite.js preview --config ./vite.config.mjs",
+    "export:ui": "node ./scripts/export-ui-artboards.mjs",
+    "handoff:figma": "node ./scripts/build-figma-handoff.mjs"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.3",
+    "chartjs-chart-treemap": "^3.1.0",
+    "lucide-react": "^0.379.0",
+    "react": "^18.3.1",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.23.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^7.11.0",
+    "@typescript-eslint/parser": "^7.11.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.11"
+  }
+}

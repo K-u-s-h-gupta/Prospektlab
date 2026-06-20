@@ -11,7 +11,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY deployment/requirements.ikg-worker.txt ./requirements.ikg-worker.txt
-COPY finagent ./finagent
+COPY backend/finagent ./finagent
 COPY deployment ./deployment
 
 RUN pip install --no-cache-dir -r requirements.ikg-worker.txt

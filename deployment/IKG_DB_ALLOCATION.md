@@ -6,7 +6,7 @@ This worker deployment separates app data from IKG data.
 
 - Supabase: app/auth/product data only.
 - Local Postgres container: durable IKG source of truth.
-- Memgraph container: graph-serving projection rebuilt from Postgres.
+- Memgraph container: optional graph-serving projection rebuilt from Postgres.
 - Qdrant container: vectors for `document_sections`.
 - Azure Blob Storage: raw PDFs, XML, ZIP, CSV, extracted long text.
 - Redis: Celery broker/result backend.
@@ -56,7 +56,7 @@ spl_strategies
 compliance_ledger
 ```
 
-Memgraph stores only a projection of `ikg_vertices`/`ikg_edges`. Qdrant stores
+Memgraph (when enabled) stores only a projection of `ikg_vertices`/`ikg_edges`. Qdrant stores
 only embeddings and payloads derived from `document_sections`.
 
 ## Local IKG Postgres
@@ -80,9 +80,18 @@ docker compose -f deployment/docker-compose.ikg.worker-only.yml up -d --build --
 From inside containers, use host `postgres`. From the VM shell, use
 `127.0.0.1:15432` unless you override `IKG_POSTGRES_BIND`.
 
-## Memgraph
+## Memgraph (Optional)
 
-Memgraph runs privately on the VM:
+Memgraph is disabled by default in current compose files to reduce storage and
+compute overhead. If you need Memgraph projection, set:
+
+```text
+FINAGENT_ENABLE_MEMGRAPH_PROJECTION=1
+```
+
+Then run a compose variant that includes Memgraph services.
+
+When enabled, Memgraph runs privately on the VM:
 
 ```text
 MEMGRAPH_URI=bolt://memgraph:7687
@@ -145,7 +154,7 @@ docker compose -f deployment/docker-compose.ikg.worker-only.yml exec -T schedule
 The Celery chain now runs:
 
 ```text
-scrapers -> director/KMP enrichment -> Postgres IKG build -> Memgraph projection -> Qdrant index
+scrapers -> director/KMP enrichment -> Postgres IKG build -> Qdrant index
 ```
 
 ## Backups

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any
@@ -36,7 +37,11 @@ async def parse_portfolio_document(data: bytes, filename: str, password: str = "
     # Try casparser first for CAS PDFs
     if source_ext == ".pdf":
         logger.info("Attempting casparser (CAS/eCAS) parsing for %s", filename)
-        extraction = cas_adapter(data, password=password)
+        # casparser.read_cas_pdf is a synchronous, CPU/IO-heavy call. Run it in a
+        # worker thread so it never blocks the event loop (which would stall every
+        # other in-flight request — quotes, analytics, news — and surface as
+        # client-side timeouts during an upload).
+        extraction = await asyncio.to_thread(cas_adapter, data, password)
         extraction.diagnostics["filename"] = filename
 
         # If casparser succeeded, return it

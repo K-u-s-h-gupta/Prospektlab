@@ -282,10 +282,24 @@ async def replace_active_positions(
         return []
 
     store = get_portfolio_store()
-    stored_rows = await store.replace_active_positions(tenant_id, prepared)
+    try:
+        stored_rows = await store.replace_active_positions(tenant_id, prepared)
+    except Exception as exc:  # noqa: BLE001 - mirror persistence is best-effort
+        logger.warning("Portfolio mirror write failed for tenant %s; falling back to in-memory holdings: %s", tenant_id, exc)
+        stored_rows = []
     if stored_rows:
         return _rows_to_position_mirrors(stored_rows)
-    return await load_active_positions(tenant_id)
+    # Mirror backend (Supabase) unreachable or returned nothing. The frontend's
+    # localStorage is the source of truth in open-access mode, so still return the
+    # holdings we just prepared instead of failing the whole upload with a 500/503.
+    try:
+        loaded = await load_active_positions(tenant_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Portfolio mirror read-back failed for tenant %s; using prepared rows: %s", tenant_id, exc)
+        loaded = []
+    if loaded:
+        return loaded
+    return _rows_to_position_mirrors(prepared)
 
 
 async def delete_positions(tenant_id: str) -> int:

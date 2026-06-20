@@ -10,7 +10,7 @@ $SSH_KEY       = "D:\PROSPEKTLAB\deployment\az_ssh_config\PROSPEKTLAB-IKG-RG-pro
 $REMOTE_DIR    = "/home/$AZURE_VM_USER/prospektlab"
 $LOCAL_ROOT    = "D:\PROSPEKTLAB"
 $COMPOSE_FILE  = "$REMOTE_DIR/deployment/docker-compose.ikg.yml"
-$ENV_FILE      = "$REMOTE_DIR/finagent/.env"
+$ENV_FILE      = "$REMOTE_DIR/backend/finagent/.env"
 
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Cyan
@@ -37,7 +37,7 @@ if ($wslAvail) {
     wsl rsync -az --progress `
         "--exclude=.git/" "--exclude=__pycache__/" "--exclude=*.pyc" `
         "--exclude=.venv/" "--exclude=node_modules/" `
-        "--exclude=Frontend/app/dist/" "--exclude=Frontend/app/node_modules/" `
+        "--exclude=frontend/dist/" "--exclude=frontend/node_modules/" `
         "--exclude=data/" "--exclude=pipeline_logs/" "--exclude=*.egg-info/" `
         -e "ssh -i $wslKey -o StrictHostKeyChecking=no -o ConnectTimeout=15" `
         "${wslSrc}/" "${SSH_TARGET}:${REMOTE_DIR}/"
@@ -47,7 +47,7 @@ if ($wslAvail) {
     rsync -az --progress `
         "--exclude=.git/" "--exclude=__pycache__/" "--exclude=*.pyc" `
         "--exclude=.venv/" "--exclude=node_modules/" `
-        "--exclude=Frontend/app/dist/" "--exclude=Frontend/app/node_modules/" `
+        "--exclude=frontend/dist/" "--exclude=frontend/node_modules/" `
         "--exclude=data/" "--exclude=pipeline_logs/" "--exclude=*.egg-info/" `
         -e "ssh -i `"$SSH_KEY`" -o StrictHostKeyChecking=no -o ConnectTimeout=15" `
         "${LOCAL_ROOT}/" "${SSH_TARGET}:${REMOTE_DIR}/"
@@ -61,7 +61,7 @@ if ($wslAvail) {
     tar -czf $TMP_TAR `
         --exclude=".git" --exclude="__pycache__" --exclude=".venv" `
         --exclude="data" --exclude="pipeline_logs" `
-        "--exclude=Frontend/app/node_modules" "--exclude=Frontend/app/dist" `
+        "--exclude=frontend/node_modules" "--exclude=frontend/dist" `
         finagent deployment pyproject.toml scripts
     Pop-Location
 
@@ -95,9 +95,9 @@ cd "$REMOTE_DIR"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo ""
-  echo "ERROR: finagent/.env not found at $ENV_FILE"
+  echo "ERROR: backend/finagent/.env not found at $ENV_FILE"
   echo "Upload it once with:"
-  echo "  scp finagent/.env ar2108925@4.213.112.2:$ENV_FILE"
+  echo "  scp backend/finagent/.env ar2108925@4.213.112.2:$ENV_FILE"
   echo ""
   exit 1
 fi
@@ -107,8 +107,8 @@ set -a
 source "$ENV_FILE"
 set +a
 
-echo "[REMOTE] Pulling infrastructure images (postgres, memgraph, redis, qdrant)..."
-docker compose -f "$COMPOSE_FILE" pull postgres memgraph redis qdrant 2>/dev/null || true
+echo "[REMOTE] Pulling infrastructure images (postgres, redis, qdrant)..."
+docker compose -f "$COMPOSE_FILE" pull postgres redis qdrant 2>/dev/null || true
 
 echo "[REMOTE] Stopping old containers..."
 docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null || true

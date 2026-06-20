@@ -22,6 +22,7 @@ from finagent.tools.data.india import (
     IndiaCompanySnapshot,
     SEBIFiling,
     fetch_india_snapshot,
+    fetch_nse_delivery_snapshot,
     fetch_nse_snapshot,
     fetch_sebi_filing,
     fetch_shareholding_pattern,
@@ -30,7 +31,7 @@ from finagent.tools.data.news_feed import NewsItem, fetch_news
 from finagent.tools.data.reddit import RedditPost, aggregate_sentiment, search_reddit
 from finagent.tools.data.stocktwits import StockTwit, StockTwitsSnapshot, fetch_stocktwits
 from finagent.tools.data.wikipedia import WikipediaSummary, fetch_wikipedia_summary
-from finagent.tools.data.yahoo_finance import YahooQuote, fetch_yahoo_quote
+from finagent.tools.data.yahoo_finance import YahooQuote, fetch_yahoo_chart, fetch_yahoo_quote
 FilingNarrative = SEBIFiling
 SECCompanySnapshot = IndiaCompanySnapshot
 SECTimeSeries = dict
@@ -59,6 +60,7 @@ __all__ = [
     "IndiaCompanySnapshot",
     "SEBIFiling",
     "fetch_india_snapshot",
+    "fetch_nse_delivery_snapshot",
     "fetch_nse_snapshot",
     "fetch_sebi_filing",
     "fetch_shareholding_pattern",
@@ -79,6 +81,7 @@ __all__ = [
     # Market data
     "YahooQuote",
     "fetch_yahoo_quote",
+    "fetch_yahoo_chart",
     # Filing compatibility aliases
     "FilingNarrative",
     "fetch_filing_narrative",

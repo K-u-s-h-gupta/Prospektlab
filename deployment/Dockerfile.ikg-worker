@@ -13,7 +13,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock* ./
-COPY finagent ./finagent
+COPY backend/finagent ./finagent
 COPY deployment ./deployment
 COPY scripts ./scripts
 COPY test_phases.py test_scrapers.py test_scrapers_full.py ./

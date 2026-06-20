@@ -8,8 +8,31 @@ import httpx
 from fastapi import HTTPException
 
 
-_SUPABASE_TIMEOUT = httpx.Timeout(12.0, connect=5.0)
+import time as _time
+
+_SUPABASE_TIMEOUT = httpx.Timeout(4.0, connect=2.0)
 logger = logging.getLogger("finagent.gateway.supabase_client")
+
+# Circuit breaker: when Supabase is unreachable, skip cloud calls for a cool-off
+# window so each request returns instantly to its local SQLite fallback instead of
+# waiting the full per-request timeout (which stacks up and stalls uploads).
+_SUPABASE_DOWN_UNTIL = 0.0
+_SUPABASE_COOLOFF_S = 60.0
+
+
+def _circuit_open() -> bool:
+    return _time.time() < _SUPABASE_DOWN_UNTIL
+
+
+def _trip_circuit() -> None:
+    global _SUPABASE_DOWN_UNTIL
+    _SUPABASE_DOWN_UNTIL = _time.time() + _SUPABASE_COOLOFF_S
+
+
+def _reset_circuit() -> None:
+    global _SUPABASE_DOWN_UNTIL
+    if _SUPABASE_DOWN_UNTIL:
+        _SUPABASE_DOWN_UNTIL = 0.0
 
 
 def _httpx_trust_env() -> bool:
@@ -435,15 +458,17 @@ async def store_pending_extraction(review_id: str, tenant_id: str, payload: dict
         "payload_json": json.dumps(payload, ensure_ascii=False),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    try:
-        async with _supabase_async_client() as client:
-            headers = get_headers()
-            headers["Prefer"] = "resolution=merge-duplicates"
-            res = await client.post(url, json=payload_row, headers=headers)
-            if res.is_success:
-                return True
-    except Exception:
-        pass
+    if not _circuit_open():
+        try:
+            async with _supabase_async_client() as client:
+                headers = get_headers()
+                headers["Prefer"] = "resolution=merge-duplicates"
+                res = await client.post(url, json=payload_row, headers=headers)
+                if res.is_success:
+                    _reset_circuit()
+                    return True
+        except Exception:
+            _trip_circuit()
     # Fallback to local SQLite
     from finagent.gateway.state_store import store_pending_extraction as local_store
     local_store(review_id, tenant_id, payload)
@@ -453,17 +478,19 @@ async def store_pending_extraction(review_id: str, tenant_id: str, payload: dict
 async def get_pending_extraction(review_id: str) -> dict | None:
     """Get pending extraction from Supabase (or local SQLite fallback)."""
     url = f"{_get_supabase_url()}/rest/v1/pending_extractions"
-    try:
-        async with _supabase_async_client() as client:
-            headers = get_headers()
-            params = {"review_id": f"eq.{review_id}", "select": "tenant_id,payload_json"}
-            res = await client.get(url, params=params, headers=headers)
-            if res.is_success:
-                data = res.json()
-                if data and len(data) > 0:
-                    return {"tenant_id": data[0]["tenant_id"], "extraction": _parse_payload_json(data[0]["payload_json"])}
-    except Exception:
-        pass
+    if not _circuit_open():
+        try:
+            async with _supabase_async_client() as client:
+                headers = get_headers()
+                params = {"review_id": f"eq.{review_id}", "select": "tenant_id,payload_json"}
+                res = await client.get(url, params=params, headers=headers)
+                if res.is_success:
+                    _reset_circuit()
+                    data = res.json()
+                    if data and len(data) > 0:
+                        return {"tenant_id": data[0]["tenant_id"], "extraction": _parse_payload_json(data[0]["payload_json"])}
+        except Exception:
+            _trip_circuit()
     # Fallback to local SQLite
     from finagent.gateway.state_store import get_pending_extraction as local_get
     return local_get(review_id)

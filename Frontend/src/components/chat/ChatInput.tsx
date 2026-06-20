@@ -71,11 +71,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
+        gap: '8px',
         background: 'rgba(15, 23, 42, 0.45)',
         border: `1px solid ${isPulsing ? 'rgba(56, 189, 248, 0.6)' : 'rgba(255, 255, 255, 0.08)'}`,
-        borderRadius: '12px',
-        padding: '12px',
+        borderRadius: '10px',
+        padding: '10px',
         width: '100%',
         boxShadow: isPulsing
           ? '0 0 0 3px rgba(56, 189, 248, 0.18), 0 4px 24px rgba(0, 0, 0, 0.2)'
@@ -121,17 +121,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         placeholder="Ask Arthik anything — a ticker, your portfolio, or the tape..."
         style={{
           width: '100%',
-          minHeight: '72px',
-          maxHeight: '180px',
+          minHeight: '40px',
+          maxHeight: '120px',
           background: 'transparent',
           border: 'none',
           color: 'var(--text-primary)',
-          fontSize: '13.5px',
+          fontSize: '13px',
           resize: 'none',
-          padding: '4px 2px',
+          padding: '2px 2px',
           outline: 'none',
           fontFamily: 'inherit',
-          lineHeight: '1.6',
+          lineHeight: '1.5',
           letterSpacing: 0,
         }}
       />
@@ -143,7 +143,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-          paddingTop: '10px',
+          paddingTop: '8px',
         }}
       >
         {/* Depth Mode Selector Chips */}
@@ -160,9 +160,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               backgroundColor: depth === 'standard' ? 'var(--neutral-dim)' : 'transparent',
               borderColor: depth === 'standard' ? 'var(--accent-indigo)' : 'transparent',
               color: depth === 'standard' ? 'var(--accent-indigo)' : 'var(--text-secondary)',
-              padding: '6px 10px',
+              padding: '5px 9px',
               borderRadius: '6px',
-              fontSize: '11px',
+              fontSize: '10.5px',
               fontWeight: 600,
               border: '1px solid',
               cursor: 'pointer',
@@ -170,7 +170,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               lineHeight: 1,
             }}
           >
-            <ShieldCheck size={11} />
+            <ShieldCheck size={10} />
             Standard
           </button>
 
@@ -186,9 +186,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               backgroundColor: depth === 'deep' ? 'var(--profit-dim)' : 'transparent',
               borderColor: depth === 'deep' ? 'var(--profit)' : 'transparent',
               color: depth === 'deep' ? 'var(--profit)' : 'var(--text-secondary)',
-              padding: '6px 10px',
+              padding: '5px 9px',
               borderRadius: '6px',
-              fontSize: '11px',
+              fontSize: '10.5px',
               fontWeight: 600,
               border: '1px solid',
               cursor: 'pointer',
@@ -196,7 +196,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               lineHeight: 1,
             }}
           >
-            <Sparkles size={11} />
+            <Sparkles size={10} />
             Deep
           </button>
         </div>
@@ -209,9 +209,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               background: 'rgba(251, 113, 133, 0.1)',
               color: 'var(--loss)',
               border: '1px solid rgba(251, 113, 133, 0.3)',
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
+              width: '28px',
+              height: '28px',
+              borderRadius: '7px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -230,9 +230,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               background: text.trim() && !disabled ? 'var(--gradient-brand)' : 'rgba(255, 255, 255, 0.03)',
               color: text.trim() && !disabled ? '#030712' : 'var(--text-muted)',
               border: 'none',
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
+              width: '28px',
+              height: '28px',
+              borderRadius: '7px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -241,7 +241,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               transition: 'all 0.25s ease',
             }}
           >
-            <Send size={13} color={text.trim() && !disabled ? '#030712' : 'var(--text-muted)'} />
+            <Send size={12} color={text.trim() && !disabled ? '#030712' : 'var(--text-muted)'} />
           </button>
         )}
       </div>

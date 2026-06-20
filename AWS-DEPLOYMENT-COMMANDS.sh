@@ -12,6 +12,8 @@ export ECS_SERVICE=prospektlab-backend
 export ECR_REPO=prospektlab-backend
 export BACKEND_URL=https://api.prospektlab.com
 export AMPLIFY_DOMAIN=https://app.prospektlab.com
+export FRONTEND_PRIMARY_URL=https://prospektlab.com
+export CORS_ORIGINS="${FRONTEND_PRIMARY_URL},https://www.prospektlab.com,${AMPLIFY_DOMAIN}"
 export OPENAI_API_KEY=your-openai-key-here
 
 # Verify
@@ -60,7 +62,9 @@ aws ecs describe-task-definition \
 # Create new task definition (using jq)
 jq '.containerDefinitions[0].image = "'$ECR_REPO_URI':latest" |
 	.containerDefinitions[0].environment += [
-	  {name: "CORS_ORIGINS", value: "'$AMPLIFY_DOMAIN'"},
+	  {name: "CORS_ORIGINS", value: "'$CORS_ORIGINS'"},
+	  {name: "FINAGENT_FRONTEND_URL", value: "'$FRONTEND_PRIMARY_URL'"},
+	  {name: "FRONTEND_URL", value: "'$FRONTEND_PRIMARY_URL'"},
 	  {name: "MCP_NSE_INDIA_URL", value: "http://mcp-nse-service:8001/mcp"},
 	  {name: "MCP_FUNDAMENTALS_URL", value: "http://mcp-fundamentals-service:8002/mcp"},
 	  {name: "MCP_RESEARCH_URL", value: "http://mcp-research-service:8003/mcp"},

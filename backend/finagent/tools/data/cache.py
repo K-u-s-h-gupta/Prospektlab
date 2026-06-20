@@ -25,6 +25,7 @@ _TTL: dict[str, tuple[int, int]] = {
     "fundamentals": (300,   3_600),   # 5 min / 1 hr
     "shareholding": (86_400, 86_400), # 24 hr always (quarterly update)
     "news":         (180,   900),     # 3 min / 15 min
+    "delivery":     (900,   3_600),   # NSE delivery archives
     "wikipedia":    (21_600, 21_600), # 6 hr always
     "sentiment":    (300,   1_800),   # 5 min / 30 min
     "fx":           (120,   3_600),   # 2 min / 1 hr

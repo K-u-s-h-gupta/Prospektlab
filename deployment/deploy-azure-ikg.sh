@@ -48,8 +48,8 @@ rsync -az --progress \
   --exclude '*.pyc' \
   --exclude '.venv/' \
   --exclude 'node_modules/' \
-  --exclude 'Frontend/app/dist/' \
-  --exclude 'Frontend/app/node_modules/' \
+  --exclude 'frontend/dist/' \
+  --exclude 'frontend/node_modules/' \
   --exclude 'data/' \
   --exclude 'pipeline_logs/' \
   --exclude '*.egg-info/' \
@@ -66,16 +66,16 @@ $SSH_CMD bash -s << 'REMOTE'
 set -e
 REMOTE_DIR="/home/$(whoami)/prospektlab"
 COMPOSE_FILE="${REMOTE_DIR}/deployment/docker-compose.ikg.yml"
-ENV_FILE="${REMOTE_DIR}/finagent/.env"
+ENV_FILE="${REMOTE_DIR}/backend/finagent/.env"
 
 echo "[REMOTE] Working dir: ${REMOTE_DIR}"
 cd "${REMOTE_DIR}"
 
 # Ensure .env is present
 if [ ! -f "${ENV_FILE}" ]; then
-  echo "[REMOTE] ERROR: finagent/.env not found at ${ENV_FILE}"
+  echo "[REMOTE] ERROR: backend/finagent/.env not found at ${ENV_FILE}"
   echo "[REMOTE] Copy your .env file to the VM first:"
-  echo "    scp finagent/.env ${AZURE_VM_USER}@4.213.112.2:${REMOTE_DIR}/finagent/.env"
+  echo "    scp backend/finagent/.env ${AZURE_VM_USER}@4.213.112.2:${REMOTE_DIR}/backend/finagent/.env"
   exit 1
 fi
 
@@ -84,7 +84,7 @@ export $(grep -E '^MEMORY_DATABASE_URL=' "${ENV_FILE}" | head -1)
 export IKG_POSTGRES_PASSWORD="${IKG_POSTGRES_PASSWORD:-ikg_password_change_me}"
 
 echo "[REMOTE] Pulling base images..."
-docker compose -f "${COMPOSE_FILE}" pull postgres memgraph redis qdrant 2>/dev/null || true
+docker compose -f "${COMPOSE_FILE}" pull postgres redis qdrant 2>/dev/null || true
 
 echo "[REMOTE] Stopping old containers..."
 docker compose -f "${COMPOSE_FILE}" down --remove-orphans 2>/dev/null || true

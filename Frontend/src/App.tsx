@@ -1,79 +1,28 @@
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import LandingPage from './pages/LandingPage';
-import Pricing from './pages/Pricing';
-import Testimonials from './pages/Testimonials';
-import Features from './pages/Features';
-import ContactUs from './pages/ContactUs';
+import { HashRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import GatewayPage from './pages/GatewayPage';
 import ManualEntry from './pages/ManualEntry';
 import UploadPage from './pages/UploadPage';
 import WatchlistStep from './pages/WatchlistStep';
-import { Dashboard } from './pages/Dashboard';
-import { Login } from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import DashboardEarningsPage from './pages/DashboardEarningsPage';
+import DashboardGovernancePage from './pages/DashboardGovernancePage';
 import InsightsStudio from './pages/InsightsStudio';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
 import { trackPageView } from './telemetry';
 import CommandPalette from './components/common/CommandPalette';
 
-// Protected Route for authenticated users
-const ProtectedRoute: React.FC<{
-  children: React.ReactElement;
-  requireOnboarded?: boolean;
-  /** Skip all onboarding checks — just require the user to be authenticated */
-  authOnly?: boolean;
-}> = ({ children, requireOnboarded = false, authOnly = false }) => {
-  const { isAuthenticated, isLoading, onboarded } = useAuth();
+type DashboardTabParam = 'overview' | 'portfolio' | 'watchlist' | 'screener';
 
-  if (isLoading) {
-    return (
-      <div style={{ display: 'flex', width: '100%', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-deep)' }}>
-        <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Loading workspace...</div>
-      </div>
-    );
-  }
+const DashboardRoute: React.FC = () => {
+  const { featureTab } = useParams<{ featureTab?: string }>();
+  const normalized = String(featureTab || '').toLowerCase();
+  const tab: DashboardTabParam =
+    normalized === 'portfolio' || normalized === 'watchlist' || normalized === 'screener'
+      ? (normalized as DashboardTabParam)
+      : 'overview';
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // authOnly routes (e.g. Insights Studio) skip all portfolio-onboarding checks
-  if (authOnly) {
-    return children;
-  }
-
-  if (requireOnboarded && !onboarded) {
-    return <Navigate to="/get-started" replace />;
-  }
-
-  if (!requireOnboarded && onboarded) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  return children;
-};
-
-// Route for anonymous users only (login/signup). If a redirect is provided in
-// the URL query string, authenticated users are sent there instead of the default.
-const PublicRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { isAuthenticated, isLoading, onboarded } = useAuth();
-  const location = useLocation();
-  const redirectTo = new URLSearchParams(location.search).get('redirect') || '';
-
-  if (isLoading) {
-    return (
-      <div style={{ display: 'flex', width: '100%', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-deep)' }}>
-        <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Loading workspace...</div>
-      </div>
-    );
-  }
-
-  if (isAuthenticated) {
-    const target = redirectTo || (onboarded ? "/dashboard" : "/get-started");
-    return <Navigate to={target} replace />;
-  }
-
-  return children;
+  return <Dashboard initialFeatureTab={tab} />;
 };
 
 const TelemetryRouteTracker: React.FC = () => {
@@ -95,72 +44,29 @@ export const AppContent: React.FC = () => {
       <TelemetryRouteTracker />
       <CommandPalette />
       <Routes>
-        {/* Marketing Pages */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/pricing" element={<Pricing />} />
-        <Route path="/testimonials" element={<Testimonials />} />
-        <Route path="/features" element={<Features />} />
-        <Route path="/contact" element={<ContactUs />} />
-        
-        {/* Onboarding Gateway / Manual Entry — public, no auth required */}
+        <Route path="/" element={<Navigate to="/dashboard/overview" replace />} />
+        <Route path="/pricing" element={<Navigate to="/dashboard/overview" replace />} />
+        <Route path="/testimonials" element={<Navigate to="/dashboard/overview" replace />} />
+        <Route path="/features" element={<Navigate to="/dashboard/overview" replace />} />
+        <Route path="/contact" element={<Navigate to="/dashboard/overview" replace />} />
+
         <Route path="/get-started" element={<GatewayPage />} />
         <Route path="/onboarding/manual" element={<ManualEntry />} />
-
-        {/* Upload flow — requires auth (documents are processed server-side) */}
-        <Route 
-          path="/onboarding/upload" 
-          element={
-            <ProtectedRoute>
-              <UploadPage />
-            </ProtectedRoute>
-          } 
-        />
-
-        <Route 
-          path="/onboarding/watchlist" 
-          element={
-            <ProtectedRoute>
-              <WatchlistStep />
-            </ProtectedRoute>
-          } 
-        />
-
-        {/* Legacy onboarding redirect */}
+        <Route path="/onboarding/upload" element={<UploadPage />} />
+        <Route path="/onboarding/watchlist" element={<WatchlistStep />} />
         <Route path="/onboarding" element={<Navigate to="/get-started" replace />} />
 
-        {/* Auth Pages */}
-        <Route 
-          path="/login" 
-          element={
-            <PublicRoute>
-              <Login initialTab="login" />
-            </PublicRoute>
-          } 
-        />
+        {/* Auth paths are disabled in open-access mode. */}
+        <Route path="/login" element={<Navigate to="/dashboard/overview" replace />} />
+        <Route path="/signup" element={<Navigate to="/dashboard/overview" replace />} />
 
-        <Route 
-          path="/signup" 
-          element={
-            <PublicRoute>
-              <Login initialTab="signup" />
-            </PublicRoute>
-          } 
-        />
-        
-        {/* Dashboard — accessible to everyone. Read-only mode when unauthenticated. */}
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Navigate to="/dashboard/overview" replace />} />
+        <Route path="/dashboard/:featureTab" element={<DashboardRoute />} />
+        <Route path="/dashboard/earnings" element={<DashboardEarningsPage />} />
+        <Route path="/dashboard/governance" element={<DashboardGovernancePage />} />
+        <Route path="/insights-studio" element={<InsightsStudio />} />
 
-        <Route
-          path="/insights-studio"
-          element={
-            <ProtectedRoute authOnly>
-              <InsightsStudio />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard/overview" replace />} />
       </Routes>
     </HashRouter>
   );

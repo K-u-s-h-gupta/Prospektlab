@@ -19,6 +19,12 @@ const DIRECT_ENTRY_HASH_ROUTES = new Set([
   '/onboarding/upload',
   '/onboarding/watchlist',
   '/dashboard',
+  '/dashboard/overview',
+  '/dashboard/portfolio',
+  '/dashboard/watchlist',
+  '/dashboard/screener',
+  '/dashboard/earnings',
+  '/dashboard/governance',
   '/insights-studio',
 ])
 

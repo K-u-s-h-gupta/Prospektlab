@@ -74,8 +74,57 @@ outreach/leads*.csv
 # Frontend (Vite/React)
 frontend/node_modules/
 frontend/dist/
+frontend/dist-sandbox/
+frontend/app/dist_unzipped/
 frontend/.vite/
 frontend/.env.local
 frontend/.env.*.local
 frontend/*.log
 frontend/npm-debug.log*
+
+# Node deps (any nesting)
+node_modules/
+
+# Secrets / credential leakage (do not commit, rotate then keep local-only)
+deployment/azure_vm_update_openai_key.generated.sh
+.azurecli/
+
+# Local agent / tool config (personal, not project-tracked)
+.claude/
+.greptile/
+.mdfiles/
+
+# Generated runtime data / logs / caches
+cache/
+audit_logs/
+backend/audit_logs/
+pipeline_logs/
+backend/pipeline_logs/
+backend/temp_puppet/
+
+# Nested git-like publish scratch dirs
+_publish_git/
+_publish_meta/
+
+# One-off debug / diagnostic scripts (scratch, not part of app)
+.tmp_*
+tmp_run.pyc.*
+mode_analysis_diagnostic.py
+mode_fix_verification.py
+mode_query_test.py
+backend/build_hub_v3.py
+backend/check_html.py
+backend/check_imgs.py
+backend/check_imgs2.py
+backend/current_hub.html
+backend/diag_body.py
+backend/diag_hub.py
+backend/diag_images.py
+backend/diag_images2.py
+backend/diag_js.py
+backend/diag_structure.py
+backend/save_hub.py
+backend/test.js
+backend/test_vite.py
+backend/verify_backend.py
+backend/verify_vite.py

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" fill="none">
+  <rect width="1200" height="500" fill="#14233B"></rect>
+  <defs><linearGradient id="ga1" x1="0" y1="500" x2="0" y2="0"><stop offset="0" stop-color="#0A5C45" stop-opacity=".2"></stop><stop offset="1" stop-color="#14233B"></stop></linearGradient></defs>
+  <rect width="1200" height="500" fill="url(#ga1)"></rect>
+  <g stroke="rgba(234,227,214,.04)" stroke-width="1"><line x1="0" y1="350" x2="1200" y2="350"></line><line x1="0" y1="250" x2="1200" y2="250"></line></g>
+  
+  <path d="M0,400 Q300,380 600,390 T1200,370" stroke="rgba(234,227,214,.1)" stroke-width="60" fill="none"></path>
+  <path d="M0,400 Q300,380 600,390 T1200,370" stroke="rgba(234,227,214,.06)" stroke-width="2" fill="none" stroke-dasharray="20 15"></path>
+  
+  <g transform="translate(500,280)">
+    <rect x="0" y="30" width="200" height="60" rx="12" fill="rgba(234,227,214,.08)" stroke="rgba(234,227,214,.12)"></rect>
+    <rect x="30" y="0" width="140" height="40" rx="8" fill="rgba(234,227,214,.06)" stroke="rgba(234,227,214,.1)"></rect>
+    <circle cx="50" cy="95" r="18" fill="rgba(234,227,214,.05)" stroke="rgba(234,227,214,.12)"></circle>
+    <circle cx="150" cy="95" r="18" fill="rgba(234,227,214,.05)" stroke="rgba(234,227,214,.12)"></circle>
+    <rect x="45" y="10" width="45" height="25" rx="4" fill="rgba(15,122,92,.15)"></rect>
+    <rect x="110" y="10" width="45" height="25" rx="4" fill="rgba(15,122,92,.12)"></rect>
+  </g>
+  
+  <g transform="translate(100,140)">
+    <rect x="0" y="140" width="30" height="60" fill="rgba(22,122,83,.15)"></rect>
+    <rect x="45" y="120" width="30" height="80" fill="rgba(22,122,83,.2)"></rect>
+    <rect x="90" y="100" width="30" height="100" fill="rgba(22,122,83,.25)"></rect>
+    <rect x="135" y="70" width="30" height="130" fill="rgba(22,122,83,.3)"></rect>
+    <rect x="180" y="50" width="30" height="150" fill="rgba(22,122,83,.35)"></rect>
+  </g>
+  
+  <path d="M800,250 L850,180 L900,250" stroke="rgba(234,227,214,.08)" stroke-width="1.5" fill="rgba(15,122,92,.06)"></path>
+  <path d="M880,250 L950,160 L1020,250" stroke="rgba(234,227,214,.08)" stroke-width="1.5" fill="rgba(15,122,92,.04)"></path>
+  <text x="600" y="460" text-anchor="middle" fill="rgba(234,227,214,.1)" font-family="monospace" font-size="11" letter-spacing="6">AUTO · TWO-WHEELERS · RURAL RECOVERY</text>
+</svg>

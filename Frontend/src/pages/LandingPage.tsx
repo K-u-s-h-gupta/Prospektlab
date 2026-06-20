@@ -202,7 +202,7 @@ export const LandingPage: React.FC = () => {
 
   const ctaTarget = isAuthenticated && onboarded ? '/dashboard' : '/get-started';
   const handleCTA = () => navigate(ctaTarget);
-  const handleAuthAction = () => navigate(isAuthenticated ? '/dashboard' : '/login');
+  const handleAuthAction = () => navigate('/dashboard');
 
   const toast = ACTIVITY_FEED[toastIdx];
 
@@ -333,7 +333,7 @@ export const LandingPage: React.FC = () => {
             <button onClick={handleAuthAction} className="d-none-m" style={{ background:'none', border:'1px solid var(--border-subtle)', color:'var(--text-primary)', padding:'7px 16px', borderRadius:8, fontSize:13, cursor:'pointer', transition:'all 0.15s' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-cyan)'; e.currentTarget.style.color = 'var(--accent-cyan)'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-primary)'; }}>
-              {isAuthenticated ? 'Dashboard' : 'Sign In'}
+              Dashboard
             </button>
             <button onClick={handleCTA} className="cta-shimmer" style={{ color:'#0f172a', border:'none', padding:'8px 18px', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer' }}>
               Start Free →
@@ -847,3 +847,4 @@ export const LandingPage: React.FC = () => {
 };
 
 export default LandingPage;
+

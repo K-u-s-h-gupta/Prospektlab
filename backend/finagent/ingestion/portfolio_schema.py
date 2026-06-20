@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from typing import Literal
@@ -61,7 +61,7 @@ class PortfolioExtractionSchema(BaseModel):
 
     Contains flexible dict bags (diagnostics, investor) for runtime use by
     document pipelines and error reporting. Never passed directly to OpenAI
-    structured outputs — use PortfolioExtractionLLMResponse for that.
+    structured outputs â€” use PortfolioExtractionLLMResponse for that.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -85,7 +85,7 @@ class PortfolioExtractionLLMResponse(StrictBaseModel):
 
     This model is safe to pass as `response_format=` to the OpenAI beta parse
     endpoint. It deliberately excludes the dynamic dict fields (diagnostics,
-    investor) — those are populated in Python code after the LLM call.
+    investor) â€” those are populated in Python code after the LLM call.
     """
 
     status: ExtractionStatus = "REVIEW_REQUIRED"
@@ -106,6 +106,7 @@ class PortfolioExtractionReview(StrictBaseModel):
 
 class PortfolioExtractionConfirmRequest(StrictBaseModel):
     review_id: str | None = None
+    review_token: str | None = Field(default=None, max_length=2048)
     positions: list[PortfolioPositionSchema] = Field(default_factory=list, max_length=1000)
     source_type: str = "review"
 
@@ -118,6 +119,18 @@ class PortfolioExtractionConfirmRequest(StrictBaseModel):
         if not re.fullmatch(r"[a-f0-9]{12,64}", review_id):
             raise ValueError("Invalid review_id format")
         return review_id
+
+    @field_validator("review_token")
+    @classmethod
+    def _review_token(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        token = value.strip()
+        if not token:
+            return None
+        if not re.fullmatch(r"[A-Za-z0-9._-]{16,2048}", token):
+            raise ValueError("Invalid review_token format")
+        return token
 
 
 def ensure_openai_strict_schema(model: type[BaseModel]) -> dict:
@@ -146,4 +159,5 @@ def ensure_openai_strict_schema(model: type[BaseModel]) -> dict:
 
     _check(schema)
     return schema
+
 

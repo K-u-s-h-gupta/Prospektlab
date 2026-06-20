@@ -8,65 +8,9 @@ import Onboarding from './pages/Onboarding';
 import ContactUs from './pages/ContactUs';
 import { Dashboard } from './pages/Dashboard';
 import { ControlTowerPage } from './pages/ControlTower';
-import { Login } from './pages/Login';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
 import { hydrateAuthToken } from './api/client';
 import { trackPageView } from './telemetry';
-
-// Protected Route for authenticated users
-const ProtectedRoute: React.FC<{
-  children: React.ReactElement;
-  requireOnboarded?: boolean;
-  onboardingOnly?: boolean;
-}> = ({
-  children,
-  requireOnboarded = false,
-  onboardingOnly = false,
-}) => {
-  const { isAuthenticated, isLoading, onboarded } = useAuth();
-  const location = useLocation();
-
-  if (isLoading) {
-    return (
-      <div style={{ display: 'flex', width: '100%', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-deep)' }}>
-        <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Loading workspace...</div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace state={{ next: location.pathname }} />;
-  }
-
-  if (requireOnboarded && !onboarded) {
-    return <Navigate to="/onboarding" replace />;
-  }
-
-  if (onboardingOnly && onboarded) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  return children;
-};
-
-// Route for anonymous users only
-const PublicRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { isAuthenticated, isLoading, onboarded } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div style={{ display: 'flex', width: '100%', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-deep)' }}>
-        <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Loading workspace...</div>
-      </div>
-    );
-  }
-
-  if (isAuthenticated) {
-    return <Navigate to={onboarded ? "/dashboard" : "/onboarding"} replace />;
-  }
-
-  return children;
-};
 
 const TelemetryRouteTracker: React.FC = () => {
   const location = useLocation();
@@ -135,53 +79,15 @@ export const AppContent: React.FC = () => {
         <Route path="/testimonials" element={<Testimonials />} />
         <Route path="/features" element={<Features />} />
         <Route path="/contact" element={<ContactUs />} />
-        
-        {/* Auth Pages */}
-        <Route 
-          path="/login" 
-          element={
-            <PublicRoute>
-              <Login initialTab="login" />
-            </PublicRoute>
-          } 
-        />
 
-        <Route 
-          path="/signup" 
-          element={
-            <PublicRoute>
-              <Login initialTab="signup" />
-            </PublicRoute>
-          } 
-        />
-        
+        {/* Auth routes disabled in open-access mode */}
+        <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/signup" element={<Navigate to="/dashboard" replace />} />
+
         {/* App Pages */}
-        <Route 
-          path="/onboarding" 
-          element={
-            <ProtectedRoute onboardingOnly>
-              <Onboarding />
-            </ProtectedRoute>
-          } 
-        />
-        
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute requireOnboarded>
-              <Dashboard />
-            </ProtectedRoute>
-          } 
-        />
-
-        <Route
-          path="/ops"
-          element={
-            <ProtectedRoute>
-              <ControlTowerPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/ops" element={<ControlTowerPage />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

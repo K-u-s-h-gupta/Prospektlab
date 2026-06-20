@@ -11,10 +11,12 @@ All results are cached via finagent.tools.data.cache with IST-aware TTLs.
 from __future__ import annotations
 
 import asyncio
+import html as html_lib
 import logging
 import os
 import re
 import time
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -49,6 +51,70 @@ def _float_env(name: str, default: float) -> float:
     return value if value > 0 else default
 
 
+def _int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+_MC_HISTORY_COUNTBACK = max(90, _int_env("FINAGENT_MC_HISTORY_COUNTBACK", 320))
+
+
+_SYMBOL_ALIASES = {
+    "ZOMATO": "ETERNAL",
+}
+
+
+def _canonical_symbol(symbol: str) -> str:
+    value = (symbol or "").strip().upper()
+    return _SYMBOL_ALIASES.get(value, value)
+
+
+# Known Moneycontrol identifiers used by their chart endpoint.
+# Unknown symbols fall back to the raw NSE ticker.
+_MC_SYMBOL_MAP: dict[str, str] = {
+    "RELIANCE": "RI",
+    "TCS": "TCS",
+    "INFY": "IT",
+    "HDFCBANK": "HDF01",
+    "ICICIBANK": "ICICIBANK",
+    "SBIN": "SBI",
+    "ITC": "ITC",
+    "LT": "LT",
+    "AXISBANK": "AXSB",
+    "KOTAKBANK": "KTKM",
+    "BHARTIARTL": "BHA",
+    "HINDUNILVR": "HLL",
+    "WIPRO": "WIP",
+    "HCLTECH": "HCL04",
+    "TECHM": "TECHM",
+    "TATAMOTORS": "TATAMOTORS",
+    "TATASTEEL": "TIS",
+    "POWERGRID": "PGRI",
+    "NTPC": "NTPC",
+    "ONGC": "ONGC",
+    "SUNPHARMA": "SUNPHARMA",
+    "ASIANPAINT": "ASP",
+    "NESTLEIND": "NEST",
+    "ULTRACEMCO": "UTI",
+    "BAJFINANCE": "BAF",
+    "BAJAJFINSV": "BAF01",
+    "INDUSINDBK": "INDBK",
+    "M&M": "MAH",
+    "MARUTI": "MAR02",
+    "ADANIENT": "ADE",
+    "JSWSTEEL": "JSW",
+    "GRASIM": "GRI",
+    "ZOMATO": "ZOMATO",
+    "ETERNAL": "ETERNAL",
+}
+
+
 _TIMEOUT = httpx.Timeout(
     _float_env("FINAGENT_MARKET_DATA_TIMEOUT_S", 4.0),
     connect=_float_env("FINAGENT_MARKET_DATA_CONNECT_TIMEOUT_S", 1.5),
@@ -70,12 +136,14 @@ _TRANSIENT_NETWORK_ERRORS = (
 )
 
 
-def _provider_available(provider: str) -> bool:
-    return time.monotonic() >= _PROVIDER_BACKOFF.get(provider, 0.0)
+def _provider_available(provider: str, symbol: str) -> bool:
+    key = f"{provider}:{(symbol or '').upper()}"
+    return time.monotonic() >= _PROVIDER_BACKOFF.get(key, 0.0)
 
 
 def _mark_provider_miss(provider: str, symbol: str, exc: Exception) -> None:
-    _PROVIDER_BACKOFF[provider] = time.monotonic() + _PROVIDER_BACKOFF_SECONDS
+    key = f"{provider}:{(symbol or '').upper()}"
+    _PROVIDER_BACKOFF[key] = time.monotonic() + _PROVIDER_BACKOFF_SECONDS
     logger.debug(
         "%s temporarily unavailable for %s; suppressing retries for %.0fs: %s",
         provider,
@@ -92,6 +160,7 @@ class IndiaCompanySnapshot:
     """Unified India company data from Moneycontrol / NSE / BSE."""
     symbol: str                          # NSE symbol e.g. "RELIANCE"
     isin: str = ""                       # e.g. "INE002A01018"
+    cin: str = ""                        # e.g. "L17110MH1973PLC019786"
     company_name: str = ""
     exchange: str = "NSE"                # "NSE" or "BSE"
     sector: str = ""
@@ -118,9 +187,18 @@ class IndiaCompanySnapshot:
     dii_holding: float | None = None        # %
     public_holding: float | None = None     # %
     promoter_pledge_pct: float | None = None  # % of promoter shares pledged
+    # Profile
+    business_summary: str = ""
+    screener_company_id: str = ""
+    segment_data: dict[str, Any] = field(default_factory=dict)
+    related_party_data: dict[str, Any] = field(default_factory=dict)
+    annual_reports: list[dict[str, Any]] = field(default_factory=list)
     # Quarterly
     quarterly_revenue: list[dict] = field(default_factory=list)
     quarterly_profit: list[dict] = field(default_factory=list)
+    # Price history
+    series_dates: list[str] = field(default_factory=list)
+    series_closes: list[float] = field(default_factory=list)
     # Source
     source: str = ""
     source_url: str = ""
@@ -131,13 +209,13 @@ class IndiaCompanySnapshot:
         m: dict[str, Any] = {}
         if self.pe_ratio is not None:       m["pe_ratio"]         = {"label": "P/E Ratio",              "display": f"{self.pe_ratio:.2f}x",    "value": self.pe_ratio}
         if self.pb_ratio is not None:       m["pb_ratio"]         = {"label": "P/B Ratio",              "display": f"{self.pb_ratio:.2f}x",    "value": self.pb_ratio}
-        if self.eps is not None:            m["eps"]              = {"label": "EPS (TTM)",               "display": f"₹{self.eps:.2f}",         "value": self.eps}
-        if self.book_value is not None:     m["book_value"]       = {"label": "Book Value",              "display": f"₹{self.book_value:.2f}",  "value": self.book_value}
+        if self.eps is not None:            m["eps"]              = {"label": "EPS (TTM)",               "display": f"Rs {self.eps:.2f}",         "value": self.eps}
+        if self.book_value is not None:     m["book_value"]       = {"label": "Book Value",              "display": f"Rs {self.book_value:.2f}",  "value": self.book_value}
         if self.dividend_yield is not None: m["dividend_yield"]   = {"label": "Dividend Yield",          "display": f"{self.dividend_yield:.2f}%","value": self.dividend_yield}
         if self.roe is not None:            m["roe"]              = {"label": "ROE",                     "display": f"{self.roe:.1f}%",         "value": self.roe}
         if self.roce is not None:           m["roce"]             = {"label": "ROCE",                    "display": f"{self.roce:.1f}%",        "value": self.roce}
         if self.debt_to_equity is not None: m["debt_to_equity"]   = {"label": "Debt / Equity",           "display": f"{self.debt_to_equity:.2f}","value": self.debt_to_equity}
-        if self.market_cap_cr is not None:  m["market_cap"]       = {"label": "Market Cap",              "display": f"₹{self.market_cap_cr:,.0f} Cr","value": self.market_cap_cr}
+        if self.market_cap_cr is not None:  m["market_cap"]       = {"label": "Market Cap",              "display": f"Rs {self.market_cap_cr:,.0f} Cr","value": self.market_cap_cr}
         if self.promoter_holding is not None: m["promoter_pct"]   = {"label": "Promoter Holding",        "display": f"{self.promoter_holding:.1f}%","value": self.promoter_holding}
         if self.fii_holding is not None:    m["fii_pct"]          = {"label": "FII Holding",             "display": f"{self.fii_holding:.1f}%", "value": self.fii_holding}
         if self.dii_holding is not None:    m["dii_pct"]          = {"label": "DII Holding",             "display": f"{self.dii_holding:.1f}%", "value": self.dii_holding}
@@ -197,141 +275,521 @@ class SEBIFiling:
 async def _fetch_screener(symbol: str) -> IndiaCompanySnapshot | None:
     """Fetch company data from Screener.in — best source for 10-year financials."""
     provider = "screener"
-    if not _provider_available(provider):
+    sym = _canonical_symbol(symbol)
+    if not _provider_available(provider, sym):
         return None
-    url = f"https://www.screener.in/company/{symbol.upper()}/"
+    urls = [
+        f"https://www.screener.in/company/{sym}/consolidated/",
+        f"https://www.screener.in/company/{sym}/",
+    ]
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS_MC, trust_env=_HTTPX_TRUST_ENV) as session:
-            resp = await session.get(url)
-            if resp.status_code != 200:
-                return None
-            html = resp.text
-        return _parse_screener_html(html, symbol)
+            for url in urls:
+                resp = await session.get(url)
+                if resp.status_code != 200:
+                    continue
+                snap = _parse_screener_html(resp.text, sym)
+                if snap is None:
+                    continue
+                snap.source_url = url
+                if url.endswith("/consolidated/"):
+                    snap.source = "screener.in consolidated"
+                if snap.screener_company_id:
+                    snap.segment_data = await _fetch_screener_segment_metadata(
+                        session,
+                        snap.screener_company_id,
+                        consolidated=url.endswith("/consolidated/"),
+                        referer=url,
+                    )
+                return snap
+        return None
     except _TRANSIENT_NETWORK_ERRORS as exc:
-        _mark_provider_miss(provider, symbol, exc)
+        _mark_provider_miss(provider, sym, exc)
         return None
     except Exception as exc:
         logger.debug("screener fetch failed for %s: %s", symbol, exc)
         return None
 
 
+
+def _clean_html_text(value: str) -> str:
+    text = re.sub(r"<[^>]+>", " ", value or "")
+    text = html_lib.unescape(text).replace("\xa0", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _parse_segment_names(segment_html: str) -> dict[str, Any]:
+    names: list[str] = []
+    restricted = "upgrade to premium" in (segment_html or "").lower()
+    sales_m = re.search(r'<tbody[^>]*data-segment-line=["\']Sales["\'][^>]*>(.*?)</tbody>', segment_html or "", re.IGNORECASE | re.DOTALL)
+    block = sales_m.group(1) if sales_m else (segment_html or "")
+    for row_m in re.finditer(r"<tr[^>]*>(.*?)</tr>", block, re.IGNORECASE | re.DOTALL):
+        cells = re.findall(r"<td[^>]*>(.*?)</td>", row_m.group(1) or "", re.IGNORECASE | re.DOTALL)
+        if not cells:
+            continue
+        label = _clean_html_text(cells[0])
+        label_l = label.lower()
+        if not label or label_l in {"sales", "profit %", "roce %"}:
+            continue
+        if "please upgrade" in label_l or "less:" in label_l:
+            continue
+        if label not in names:
+            names.append(label)
+    return {
+        "status": "restricted" if restricted else ("available" if names else "unavailable"),
+        "segments": names[:20],
+        "reason": "segment_values_require_screener_premium" if restricted else ("parsed_public_segment_table" if names else "segment_table_unavailable"),
+    }
+
+
+async def _fetch_screener_segment_metadata(
+    session: httpx.AsyncClient,
+    company_id: str,
+    *,
+    consolidated: bool,
+    referer: str,
+) -> dict[str, Any]:
+    params = "?consolidated=true" if consolidated else ""
+    url = f"https://www.screener.in/api/segments/{company_id}/profit-loss/1/{params}"
+    try:
+        resp = await session.get(url, headers={**_HEADERS_MC, "Referer": referer})
+        if resp.status_code != 200:
+            return {"status": "unavailable", "source_url": url, "reason": f"http_{resp.status_code}"}
+        parsed = _parse_segment_names(resp.text)
+        parsed["source_url"] = url
+        return parsed
+    except Exception as exc:
+        logger.debug("Screener segment fetch failed for %s: %s", company_id, exc)
+        return {"status": "unavailable", "source_url": url, "reason": "fetch_failed"}
+
+
+def _parse_annual_reports(page_html: str) -> list[dict[str, Any]]:
+    reports: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for match in re.finditer(r'<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', page_html or "", re.IGNORECASE | re.DOTALL):
+        url = html_lib.unescape(match.group(1) or "").strip()
+        body = match.group(2) or ""
+        text = _clean_html_text(body)
+        if "financial year" not in text.lower() and "annual report" not in text.lower():
+            continue
+        year_m = re.search(r"(?:Financial\s+Year|FY)\s*(\d{4})", text, re.IGNORECASE)
+        if not year_m:
+            continue
+        if url.startswith("/"):
+            url = f"https://www.screener.in{url}"
+        if url in seen:
+            continue
+        seen.add(url)
+        reports.append({
+            "year": int(year_m.group(1)),
+            "label": f"Financial Year {year_m.group(1)}",
+            "url": url,
+            "source": "bse" if "bseindia.com" in url.lower() or "from bse" in text.lower() else "public_web",
+        })
+    reports.sort(key=lambda item: int(item.get("year") or 0), reverse=True)
+    return reports[:8]
+
+
+async def fetch_nse_delivery_snapshot(symbol: str) -> dict[str, Any]:
+    """Fetch latest delivery percentage from NSE public archives when reachable."""
+    sym = _canonical_symbol(symbol)
+    cached = cache_get("delivery", sym)
+    if cached is not None:
+        return cached
+    end_dt = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+    start_dt = end_dt - timedelta(days=10)
+    params = {
+        "from": start_dt.strftime("%d-%m-%Y"),
+        "to": end_dt.strftime("%d-%m-%Y"),
+        "symbol": sym,
+        "dataType": "priceVolumeDeliverable",
+        "series": "EQ",
+    }
+    url = "https://www.nseindia.com/api/historical/securityArchives"
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(6.0), trust_env=_HTTPX_TRUST_ENV) as session:
+            await session.get("https://www.nseindia.com", headers=_HEADERS_NSE)
+            resp = await session.get(url, params=params, headers={**_HEADERS_NSE, "Referer": f"https://www.nseindia.com/get-quotes/equity?symbol={sym}"})
+        if resp.status_code != 200:
+            out = {"status": "unavailable", "reason": f"nse_http_{resp.status_code}", "source_url": url}
+            cache_set("delivery", sym, out, "delivery")
+            return out
+        data = resp.json()
+        rows = data.get("data") if isinstance(data, dict) else data
+        if not isinstance(rows, list) or not rows:
+            out = {"status": "unavailable", "reason": "nse_archive_empty", "source_url": url}
+            cache_set("delivery", sym, out, "delivery")
+            return out
+        latest = rows[0]
+        for row in rows:
+            if isinstance(row, dict) and (row.get("COP_DELIV_PERC") or row.get("deliverableQty")):
+                latest = row
+                break
+        delivery_pct = _safe_float(latest.get("COP_DELIV_PERC") or latest.get("DELIV_PER") or latest.get("deliverablePercent"))
+        traded_qty = _safe_float(latest.get("CH_TOT_TRADED_QTY") or latest.get("totTradedQty"))
+        deliverable_qty = _safe_float(latest.get("COP_DELIV_QTY") or latest.get("deliverableQty"))
+        out = {
+            "status": "ok" if delivery_pct is not None else "unavailable",
+            "delivery_pct": delivery_pct,
+            "traded_qty": traded_qty,
+            "deliverable_qty": deliverable_qty,
+            "as_of": str(latest.get("CH_TIMESTAMP") or latest.get("mTIMESTAMP") or latest.get("date") or ""),
+            "source": "NSE public security archives",
+            "source_url": url,
+        }
+        cache_set("delivery", sym, out, "delivery")
+        return out
+    except Exception as exc:
+        logger.debug("NSE delivery fetch failed for %s: %s", sym, exc)
+        return {"status": "unavailable", "reason": "nse_archive_fetch_failed", "source_url": url}
+
 def _parse_screener_html(html: str, symbol: str) -> IndiaCompanySnapshot | None:
     """Parse key metrics from Screener.in HTML (no JS required for basic data)."""
-    snap = IndiaCompanySnapshot(symbol=symbol.upper(), source="screener.in",
-                                source_url=f"https://www.screener.in/company/{symbol.upper()}/")
+    snap = IndiaCompanySnapshot(
+        symbol=symbol.upper(),
+        source="screener.in",
+        source_url=f"https://www.screener.in/company/{symbol.upper()}/",
+    )
 
     def _find(pattern: str) -> str | None:
         m = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
         return m.group(1).strip() if m else None
 
-    def _num(s: str | None) -> float | None:
-        if not s:
+    def _num(raw: str | None) -> float | None:
+        if not raw:
             return None
-        s = re.sub(r"[₹,%\s,Cr]", "", s)
+        text_val = str(raw).strip()
+        if not text_val:
+            return None
+        neg = text_val.startswith("(") and text_val.endswith(")")
+        text_val = text_val.strip("()")
+        text_val = text_val.replace("₹", "").replace("Rs ", "")
+        text_val = re.sub(r"(?i)\b(?:rs\.?|inr)\b", "", text_val)
+        text_val = text_val.replace(",", "").replace("%", "")
+        text_val = re.sub(r"(?i)\b(?:cr|crore|lakh|lakhs|mn|bn)\b", "", text_val)
+        text_val = re.sub(r"[^0-9eE+\-.]", "", text_val)
+        if not text_val or text_val in {"+", "-", ".", "+.", "-."}:
+            return None
         try:
-            return float(s)
+            value = float(text_val)
         except ValueError:
             return None
+        return -value if neg else value
 
     # Company name
     name_m = re.search(r'<h1[^>]*class="[^"]*company-name[^"]*"[^>]*>([^<]+)', html)
     if name_m:
         snap.company_name = name_m.group(1).strip()
+    if not snap.company_name:
+        title_m = re.search(r"<title>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+        if title_m:
+            title_text = re.sub(r"<[^>]+>", " ", title_m.group(1) or "")
+            title_text = re.sub(r"\s+", " ", title_text).strip()
+            if title_text:
+                cleaned_title = title_text.split("|")[0].strip()
+                cleaned_title = re.sub(r"\bshare\s+price\b.*$", "", cleaned_title, flags=re.IGNORECASE).strip()
+                cleaned_title = re.sub(r"\s{2,}", " ", cleaned_title).strip(" -|")
+                if cleaned_title:
+                    snap.company_name = cleaned_title
 
-    # Key ratios table — Screener renders these in a specific #top-ratios div
-    ratio_section = re.search(r'id=["\']top-ratios["\'].*?</ul>', html, re.DOTALL)
+    company_info_m = re.search(r'<div[^>]*id=["\']company-info["\'][^>]*>|<div[^>]*data-company-id=["\']\d+["\'][^>]*id=["\']company-info["\'][^>]*>', html, re.IGNORECASE | re.DOTALL)
+    if company_info_m:
+        id_m = re.search(r'data-company-id=["\'](\d+)["\']', company_info_m.group(0), re.IGNORECASE)
+        if id_m:
+            snap.screener_company_id = id_m.group(1)
+
+    rpt_m = re.search(r'data-url=["\']([^"\']*/results/rpt/[^"\']+)["\']', html, re.IGNORECASE)
+    if rpt_m:
+        rpt_url = rpt_m.group(1)
+        if rpt_url.startswith('/'):
+            rpt_url = f"https://www.screener.in{rpt_url}"
+        snap.related_party_data = {
+            "status": "requires_free_login",
+            "source_url": rpt_url,
+            "reason": "screener_rpt_modal_requires_login_without_paid_api",
+        }
+
+    snap.annual_reports = _parse_annual_reports(html)
+
+    cin_match = re.search(r"\b[LU]\d{5}[A-Z]{2}\d{4}[A-Z]{3}\d{6}\b", html, re.IGNORECASE)
+    if cin_match:
+        snap.cin = cin_match.group(0).upper()
+
+    if not snap.isin:
+        isin_match = re.search(r"\bINE[A-Z0-9]{9}\b", html, re.IGNORECASE)
+        if isin_match:
+            snap.isin = isin_match.group(0).upper()
+
+    def _clean_classification(value: str | None) -> str:
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        cleaned = re.sub(r"\s+", " ", raw).strip(" :|,-")
+        low = cleaned.lower()
+        # Avoid index labels and generic boilerplate being captured as sector.
+        banned_tokens = ("nifty", "index", "indices", "incorporated", "india ratings", "www.", "http")
+        if any(token in low for token in banned_tokens):
+            return ""
+        if len(cleaned) < 2 or len(cleaned) > 80:
+            return ""
+        if re.search(r"[a-z]{3}", low) is None:
+            return ""
+        if cleaned in {"i", "/i", "-", "--"}:
+            return ""
+        return cleaned
+
+    sector_patterns = (
+        r'"sector"\s*:\s*"([^"]{2,120})"',
+        r'Sector\s*</[^>]+>\s*<[^>]*>\s*([^<]{2,120})\s*<',
+        r'\bSector\b[^A-Za-z0-9]{1,16}([A-Za-z &/\-]{2,120})',
+    )
+    for pattern in sector_patterns:
+        m = re.search(pattern, html, re.IGNORECASE)
+        if m:
+            cleaned = _clean_classification(m.group(1))
+            if cleaned:
+                snap.sector = cleaned
+                break
+
+    industry_patterns = (
+        r'"industry"\s*:\s*"([^"]{2,120})"',
+        r'Industry\s*</[^>]+>\s*<[^>]*>\s*([^<]{2,120})\s*<',
+        r'\bIndustry\b[^A-Za-z0-9]{1,16}([A-Za-z &/\-]{2,120})',
+    )
+    for pattern in industry_patterns:
+        m = re.search(pattern, html, re.IGNORECASE)
+        if m:
+            cleaned = _clean_classification(m.group(1))
+            if cleaned:
+                snap.industry = cleaned
+                break
+
+    ratio_section = re.search(r"id=[\"']top-ratios[\"'].*?</ul>", html, re.DOTALL | re.IGNORECASE)
     if ratio_section:
         block = ratio_section.group(0)
+
+        kv_pairs: dict[str, str] = {}
+        _tag_strip = re.compile(r"<[^>]+>")
+        _pair_pat = re.compile(
+            r'<li[^>]*>\s*<span[^>]*class=["\'][^"\']*name[^"\']*["\'][^>]*>(.*?)</span>\s*<span[^>]*class=["\'][^"\']*(?:number|value)[^"\']*["\'][^>]*>(.*?)</span>',
+            re.IGNORECASE | re.DOTALL,
+        )
+        for pair in _pair_pat.finditer(block):
+            raw_label = _tag_strip.sub(" ", pair.group(1) or "")
+            raw_value = _tag_strip.sub(" ", pair.group(2) or "")
+            label = re.sub(r"\s+", " ", raw_label).strip().lower()
+            value = re.sub(r"\s+", " ", raw_value).strip()
+            if label and value:
+                kv_pairs[label] = value
+
+        def _kv(*tokens: str) -> float | None:
+            for label, raw_value in kv_pairs.items():
+                if all(token in label for token in tokens):
+                    return _num(raw_value)
+            return None
+
+        def _latest_table_value(section_id: str, *label_tokens: str) -> float | None:
+            section_m = re.search(
+                rf'<section[^>]*id=["\']{re.escape(section_id)}["\'][^>]*>(.*?)</section>',
+                html,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if not section_m:
+                return None
+            for row_m in re.finditer(r"<tr[^>]*>(.*?)</tr>", section_m.group(1) or "", re.IGNORECASE | re.DOTALL):
+                cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row_m.group(1) or "", re.IGNORECASE | re.DOTALL)
+                if len(cells) < 2:
+                    continue
+                label = re.sub(r"\s+", " ", _tag_strip.sub(" ", cells[0] or "")).strip().lower()
+                if not all(token in label for token in label_tokens):
+                    continue
+                values = [_num(re.sub(r"\s+", " ", _tag_strip.sub(" ", cell or "")).strip()) for cell in cells[1:]]
+                values = [value for value in values if value is not None]
+                return values[-1] if values else None
+            return None
 
         def _find_block(pattern: str) -> str | None:
             m = re.search(pattern, block, re.IGNORECASE | re.DOTALL)
             return m.group(1).strip() if m else None
 
-        snap.market_cap_cr  = _num(_find_block(r'Market\s+Cap.*?₹\s*([\d,]+)'))
-        snap.current_price  = _num(_find_block(r'Current\s+Price.*?₹\s*([\d,.]+)'))
-        snap.pe_ratio       = _num(_find_block(r'Stock\s+P/E.*?<span[^>]*>([\d.]+)'))
-        snap.book_value     = _num(_find_block(r'Book\s+Value.*?₹\s*([\d.]+)'))
-        snap.dividend_yield = _num(_find_block(r'Dividend\s+Yield.*?([\d.]+)\s*%'))
-        snap.roce           = _num(_find_block(r'ROCE.*?([\d.]+)\s*%'))
-        snap.roe            = _num(_find_block(r'ROE.*?([\d.]+)\s*%'))
+        currency_pat = r"(?:Rs\.?|INR)?"
+        snap.market_cap_cr = _kv("market", "cap") or _num(_find_block(rf'Market\s+Cap.*?{currency_pat}\s*([\d,.]+)'))
+        snap.current_price = _kv("current", "price") or _num(_find_block(rf'Current\s+Price.*?{currency_pat}\s*([\d,.]+)'))
+        snap.pe_ratio = _kv("stock", "p/e") or _num(_find_block(r'Stock\s+P/E.*?<span[^>]*>([\d.]+)'))
+        snap.pb_ratio = _kv("stock", "p/b") or _num(_find_block(r'Stock\s+P/B.*?<span[^>]*>([\d.]+)'))
+        snap.eps = _kv("eps") or _num(_find_block(r'(?:TTM\s+)?EPS.*?<span[^>]*>([\d.]+)'))
+        snap.book_value = _kv("book", "value") or _num(_find_block(rf'Book\s+Value.*?{currency_pat}\s*([\d.]+)'))
+        snap.dividend_yield = _kv("dividend", "yield") or _num(_find_block(r'Dividend\s+Yield.*?([\d.]+)\s*%'))
+        snap.roce = _kv("roce") or _num(_find_block(r'ROCE.*?([\d.]+)\s*%'))
+        snap.roe = _kv("roe") or _num(_find_block(r'ROE.*?([\d.]+)\s*%'))
+        snap.debt_to_equity = _kv("debt", "eq") or _num(_find_block(r'Debt\s*(?:/|to)?\s*Eq(?:uity)?.*?<span[^>]*>([\d.]+)'))
+        snap.current_ratio = _kv("current", "ratio") or _num(_find_block(r'Current\s+Ratio.*?<span[^>]*>([\d.]+)'))
 
-    # Shareholding from Screener
-    snap.promoter_holding = _num(_find(r'Promoter Holding.*?([\d.]+)\s*%'))
-    snap.fii_holding      = _num(_find(r'FII\s+Holding.*?([\d.]+)\s*%'))
-    snap.dii_holding      = _num(_find(r'DII\s+Holding.*?([\d.]+)\s*%'))
+        if snap.debt_to_equity is None:
+            borrowings = _latest_table_value("balance-sheet", "borrowings")
+            share_capital = _latest_table_value("balance-sheet", "share", "capital")
+            reserves = _latest_table_value("balance-sheet", "reserves")
+            equity = (share_capital or 0.0) + (reserves or 0.0)
+            if borrowings is not None and equity > 0:
+                snap.debt_to_equity = round(float(borrowings) / float(equity), 4)
 
-    if snap.company_name or snap.pe_ratio or snap.market_cap_cr:
+        high_low_value = ""
+        for label, value in kv_pairs.items():
+            if "high" in label and "low" in label:
+                high_low_value = value
+                break
+        hl_match = re.search(r'([\d,.]+)\s*/\s*([\d,.]+)', high_low_value) if high_low_value else None
+        if hl_match is None:
+            block_text = re.sub(r"\s+", " ", _tag_strip.sub(" ", block)).strip()
+            hl_match = re.search(r'High\s*/\s*Low\s*[^0-9]*([\d,.]+)\s*/\s*[^0-9]*([\d,.]+)', block_text, re.IGNORECASE)
+        if hl_match:
+            snap.week_52_high = _num(hl_match.group(1))
+            snap.week_52_low = _num(hl_match.group(2))
+
+        if snap.pb_ratio is None and snap.current_price is not None and snap.book_value not in (None, 0):
+            try:
+                snap.pb_ratio = round(float(snap.current_price) / float(snap.book_value), 4)
+            except Exception:
+                pass
+
+        if snap.pe_ratio is None and snap.current_price is not None and snap.eps not in (None, 0):
+            try:
+                snap.pe_ratio = round(float(snap.current_price) / float(snap.eps), 4)
+            except Exception:
+                pass
+
+    tag_strip = re.compile(r"<[^>]+>")
+
+    about_m = re.search(
+        r'<div[^>]*class=["\'][^"\']*about[^"\']*["\'][^>]*>(.*?)</div>',
+        html,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if about_m:
+        about_text = tag_strip.sub(" ", about_m.group(1) or "")
+        about_text = about_text.replace("&nbsp;", " ").replace("&amp;", "&")
+        about_text = re.sub(r"\s+", " ", about_text).strip()
+        if about_text:
+            snap.business_summary = about_text[:1200]
+
+    def _latest_shareholding_value(*aliases: str) -> float | None:
+        marker = re.search(r'<section[^>]*id=["\']shareholding["\'][^>]*>(.*?)</section>', html, re.IGNORECASE | re.DOTALL)
+        block = marker.group(1) if marker else html
+        alias_l = tuple(alias.lower() for alias in aliases)
+        for row_m in re.finditer(r"<tr[^>]*>(.*?)</tr>", block, re.IGNORECASE | re.DOTALL):
+            row_html = row_m.group(1) or ""
+            row_text = tag_strip.sub(" ", row_html).replace("&nbsp;", " ")
+            row_text = re.sub(r"\s+", " ", row_text).strip().lower()
+            if not any(alias in row_text for alias in alias_l):
+                continue
+            values = re.findall(r"<td[^>]*>\s*([0-9][\d,.]*)\s*%", row_html, re.IGNORECASE)
+            if values:
+                return _num(values[-1])
+        return None
+
+    # Shareholding from Screener. Prefer the latest quarterly shareholding row.
+    snap.promoter_holding = _latest_shareholding_value("promoters", "promoter") or _num(_find(r'Promoter\s+Holding.*?([\d.]+)\s*%'))
+    snap.fii_holding = _latest_shareholding_value("fiis", "foreign institutions", "fii") or _num(_find(r'FII\s+Holding.*?([\d.]+)\s*%'))
+    snap.dii_holding = _latest_shareholding_value("diis", "domestic institutions", "dii") or _num(_find(r'DII\s+Holding.*?([\d.]+)\s*%'))
+    snap.public_holding = _latest_shareholding_value("public") or _num(_find(r'Public\s+Holding.*?([\d.]+)\s*%'))
+    snap.promoter_pledge_pct = _num(
+        _find(r'Promoter\s+Pledge.*?([\d.]+)\s*%')
+        or _find(r'Pledged\s+Percentage.*?([\d.]+)\s*%')
+    )
+
+    if any(
+        value is not None
+        for value in (
+            snap.current_price,
+            snap.market_cap_cr,
+            snap.pe_ratio,
+            snap.pb_ratio,
+            snap.roe,
+            snap.roce,
+        )
+    ) or snap.company_name:
         return snap
     return None
-
-
-# ── Moneycontrol ──────────────────────────────────────────────────────────────
-
-# Known Moneycontrol symbol map for top Indian companies (extend as needed)
-_MC_SYMBOL_MAP: dict[str, str] = {
-    "RELIANCE": "RI",  "TCS": "TCS", "HDFCBANK": "HDF01",
-    "INFY": "IT",      "ICICIBANK": "ICICIBANK", "HINDUNILVR": "HLL",
-    "SBIN": "SBI",     "BHARTIARTL": "BHA",      "ITC": "ITC",
-    "KOTAKBANK": "KTKM", "LT": "LT",             "AXISBANK": "AXSB",
-    "BAJFINANCE": "BAF",  "WIPRO": "WIP",         "HCLTECH": "HCL04",
-    "MARUTI": "MAR02",    "TATAMOTORS": "TATAMOTORS", "ADANIENT": "ADE",
-    "TATASTEEL": "TIS",   "NTPC": "NTPC",         "POWERGRID": "PGRI",
-    "ULTRACEMCO": "UTI",  "ASIANPAINT": "ASP",    "NESTLEIND": "NEST",
-    "SUNPHARMA": "SUNPHARMA", "TITAN": "TITA",    "ONGC": "ONGC",
-    "BAJAJFINSV": "BAF01",    "INDUSINDBK": "INDBK", "GRASIM": "GRI",
-    "M&M": "MAH",             "JSWSTEEL": "JSW",   "TECHM": "TECHM",
-}
 
 
 async def _fetch_moneycontrol(symbol: str) -> IndiaCompanySnapshot | None:
     """Fetch from Moneycontrol API (JSON endpoints used by their site)."""
     provider = "moneycontrol"
-    if not _provider_available(provider):
+    sym = _canonical_symbol(symbol)
+    if not _provider_available(provider, sym):
         return None
-    mc_sym = _MC_SYMBOL_MAP.get(symbol.upper(), symbol.upper())
-    url = f"https://priceapi.moneycontrol.com/techCharts/indianMarket/stock/history?symbol={mc_sym}&resolution=1D&countback=5&currencyCode=INR"
+    mc_sym = _MC_SYMBOL_MAP.get(sym, sym)
+    url = f"https://priceapi.moneycontrol.com/techCharts/indianMarket/stock/history?symbol={mc_sym}&resolution=1D&countback={_MC_HISTORY_COUNTBACK}&currencyCode=INR"
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT, headers=_HEADERS_MC, trust_env=_HTTPX_TRUST_ENV) as session:
             resp = await session.get(url)
             if resp.status_code != 200:
                 return None
             data = resp.json()
-        return _parse_moneycontrol_json(data, symbol)
+        return _parse_moneycontrol_json(data, sym)
     except _TRANSIENT_NETWORK_ERRORS as exc:
-        _mark_provider_miss(provider, symbol, exc)
+        _mark_provider_miss(provider, sym, exc)
         return None
     except Exception as exc:
-        logger.debug("moneycontrol fetch failed for %s: %s", symbol, exc)
+        logger.debug("moneycontrol fetch failed for %s: %s", sym, exc)
         return None
 
 
 def _parse_moneycontrol_json(data: dict, symbol: str) -> IndiaCompanySnapshot | None:
     if not data or data.get("s") != "ok":
         return None
-    closes = data.get("c", [])
-    if not closes:
+
+    closes_raw = data.get("c", []) or []
+    times_raw = data.get("t", []) or []
+
+    series_dates: list[str] = []
+    series_closes: list[float] = []
+
+    for idx, raw_close in enumerate(closes_raw):
+        close = _safe_float(raw_close)
+        if close is None:
+            continue
+        ts = times_raw[idx] if idx < len(times_raw) else None
+        dt = None
+        if isinstance(ts, str) and ts.strip().isdigit():
+            ts = int(ts.strip())
+        if isinstance(ts, (int, float)):
+            ts_num = int(ts)
+            if ts_num > 10**12:
+                ts_num //= 1000
+            try:
+                dt = datetime.fromtimestamp(ts_num, tz=timezone.utc)
+            except Exception:
+                dt = None
+        series_dates.append(dt.date().isoformat() if dt else "")
+        series_closes.append(float(close))
+
+    if not series_closes:
         return None
+
     snap = IndiaCompanySnapshot(
         symbol=symbol.upper(),
-        current_price=float(closes[-1]) if closes else None,
+        current_price=series_closes[-1],
+        series_dates=series_dates,
+        series_closes=series_closes,
         source="moneycontrol",
         source_url=f"https://www.moneycontrol.com/india/stockpricequote/{symbol.lower()}",
     )
-    if len(closes) >= 2:
-        prev = float(closes[-2])
-        curr = float(closes[-1])
+    if len(series_closes) >= 2:
+        prev = series_closes[-2]
+        curr = series_closes[-1]
         snap.change_pct = round((curr - prev) / prev * 100, 2) if prev else None
     return snap
-
 
 # ── NSE India API ─────────────────────────────────────────────────────────────
 
 async def _fetch_nse(symbol: str) -> IndiaCompanySnapshot | None:
     """Fetch from NSE India's JSON API (needs Referer cookie dance)."""
     provider = "nse"
-    if not _provider_available(provider):
+    sym = _canonical_symbol(symbol)
+    if not _provider_available(provider, sym):
         return None
-    quote_url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol.upper()}"
+    quote_url = f"https://www.nseindia.com/api/quote-equity?symbol={sym}"
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT, trust_env=_HTTPX_TRUST_ENV) as session:
             # Seed cookies with a homepage visit
@@ -340,12 +798,12 @@ async def _fetch_nse(symbol: str) -> IndiaCompanySnapshot | None:
             if resp.status_code != 200:
                 return None
             data = resp.json()
-        return _parse_nse_json(data, symbol)
+        return _parse_nse_json(data, sym)
     except _TRANSIENT_NETWORK_ERRORS as exc:
-        _mark_provider_miss(provider, symbol, exc)
+        _mark_provider_miss(provider, sym, exc)
         return None
     except Exception as exc:
-        logger.debug("NSE fetch failed for %s: %s", symbol, exc)
+        logger.debug("NSE fetch failed for %s: %s", sym, exc)
         return None
 
 
@@ -392,11 +850,12 @@ _BSE_SCRIP_MAP: dict[str, str] = {
 async def _fetch_bse(symbol: str) -> IndiaCompanySnapshot | None:
     """Fetch from BSE India API as fallback."""
     provider = "bse"
-    if not _provider_available(provider):
+    sym = _canonical_symbol(symbol)
+    if not _provider_available(provider, sym):
         return None
-    scrip = _BSE_SCRIP_MAP.get(symbol.upper())
+    scrip = _BSE_SCRIP_MAP.get(sym)
     if not scrip:
-        logger.debug("no BSE scrip code for %s", symbol)
+        logger.debug("no BSE scrip code for %s", sym)
         return None
     url = f"https://api.bseindia.com/BseIndiaAPI/api/getScripHeaderData/w?Debtflag=&scripcode={scrip}&seriesid="
     try:
@@ -405,12 +864,12 @@ async def _fetch_bse(symbol: str) -> IndiaCompanySnapshot | None:
             if resp.status_code != 200:
                 return None
             data = resp.json()
-        return _parse_bse_json(data, symbol, scrip)
+        return _parse_bse_json(data, sym, scrip)
     except _TRANSIENT_NETWORK_ERRORS as exc:
-        _mark_provider_miss(provider, symbol, exc)
+        _mark_provider_miss(provider, sym, exc)
         return None
     except Exception as exc:
-        logger.debug("BSE fetch failed for %s: %s", symbol, exc)
+        logger.debug("BSE fetch failed for %s: %s", sym, exc)
         return None
 
 
@@ -420,6 +879,7 @@ def _parse_bse_json(data: dict, symbol: str, scrip: str) -> IndiaCompanySnapshot
     snap = IndiaCompanySnapshot(
         symbol=symbol.upper(),
         isin=data.get("ISIN_Code", ""),
+        cin=data.get("CIN", ""),
         company_name=data.get("LongName", ""),
         exchange="BSE",
         face_value=_safe_float(data.get("FaceValue")),
@@ -435,8 +895,21 @@ def _parse_bse_json(data: dict, symbol: str, scrip: str) -> IndiaCompanySnapshot
 
 
 def _safe_float(v: Any) -> float | None:
+    if v is None:
+        return None
+    if isinstance(v, str):
+        raw = v.strip()
+        if not raw:
+            return None
+        raw = raw.replace("₹", "").replace("Rs ", "")
+        raw = raw.replace(",", "").replace("%", "")
+        raw = re.sub(r"(?i)\b(?:rs\.?|inr|crore|cr)\b", "", raw)
+        raw = re.sub(r"[^0-9eE+\-.]", "", raw)
+        if raw in {"", "+", "-", ".", "+.", "-."}:
+            return None
+        v = raw
     try:
-        return float(v) if v is not None and v != "" else None
+        return float(v) if v != "" else None
     except (ValueError, TypeError):
         return None
 
@@ -571,41 +1044,89 @@ async def fetch_india_snapshot(symbol: str) -> IndiaCompanySnapshot | None:
         record_mcp("fundamentals")
     except ImportError:
         pass
-    sym = symbol.upper().strip()
+    sym = _canonical_symbol(symbol)
 
     async def _do_fetch() -> IndiaCompanySnapshot | None:
-        # Run Screener + Moneycontrol in parallel (both non-rate-limited)
-        screener_snap, mc_snap = await asyncio.gather(
+        screener_snap, mc_snap, nse_snap = await asyncio.gather(
             _fetch_screener(sym),
             _fetch_moneycontrol(sym),
+            _fetch_nse(sym),
             return_exceptions=True,
         )
 
-        # Resolve exceptions to None
         if isinstance(screener_snap, Exception):
+            logger.debug("Screener fetch failed for %s: %s", sym, screener_snap)
             screener_snap = None
         if isinstance(mc_snap, Exception):
+            logger.debug("Moneycontrol fetch failed for %s: %s", sym, mc_snap)
             mc_snap = None
+        if isinstance(nse_snap, Exception):
+            logger.debug("NSE fetch failed for %s: %s", sym, nse_snap)
+            nse_snap = None
 
-        # Merge: start from Screener (richest), backfill from Moneycontrol
-        snap = screener_snap or mc_snap
+        # Prefer Screener fundamentals, but prefer NSE quote freshness.
+        snap = screener_snap or nse_snap or mc_snap
         if snap is None:
-            logger.debug("Screener/MC miss for %s; trying NSE", sym)
-            snap = await _fetch_nse(sym)
-
-        if snap is None:
-            logger.debug("NSE miss for %s; trying BSE", sym)
+            logger.debug("Screener/MC/NSE miss for %s; trying BSE", sym)
             snap = await _fetch_bse(sym)
 
         if snap is None:
             return None
 
-        # Backfill price from MC if Screener didn't return it
-        if snap is screener_snap and mc_snap and mc_snap.current_price:
-            if snap.current_price is None:
+        def _fill_missing(target: IndiaCompanySnapshot, source: IndiaCompanySnapshot, fields: list[str]) -> None:
+            for field in fields:
+                if getattr(target, field) in (None, "") and getattr(source, field) not in (None, ""):
+                    setattr(target, field, getattr(source, field))
+
+        if nse_snap is not None:
+            # NSE quote is the freshest available public source for listed equities.
+            if nse_snap.current_price is not None:
+                snap.current_price = nse_snap.current_price
+            if nse_snap.change_pct is not None:
+                snap.change_pct = nse_snap.change_pct
+            if nse_snap.week_52_high is not None:
+                snap.week_52_high = nse_snap.week_52_high
+            if nse_snap.week_52_low is not None:
+                snap.week_52_low = nse_snap.week_52_low
+            _fill_missing(
+                snap,
+                nse_snap,
+                ["isin", "cin", "company_name", "sector", "industry", "face_value", "exchange"],
+            )
+            if snap.source and "nse" not in snap.source.lower():
+                snap.source = f"{snap.source}+NSE"
+
+        if mc_snap is not None:
+            if snap.current_price is None and mc_snap.current_price is not None:
                 snap.current_price = mc_snap.current_price
-            if snap.change_pct is None:
+            if snap.change_pct is None and mc_snap.change_pct is not None:
                 snap.change_pct = mc_snap.change_pct
+            if not getattr(snap, "series_dates", None) and getattr(mc_snap, "series_dates", None):
+                snap.series_dates = list(mc_snap.series_dates)
+            if not getattr(snap, "series_closes", None) and getattr(mc_snap, "series_closes", None):
+                snap.series_closes = list(mc_snap.series_closes)
+
+        if (snap.current_price is None or not snap.company_name) and snap.exchange != "BSE":
+            bse_snap = await _fetch_bse(sym)
+            if bse_snap is not None:
+                _fill_missing(
+                    snap,
+                    bse_snap,
+                    [
+                        "isin",
+                        "cin",
+                        "company_name",
+                        "exchange",
+                        "face_value",
+                        "week_52_high",
+                        "week_52_low",
+                        "market_cap_cr",
+                    ],
+                )
+                if snap.current_price is None and bse_snap.current_price is not None:
+                    snap.current_price = bse_snap.current_price
+                if snap.change_pct is None and bse_snap.change_pct is not None:
+                    snap.change_pct = bse_snap.change_pct
 
         return snap
 
@@ -620,7 +1141,7 @@ async def fetch_nse_snapshot(symbol: str) -> IndiaCompanySnapshot | None:
         record_mcp("nse_india")
     except ImportError:
         pass
-    sym = symbol.upper().strip()
+    sym = _canonical_symbol(symbol)
 
     async def _do() -> IndiaCompanySnapshot | None:
         snap = await _fetch_nse(sym)

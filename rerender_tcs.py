@@ -11,7 +11,7 @@ from finagent.content_automation import ContentArticlePackage, render_article_ht
 
 SLUG = "manual-tcs-q3-fy25-earnings-overview"
 DATA_DIR = Path("D:/PROSPEKTLAB/.finagent/content_automation/insights") / SLUG
-MIRROR_DIR = Path("D:/PROSPEKTLAB/Frontend/app/public/insights") / SLUG
+MIRROR_DIR = Path("D:/PROSPEKTLAB/frontend/public/insights") / SLUG
 
 with open(DATA_DIR / "article.json", encoding="utf-8") as f:
     existing = json.load(f)

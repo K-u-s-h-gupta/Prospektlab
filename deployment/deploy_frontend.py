@@ -8,10 +8,15 @@ import sys
 
 # Constants
 APP_NAME = "finagent-frontend"
+APP_ID = os.getenv("AMPLIFY_APP_ID", "d1z5h6v6ty54e7")
 BRANCH_NAME = "production"
-FRONTEND_DIST_DIR = os.path.join("Frontend", "app", "dist")
+AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
+FRONTEND_DIST_DIR = os.path.join("frontend", "dist")
 ZIP_PATH = "frontend.zip"
-API_GATEWAY_URL = "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com"
+API_GATEWAY_URL = os.getenv(
+    "API_GATEWAY_URL",
+    "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com",
+)
 
 # Custom rewrite/redirect rules
 CUSTOM_RULES = [
@@ -46,6 +51,26 @@ CUSTOM_RULES = [
         "status": "200"
     },
     {
+        "source": "/insights/research",
+        "target": "/insights/research/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/insights/research/",
+        "target": "/insights/research/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/insights/strategy",
+        "target": "/insights/strategy/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/insights/strategy/",
+        "target": "/insights/strategy/index.html",
+        "status": "200"
+    },
+    {
         "source": "/insights/<*>",
         "target": "/insights/<*>",
         "status": "200"
@@ -61,23 +86,53 @@ CUSTOM_RULES = [
         "status": "200"
     },
     {
-        "source": "/memos<*>",
-        "target": f"{API_GATEWAY_URL}/memos<*>",
+        "source": "/memos",
+        "target": f"{API_GATEWAY_URL}/memos",
         "status": "200"
     },
     {
-        "source": "/config<*>",
-        "target": f"{API_GATEWAY_URL}/config<*>",
+        "source": "/memos/<*>",
+        "target": f"{API_GATEWAY_URL}/memos/<*>",
         "status": "200"
     },
     {
-        "source": "/capabilities<*>",
-        "target": f"{API_GATEWAY_URL}/capabilities<*>",
+        "source": "/config",
+        "target": f"{API_GATEWAY_URL}/config",
         "status": "200"
     },
     {
-        "source": "/health<*>",
-        "target": f"{API_GATEWAY_URL}/health<*>",
+        "source": "/config/<*>",
+        "target": f"{API_GATEWAY_URL}/config/<*>",
+        "status": "200"
+    },
+    {
+        "source": "/capabilities",
+        "target": f"{API_GATEWAY_URL}/capabilities",
+        "status": "200"
+    },
+    {
+        "source": "/capabilities/<*>",
+        "target": f"{API_GATEWAY_URL}/capabilities/<*>",
+        "status": "200"
+    },
+    {
+        "source": "/health",
+        "target": f"{API_GATEWAY_URL}/health",
+        "status": "200"
+    },
+    {
+        "source": "/health/<*>",
+        "target": f"{API_GATEWAY_URL}/health/<*>",
+        "status": "200"
+    },
+    {
+        "source": "/public",
+        "target": f"{API_GATEWAY_URL}/public",
+        "status": "200"
+    },
+    {
+        "source": "/public/<*>",
+        "target": f"{API_GATEWAY_URL}/public/<*>",
         "status": "200"
     },
     {
@@ -174,7 +229,7 @@ def create_frontend_zip():
     if not os.path.isdir(FRONTEND_DIST_DIR):
         raise Exception(
             f"Frontend build output not found at {FRONTEND_DIST_DIR}. "
-            "Run `npm run build` inside Frontend/app first."
+            "Run `npm run build` inside frontend first."
         )
 
     with zipfile.ZipFile(ZIP_PATH, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -191,26 +246,10 @@ def deploy():
     # Create frontend zip
     create_frontend_zip()
     
-    # Check if app already exists
-    print("2. Checking for existing AWS Amplify app...")
-    app_id = None
-    try:
-        apps_json = run_cmd("aws amplify list-apps")
-        apps = json.loads(apps_json).get("apps", [])
-        for app in apps:
-            if app.get("name") == APP_NAME:
-                app_id = app.get("appId")
-                print(f"  Found existing Amplify app: {APP_NAME} (ID: {app_id})")
-                break
-    except Exception as e:
-        print(f"Error listing apps: {e}")
-        
-    if not app_id:
-        print(f"  Creating new Amplify app: {APP_NAME}...")
-        create_cmd = f'aws amplify create-app --name "{APP_NAME}"'
-        app_json = run_cmd(create_cmd)
-        app_id = json.loads(app_json)["app"]["appId"]
-        print(f"  Created App ID: {app_id}")
+    # Target the Mumbai Amplify app explicitly so we never hit the old us-east-1 app.
+    print("2. Using configured AWS Amplify app...")
+    app_id = APP_ID
+    print(f"  App ID: {app_id}")
         
     # Apply custom rewrite rules
     print("3. Applying redirect/rewrite rules for backend proxying...")
@@ -219,11 +258,14 @@ def deploy():
         json.dump(CUSTOM_RULES, f, indent=2)
         
     try:
-        run_cmd(f'aws amplify update-app --app-id {app_id} --custom-rules file://{rules_path}')
+        run_cmd(f'aws amplify update-app --app-id {app_id} --region {AWS_REGION} --custom-rules file://{rules_path}')
         print("  Redirect/rewrite rules applied successfully!")
     finally:
         if os.path.exists(rules_path):
-            os.remove(rules_path)
+            try:
+                os.remove(rules_path)
+            except OSError:
+                pass
             
     # Deploy to both main and production branches
     branches = ["main", "production"]
@@ -232,7 +274,7 @@ def deploy():
         # Check if branch exists
         branch_exists = False
         try:
-            branches_json = run_cmd(f"aws amplify list-branches --app-id {app_id}")
+            branches_json = run_cmd(f"aws amplify list-branches --app-id {app_id} --region {AWS_REGION}")
             branches_list = json.loads(branches_json).get("branches", [])
             for branch in branches_list:
                 if branch.get("branchName") == branch_name:
@@ -244,12 +286,12 @@ def deploy():
             
         if not branch_exists:
             print(f"  Creating branch '{branch_name}'...")
-            run_cmd(f"aws amplify create-branch --app-id {app_id} --branch-name {branch_name}")
+            run_cmd(f"aws amplify create-branch --app-id {app_id} --branch-name {branch_name} --region {AWS_REGION}")
             print(f"  Branch '{branch_name}' created.")
             
         # Trigger manual deployment
         print(f"  Initiating manual deployment for '{branch_name}'...")
-        deploy_json = run_cmd(f"aws amplify create-deployment --app-id {app_id} --branch-name {branch_name}")
+        deploy_json = run_cmd(f"aws amplify create-deployment --app-id {app_id} --branch-name {branch_name} --region {AWS_REGION}")
         deploy_data = json.loads(deploy_json)
         
         job_id = deploy_data.get("jobId")
@@ -280,13 +322,13 @@ def deploy():
 
         # Start deployment
         print(f"  Starting Amplify deployment for '{branch_name}'...")
-        run_cmd(f"aws amplify start-deployment --app-id {app_id} --branch-name {branch_name} --job-id {job_id}")
+        run_cmd(f"aws amplify start-deployment --app-id {app_id} --branch-name {branch_name} --job-id {job_id} --region {AWS_REGION}")
         print("  Deployment started.")
 
         # Poll deployment status
         print("  Polling deployment status...")
         while True:
-            status_json = run_cmd(f"aws amplify get-job --app-id {app_id} --branch-name {branch_name} --job-id {job_id}")
+            status_json = run_cmd(f"aws amplify get-job --app-id {app_id} --branch-name {branch_name} --job-id {job_id} --region {AWS_REGION}")
             job = json.loads(status_json).get("job", {})
             status = job.get("summary", {}).get("status")
             print(f"    Current Status: {status}")
@@ -304,7 +346,10 @@ def deploy():
             
     # Clean up local zip
     if os.path.exists(ZIP_PATH):
-        os.remove(ZIP_PATH)
+        try:
+            os.remove(ZIP_PATH)
+        except OSError:
+            pass
 
 if __name__ == "__main__":
     deploy()

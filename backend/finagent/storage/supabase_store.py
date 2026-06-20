@@ -129,9 +129,33 @@ def _nonnegative_float_env(name: str, default: float) -> float:
 
 
 _SUPABASE_TIMEOUT = httpx.Timeout(
-    _float_env("SUPABASE_TIMEOUT_S", 8.0),
-    connect=_float_env("SUPABASE_CONNECT_TIMEOUT_S", 4.0),
+    _float_env("SUPABASE_TIMEOUT_S", 4.0),
+    connect=_float_env("SUPABASE_CONNECT_TIMEOUT_S", 2.0),
 )
+
+# Circuit breaker: when Supabase is unreachable, repeatedly waiting the full
+# per-request timeout (connect + read) on every mirror op stacks up to tens of
+# seconds and starves the event loop, surfacing as upload "timed out" / "failed
+# to fetch". Once a call fails, skip Supabase entirely for a cool-off window so
+# mirror reads/writes return instantly and fall back to local cache.
+_SUPABASE_DOWN_UNTIL = 0.0
+_SUPABASE_COOLOFF_S = _float_env("SUPABASE_CIRCUIT_COOLOFF_S", 60.0)
+
+
+def _supabase_circuit_open() -> bool:
+    return time.time() < _SUPABASE_DOWN_UNTIL
+
+
+def _trip_supabase_circuit() -> None:
+    global _SUPABASE_DOWN_UNTIL
+    _SUPABASE_DOWN_UNTIL = time.time() + _SUPABASE_COOLOFF_S
+    logger.warning("Supabase circuit tripped; skipping cloud calls for %.0fs", _SUPABASE_COOLOFF_S)
+
+
+def _reset_supabase_circuit() -> None:
+    global _SUPABASE_DOWN_UNTIL
+    if _SUPABASE_DOWN_UNTIL:
+        _SUPABASE_DOWN_UNTIL = 0.0
 
 _PORTFOLIO_MIRROR_CACHE_TTL_S = _float_env(
     "SUPABASE_PORTFOLIO_CACHE_TTL_S",
@@ -280,6 +304,13 @@ class SupabasePortfolioStore:
             logger.warning("Refusing to replace portfolio mirror for tenant %s with zero prepared positions", tenant_id)
             return []
 
+        if _supabase_circuit_open():
+            # Supabase is down — persist to the local cache so backend reads
+            # (mirror GET, analytics) still see the holdings offline.
+            logger.debug("Supabase circuit open; caching portfolio mirror locally for tenant %s", tenant_id)
+            self._write_cache(tenant_id, positions)
+            return positions
+
         try:
             async with _supabase_async_client() as client:
                 # 1. Delete existing positions for tenant
@@ -332,13 +363,18 @@ class SupabasePortfolioStore:
                             logger.error("Supabase portfolio insert failed: %s", res.text)
                 if inserted:
                     self._write_cache(tenant_id, inserted)
+                _reset_supabase_circuit()
                 return inserted
         except httpx.TimeoutException:
-            logger.debug("Supabase portfolio replace timed out for tenant %s; returning empty write result", tenant_id)
-            return []
+            _trip_supabase_circuit()
+            logger.debug("Supabase portfolio replace timed out for tenant %s; caching locally", tenant_id)
+            self._write_cache(tenant_id, positions)
+            return positions
         except httpx.HTTPError as exc:
-            logger.debug("Supabase portfolio replace failed for tenant %s; returning empty write result: %s", tenant_id, exc)
-            return []
+            _trip_supabase_circuit()
+            logger.debug("Supabase portfolio replace failed for tenant %s; caching locally: %s", tenant_id, exc)
+            self._write_cache(tenant_id, positions)
+            return positions
 
     async def load_active_positions(self, tenant_id: str) -> list[dict[str, Any]]:
         if not tenant_id:
@@ -346,6 +382,9 @@ class SupabasePortfolioStore:
         fresh_cached = self._read_fresh_memory_cache(tenant_id)
         if fresh_cached:
             return fresh_cached
+        if _supabase_circuit_open():
+            cached = self._read_cache(tenant_id)
+            return cached if cached else []
         try:
             async with _supabase_async_client() as client:
                 res = await client.get(
@@ -360,25 +399,29 @@ class SupabasePortfolioStore:
                 )
                 if not res.is_success:
                     logger.error("Supabase portfolio load failed: %s", res.text)
-                    res.raise_for_status()
+                    cached = self._read_cache(tenant_id)
+                    return cached if cached else []
                 rows = res.json()
                 if isinstance(rows, list) and rows:
                     self._write_cache(tenant_id, rows)
+                _reset_supabase_circuit()
                 return rows
         except httpx.TimeoutException:
+            _trip_supabase_circuit()
             cached = self._read_cache(tenant_id)
             if cached:
                 logger.debug("Supabase portfolio load timed out for tenant %s; serving cached mirror", tenant_id)
                 return cached
             logger.warning("Supabase portfolio load timed out for tenant %s and no cached mirror is available", tenant_id)
-            raise
+            return []
         except httpx.HTTPError as exc:
+            _trip_supabase_circuit()
             cached = self._read_cache(tenant_id)
             if cached:
                 logger.debug("Supabase portfolio load failed for tenant %s; serving cached mirror: %s", tenant_id, exc)
                 return cached
             logger.warning("Supabase portfolio load failed for tenant %s and no cached mirror is available: %s", tenant_id, exc)
-            raise
+            return []
 
     async def delete_positions(self, tenant_id: str) -> int:
         if not tenant_id:

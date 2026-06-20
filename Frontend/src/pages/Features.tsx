@@ -233,7 +233,7 @@ export const Features: React.FC = () => {
               <div style={{ background: 'rgba(15,23,42,0.4)', border: '1px solid var(--border-subtle)', borderRadius: 16, padding: 28, minHeight: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', order: i % 2 === 1 ? 1 : 2 }}>
                 <div style={{ textAlign: 'center' }}>
                   <feature.icon size={48} color="var(--text-muted)" strokeWidth={1} />
-                  <div style={{ marginTop: 16, fontSize: 13, color: 'var(--text-muted)' }}>Interactive demo available after signup</div>
+                  <div style={{ marginTop: 16, fontSize: 13, color: 'var(--text-muted)' }}>Interactive demo available inside the dashboard</div>
                 </div>
               </div>
             </div>
@@ -305,3 +305,4 @@ export const Features: React.FC = () => {
 };
 
 export default Features;
+

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" fill="none">
+  <rect width="1200" height="500" fill="#14233B"></rect>
+  <defs><linearGradient id="gr1" x1="600" y1="0" x2="600" y2="500"><stop offset="0" stop-color="#9A6B16" stop-opacity=".12"></stop><stop offset="1" stop-color="#14233B"></stop></linearGradient></defs>
+  <rect width="1200" height="500" fill="url(#gr1)"></rect>
+  <g stroke="rgba(234,227,214,.05)" stroke-width="1"><line x1="200" y1="0" x2="200" y2="500"></line><line x1="400" y1="0" x2="400" y2="500"></line><line x1="600" y1="0" x2="600" y2="500"></line><line x1="800" y1="0" x2="800" y2="500"></line><line x1="1000" y1="0" x2="1000" y2="500"></line></g>
+  
+  <g transform="translate(430,80)">
+    <path d="M0,240 L170,80 L340,240" stroke="rgba(234,227,214,.12)" stroke-width="2" fill="rgba(234,227,214,.03)"></path>
+    <rect x="40" y="240" width="50" height="120" fill="rgba(234,227,214,.06)" stroke="rgba(234,227,214,.1)"></rect>
+    <rect x="145" y="240" width="50" height="120" fill="rgba(234,227,214,.06)" stroke="rgba(234,227,214,.1)"></rect>
+    <rect x="250" y="240" width="50" height="120" fill="rgba(234,227,214,.06)" stroke="rgba(234,227,214,.1)"></rect>
+    <line x1="0" y1="240" x2="340" y2="240" stroke="rgba(234,227,214,.1)" stroke-width="2"></line>
+    <line x1="0" y1="360" x2="340" y2="360" stroke="rgba(234,227,214,.1)" stroke-width="3"></line>
+  </g>
+  
+  <g transform="translate(900,200)">
+    <circle r="80" fill="none" stroke="rgba(234,227,214,.08)" stroke-width="2"></circle>
+    <path d="M-60,-50 A80,80 0 0,1 60,-50" fill="none" stroke="rgba(154,107,22,.3)" stroke-width="4"></path>
+    <line x1="0" y1="0" x2="-10" y2="-65" stroke="#9A6B16" stroke-width="2.5" stroke-linecap="round"></line>
+    <circle r="6" fill="#9A6B16" opacity=".6"></circle>
+    <text y="35" text-anchor="middle" fill="rgba(234,227,214,.25)" font-family="monospace" font-size="14">6.50%</text>
+    <text y="55" text-anchor="middle" fill="rgba(234,227,214,.15)" font-family="monospace" font-size="9">REPO RATE</text>
+  </g>
+  <text x="600" y="460" text-anchor="middle" fill="rgba(234,227,214,.1)" font-family="monospace" font-size="11" letter-spacing="6">RBI · MONETARY POLICY · STANCE · LIQUIDITY</text>
+</svg>

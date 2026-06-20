@@ -1,6 +1,14 @@
 import os
 import zipfile
 
+def resolve_source_dir() -> str:
+    """Prefer the real backend package under backend/finagent."""
+    candidate = os.path.join("backend", "finagent")
+    if os.path.isdir(candidate):
+        return candidate
+    return "finagent"
+
+
 def zipdir(path, ziph):
     # Walk the directory
     for root, dirs, files in os.walk(path):
@@ -17,6 +25,7 @@ def zipdir(path, ziph):
             ziph.write(filePath, archivePath)
 
 def create_zip():
+    source_dir = resolve_source_dir()
     # Delete existing zip if any
     if os.path.exists('backend.zip'):
         try:
@@ -31,9 +40,9 @@ def create_zip():
         # Add buildspec.yml
         if os.path.exists('buildspec.yml'):
             zipf.write('buildspec.yml', 'buildspec.yml')
-        # Add finagent directory
-        if os.path.exists('finagent'):
-            zipdir('finagent', zipf)
+        # Add the backend package as top-level finagent/ so the Dockerfile COPY works.
+        if os.path.exists(source_dir):
+            zipdir(source_dir, zipf)
             
     print("Successfully created backend.zip using Python")
 

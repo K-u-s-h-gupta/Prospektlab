@@ -53,7 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showWhatsAppInvite, setShowWhatsAppInvite] = useState(false);
-  const isReadOnly = !user;
+  const isReadOnly = false;
 
   const onboardedKeyFor = useCallback((email?: string | null) => {
     const normalized = (email || '').trim().toLowerCase();
@@ -72,43 +72,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [onboardedKeyFor, user?.email]);
 
-  const readPersistedOnboarded = useCallback((email?: string | null) => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem(onboardedKeyFor(email || user?.email)) === 'true';
-  }, [onboardedKeyFor, user?.email]);
-
   const setOnboarded = useCallback((next: boolean) => {
     persistOnboarded(next);
   }, [persistOnboarded]);
 
+  const hasLocalHoldings = useCallback((): boolean => {
+    if (typeof window === 'undefined') return false;
+    const parseNonEmpty = (raw: string | null): boolean => {
+      if (!raw) return false;
+      try {
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) && arr.length > 0;
+      } catch {
+        return false;
+      }
+    };
+    return (
+      parseNonEmpty(localStorage.getItem(MANUAL_PORTFOLIO_KEY)) ||
+      parseNonEmpty(localStorage.getItem('prospektlab_portfolio'))
+    );
+  }, []);
+
   const refreshOnboardingStatus = useCallback(async (emailOverride?: string) => {
+    // Open-access / guest mode keeps holdings in localStorage; the cloud mirror is
+    // best-effort and may be unreachable. Treat local holdings as a valid onboarded
+    // signal so an uploaded/manual portfolio doesn't bounce the user back to onboarding.
+    const localHas = hasLocalHoldings();
     try {
       const data = await getPortfolioMirror();
       const countFromPayload = Number(data?.count);
       const countFromPositions = Array.isArray(data?.positions) ? data.positions.length : 0;
-      const next = Number.isFinite(countFromPayload)
+      const mirrorHas = Number.isFinite(countFromPayload)
         ? countFromPayload > 0
         : countFromPositions > 0;
+      const next = mirrorHas || localHas;
       persistOnboarded(next, emailOverride);
       return next;
     } catch (err) {
       console.error('Failed to resolve portfolio mirror state:', err);
-      const persistedFallback = readPersistedOnboarded(emailOverride || user?.email);
-      let localSnapshotFallback = false;
-      if (typeof window !== 'undefined') {
-        try {
-          const localPortfolioRaw = localStorage.getItem('prospektlab_portfolio');
-          const localPortfolio = localPortfolioRaw ? JSON.parse(localPortfolioRaw) : [];
-          localSnapshotFallback = Array.isArray(localPortfolio) && localPortfolio.length > 0;
-        } catch {
-          localSnapshotFallback = false;
-        }
-      }
-      const fallback = persistedFallback || localSnapshotFallback;
-      setOnboardedState(fallback);
-      return fallback;
+      persistOnboarded(localHas, emailOverride || user?.email);
+      return localHas;
     }
-  }, [persistOnboarded, readPersistedOnboarded, user?.email]);
+  }, [persistOnboarded, user?.email, hasLocalHoldings]);
 
   useEffect(() => {
     // On mount, check auth status via httpOnly cookie

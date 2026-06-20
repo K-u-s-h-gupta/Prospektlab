@@ -10,16 +10,16 @@ from shutil import which
 
 
 ROOT = Path(__file__).resolve().parents[1]
-REMOTE_HOST_SCRAPER = "/home/azureuser/worker_only_package/finagent/ikg/scrapers/sebi_corporate_filings.py"
+REMOTE_HOST_SCRAPER = "/home/azureuser/backend/finagent/ikg/scrapers/sebi_corporate_filings.py"
 REMOTE_CONTAINER_SCRAPER = "/app/finagent/ikg/scrapers/sebi_corporate_filings.py"
-REMOTE_HOST_MCA = "/home/azureuser/worker_only_package/finagent/ikg/scrapers/mca_companies.py"
+REMOTE_HOST_MCA = "/home/azureuser/backend/finagent/ikg/scrapers/mca_companies.py"
 REMOTE_CONTAINER_MCA = "/app/finagent/ikg/scrapers/mca_companies.py"
-REMOTE_HOST_BSE_SHP = "/home/azureuser/worker_only_package/finagent/ikg/scrapers/bse_shp.py"
+REMOTE_HOST_BSE_SHP = "/home/azureuser/backend/finagent/ikg/scrapers/bse_shp.py"
 REMOTE_CONTAINER_BSE_SHP = "/app/finagent/ikg/scrapers/bse_shp.py"
-REMOTE_HOST_ORCHESTRATOR = "/home/azureuser/worker_only_package/finagent/ikg/pipeline/orchestrator.py"
+REMOTE_HOST_ORCHESTRATOR = "/home/azureuser/backend/finagent/ikg/pipeline/orchestrator.py"
 REMOTE_CONTAINER_ORCHESTRATOR = "/app/finagent/ikg/pipeline/orchestrator.py"
-LOCAL_TARGET_SMOKE = ROOT / "worker_only_package" / "finagent" / "ikg" / "pipeline" / "target_company_smoke.py"
-REMOTE_HOST_TARGET_SMOKE = "/home/azureuser/worker_only_package/finagent/ikg/pipeline/target_company_smoke.py"
+LOCAL_TARGET_SMOKE = ROOT / "backend" / "finagent" / "ikg" / "pipeline" / "target_company_smoke.py"
+REMOTE_HOST_TARGET_SMOKE = "/home/azureuser/backend/finagent/ikg/pipeline/target_company_smoke.py"
 REMOTE_CONTAINER_TARGET_SMOKE = "/app/finagent/ikg/pipeline/target_company_smoke.py"
 AZ_CLI = which("az") or which("az.cmd") or r"C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd"
 TARGET_CONTAINERS = [
@@ -433,12 +433,12 @@ def run_target_company_smoke(
 
 def sync_target_smoke_module(resource_group: str, vm_name: str) -> None:
     payload = base64.b64encode(LOCAL_TARGET_SMOKE.read_bytes()).decode("ascii")
-    remote_b64 = "/home/azureuser/worker_only_package/finagent/ikg/pipeline/target_company_smoke.py.b64"
+    remote_b64 = "/home/azureuser/backend/finagent/ikg/pipeline/target_company_smoke.py.b64"
     _print_remote(
         _az_invoke(
             resource_group,
             vm_name,
-            f"rm -f {remote_b64}; mkdir -p /home/azureuser/worker_only_package/finagent/ikg/pipeline",
+            f"rm -f {remote_b64}; mkdir -p /home/azureuser/backend/finagent/ikg/pipeline",
         )
     )
     chunk_size = 3000
@@ -521,7 +521,6 @@ def run_smoke(resource_group: str, vm_name: str, *, max_companies: int, years_ba
         f"docker exec deployment-scheduler-1 python -m finagent.ikg.pipeline.orchestrator --phase governance_directors --max-companies {max_companies} --years-back {years_back}",
         f"docker exec deployment-scheduler-1 python -m finagent.ikg.pipeline.orchestrator --phase director_kmp --max-companies {max_companies} --years-back {years_back}",
         f"docker exec deployment-scheduler-1 python -m finagent.ikg.pipeline.orchestrator --phase build_graph --max-companies {max_companies}",
-        f"docker exec deployment-scheduler-1 python -m finagent.ikg.pipeline.orchestrator --phase memgraph_project --max-companies {max_companies}",
         "docker exec deployment-scheduler-1 python -m finagent.ikg.pipeline.orchestrator --phase qdrant_index",
     ]
     for command in commands:

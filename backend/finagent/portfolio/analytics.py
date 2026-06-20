@@ -124,9 +124,18 @@ import time
 _FETCH_CACHE: dict[tuple, tuple[float, dict]] = {}
 _CACHE_TTL = 900
 _CACHE_LOCK = threading.Lock()
+try:
+    # Hard ceiling on each yfinance HTTP call so a throttled/unreachable Yahoo
+    # (HTTP 429 triggers internal retries) cannot stall analytics for 30s+.
+    _YF_TIMEOUT_S = max(2.0, float(os.environ.get("FINAGENT_YF_TIMEOUT_S", "6")))
+except Exception:
+    _YF_TIMEOUT_S = 6.0
 _YF_RATE_LOCK = threading.Lock()
 _LAST_YF_CALL_TIME: float = 0.0
-_MIN_YF_INTERVAL_SECONDS = 2.0
+try:
+    _MIN_YF_INTERVAL_SECONDS = max(0.05, float(os.environ.get("FINAGENT_YF_MIN_INTERVAL_S", "0.35")))
+except Exception:
+    _MIN_YF_INTERVAL_SECONDS = 0.35
 
 
 def _yf_rate_limit() -> None:
@@ -161,7 +170,7 @@ def _fetch_history(ticker: str, period: str = "1y") -> dict[str, Any]:
         _configure_yfinance(yf)
         t = yf.Ticker(ticker)
         norm_period = _normalize_period(period)
-        hist = t.history(period=norm_period, auto_adjust=True)
+        hist = t.history(period=norm_period, auto_adjust=True, timeout=_YF_TIMEOUT_S)
         if hist.empty:
             return {}
         dates: list[str] = []
@@ -174,10 +183,12 @@ def _fetch_history(ticker: str, period: str = "1y") -> dict[str, Any]:
             prices.append(price)
         if not prices:
             return {}
+        # Indian market data — default to INR. Avoid t.info (a separate, slow
+        # yfinance network call that hangs hard when Yahoo throttles).
         return {
             "dates": dates,
             "prices": prices,
-            "currency": t.info.get("currency", "INR"),
+            "currency": "INR",
         }
     except Exception as exc:
         logger.debug("Yahoo history fetch failed for %s (period=%s): %s", ticker, period, exc)
@@ -208,7 +219,7 @@ def _fetch_quote(ticker: str) -> dict[str, Any]:
         import yfinance as yf
         _configure_yfinance(yf)
         t = yf.Ticker(ticker)
-        hist = t.history(period="5d", auto_adjust=True)
+        hist = t.history(period="5d", auto_adjust=True, timeout=_YF_TIMEOUT_S)
         if hist.empty:
             return {}
         closes = _clean_price_series(hist["Close"].tolist())
@@ -220,7 +231,7 @@ def _fetch_quote(ticker: str) -> dict[str, Any]:
             "price": last,
             "prev_close": prev,
             "day_change_pct": (last - prev) / prev if prev else 0.0,
-            "currency": t.info.get("currency", "INR"),
+            "currency": "INR",
             "source": "yfinance",
             "as_of": datetime.now(timezone.utc).isoformat(),
         }

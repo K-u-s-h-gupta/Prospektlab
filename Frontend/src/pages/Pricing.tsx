@@ -106,7 +106,7 @@ export const Pricing: React.FC = () => {
 
   const handleUpgrade = async (planName: string) => {
     if (planName === 'Free Forever') { navigate('/dashboard'); return; }
-    if (!isAuthenticated) { navigate('/login?redirect=/pricing'); return; }
+    if (!isAuthenticated) { navigate('/dashboard'); return; }
     if (isPro) { showToast('You are already on Pro Analyst.', 'info'); return; }
 
     if (!(await loadRazorpay())) {
@@ -303,3 +303,4 @@ export const Pricing: React.FC = () => {
 };
 
 export default Pricing;
+

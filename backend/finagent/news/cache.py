@@ -16,21 +16,26 @@ logger = logging.getLogger("finagent.news.cache")
 _CACHE_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "news_cache.sqlite3"
 
 
-def _ensure_db() -> None:
+def _ensure_db() -> bool:
     _CACHE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(str(_CACHE_DB_PATH), check_same_thread=False) as conn:
-        # Create minimal table if it doesn't exist (old DBs may have different schema)
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS news_cache (
-                cache_key TEXT PRIMARY KEY,
-                results TEXT NOT NULL,
-                fetched_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            """
-        )
-        # Run migration (adds source, cache_key, etc. and safe indexes)
-        _migrate_news_cache_schema(conn)
+    try:
+        with sqlite3.connect(str(_CACHE_DB_PATH), check_same_thread=False) as conn:
+            # Create minimal table if it doesn't exist (old DBs may have different schema)
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS news_cache (
+                    cache_key TEXT PRIMARY KEY,
+                    results TEXT NOT NULL,
+                    fetched_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                """
+            )
+            # Run migration (adds source, cache_key, etc. and safe indexes)
+            _migrate_news_cache_schema(conn)
+        return True
+    except sqlite3.Error as exc:
+        logger.warning("News cache DB unavailable (%s); proceeding without persistent cache.", exc)
+        return False
 
 
 def _migrate_news_cache_schema(conn: sqlite3.Connection) -> None:
@@ -66,13 +71,19 @@ def _migrate_news_cache_schema(conn: sqlite3.Connection) -> None:
 
 def cache_get(cache_key: str, ttl_minutes: int = 30, source: str = "") -> list[dict[str, Any]] | None:
     """Get cached results if within TTL."""
-    _ensure_db()
+    if not _ensure_db():
+        return None
     cutoff = (datetime.now(timezone.utc) - timedelta(minutes=ttl_minutes)).isoformat()
-    with sqlite3.connect(str(_CACHE_DB_PATH), check_same_thread=False) as conn:
-        row = conn.execute(
-            "SELECT results FROM news_cache WHERE cache_key = ? AND source = ? AND fetched_at > ?",
-            (cache_key, source, cutoff),
-        ).fetchone()
+    try:
+        with sqlite3.connect(str(_CACHE_DB_PATH), check_same_thread=False) as conn:
+            row = conn.execute(
+                "SELECT results FROM news_cache WHERE cache_key = ? AND source = ? AND fetched_at > ?",
+                (cache_key, source, cutoff),
+            ).fetchone()
+    except sqlite3.Error as exc:
+        logger.warning("News cache read failed (%s); serving uncached results.", exc)
+        return None
+
     if row:
         try:
             return json.loads(row[0])
@@ -83,20 +94,29 @@ def cache_get(cache_key: str, ttl_minutes: int = 30, source: str = "") -> list[d
 
 def cache_set(cache_key: str, results: list[dict[str, Any]], source: str = "") -> None:
     """Store results in cache. Uses INSERT OR REPLACE for maximum compatibility across schema versions."""
-    _ensure_db()
-    with sqlite3.connect(str(_CACHE_DB_PATH), check_same_thread=False) as conn:
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO news_cache (cache_key, source, results, fetched_at)
-            VALUES (?, ?, ?, ?)
-            """,
-            (cache_key, source, json.dumps(results), datetime.now(timezone.utc).isoformat()),
-        )
+    if not _ensure_db():
+        return
+    try:
+        with sqlite3.connect(str(_CACHE_DB_PATH), check_same_thread=False) as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO news_cache (cache_key, source, results, fetched_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (cache_key, source, json.dumps(results), datetime.now(timezone.utc).isoformat()),
+            )
+    except sqlite3.Error as exc:
+        logger.warning("News cache write failed (%s); continuing without cache persistence.", exc)
 
 
 def cache_clear_source(source: str) -> int:
     """Clear all cache entries for a source."""
-    _ensure_db()
-    with sqlite3.connect(str(_CACHE_DB_PATH), check_same_thread=False) as conn:
-        cur = conn.execute("DELETE FROM news_cache WHERE source = ?", (source,))
-        return cur.rowcount
+    if not _ensure_db():
+        return 0
+    try:
+        with sqlite3.connect(str(_CACHE_DB_PATH), check_same_thread=False) as conn:
+            cur = conn.execute("DELETE FROM news_cache WHERE source = ?", (source,))
+            return cur.rowcount
+    except sqlite3.Error as exc:
+        logger.warning("News cache clear failed (%s).", exc)
+        return 0

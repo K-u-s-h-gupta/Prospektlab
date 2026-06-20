@@ -202,6 +202,24 @@ def fetch_portfolio_news(
             "score": item.get("score", 0.0),
             "related_holding": item.get("related_holding"),
             "tags": [item.get("category", "general"), _freshness_label(pub_dt)],
+            "image": (
+                item.get("image")
+                or item.get("image_url")
+                or item.get("thumbnail")
+                or item.get("urlToImage")
+                or item.get("banner")
+                or item.get("og_image")
+                or ""
+            ),
+            "image_url": (
+                item.get("image")
+                or item.get("image_url")
+                or item.get("thumbnail")
+                or item.get("urlToImage")
+                or item.get("banner")
+                or item.get("og_image")
+                or ""
+            ),
         })
 
     cache_set(cache_key, final_items, source="combined")

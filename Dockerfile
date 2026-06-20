@@ -28,8 +28,8 @@ RUN apt-get update && apt-get install -y \
     libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file
-COPY finagent/requirements-finagent.txt ./
+# Copy requirements file from the active backend package tree
+COPY backend/finagent/requirements-finagent.txt ./
 
 # Install python dependencies
 RUN pip install --upgrade pip && \
@@ -40,8 +40,8 @@ RUN pip install --upgrade pip && \
 RUN crawl4ai-setup
 
 # Copy the application code
-# We copy it into the /app/finagent directory so that `uvicorn finagent.gateway.run:app` works
-COPY finagent/ ./finagent/
+# The runtime package lives in backend/finagent; copy it into /app/finagent.
+COPY backend/finagent/ ./finagent/
 
 # Expose the port FastAPI runs on
 EXPOSE 8080

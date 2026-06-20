@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" fill="none">
+  <rect width="1200" height="500" fill="#14233B"></rect>
+  <defs><linearGradient id="ge1" x1="0" y1="500" x2="1200" y2="0"><stop offset="0" stop-color="#1F56D6" stop-opacity=".2"></stop><stop offset="1" stop-color="#14233B"></stop></linearGradient></defs>
+  <rect width="1200" height="500" fill="url(#ge1)"></rect>
+  <g stroke="rgba(234,227,214,.05)" stroke-width="1">
+    <line x1="200" y1="0" x2="200" y2="500"></line><line x1="400" y1="0" x2="400" y2="500"></line>
+    <line x1="600" y1="0" x2="600" y2="500"></line><line x1="800" y1="0" x2="800" y2="500"></line><line x1="1000" y1="0" x2="1000" y2="500"></line>
+    <line x1="0" y1="125" x2="1200" y2="125"></line><line x1="0" y1="250" x2="1200" y2="250"></line><line x1="0" y1="375" x2="1200" y2="375"></line>
+  </g>
+  
+  <polyline points="100,380 200,360 300,340 400,350 500,300 600,280 700,240 800,200 900,220 1000,160 1100,140" stroke="#1F56D6" stroke-width="2.5" fill="none" stroke-linejoin="round"></polyline>
+  <path d="M100,380 200,360 300,340 400,350 500,300 600,280 700,240 800,200 900,220 1000,160 1100,140 1100,500 100,500Z" fill="url(#gfill1)" opacity=".3"></path>
+  <defs><linearGradient id="gfill1" x1="600" y1="140" x2="600" y2="500"><stop offset="0" stop-color="#1F56D6" stop-opacity=".4"></stop><stop offset="1" stop-color="#1F56D6" stop-opacity="0"></stop></linearGradient></defs>
+  
+  <g transform="translate(180,80)">
+    <rect width="80" height="120" rx="6" fill="rgba(234,227,214,.06)" stroke="rgba(234,227,214,.1)"></rect>
+    <rect x="12" y="15" width="56" height="8" rx="2" fill="rgba(31,86,214,.2)"></rect>
+    <rect x="12" y="30" width="56" height="8" rx="2" fill="rgba(31,86,214,.15)"></rect>
+    <rect x="12" y="45" width="56" height="8" rx="2" fill="rgba(31,86,214,.1)"></rect>
+    <circle cx="60" cy="19" r="3" fill="#1F56D6" opacity=".6"></circle>
+    <circle cx="60" cy="34" r="3" fill="#167A53" opacity=".5"></circle>
+  </g>
+  <g transform="translate(280,100)">
+    <rect width="80" height="100" rx="6" fill="rgba(234,227,214,.05)" stroke="rgba(234,227,214,.08)"></rect>
+    <rect x="12" y="15" width="56" height="8" rx="2" fill="rgba(31,86,214,.15)"></rect>
+    <rect x="12" y="30" width="56" height="8" rx="2" fill="rgba(31,86,214,.1)"></rect>
+    <circle cx="60" cy="19" r="3" fill="#1F56D6" opacity=".4"></circle>
+  </g>
+  
+  <text x="850" y="100" fill="rgba(31,86,214,.25)" font-family="monospace" font-size="48">{</text>
+  <text x="990" y="100" fill="rgba(31,86,214,.2)" font-family="monospace" font-size="48">}</text>
+  <circle cx="1100" cy="140" r="5" fill="#1F56D6" opacity=".6"></circle>
+  <text x="600" y="460" text-anchor="middle" fill="rgba(234,227,214,.1)" font-family="monospace" font-size="11" letter-spacing="6">EARNINGS · IT SERVICES · Q4 GUIDANCE</text>
+</svg>

@@ -60,7 +60,11 @@ async def extract_portfolio_from_image(image_bytes: bytes, filename: str) -> Por
         raise PortfolioImageExtractionError("openai package is not installed.") from exc
 
     data_url = f"data:{_mime_type(filename)};base64,{base64.b64encode(image_bytes).decode('ascii')}"
-    client = AsyncOpenAI(api_key=api_key)
+    # Fail fast when OpenAI is unreachable/slow instead of letting the SDK's default
+    # retries + long timeout stack up into a 90s+ upload hang. The endpoint wraps any
+    # failure into an actionable error directing the user to CSV/XLSX upload.
+    vision_timeout = float(os.getenv("PORTFOLIO_VISION_TIMEOUT_S", "30") or 30)
+    client = AsyncOpenAI(api_key=api_key, timeout=vision_timeout, max_retries=0)
     model = os.getenv("PORTFOLIO_VISION_MODEL", "gpt-5.4-mini")
 
     prompt = (

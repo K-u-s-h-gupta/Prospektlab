@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "purviewSourceMode": "all_available",
+  "sources": [
+    {
+      "name": "app-sql-primary",
+      "type": "AzureSqlDatabase",
+      "host": "<sql-server-name>.database.windows.net",
+      "database": "<database-name>",
+      "notes": "Register and scan this source for governance + classification."
+    },
+    {
+      "name": "app-storage-documents",
+      "type": "AzureBlobStorage",
+      "account": "<storage-account-name>",
+      "container": "<container-name>",
+      "notes": "Register this container for cataloging, lineage, and sensitive data discovery."
+    },
+    {
+      "name": "app-datalake",
+      "type": "AzureDataLakeStorageGen2",
+      "account": "<datalake-account-name>",
+      "filesystem": "<filesystem-name>",
+      "notes": "Add scanning scope to align with your active production paths."
+    }
+  ]
+}

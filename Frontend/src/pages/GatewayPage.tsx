@@ -4,7 +4,12 @@ import { Logo } from '../components/layout/Logo';
 import { Keyboard, UploadCloud, ArrowRight, TrendingUp, ShieldCheck, BadgeInfo } from 'lucide-react';
 import { trackEvent } from '../telemetry';
 
-export const GatewayPage: React.FC = () => {
+interface GatewaySetupCardProps {
+  embedded?: boolean;
+  onClose?: () => void;
+}
+
+export const GatewaySetupCard: React.FC<GatewaySetupCardProps> = ({ embedded = false, onClose }) => {
   const navigate = useNavigate();
   const [name, setName] = useState(() => localStorage.getItem('prospektlab_username') || '');
   const [style, setStyle] = useState<'Conservative' | 'Balanced' | 'Growth'>(() => {
@@ -49,12 +54,19 @@ export const GatewayPage: React.FC = () => {
   const handleUpload = () => {
     persistProfile();
     trackEvent('onboarding_upload_selected', { style });
-    navigate('/login?redirect=/onboarding/upload');
+    navigate('/onboarding/upload');
   };
 
   return (
-    <div className="onboarding-screen animate-fade-in-up">
-      <div className="glass onboarding-card">
+    <div className={`glass onboarding-card${embedded ? ' onboarding-card-embedded' : ''}`}>
+      {embedded && onClose && (
+        <div className="onboarding-card-close-row">
+          <button type="button" className="onboarding-card-close" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      )}
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center' }}>
           <div style={{
             background: 'var(--gradient-brand)',
@@ -133,7 +145,7 @@ export const GatewayPage: React.FC = () => {
         </div>
 
         {/* Choice cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
           <button
             type="button"
             onClick={handleManual}
@@ -172,7 +184,7 @@ export const GatewayPage: React.FC = () => {
             <div>
               <div style={{ fontSize: '14px', fontWeight: 600 }}>Type manually</div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                Enter your holdings quickly. No login required to preview your dashboard.
+                Enter your holdings quickly. No account setup is required to preview your dashboard.
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', fontSize: '12px', fontWeight: 600, marginTop: 'auto' }}>
@@ -226,9 +238,17 @@ export const GatewayPage: React.FC = () => {
             </div>
           </button>
         </div>
-      </div>
+    </div>
+  );
+};
+
+export const GatewayPage: React.FC = () => {
+  return (
+    <div className="onboarding-screen animate-fade-in-up">
+      <GatewaySetupCard />
     </div>
   );
 };
 
 export default GatewayPage;
+

@@ -230,13 +230,25 @@ def test_portfolio_mirror_api_replaces_only_verified_tenant(monkeypatch):
     from finagent.gateway.run import JWT_SECRET, app
 
     client = TestClient(app, raise_server_exceptions=False)
-    token_a = _mint_test_token({"user_id": "tenant-a", "email": "a@example.com"}, JWT_SECRET)
-    token_b = _mint_test_token({"user_id": "tenant-b", "email": "b@example.com"}, JWT_SECRET)
+    token_a = _mint_test_token({"user_id": "tenant-mirror-a", "email": "a@example.com"}, JWT_SECRET)
+    token_b = _mint_test_token({"user_id": "tenant-mirror-b", "email": "b@example.com"}, JWT_SECRET)
 
     response = client.post(
         "/portfolio/mirror",
         headers={"Authorization": f"Bearer {token_a}"},
-        json={"positions": [{"symbol": "TCS", "exchange": "NSE", "quantity": 2, "market_value": 1000, "cost_basis": 500}]},
+        json={
+            "positions": [
+                {
+                    "symbol": "TCS",
+                    "exchange": "NSE",
+                    "quantity": 1,
+                    "market_value": 3500,
+                    "cost_basis": 3000,
+                    "name": "Tata Consultancy Services",
+                    "active": True,
+                }
+            ]
+        },
     )
 
     assert response.status_code == 200
@@ -403,8 +415,65 @@ def test_screenshot_upload_requires_review_and_does_not_write(monkeypatch):
     body = response.json()
     assert body["status"] == "REVIEW_REQUIRED"
     assert body["review_id"]
+    assert isinstance(body.get("review_token"), str) and len(body.get("review_token", "")) >= 16
     assert asyncio.run(load_active_positions("tenant-img")) == []
 
+
+
+
+def test_confirm_extraction_requires_review_token_for_cross_tenant_review(monkeypatch):
+    from finagent.gateway.run import JWT_SECRET, app
+
+    async def fake_image_extract(_image_bytes, _filename):
+        return PortfolioExtractionSchema.model_validate({
+            "status": "REVIEW_REQUIRED",
+            "source_type": "image",
+            "confidence": 0.9,
+            "positions": [{
+                "symbol": "TCS",
+                "exchange": "NSE",
+                "quantity": 2,
+                "market_value": 7000,
+                "name": "Tata Consultancy Services",
+                "confidence": 0.9,
+                "raw_evidence": "TCS 2 7000",
+            }],
+        })
+
+    monkeypatch.setattr("finagent.gateway.run.extract_portfolio_from_image", fake_image_extract)
+    client = TestClient(app, raise_server_exceptions=False)
+
+    token_a = _mint_test_token({"user_id": "tenant-a", "email": "tenant-a@example.com"}, JWT_SECRET)
+    upload = client.post(
+        "/api/portfolio/upload-screenshot",
+        headers={"Authorization": f"Bearer {token_a}"},
+        files={"file": ("holdings.png", b"\x89PNG\x0d\x0a\x1a\x0a fake", "image/png")},
+    )
+    assert upload.status_code == 200
+    upload_body = upload.json()
+    review_id = upload_body["review_id"]
+    review_token = upload_body["review_token"]
+
+    token_b = _mint_test_token({"user_id": "tenant-b", "email": "tenant-b@example.com"}, JWT_SECRET)
+
+    denied = client.post(
+        "/api/portfolio/confirm-extraction",
+        headers={"Authorization": f"Bearer {token_b}"},
+        json={"review_id": review_id},
+    )
+    assert denied.status_code == 403
+    assert denied.json().get("detail") == "Review payload belongs to a different tenant."
+
+    allowed = client.post(
+        "/api/portfolio/confirm-extraction",
+        headers={"Authorization": f"Bearer {token_b}"},
+        json={"review_id": review_id, "review_token": review_token},
+    )
+    assert allowed.status_code == 200
+    allowed_body = allowed.json()
+    assert allowed_body.get("code") == "MIRROR_SYNCHRONIZED"
+    assert asyncio.run(load_active_positions("tenant-b"))
+    assert asyncio.run(load_active_positions("tenant-a")) == []
 
 def test_screenshot_upload_rejects_non_holdings_screen(monkeypatch):
     from finagent.gateway.run import JWT_SECRET, app

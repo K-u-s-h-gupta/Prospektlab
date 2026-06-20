@@ -156,7 +156,7 @@ Resources:
   SourceBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'finagent-backend-src-${AWS::AccountId}'
+      BucketName: !Sub 'finagent-backend-src-${AWS::Region}-${AWS::AccountId}'
       VersioningConfiguration:
         Status: Enabled
 

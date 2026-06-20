@@ -19,6 +19,8 @@ ECR_REPO_NAME="${ECR_REPO_NAME:-prospektlab-backend}"
 # Backend Configuration
 BACKEND_URL="${BACKEND_URL:-https://api.prospektlab.com}"  # Your ECS backend URL
 AMPLIFY_DOMAIN="${AMPLIFY_DOMAIN:-https://app.prospektlab.com}"  # Your Amplify domain
+FRONTEND_PRIMARY_URL="${FRONTEND_PRIMARY_URL:-https://prospektlab.com}"
+CORS_ORIGINS="${CORS_ORIGINS:-https://prospektlab.com,https://www.prospektlab.com,$AMPLIFY_DOMAIN}"
 
 # MCP Services Configuration
 MCP_NSE_URL="${MCP_NSE_URL:-http://mcp-nse-service:8001/mcp}"
@@ -62,6 +64,8 @@ echo "   ECS Cluster: $ECS_CLUSTER"
 echo "   ECS Service: $ECS_SERVICE"
 echo "   Backend URL: $BACKEND_URL"
 echo "   Amplify Domain: $AMPLIFY_DOMAIN"
+echo "   Frontend Primary URL: $FRONTEND_PRIMARY_URL"
+echo "   CORS Origins: $CORS_ORIGINS"
 echo "   App Insights Enabled: $APPINSIGHTS_ENABLED"
 echo ""
 
@@ -119,7 +123,9 @@ TASK_DEF=$(aws ecs describe-task-definition \
 # Create new task definition with updated image and environment variables
 NEW_TASK_DEF=$(echo $TASK_DEF | jq \
 	--arg IMAGE "$ECR_IMAGE_URL" \
-	--arg CORS_ORIGINS "$AMPLIFY_DOMAIN" \
+	--arg CORS_ORIGINS "$CORS_ORIGINS" \
+	--arg FINAGENT_FRONTEND_URL "$FRONTEND_PRIMARY_URL" \
+	--arg FRONTEND_URL "$FRONTEND_PRIMARY_URL" \
 	--arg MCP_NSE "$MCP_NSE_URL" \
 	--arg MCP_FUNDAMENTALS "$MCP_FUNDAMENTALS_URL" \
 	--arg MCP_RESEARCH "$MCP_RESEARCH_URL" \
@@ -133,6 +139,8 @@ NEW_TASK_DEF=$(echo $TASK_DEF | jq \
 	 .containerDefinitions[0].environment = (
 	   .containerDefinitions[0].environment // [] |
 	   map(select(.name != "CORS_ORIGINS" and 
+				  .name != "FINAGENT_FRONTEND_URL" and
+				  .name != "FRONTEND_URL" and
 				  .name != "MCP_NSE_INDIA_URL" and 
 				  .name != "MCP_FUNDAMENTALS_URL" and 
 				  .name != "MCP_RESEARCH_URL" and 
@@ -144,6 +152,8 @@ NEW_TASK_DEF=$(echo $TASK_DEF | jq \
 				  .name != "APPINSIGHTS_ROLE_NAME")) +
 	   [
 		 {name: "CORS_ORIGINS", value: $CORS_ORIGINS},
+		 {name: "FINAGENT_FRONTEND_URL", value: $FINAGENT_FRONTEND_URL},
+		 {name: "FRONTEND_URL", value: $FRONTEND_URL},
 		 {name: "MCP_NSE_INDIA_URL", value: $MCP_NSE},
 		 {name: "MCP_FUNDAMENTALS_URL", value: $MCP_FUNDAMENTALS},
 		 {name: "MCP_RESEARCH_URL", value: $MCP_RESEARCH},

@@ -172,7 +172,7 @@ if ($WriteToFinagentEnv) {
     Set-EnvFileValue -Path $envPath -Name "ACS_SMS_CONNECTION_STRING" -Value $keys.primaryConnectionString
 
     Write-Host ""
-    Write-Host "Updated local finagent/.env with ACS auth email settings."
+    Write-Host "Updated local backend/finagent/.env with ACS auth email settings."
     if ($brandReady) {
         Write-Host "The branded domain is ready, so the env file now points auth mail at $BrandedDomain."
     } else {

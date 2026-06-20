@@ -1,1963 +1,2212 @@
-# PROSPEKTLAB Architecture
+# PROSPEKTLAB — Complete Architecture Documentation
 
-This document describes the complete architecture, workflow, and component breakdown of the ProspektLab platform — an AI-powered financial research system with India-first design.
+> **Financial Intelligence Operating System**  
+> AI-powered automated financial research, portfolio analytics, content generation, and governance intelligence platform.
 
 ---
 
 ## Table of Contents
 
-1. [High-Level Architecture](#high-level-architecture)
-2. [Technology Stack](#technology-stack)
-3. [System Layers](#system-layers)
-4. [Request Flow](#request-flow)
-5. [Core Agent Loop](#core-agent-loop)
-6. [Multi-Agent Orchestration](#multi-agent-orchestration)
-7. [Deep Research (Multi-Pass)](#deep-research-multi-pass)
-8. [MCP Server Layer](#mcp-server-layer)
-9. [Portfolio System](#portfolio-system)
-10. [Memory System](#memory-system)
-11. [Entity Resolution & Geography](#entity-resolution--geography)
-12. [Synthesis & Output](#synthesis--output)
-13. [Data Layer & External Providers](#data-layer--external-providers)
-14. [Frontend Architecture](#frontend-architecture)
-15. [Gateway & API Endpoints](#gateway--api-endpoints)
-16. [Security & Auth](#security--auth)
-17. [Monitoring & Telemetry](#monitoring--telemetry)
-18. [Deployment](#deployment)
-19. [Data Flow Diagrams](#data-flow-diagrams)
-20. [Complete File Inventory](#complete-file-inventory)
+1. [System Architecture Overview](#1-system-architecture-overview)
+2. [Technology Stack](#2-technology-stack)
+3. [Directory Structure](#3-directory-structure)
+4. [API Reference (All Endpoints)](#4-api-reference-all-endpoints)
+5. [Data Flow & Workflows](#5-data-flow--workflows)
+6. [Multi-Agent Research Engine (FinAgent)](#6-multi-agent-research-engine-finagent)
+7. [Intelligent Knowledge Graph (IKG)](#7-intelligent-knowledge-graph-ikg)
+8. [Portfolio Analytics Engine](#8-portfolio-analytics-engine)
+9. [Content Automation Engine](#9-content-automation-engine)
+10. [Frontend Architecture](#10-frontend-architecture)
+11. [Database Schema](#11-database-schema)
+12. [State Management](#12-state-management)
+13. [Authentication & Security](#13-authentication--security)
+14. [Deployment & Infrastructure](#14-deployment--infrastructure)
+15. [CI/CD Pipelines](#15-cicd-pipelines)
+16. [Configuration Reference](#16-configuration-reference)
+17. [Third-Party Integrations](#17-third-party-integrations)
 
 ---
 
-## High-Level Architecture
+## 1. System Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     PRESENTATION LAYER                           │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  React 18 + Vite 5 + TypeScript 5 (Frontend/app/)          │  │
-│  │  • Dashboard, Chat, Portfolio, Auth, Marketing Pages       │  │
-│  │  • SSE event consumption for real-time agent progress      │  │
-│  │  • HashRouter SPA with AuthContext                         │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                    HTTPS / SSE Stream
-                              │
-┌─────────────────────────────────────────────────────────────────┐
-│                     APPLICATION LAYER                            │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  FastAPI Gateway (finagent/gateway/run.py)                 │  │
-│  │  • Auth endpoints (local + Supabase JWT)                   │  │
-│  │  • Research orchestration & SSE streaming                  │  │
-│  │  • Portfolio ingestion & analytics                         │  │
-│  │  • Intent classification, rate limiting, CORS              │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                            │                                     │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  Core Agent Loop (finagent/run_agent.py)                   │  │
-│  │  • Identify → Enrich → Search → Multi-Agent → Synthesis    │  │
-│  │  • SessionBus event emission                               │  │
-│  │  • Configurable depth/reflection/memory                    │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                            │                                     │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  Multi-Agent Orchestrator (finagent/agents/)               │  │
-│  │  10 specialist subagents in dependency-aware waves         │  │
-│  │  + Verifier + Blind-spot detector                          │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────────┐
-│                     TOOLING & DATA LAYER                          │
-│  ┌────────────────────┐  ┌────────────────────────────────────┐ │
-│  │  MCP Servers        │  │  Direct Data Tools                 │ │
-│  │  • :8003 Discovery  │  │  • yfinance (quotes + fundamentals)│ │
-│  │    (search, NSE,    │  │  • SEC EDGAR (company facts)       │ │
-│  │    docs, research)  │  │  • India (Screener.in, Moneycontrol)│ │
-│  │  • :8005 Quant       │  │  • Reddit, HackerNews, StockTwits │ │
-│  │    (fundamentals,    │  │  • Wikipedia, News Feed, Forex    │ │
-│  │    valuation, risk)  │  │  • DuckDuckGo search + scraping   │ │
-│  └────────────────────┘  │  • Crawl4AI full-page extraction    │ │
-│                          │  • SearXNG meta-search              │ │
-│                          │  • Valuation Engine (deterministic) │ │
-│                          └────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────────┐
-│                     STORAGE LAYER                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │  SQLite       │  │  Supabase    │  │  File System         │  │
-│  │  .finagent/   │  │  PostgreSQL  │  │  memos/, sessions/   │  │
-│  │  memory.sqlite3│  │  (auth+data) │  │  cache/, users/      │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+│                     AWS AMPLIFY (Frontend)                       │
+│   React 18 + Vite + TypeScript SPA                               │
+│   HashRouter, Google OAuth, Razorpay Checkout                    │
+│   Azure Application Insights telemetry                           │
+└────────────────────────┬────────────────────────────────────────┘
+                         │  HTTPS (API calls + SSE streaming)
+                         │
+┌────────────────────────▼────────────────────────────────────────┐
+│                  AWS ECS FARGATE (Backend Gateway)                │
+│   FastAPI + Uvicorn (finagent.gateway.run:app)                   │
+│                                                                  │
+│   ┌─────────────┐  ┌──────────────┐  ┌───────────────────────┐  │
+│   │ Auth Module  │  │ Research     │  │ Portfolio Analytics   │  │
+│   │ (JWT+Google) │  │ Orchestrator │  │ & Governance Engine   │  │
+│   └─────────────┘  └──────────────┘  └───────────────────────┘  │
+│   ┌─────────────┐  ┌──────────────┐  ┌───────────────────────┐  │
+│   │ Content      │  │ Market Data  │  │ Payments (Razorpay)   │  │
+│   │ Automation   │  │ APIs         │  │                       │  │
+│   └─────────────┘  └──────────────┘  └───────────────────────┘  │
+└───┬──────────────┬──────────────┬──────────────┬────────────────┘
+    │              │              │              │
+    ▼              ▼              ▼              ▼
+┌────────┐  ┌───────────┐  ┌───────────┐  ┌────────────────────┐
+│Supabase│  │Azure VMs  │  │OpenAI     │  │External Data        │
+│        │  │(IKG Stack)│  │Azure/xAI  │  │Sources              │
+│Postgres│  │           │  │           │  │                     │
+│Auth    │  │Postgres 16│  │GPT-5.4-min│  │Yahoo Finance, SEC   │
+│Users   │  │Redis 7    │  │GPT-4o-mini│  │NSE, BSE, SEBI, MCA │
+│Payments│  │Qdrant     │  │Grok-3     │  │Reddit, HackerNews   │
+│Memory  │  │Celery     │  │           │  │Wikipedia, News RSS  │
+│        │  │Neo4j      │  │           │  │                     │
+│        │  │Scrapers   │  │           │  │                     │
+└────────┘  └───────────┘  └───────────┘  └────────────────────┘
+```
+
+### Multi-Cloud Topology
+
+| Component | Cloud Provider | Service |
+|-----------|---------------|---------|
+| **Frontend SPA** | AWS | Amplify Hosting |
+| **Backend Gateway** | AWS | ECS Fargate |
+| **CI/CD** | AWS | CodeBuild + CodePipeline |
+| **IKG Pipeline Workers** | Azure | Linux VMs (Docker Compose) |
+| **Database** | Supabase | Managed PostgreSQL |
+| **Email/SMS** | Azure | Communication Services (ACS) |
+| **Monitoring** | Azure | Application Insights + Monitor |
+
+---
+
+## 2. Technology Stack
+
+### Backend — Python 3.11
+
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| **Web Framework** | FastAPI | 0.100+ |
+| **ASGI Server** | Uvicorn | 0.23+ |
+| **AI/LLM** | OpenAI SDK, xAI Grok | 1.0+ |
+| **Agent Framework** | LangChain, LangGraph | 0.2+ |
+| **Data Science** | Pandas, NumPy | 2.0+ / 1.24+ |
+| **Finance** | yfinance, PyPortfolioOpt | 0.2.40+ |
+| **Doc Parsing** | pypdf, PyMuPDF, casparser, msoffcrypto-tool, Azure Doc Intelligence | |
+| **Web Scraping** | Patchright (Playwright), crawl4ai, httpx, aiohttp | |
+| **Search** | Qdrant (vector), Azure Cognitive Search (hybrid) | |
+| **Graph DB** | Neo4j | 5.20+ |
+| **Database** | psycopg (PostgreSQL via Supabase) | 3.1+ |
+| **Task Queue** | Celery + Redis broker | 5.4+ |
+| **Scheduler** | APScheduler | 3.10+ |
+| **Auth** | PyJWT, Google Identity Services | 2.0+ |
+| **Payments** | Razorpay SDK | 1.4+ |
+| **Charts** | Matplotlib | 3.8+ |
+| **MCP** | fastmcp | 2.0+ |
+| **Testing** | pytest | 8.0+ |
+
+### Frontend — TypeScript
+
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| **Framework** | React | 18.3 |
+| **Build Tool** | Vite | 5.2+ |
+| **Language** | TypeScript | 5.2+ |
+| **Routing** | React Router DOM (hash-based) | 6.23+ |
+| **Charts** | Chart.js + react-chartjs-2 + chartjs-chart-treemap | 4.4+ |
+| **Icons** | lucide-react | 0.379+ |
+| **Auth** | Google Identity Services (GIS) | — |
+| **Payments** | Razorpay Checkout | — |
+| **Telemetry** | Azure Application Insights | — |
+
+---
+
+## 3. Directory Structure
+
+```
+D:\PROSPEKTLAB\
+│
+├── pyproject.toml                  # Python project config & dependencies
+├── package.json                    # Root: playwright dependency
+├── uv.lock                         # Python dependency lock file
+├── Dockerfile                      # Main FastAPI gateway Docker image
+├── .python-version                 # 3.11
+├── .mcp.json                       # MCP server config (Greptile)
+├── opencode.json                   # OpenCode AI config
+├── .gitignore / .dockerignore
+│
+├── README.md
+├── README-DEPLOYMENT.md
+├── AWS-DEPLOYMENT-COMMANDS.sh
+├── deploy-production.sh
+├── start_server.ps1                # Launcher: FastAPI gateway
+├── start_ikg_scheduler.ps1         # Launcher: IKG scheduler
+├── run_qdrant_index.py
+├── bootstrap_db.py
+├── smoke_test.py
+├── cover_prompts.txt
+├── test_*.py                       # 15+ root-level integration tests
+│
+├── backend/
+│   └── finagent/                   # *** MAIN BACKEND PACKAGE ***
+│       ├── __init__.py             # Env loading, SSL certificate fix
+│       ├── __main__.py             # python -m finagent entry
+│       ├── api.py                  # Standalone FastAPI (/api/chat, /api/chat/stream)
+│       ├── cli.py                  # CLI entry point
+│       ├── cache.py                # TTL cache (in-memory + Redis fallback)
+│       ├── events.py               # Event bus for SSE streaming
+│       ├── telemetry.py            # Azure App Insights telemetry
+│       ├── telemetry_burner.py     # Batch telemetry sender
+│       ├── env.py                  # Env loading helpers
+│       ├── paths.py                # File path resolution
+│       ├── settings.py             # FinAgentSettings config dataclass
+│       ├── runtime_provider.py     # LLM provider resolution (Azure/OpenAI/xAI)
+│       ├── run_agent.py            # Core research agent loop (~3120 lines)
+│       ├── research_planner.py     # Research plan builder
+│       ├── synthesis.py            # Memo synthesis engine
+│       ├── prompt_builder.py       # System prompt builder
+│       ├── rich_builder.py         # Rich output builder
+│       ├── accuracy_validator.py   # Fact-checking validator
+│       ├── intent.py               # Intent detection
+│       ├── content_automation.py   # Automated article generation (~5482 lines)
+│       ├── portfolio_mirrors.py    # Portfolio mirror management
+│       ├── portfolio_sentinel.py   # Portfolio monitoring
+│       │
+│       ├── gateway/                # FASTAPI GATEWAY (main server entry)
+│       │   ├── run.py              # *** APP DEFINITION *** (~5640 lines, ALL routes)
+│       │   ├── auth_guard.py       # JWT auth verification + rate limiting
+│       │   ├── supabase_client.py  # Supabase API client (~779 lines)
+│       │   ├── session.py          # Session record dataclass
+│       │   ├── state_store.py      # SQLite state store for tokens/meta
+│       │   ├── email_delivery.py   # ACS email delivery
+│       │   ├── sms_delivery.py     # ACS SMS delivery
+│       │   ├── components/Charts/  # Server-rendered chart components
+│       │   └── *.html              # Static HTML templates
+│       │
+│       ├── agents/                 # MULTI-AGENT ORCHESTRATION
+│       │   ├── base.py             # Base subagent class
+│       │   ├── blueprint.py        # Agent blueprint builder
+│       │   ├── orchestrator.py     # Parallel wave-based orchestrator
+│       │   ├── blindspot.py        # Blind-spot detection agent
+│       │   ├── grader.py           # Quality grader agent
+│       │   ├── verifier.py         # Output verifier agent
+│       │   ├── context_loaders.py  # Context loaders per specialist
+│       │   └── specialists/        # 10 SPECIALIST AGENTS
+│       │       ├── accounting.py   # Forensic accounting analysis
+│       │       ├── community.py    # Community/social sentiment
+│       │       ├── competitor.py   # Competitor & peer analysis
+│       │       ├── financials.py   # Financial statement analysis
+│       │       ├── governance.py   # Corporate governance review
+│       │       ├── macro.py        # Macroeconomic outlook
+│       │       ├── news.py         # News & event briefing
+│       │       ├── risk.py         # Risk factor analysis
+│       │       ├── technical.py    # Technical/chart analysis
+│       │       └── valuation.py    # DCF & valuation analysis
+│       │
+│       ├── agent/                  # LEGACY AGENT (being migrated)
+│       │   ├── query_analysis.py   # Query understanding
+│       │   └── reflection.py       # Reflection loop
+│       │
+│       ├── ikg/                    # INTELLIGENT KNOWLEDGE GRAPH
+│       │   ├── service.py          # IKG service layer
+│       │   ├── db.py               # IKG database adapter
+│       │   ├── schema.py           # IKG schema definition
+│       │   ├── entity_resolver.py  # Entity name → CIN resolution
+│       │   ├── graph_client.py     # Neo4j graph client
+│       │   ├── governance_score.py # Forensic governance scoring
+│       │   ├── director_network.py # Board interlock analysis
+│       │   ├── company_provenance.py # Citation-backed company facts
+│       │   ├── document_selector.py  # Filing document selection
+│       │   ├── graph_health.py     # Graph completeness health
+│       │   ├── staleness.py        # Data freshness checker
+│       │   ├── pipeline/           # IKG ETL PIPELINE
+│       │   │   ├── scheduler.py    # APScheduler cron dispatcher
+│       │   │   ├── celery_app.py   # Celery app definition
+│       │   │   ├── orchestrator.py # Full pipeline orchestration
+│       │   │   ├── run_store.py    # Pipeline run tracking
+│       │   │   └── company_integrity_audit.py
+│       │   └── scrapers/           # 20+ DATA SCRAPERS
+│       │       ├── _engine.py      # Scraping engine base
+│       │       ├── _nse_session.py # NSE cookie/session management
+│       │       ├── _proxy_manager.py # Rotating proxies
+│       │       ├── annual_reports.py   # Annual report PDF extraction
+│       │       ├── bse_eod.py          # BSE end-of-day data
+│       │       ├── bse_shp.py          # BSE shareholding patterns
+│       │       ├── concall_transcripts.py # Conference call transcripts
+│       │       ├── corporate_governance_directors.py
+│       │       ├── director_kmp_enricher.py
+│       │       ├── financial_data.py
+│       │       ├── mca_companies.py    # MCA company master data
+│       │       ├── mca_directors.py    # MCA director data
+│       │       ├── nse_index.py        # NSE index constituents
+│       │       ├── sebi_corporate_filings.py
+│       │       ├── sebi_enforcement.py  # SEBI enforcement orders
+│       │       └── xbrl_utils.py       # XBRL parsing utilities
+│       │
+│       ├── content/                # CONTENT AUTOMATION ENGINE
+│       │   ├── flash_engine.py     # Flash content engine (~4979 lines)
+│       │   ├── editorial.py        # Editorial review & QA
+│       │   ├── editorial_calendar.py
+│       │   ├── official_monitor.py # Official source RSS monitoring
+│       │   ├── filing_triage.py    # Filing materiality classification
+│       │   ├── livemint_blocker.py # Duplicate detection
+│       │   ├── livemint_editorial.py
+│       │   ├── specialist_agents.py # Content specialist agents
+│       │   └── content_accuracy.py # Content fact-checking
+│       │
+│       ├── portfolio/              # PORTFOLIO ANALYTICS ENGINE
+│       │   ├── analytics.py        # Core analytics computation
+│       │   ├── sectors.py          # Sector/industry breakdown
+│       │   ├── news.py             # Portfolio-specific news
+│       │   ├── alerts.py           # Alert computation
+│       │   ├── stress_test.py      # Monte Carlo stress testing
+│       │   ├── tax.py              # Tax liability summary (India)
+│       │   ├── dividends.py        # Dividend tracking
+│       │   ├── corporate_actions.py # Bonus, splits, buybacks
+│       │   ├── governance_xray.py  # Governance overlay per holding
+│       │   ├── action_queue.py     # Daily recommended actions
+│       │   ├── holding_detail.py   # Single holding deep-dive
+│       │   ├── commentary.py       # AI portfolio commentary
+│       │   └── mf_analytics.py     # Mutual fund analysis
+│       │
+│       ├── output/                 # OUTPUT GENERATION & FORMATTING
+│       │   ├── contracts.py        # Output mode schema contracts
+│       │   ├── artifact_builder.py # Rich artifact construction
+│       │   ├── chart_generator.py  # Matplotlib chart generation
+│       │   ├── renderer.py         # HTML/Markdown renderer
+│       │   ├── memo_formatter.py   # Research memo formatting
+│       │   ├── report_exporter.py  # PDF/DOCX/XLSX export
+│       │   ├── export_jobs.py      # Async export job management
+│       │   ├── templates.py        # Output templates
+│       │   ├── fact_check.py       # Post-hoc fact checking
+│       │   ├── confidence_scorer.py # Confidence scoring
+│       │   ├── conflict_reporter.py # Interest conflict detection
+│       │   ├── compliance.py       # Regulatory compliance checks
+│       │   ├── output_scrubber.py  # Output sanitization
+│       │   ├── query_guards.py     # Query safety guardrails
+│       │   └── intent_classifier.py # Intent → output mode classifier
+│       │
+│       ├── tools/                  # TOOL ECOSYSTEM
+│       │   ├── data/               # Market data fetching tools
+│       │   │   ├── yahoo_finance.py, india.py, nse_snapshot.py
+│       │   │   ├── sec_edgar.py, sec_filings.py
+│       │   │   ├── news_feed.py, reddit.py, hackernews.py, stocktwits.py
+│       │   │   ├── wikipedia.py, forex.py
+│       │   │   └── cache.py, units.py
+│       │   ├── web/                # Web scraping tools
+│       │   │   ├── scraper.py, http_fetcher.py
+│       │   │   ├── searxng_client.py, exchange_fetcher.py
+│       │   │   └── crawl4ai_sites.py, table_parser.py
+│       │   ├── social/             # Social media tools
+│       │   │   └── viral_verifier.py
+│       │   ├── prospektlab/        # ProspektLab-specific tools
+│       │   │   ├── enricher.py, entity_fetcher.py
+│       │   │   ├── event_monitor.py, exporter.py, navigator.py
+│       │   ├── mcp_servers/        # Model Context Protocol servers
+│       │   │   ├── discovery_server.py, docs_server.py
+│       │   │   ├── fundamentals_server.py, ikg_server.py
+│       │   │   ├── mcp_valuation.py, nse_server.py
+│       │   │   ├── quant_server.py, research_server.py
+│       │   ├── valuation_engine.py # Deterministic DCF/math engine (~1016 lines)
+│       │   ├── registry.py         # Tool registry
+│       │   └── mcp_config.py       # MCP configuration
+│       │
+│       ├── router/                 # QUERY ROUTING
+│       │   ├── intent_router.py    # Intent-based routing
+│       │   ├── tool_selector.py    # Tool selection logic
+│       │   ├── domain_taxonomy.py  # Domain classification
+│       │   ├── geography_router.py # Geographic routing
+│       │   └── policies.py         # Routing policies
+│       │
+│       ├── geo/                    # GEOGRAPHY HANDLING
+│       │   ├── entity_resolver.py  # Geo-aware entity resolution
+│       │   ├── ticker_mapper.py    # Symbol → exchange mapping
+│       │   ├── jurisdiction_profiles.py
+│       │   ├── currency_policy.py, source_policy.py
+│       │   └── query_localizer.py
+│       │
+│       ├── news/                   # NEWS AGGREGATION
+│       │   ├── cache.py, dedupe.py, scorer.py
+│       │   └── sources/
+│       │       ├── sebi_rss.py, bse_announcements.py, nse_announcements.py
+│       │       ├── rbi_press.py, mca_updates.py, rss_aggregator.py
+│       │       ├── searxng_source.py, amfi_source.py
+│       │       └── exchange_announcements.py
+│       │
+│       ├── memory/                 # MEMORY SYSTEM
+│       │   ├── store.py            # Memory fact store
+│       │   ├── tiered_store.py     # Tiered (episodic/semantic/procedural)
+│       │   └── chat_memory.py      # Chat history management
+│       │
+│       ├── storage/                # STORAGE ADAPTERS
+│       │   ├── sqlite.py           # SQLite adapter
+│       │   └── supabase_store.py   # Supabase PostgreSQL adapter
+│       │
+│       ├── ingestion/              # PORTFOLIO DOCUMENT INGESTION
+│       │   ├── portfolio_document.py  # Multi-format parser (CAS/PDF/CSV/XLSX/image)
+│       │   ├── portfolio_schema.py    # Extraction Pydantic schema
+│       │   ├── image_ingestion.py     # Screenshot → positions (GPT-4o Vision)
+│       │   ├── cas_adapter.py         # CAS/eCAS PDF parsing
+│       │   ├── pdf_transformer.py     # PDF → structured data
+│       │   ├── markdown_extractor.py  # Markdown table extraction
+│       │   ├── azure_doc_intel.py     # Azure Document Intelligence
+│       │   ├── mineru_transformer.py  # MinerU document parsing
+│       │   ├── isin_resolver.py       # ISIN → Symbol resolution
+│       │   ├── di_cost_report.py      # Document Intelligence cost tracking
+│       │   └── portfolio_guardrails.py # Portfolio validation rules
+│       │
+│       ├── retrieval/              # HYBRID RETRIEVAL (RAG)
+│       │   ├── planner.py          # Retrieval planner
+│       │   ├── fusion.py           # BM25 + dense fusion
+│       │   ├── dense_index.py      # Dense vector index
+│       │   ├── sparse_index.py     # Sparse (BM25) index
+│       │   ├── graph_index.py      # Graph-based index
+│       │   ├── reranker.py         # Result re-ranking
+│       │   └── hyde.py             # Hypothetical Document Embeddings (HyDE)
+│       │
+│       ├── graphrag/               # GRAPH RAG
+│       │   ├── indexer.py, query.py
+│       │   ├── azure_search.py     # Azure Cognitive Search integration
+│       │   ├── qdrant_store.py     # Qdrant vector store
+│       │   ├── qdrant_indexer.py   # Qdrant index builder
+│       │   ├── qdrant_search.py    # Qdrant search client
+│       │   ├── section_materializer.py
+│       │   └── mcp_server.py
+│       │
+│       ├── harness/                # AGENT HARNESS
+│       │   ├── orchestrator.py     # Long-running agent orchestrator
+│       │   ├── context_manager.py  # Context window management
+│       │   ├── error_recovery.py   # Error recovery strategies
+│       │   ├── footprint_enforcer.py # Token/context budget enforcement
+│       │   ├── human_gates.py      # Human-in-the-loop checkpoints
+│       │   ├── interrupt_handler.py # Cancellation/interrupt handling
+│       │   └── preflight.py        # Pre-execution validation
+│       │
+│       ├── state/                  # STATE MANAGEMENT
+│       │   ├── checkpoint.py       # Checkpoint save/restore
+│       │   ├── citation_log.py     # Citation tracking
+│       │   ├── compression.py      # Context compression
+│       │   ├── research_state.py   # Research state machine
+│       │   └── session_context.py  # Session-level context
+│       │
+│       ├── playbooks/              # PLAYBOOK SYSTEM
+│       │   ├── executor.py, promoter.py
+│       │   ├── retriever.py, schema.py, store.py
+│       │
+│       ├── dreaming/               # DREAMING LAYER (offline learning)
+│       │   ├── consolidator.py     # Insight consolidation
+│       │   ├── pattern_detector.py # Pattern detection
+│       │   ├── preloader.py        # Pre-caching
+│       │   ├── scheduler.py        # Nightly scheduler (2 AM IST)
+│       │   └── worker.py           # Dream worker
+│       │
+│       ├── learning/               # ONLINE LEARNING
+│       │   ├── reflexion.py        # Reflexion-based improvement
+│       │   ├── spl.py              # Self-play learning
+│       │   └── strategy_loader.py  # Strategy loading
+│       │
+│       ├── seo/                    # SEO
+│       │   └── google_search_console.py # Sitemap submission
+│       │
+│       ├── ops/                    # OPERATIONS
+│       │   ├── control_tower.py    # Control tower dashboard
+│       │   └── metrics_warehouse.py # DAU/MAU/retention metrics
+│       │
+│       ├── analysis/               # ANALYSIS
+│       │   ├── conflicts.py        # Conflict analysis
+│       │   └── quality.py          # Quality analysis
+│       │
+│       ├── prompts/                # SYSTEM PROMPTS
+│       │   └── finagent_system.txt # Master system prompt
+│       │
+│       ├── tests/                  # Package unit tests
+│       └── data/                   # Local data
+│
+├── frontend/                       # REACT FRONTEND (Vite + TypeScript)
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── vite.config.ts / vite.config.mjs
+│   ├── index.html
+│   ├── .env                        # VITE_RAZORPAY_KEY_ID
+│   ├── amplify.yml                 # Amplify hosting config
+│   ├── public/
+│   │   ├── *.svg, *.html           # Static assets + landing pages
+│   │   ├── env-config.js           # Runtime BACKEND_API_URL injection
+│   │   └── insights/               # Generated public article HTML
+│   └── src/
+│       ├── main.tsx                # Entry point
+│       ├── App.tsx                 # HashRouter + route definitions
+│       ├── index.css               # Global styles
+│       ├── telemetry.ts            # Frontend telemetry (~491 lines)
+│       ├── api/
+│       │   └── client.ts           # *** API CLIENT *** (~2200+ lines, all backend calls)
+│       ├── context/
+│       │   └── AuthContext.tsx      # Auth state (JWT, user, role) (~626 lines)
+│       ├── data/
+│       │   └── indianStocks.ts     # Stock metadata list
+│       ├── pages/
+│       │   ├── LandingPage.tsx     # Marketing landing
+│       │   ├── Login.tsx           # Google/Email auth
+│       │   ├── Dashboard.tsx       # Main app dashboard
+│       │   ├── GatewayPage.tsx     # Research gateway
+│       │   ├── InsightsStudio.tsx  # Content management
+│       │   ├── Pricing.tsx         # Pricing plans
+│       │   ├── Testimonials.tsx    # Social proof
+│       │   ├── Features.tsx        # Feature showcase
+│       │   ├── ContactUs.tsx       # Contact form
+│       │   ├── ManualEntry.tsx     # Manual portfolio entry
+│       │   ├── UploadPage.tsx      # Portfolio upload
+│       │   └── WatchlistStep.tsx   # Watchlist onboarding
+│       └── components/
+│           ├── common/             # CommandPalette, ProvenanceCard
+│           ├── layout/             # AppShell, Logo, Sidebar
+│           ├── chat/               # AgentThinking, ChatInput, MessageBubble,
+│           │                       # RichResponse, ExportPanel, HtmlArtifact,
+│           │                       # SuggestedPrompts, SectionBlock, CalloutBlock
+│           ├── charts/             # AreaChart, BarChart, DonutChart, InteractiveChart,
+│           │                       # MetricCard, RadarChart, TableBlock, TreemapChart,
+│           │                       # ThemeProvider
+│           ├── dashboard/          # AssetHistoryModal, CompanyIntelModal,
+│           │                       # GovernancePanel, IndexTickerCard, PortfolioTable,
+│           │                       # QuickActions, QuickPulse, RecentInsights,
+│           │                       # Sparkline, WatchlistCard
+│           ├── insights/           # ArticleQueueTable, ArticleReader,
+│           │                       # DraftReviewDrawer, FlashJobMonitor
+│           └── research/           # ResearchTimeline
+│
+├── deployment/                     # INFRASTRUCTURE SCRIPTS
+│   ├── Dockerfile.ikg-worker
+│   ├── Dockerfile.ikg-worker-only
+│   ├── docker-compose.ikg.yml
+│   ├── docker-compose.ikg.worker-only.yml
+│   ├── requirements.ikg-worker.txt
+│   ├── fargate-backend.yml         # AWS Fargate config
+│   ├── deploy-azure-ikg.ps1 / .sh
+│   ├── deploy-backend.ps1
+│   ├── deploy_frontend.py
+│   ├── zip_backend.py
+│   ├── azure_vm_*.sh               # 15+ Azure VM management scripts
+│   ├── azure-cost-guardrail.ps1
+│   ├── azure-monitoring.bicep      # Azure IaC
+│   ├── azure-security-subscription.bicep
+│   ├── ikg_watchdog.ps1 / .sh
+│   └── *.sql / migrate_*.py        # Database bootstrap & migration
+│
+├── supabase/                       # SUPABASE DATABASE MIGRATIONS
+│   ├── config.toml
+│   └── migrations/
+│       ├── 20260603080031_sebi_verified_leads.sql
+│       ├── 20260603081825_prospektlab_core_tables.sql
+│       ├── 20260603091459_grant_service_role_public_schema.sql
+│       ├── 20260606054201_outreach_personalized_setup.sql
+│       ├── 20260606175500_public_outreach_unsubscribe_rpc.sql
+│       ├── 20260606210500_outreach_unsubscribes.sql
+│       └── 20260613180000_subscription_payments.sql
+│
+├── outreach/                       # OUTREACH / LEAD GEN MODULE
+│   ├── config.example.json
+│   ├── leads.sample.csv
+│   ├── suppression.sample.csv
+│   ├── Dockerfile.azure
+│   ├── scripts/
+│   │   ├── run_azure_job.py
+│   │   ├── run_india_outreach_scheduled.ps1
+│   │   ├── run_supabase_outreach_batch.py
+│   │   └── send_outreach_batch.py
+│   └── templates/
+│       └── prospektlab_feedback.md
+│
+├── scripts/                        # UTILITY SCRIPTS
+│   ├── daily_publisher.py
+│   ├── publish_pipeline.py
+│   ├── cleanup_published.py
+│   ├── fundamentals.py
+│   ├── run_content_quality_audit.py
+│   ├── regenerate_published_covers.py
+│   ├── sync_public_research_assets.py
+│   ├── reset_ikg_data.py
+│   └── register_daily_task.ps1
+│
+├── data/                           # STATIC DATA
+│   ├── company_master_data_2026-06-01.csv  # MCA company master
+│   └── fine_tuning/
+│
+├── .github/                        # GitHub Actions workflows
+├── .finagent/                      # Agent runtime state directory
+├── audit_logs/ / cache/ / pipeline_logs/
+└── finagent/                       # Legacy/deprecated package root
 ```
 
 ---
 
-## Technology Stack
+## 4. API Reference (All Endpoints)
 
-### Backend (Python 3.11+)
+### 4.1 Authentication
 
-| Category | Technology | Purpose |
-|----------|-----------|---------|
-| Web Framework | FastAPI + Uvicorn | REST API, SSE streaming, static pages |
-| LLM Provider | OpenAI (GPT-4o) | Primary model for synthesis, reflection, orchestration |
-| Fallback LLM | xAI (Grok-3) | Via OpenAI-compatible endpoint |
-| Agent Framework | LangGraph | Supervisor-based multi-agent orchestration |
-| LLM Chaining | LangChain | LLM abstraction, tool integration |
-| MCP Protocol | FastMCP (>=2.0.0) | Standalone tool servers (discovery + quant) |
-| Data Validation | Pydantic (>=2.0.0) | Request/response schemas, data models |
-| HTTP Client | httpx + aiohttp (async) | Shared HTTP client for all external API calls |
-| Finance Data | yfinance (>=0.2.40) | Quotes, fundamentals, financial statements |
-| Portfolio Math | PyPortfolioOpt | Portfolio optimization |
-| Auth | PyJWT | JWT signing and validation |
-| Chart Generation | matplotlib | Answer artifact charts |
-| PDF Parsing | pymupdf (PyMuPDF), pypdf | Statement extraction |
-| CAS Parsing | casparser | Indian eCAS (CAMS/KFintech) |
-| Web Scraping | Crawl4AI, BeautifulSoup | Full page extraction with Chromium |
-| Web Search | DuckDuckGo (duckduckgo_search) | Layered breadth searches |
-| OCR | image_ingestion | Screenshot portfolio extraction |
-| Doc Parsing | docling, feedparser, msoffcrypto-tool | Document ingestion pipeline |
+| Method | Path | Auth | Rate Limit | Description |
+|--------|------|------|-----------|-------------|
+| `POST` | `/auth/google` | None (receives Google ID token) | 10/min | Google OAuth sign-in → verify tokeninfo → mint JWT |
+| `POST` | `/auth/google/update-mobile` | JWT | 10/min | Update user mobile number |
+| `POST` | `/auth/signup` | None | 10/min | Email + password signup via Supabase Auth Admin |
+| `POST` | `/auth/login` | None | 10/min | Email + password login → JWT issued |
+| `POST` | `/auth/logout` | None | — | Clear `prospektlab_token` httpOnly cookie |
+| `POST` | `/auth/send-verification` | None | 10/min | Send OTP via email (ACS) or SMS (ACS) |
+| `POST` | `/auth/forgot-password` | None | 10/min | Request password reset → email code |
+| `POST` | `/auth/reset-password` | None | 10/min | Verify code → update password |
+| `GET`  | `/auth/me` | JWT | — | Return user + plan (free/pro) + usage stats |
 
-### Frontend (TypeScript + React 18)
-
-| Category | Technology | Purpose |
-|----------|-----------|---------|
-| Framework | React 18.3 | UI components and state |
-| Build Tool | Vite 5.x | Dev server, HMR, production bundling |
-| Language | TypeScript 5.2 | Type safety |
-| Routing | react-router-dom v6 (HashRouter) | Client-side routing |
-| Charts | Chart.js + react-chartjs-2 + chartjs-chart-treemap | Portfolio and market charts |
-| Icons | Lucide React | UI iconography |
-| Auth | Google Identity Services (GIS) | Google OAuth via inline script injection |
-| Styling | CSS (custom design system) | Dark theme, glassmorphism, animations |
-
-### Infrastructure
-
-| Component | Technology |
-|-----------|------------|
-| Containerization | Docker (python:3.11-slim) |
-| Container Registry | Amazon ECR |
-| Orchestration | AWS ECS Fargate |
-| Frontend Hosting | AWS Amplify |
-| CI/CD | GitHub Actions + AWS CodeBuild |
-| Auth Database | Supabase (PostgreSQL) |
-| Local Storage | SQLite (WAL mode, `.finagent/`) |
-| Monitoring | Azure Application Insights (frontend + backend) | |
-
-### Dependency Management
-
-- **Authoritative dependency list:** `finagent/requirements-finagent.txt` — the complete set used by Docker and production
-- **Summary file:** `pyproject.toml` — contains core dependencies only; not used for production installs
-- **UV lock file:** `uv.lock` — local development lockfile
-
----
-
-## System Layers
-
-### Layer 1: Presentation (Frontend)
-
-**Entry Point:** `Frontend/app/src/main.tsx` → `App.tsx`
-
-The frontend is a single-page React application built with Vite. It uses a `HashRouter` for routing and `AuthContext` for state management.
-
-**Marketing Pages:**
-- **Landing** (`pages/LandingPage.tsx`): Product landing page
-- **Features** (`pages/Features.tsx`): Feature showcase
-- **Pricing** (`pages/Pricing.tsx`): Pricing tiers
-- **Testimonials** (`pages/Testimonials.tsx`): User testimonials
-
-**App Pages:**
-- **Login** (`pages/Login.tsx`): Handles email login, signup, password reset, and Google OAuth (via Google Identity Services inline script)
-- **Onboarding** (`pages/Onboarding.tsx`): Portfolio document upload and holding confirmation flow
-- **Dashboard** (`pages/Dashboard.tsx`): Main workspace with portfolio overview, chat interface, charts, news feed, and watchlist
-
-**Key architectural decisions:**
-- No Redux or global state library — uses React Context for auth, component-local `useState`/`useRef` for everything else
-- SSE (Server-Sent Events) for real-time agent progress with 25s proactive reconnect (accommodates AWS API Gateway's 30s timeout)
-- Runtime backend URL resolution: checks `window.__BACKEND_URL`, then `__CONFIG__`, then `VITE_BACKEND_API_URL`, then falls back to Vite proxy
-- All chart components wrap Chart.js with consistent theming via `ThemeProvider.ts`
-
-### Layer 2: Application (Gateway + Agent Loop)
-
-**Gateway:** `finagent/gateway/run.py` — the central HTTP server on port 8080.
-
-The gateway:
-1. Receives user requests (chat, research, portfolio, auth)
-2. Manages authentication via JWT (local + Supabase)
-3. Routes queries through `route_objective()` in `finagent/router/intent_router.py` (extracts entities, determines depth, detects follow-ups, classifies portfolio scope)
-4. Launches research sessions via `run_research_session()` in a background task
-5. Streams progress events to the frontend via `SessionBus` → SSE
-6. Serves portfolio analytics and static HTML pages
-
-**Key patterns:**
-- `InMemSlidingWindowRateLimiter` for per-user rate limiting
-- `SessionBus` (`events.py`) — in-process pub/sub event bus using `asyncio.Queue`
-- Events persisted to JSONL files for replay on reconnect (max 5000 events)
-- `ChatMemoryManager` for session-scoped chat history
-- `route_objective()` handles entity extraction, follow-up detection, complexity classification, portfolio scope, and deep research eligibility
-
-### Layer 3: Tooling & Data
-
-**MCP Servers** (2 active standalone processes, consolidating what was previously 5+ servers):
-
-| Port | Server | File | Consolidates |
-|------|--------|------|--------------|
-| 8003 | **Discovery** | `finagent/tools/mcp_servers/discovery_server.py` | NSE Market Data, Web & News Search, Document Pipeline (RAG) |
-| 8005 | **Quant** | `finagent/tools/mcp_servers/quant_server.py` | Fundamentals (yfinance), Valuation Engine, Portfolio Risk Engine |
-
-Legacy standalone server files exist in the same directory but are no longer deployed as separate processes:
-`nse_server.py`, `research_server.py`, `fundamentals_server.py`, `docs_server.py`, `mcp_valuation.py`
-
-**MCP Config** (`finagent/tools/mcp_config.py`): Wires discovery (8003) and quant (8005) with `streamable_http` transport. URLs configurable via `MCP_DISCOVERY_URL` and `MCP_QUANT_URL` env vars.
-
-**Direct Data Tools** (in-process, no MCP):
-- `finagent/tools/data/yahoo_finance.py` — yfinance quotes + fundamentals
-- `finagent/tools/data/india.py` — NSE/Screener.in/Moneycontrol/SEBI fetchers
-- `finagent/tools/data/sec_edgar.py` — SEC EDGAR company facts
-- `finagent/tools/data/sec_filings.py` — SEC filing narratives
-- `finagent/tools/data/wikipedia.py` — Wikipedia REST summary
-- `finagent/tools/data/news_feed.py` — Google News RSS
-- `finagent/tools/data/reddit.py` — Reddit search (WSB, IndianStreetBets, etc.)
-- `finagent/tools/data/hackernews.py` — HN Algolia search
-- `finagent/tools/data/stocktwits.py` — StockTwits sentiment
-- `finagent/tools/data/forex.py` — USD/INR FX rates
-- `finagent/tools/data/units.py` — Indian number formatting (crore/lakh)
-
-**Web Tools:**
-- `finagent/tools/web/scraper.py` — DuckDuckGo layered search + HTML page scraping
-- `finagent/tools/web/crawl4ai_sites.py` — Crawl4AI full-page extraction (Chromium-based)
-- `finagent/tools/web/searxng_client.py` — SearXNG meta-search engine
-- `finagent/tools/web/http_fetcher.py` — Shared async httpx client
-- `finagent/tools/web/table_parser.py` — HTML table extraction
-
-**Browser Tools (Archived):**
-- `finagent/tools/browser/deep_crawler.py` — Playwright deep domain crawler (ARCHIVED — NOT ACTIVE; references removed `playwright_backend.py`)
-
-**Valuation Engine** (`finagent/tools/valuation_engine.py`):
-- All financial math is deterministic — the LLM *never* does calculations
-- Computations: DCF, PE valuation, Graham number, EV/EBITDA, Dividend Discount Model, WACC, CAGR, Piotroski F-Score, Altman Z-Score, DuPont analysis
-- Returns structured Pydantic models with intermediate inputs shown
-
-**Social Tools:**
-- `finagent/tools/social/viral_verifier.py` — Pump-and-dump signal detection
-
-**ProspektLab Tools:**
-- `finagent/tools/prospektlab/enricher.py` — Entity enrichment
-- `finagent/tools/prospektlab/entity_fetcher.py` — Entity data fetching
-- `finagent/tools/prospektlab/event_monitor.py` — Event monitoring
-- `finagent/tools/prospektlab/exporter.py` — Data export
-- `finagent/tools/prospektlab/navigator.py` — Data navigation
-
-### Layer 4: Storage
-
-| Store | Location | Content |
-|-------|----------|---------|
-| Memory SQLite | `.finagent/memory.sqlite3` | Financial facts, session summaries, per-user durable knowledge |
-| Chat Memory | `.finagent/chat_memory.db` | Per-session chat history |
-| Playbooks SQLite | `.finagent/playbooks.sqlite3` | Reusable research playbooks |
-| Research State | `.finagent/research_state.sqlite3` | Research checkpoints and state |
-| Position Mirror | `.finagent/memory.sqlite3` | User portfolio holdings (per-tenant) |
-| Memos | `.finagent/memos/` | Generated research memos (markdown) |
-| Sessions | `.finagent/sessions/` | Event JSONL + session metadata |
-| Cache | `.finagent/cache/` | Per-session query cache |
-| Users | `.finagent/users/` | User-specific data |
-| Supabase | Cloud PostgreSQL | User auth, profiles, global state |
-
-### `.finagent/` Runtime Directory Structure
-
+**Example — Google Sign-In Flow:**
 ```
-.finagent/                          # Created automatically at first run
-├── memory.sqlite3                  # Financial facts + portfolio mirror (WAL mode)
-├── memory.sqlite3-shm              # WAL shared memory
-├── memory.sqlite3-wal              # WAL journal
-├── chat_memory.db                  # Per-session chat history
-├── playbooks.sqlite3               # Reusable research playbooks
-├── research_state.sqlite3          # Research checkpoints
-├── state.sqlite3                   # Session state store
-├── state.sqlite3-shm/wal           # WAL files
-├── robots_cache.db                 # robots.txt cache for web scrapers
-├── global_sqlite_test.db           # Test database
-├── crawl4ai_test.db                # Crawl4AI test database
-├── .crawl4ai/                      # Crawl4AI browser profiles
-├── cache/                          # Per-session query cache
-├── data/                           # Downloaded reference data cache
-├── ingestion_state/                # Portfolio ingestion work-in-progress
-├── isin_master.json                # Cached ISIN lookup data
-├── magic_pdf_models/               # MinerU PDF model weights
-├── memos/                          # Generated research memos (markdown)
-├── portfolio_mirror_cache/         # Cached portfolio snapshots
-├── sessions/                       # Session event JSONL + metadata
-└── users/                          # User-specific data
+1. Frontend: google.accounts.id.initialize() → prompt() → user selects account
+2. Frontend: POST /auth/google { "credential": "<google_id_token>" }
+3. Backend: verify via https://oauth2.googleapis.com/tokeninfo?id_token=...
+4. Backend: upsert user in Supabase profiles table
+5. Backend: mint JWT (HS256, issuer=prospektlab, 30d expiry)
+6. Backend: set httpOnly cookie + return token in JSON
+7. Frontend: store JWT in localStorage for API calls
 ```
 
----
+### 4.2 Research
 
-## Request Flow
+| Method | Path | Auth | Rate Limit | Description |
+|--------|------|------|-----------|-------------|
+| `POST` | `/research/start` | JWT + Token check | 5/min | Start standard research (full control over params) |
+| `POST` | `/research/deep` | JWT + Token + Deep quota | 5/min | Start deep multi-pass research |
+| `POST` | `/chat/research` | JWT + Token check | 5/min | Chat-UI friendly wrapper (simpler payload) |
+| `POST` | `/sessions/{id}/stop` | JWT + Ownership | — | Cancel running session |
+| `DELETE` | `/sessions/{id}` | JWT + Ownership | — | Delete session + artifacts + files |
+| `GET` | `/sessions/{id}/status` | JWT + Ownership | — | Poll session status (pending/running/done/error) |
+| `GET` | `/sessions/{id}/events` | JWT + Ownership | — | Poll events with `?after=<cursor>` for pagination |
+| `GET` | `/sessions/{id}/result` | JWT + Ownership | — | Get final synthesized result object |
+| `GET` | `/sessions/{id}/stream` | JWT + Ownership | — | **SSE** event stream (real-time progress) |
+| `GET` | `/sessions/{id}/memo` | JWT + Ownership | — | Get memo in Markdown format |
+| `POST` | `/research/export` | JWT + Ownership | — | Export research as PDF/DOCX/XLSX |
+| `GET` | `/research/export/{job_id}` | JWT | — | Check export job status |
+| `GET` | `/research/export/{job_id}/download` | JWT | — | Download completed export |
+| `GET` | `/memos` | JWT | — | List all user's saved memos |
+| `GET` | `/chat/history` | JWT | — | Get full chat history (last N messages) |
+| `GET` | `/memory/stats` | JWT | — | Memory usage statistics |
+| `GET` | `/memory/facts` | JWT | — | Browse stored memory facts |
+| `GET` | `/memory/sessions` | JWT | — | List session summaries |
+| `DELETE` | `/memory/clear/{target}` | JWT | — | Clear facts for a specific entity/symbol |
 
-### Standard Research Session — End-to-End Flow
-
-```
-User submits query (e.g., "Analyze Reliance Industries")
-  │
-  ▼
-[Frontend: Dashboard.tsx]
-  │  POST /chat/research  (or /research/start)
-  ▼
-[Gateway: run.py]
-  │  1. Validate JWT auth
-  │  2. Rate limit check
-  │  3. route_objective(query) in intent_router.py
-  │     → Detects follow-up via chat history
-  │     → Extracts ticker/entities via entity_resolver.py
-  │     → Classifies complexity (simple/moderate/complex)
-  │     → Checks portfolio scope
-  │     → Checks deep research eligibility via policies.should_enable_deep_research()
-  │  4. Create session record, set "running"
-  │  5. Spawn background task: run_research_session()
-  │  6. Return session_id to frontend
-  ▼
-[Core Agent Loop: run_agent.py → run_research_session()]
-  │
-  │  PHASE 1: IDENTIFY
-  │  ┌──────────────────────────────────────────────┐
-  │  │ • Resolve entities (geo/entity_resolver.py)   │
-  │  │   → Canonical ticker, exchange suffix (.NS)   │
-  │  │   → Geography detection (IN/US)               │
-  │  │   → Preferred data source domains             │
-  │  │ • Load memory facts (recall past analysis)     │
-  │  │ • Retrieve playbooks (reusable research plans) │
-  │  │ • Build ResearchPlan                           │
-  │  └──────────────────────────────────────────────┘
-  │
-  │  PHASE 2: ENRICHMENT (parallel, asyncio.gather)
-  │  ┌──────────────────────────────────────────────┐
-  │  │ • Yahoo Finance quote + fundamentals          │
-  │  │ • Wikipedia company summary                   │
-  │  │ • India company snapshot (NSE/Screener.in)    │
-  │  │ • USD/INR forex rate                          │
-  │  │ • News headlines (Google News RSS)            │
-  │  │ • Reddit search (WSB / IndianStreetBets)      │
-  │  │ • Hacker News mentions                        │
-  │  │ • StockTwits sentiment                        │
-  │  │ • SEC EDGAR (US companies)                   │
-  │  │ • SEBI filings (Indian companies)             │
-  │  │ • Shareholding pattern                        │
-  │  │ → All run concurrently                       │
-  │  └──────────────────────────────────────────────┘
-  │
-  │  PHASE 3: BREADTH SURVEY
-  │  ┌──────────────────────────────────────────────┐
-  │  │ • Localize search queries (IN/US specific)    │
-  │  │ • 4 search angles:                            │
-  │  │   1. Business overview + fundamentals         │
-  │  │   2. Growth catalysts + future outlook        │
-  │  │   3. Risk factors + red flags                 │
-  │  │   4. Competitive landscape + industry         │
-  │  │ • Each angle: DuckDuckGo search → scrape top 6 │
-  │  │ • Preferred domain filter (source_policy.py)  │
-  │  │ • Result deduplication + relevance scoring    │
-  │  │ → Scored, deduped document corpus            │
-  │  └──────────────────────────────────────────────┘
-  │
-  │  PHASE 4: DEEP DIVE (iterative, up to 4 rounds)
-  │  ┌──────────────────────────────────────────────┐
-  │  │ • Identify knowledge gaps from breadth data   │
-  │  │ • Generate targeted follow-up queries         │
-  │  │ • Search + scrape → answer gap questions      │
-  │  │ • Each round: check if enough coverage        │
-  │  │ • Stop early if all gaps filled or max rounds │
-  │  └──────────────────────────────────────────────┘
-  │
-  │  PHASE 5: ANALYSIS
-  │  ┌──────────────────────────────────────────────┐
-  │  │ • Multi-agent orchestration (10 specialists)   │
-  │  │ • Cross-source conflict detection             │
-  │  │ • Research quality scoring (0-100)            │
-  │  │ • Claim accuracy validation                   │
-  │  │ • Blind spot detection                        │
-  │  │ • Pump & dump signal detection               │
-  │  └──────────────────────────────────────────────┘
-  │
-  │  PHASE 6: SYNTHESIS
-  │  ┌──────────────────────────────────────────────┐
-  │  │ • Build EnrichmentBundle from all data        │
-  │  │ • Call synthesize_memo() (OpenAI GPT-4o)     │
-  │  │ • 8-section structured memo                   │
-  │  │ • Cross-source conflict report                │
-  │  │ • Confidence score with rationale             │
-  │  │ • Citation log (all sources linked)           │
-  │  │ • INR-first formatting (crore/lakh)           │
-  │  └──────────────────────────────────────────────┘
-  │
-  │  Persists: memos, memory facts, session events, playbooks
-  │
-  ▼
-[Frontend receives final "done" event via SSE]
-  → Transitions from AgentThinking to final MessageBubble
-  → Renders RichResponse with memo, charts, metrics
-```
-
-### SSE Event Streaming Architecture
-
-```
-┌──────────┐     SessionBus (events.py)     ┌──────────────┐
-│  Agent   │ ───►  asyncio.Queue ─────────►  │  Gateway     │
-│  Loop    │     │  • emit(event)           │  SSE endpoint │
-│          │     │  • persist to JSONL      │  /stream      │
-└──────────┘     │  • replay on request     └──────────────┘
-                 └─────────────────────────────────────────┘
-                                       │
-                                       │ text/event-stream
-                                       ▼
-                              ┌──────────────────┐
-                              │  Frontend        │
-                              │  streamSession() │
-                              │  • EventSource   │
-                              │  • Reconnect @25s│
-                              │  • JSON parse    │
-                              └──────────────────┘
-```
-
-Event types emitted:
-- `phase_change` / `phase` — Current pipeline phase (enriching, searching, analyzing, synthesizing)
-- `step_start` / `step_end` — Individual tool call with label + metadata
-- `agent_start` / `agent_end` — Sub-agent execution with name + progress
-- `source` — Source domain discovered
-- `status` — Session status updates
-- `done` — Final result with memo URL
-- `error` — Error events with message
-
----
-
-## Core Agent Loop
-
-**File:** `finagent/run_agent.py`
-
-The core loop is the heart of the system. It follows a 6-phase pipeline:
-
-1. **Identify** — Resolve target to ticker, determine geography, load memory & playbooks
-2. **Enrichment** — Pull authoritative JSON APIs in parallel (SEC EDGAR, Yahoo Finance, Wikipedia)
-3. **Breadth Survey** — Layered DuckDuckGo search across 4 angles
-4. **Deep Dive** — Iterative targeted second-pass queries to fill gaps
-5. **Analysis** — Cross-source conflict detection, multi-agent findings, viral scoring
-6. **Synthesis** — OpenAI / template memo using facts, not just excerpts
-
-Configuration is driven by `AgentLoopConfig`:
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `max_steps` | 8-18 (standard) | Max enrichment + search steps |
-| `enable_scraping` | True | Full page scraping via Crawl4AI |
-| `enable_enrichment` | True | Yahoo, Wikipedia, news, etc. |
-| `enable_deep_dive` | True | Iterative deep dive phase |
-| `enable_memory` | True | Recall past facts |
-| `enable_reflection` | True | Self-improvement loop |
-| `reflection_max_rounds` | 5 | Max reflection iterations |
-| `quality_threshold` | 75.0 | Min quality score before triggering reflection |
-| `auto_depth` | True | Auto-adjust steps by query complexity |
-
-**Deep research variant:** When triggered, `max_steps` boosts to 80, reflection rounds cap at 2, and per-query timeout tightens to 18s.
-
-**Key design principle:** The LLM only does reasoning and synthesis. All data fetching, computation, and formatting happen in deterministic Python code.
-
----
-
-## Multi-Agent Orchestration
-
-**Directory:** `finagent/agents/`
-
-### Design Pattern: Hermes Wave-Based Parallel Orchestration
-
-The `Orchestrator` (`agents/orchestrator.py`) manages 10 specialist sub-agents, each implemented as an async function returning structured `Finding` objects. Agents are organized into **dependency waves** — agents in the same wave can run in parallel, but later waves may depend on earlier waves' output. Each agent has its own timeout via `SubAgentContext.deadline_ms`.
-
-### Agent Roster (`agents/specialists/default_roster()`)
-
-| Wave | Agent | File | Priority | Description |
-|------|-------|------|----------|-------------|
-| 0 | **Financials** | `specialists/financials.py` | p10 | Income statement, balance sheet, cash flow analysis. Computes YoY/QQ growth, margin trends, ratio analysis. |
-| 0 | **Risk** | `specialists/risk.py` | p20 | Operational, financial, regulatory, and market risk factors. Debt levels, liquidity, concentration risk. |
-| 0 | **News** | `specialists/news.py` | p20 | Recent news sentiment analysis. Identifies material events, management changes, regulatory actions. |
-| 1 | **Technical** | `specialists/technical.py` | p30 | Price action, volume, moving averages, RSI, MACD, support/resistance levels. |
-| 1 | **Community** | `specialists/community.py` | p30 | Reddit (WSB, IndianStreetBets), StockTwits, Hacker News sentiment. Viral/pump-and-dump detection. |
-| 2 | **Competitor** | `specialists/competitor.py` | p40 | Peer comparison on key metrics. Market share analysis, competitive moat assessment. |
-| 2 | **Valuation** | `specialists/valuation.py` | p40 | DCF, PE multiple, Graham number, EV/EBITDA. Fair value estimation with bullish/bearish/best-estimate scenarios. |
-| 3 | **Accounting** | `specialists/accounting.py` | p45 | Forensic accounting anomaly detection. Accrual ratios, Beneish M-Score, revenue recognition red flags. |
-| 4 | **Macro** | `specialists/macro.py` | p50 | Interest rates, inflation, GDP, forex, industry cycle positioning. Regulatory/tax regime impact. |
-| 5 | **Governance** | `specialists/governance.py` | p60 | Board composition, management quality, related-party transactions, shareholder rights. |
-
-### Context (`agents/base.py`)
-
-Each sub-agent receives a `SubAgentContext` containing:
-- The enrichment bundle (quotes, financials, news, social data)
-- The search corpus (deduped, scored web documents)
-- Prior wave findings (for dependency-aware analysis)
-- Entity metadata (ticker, geography, sector)
-
-### Verification (`agents/verifier.py`)
-
-After all agents complete, the `Verifier`:
-- Cross-checks claims across different agents/sources
-- Flags inconsistencies (e.g., valuation agent says "undervalued" but financials agent warns of declining revenues)
-- Returns confidence-adjusted claim list
-
-### Blind Spot Detection (`agents/blindspot.py`)
-
-Auto-generates follow-up questions for:
-- Areas with no agent coverage
-- Contradictory findings
-- Low-confidence claims
-- Missing data points (e.g., no forward guidance found)
-
----
-
-## Deep Research (Multi-Pass)
-
-**Endpoint:** `POST /research/deep`
-
-Deep research runs multiple parallel research passes, each a complete research session with boosted step budgets (max_steps=80). It is triggered when the query matches keyword patterns in `should_enable_deep_research()` (e.g., "deep", "comprehensive", "forensic", "due diligence", "portfolio risk", "risk audit").
-
-**How it works:**
-1. Pass 0 runs first (context-building pass: financials foundation)
-2. Passes 1 through N-1 execute in parallel via `asyncio.gather()`
-3. A final synthesis pass runs serially after all others complete
-
-The number of passes is dynamic — driven by the breadth queries generated during earlier passes, not hardcoded. Each non-final pass skips memo generation; only the synthesis pass emits the final "done" event.
-
-Each pass has its own:
-- `max_steps` boosted to 80
-- Reflection rounds capped at 2
-- Per-query timeout tightened to 18s
-- Blindspot max queries set to 10
-
-The final synthesis pass integrates all intermediate findings into a single comprehensive report.
-
----
-
-## MCP Server Layer
-
-### Active Configuration
-
-Only **2 MCP servers** are actively configured and deployed:
-
-| Port | Server | Source File | Scope |
-|------|--------|-------------|-------|
-| 8003 | **Discovery** | `tools/mcp_servers/discovery_server.py` | Consolidated: NSE Market Data, Web & News Search, Document Pipeline (RAG/Qdrant) |
-| 8005 | **Quant** | `tools/mcp_servers/quant_server.py` | Consolidated: Fundamentals (yfinance), Valuation Engine, Portfolio Risk Engine |
-
-Both use `streamable_http` transport via FastMCP (>=2.0.0).
-
-### MCP Configuration
-
-**File:** `tools/mcp_config.py`
-
-```python
-MCP_SERVERS = {
-    "discovery": {"url": mcp_discovery_url, "transport": "streamable_http"},   # default :8003
-    "quant":     {"url": mcp_quant_url, "transport": "streamable_http"},       # default :8005
+**Example — Standard Research Request:**
+```json
+POST /chat/research
+{
+  "query": "Analyze Tata Motors' EV strategy and competitive position",
+  "session_id": null,       // null = new session
+  "context": [],            // previous messages for follow-up detection
+  "mode": "standard",       // "standard" | "deep" | "chat"
+  "portfolio_symbols": [],  // auto-scope to portfolio
+  "geography": "IN"
 }
 ```
 
-Environment variables: `MCP_DISCOVERY_URL`, `MCP_QUANT_URL`.
+**Example — SSE Stream Events:**
+```
+event: progress
+data: {"phase": "research", "step": "financials", "status": "running"}
 
-### Dynamic Loading (`tools/mcp/dynamic_loader.py`)
+event: progress
+data: {"phase": "research", "step": "valuation", "status": "running"}
 
-Loads MCP tools at runtime, supporting hot-reload and graceful fallback when servers are unavailable.
+event: citation
+data: {"source": "NSE Corporate Filings", "url": "...", "text": "..."}
 
-### Legacy Standalone Servers
+event: chart
+data: {"type": "area", "title": "Revenue Growth", "data": {...}}
 
-The following server files exist in `tools/mcp_servers/` but are no longer deployed as standalone processes (their capability was consolidated into discovery and quant):
-- `nse_server.py` — NSE Market Data
-- `research_server.py` — Web & News Search
-- `fundamentals_server.py` — Fundamentals
-- `docs_server.py` — Documents
-- `mcp_valuation.py` — Valuation
+event: result
+data: {"memo": "...", "citations": [...], "charts": [...], "metrics": [...]}
+
+event: done
+data: {}
+```
+
+### 4.3 Portfolio
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/portfolio/mirror` | JWT | Get current portfolio positions |
+| `POST` | `/portfolio/mirror` | JWT | Replace all portfolio positions |
+| `DELETE` | `/portfolio/mirror` | JWT | Clear all positions |
+| `POST` | `/portfolio/mirror/sync-manual` | JWT | Sync manually entered positions with Yahoo |
+| `POST` | `/api/portfolio/upload-cas` | JWT | Upload CAS/eCAS PDF, CSV, or XLSX |
+| `POST` | `/api/portfolio/upload-document` | JWT | Upload any portfolio document |
+| `POST` | `/portfolio/mirror/ecas` | JWT | Upload eCAS PDF specifically |
+| `POST` | `/api/portfolio/upload-screenshot` | JWT | Upload portfolio screenshot (GPT-4o Vision) |
+| `POST` | `/api/portfolio/confirm-extraction` | JWT | User confirms reviewed extraction → save to mirror |
+| `POST` | `/api/portfolio/cancel-extraction` | JWT | Cancel/reject pending extraction |
+| `GET` | `/portfolio/analytics` | JWT | Full portfolio analytics (returns, risk, allocation) |
+| `GET` | `/portfolio/governance` | JWT | Governance X-Ray overlay on all holdings |
+| `GET` | `/portfolio/news` | JWT | Portfolio-specific curated news |
+| `GET` | `/portfolio/sectors` | JWT | Sector/sub-sector breakdown |
+| `GET` | `/portfolio/holding/{symbol}` | JWT | Deep-dive on single holding |
+| `GET` | `/portfolio/corporate-actions` | JWT | Recent/upcoming corporate actions |
+| `GET` | `/portfolio/alerts` | JWT | Computed alerts & warnings |
+| `GET` | `/portfolio/tax-summary` | JWT | Tax summary (LTCG/STCG in India) |
+| `GET` | `/portfolio/dividends` | JWT | Dividend history & calendar |
+| `POST` | `/portfolio/stress-test` | JWT | Run Monte Carlo stress test scenarios |
+| `GET` | `/portfolio/mf-analytics` | JWT | Mutual fund-specific analytics |
+| `GET` | `/portfolio/today` | JWT | Daily action queue for user |
+| `GET` | `/portfolio/brief` | JWT | Portfolio summary brief |
+| `GET` | `/portfolio/commentary` | JWT | AI-generated portfolio commentary |
+
+### 4.4 Market Data
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/market/indices` | Optional JWT | Real-time indices (Nifty 50, Sensex, NASDAQ, S&P 500, crypto, forex) |
+| `GET` | `/market/quotes` | Optional JWT | Real-time stock quotes (symbols as CSV) |
+| `GET` | `/market/history` | JWT | Price history (1M/3M/6M/YTD/1Y/MAX) |
+| `GET` | `/market/news` | Optional JWT | Market-wide news headlines |
+| `GET` | `/public/market/ticker` | None | Public ticker data (no auth needed) |
+
+### 4.5 Company Intelligence (IKG)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/company/{cin}/governance` | JWT | Forensic governance score (0-100) |
+| `GET` | `/company/{cin}/network` | JWT | Director board interlock network graph |
+| `GET` | `/company/{cin}/provenance` | JWT | Citation-backed company facts |
+| `GET` | `/company/{cin}/health` | JWT | Graph data completeness/health score |
+| `GET` | `/company/{cin}/staleness` | JWT | Data freshness verdict per category |
+| `POST` | `/filings/triage` | JWT | Classify filings by materiality |
+
+### 4.6 Content Automation
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/content/articles/generate` | JWT | Generate single article |
+| `POST` | `/api/content/articles/generate-batch` | JWT | Batch article generation from events |
+| `POST` | `/api/content/events/ingest` | JWT | Ingest market/regulatory events |
+| `GET` | `/api/content/articles` | Optional | List articles (published + draft) |
+| `GET` | `/api/content/articles/{slug}` | JWT | Get article JSON |
+| `GET` | `/api/content/articles/{slug}/html` | None | Get published article HTML (public) |
+| `POST` | `/api/content/articles/{slug}/publish` | JWT | Publish article |
+| `POST` | `/api/content/articles/{slug}/unpublish` | JWT | Unpublish article |
+| `POST` | `/api/content/flash/generate` | JWT | Start flash content generation job |
+| `POST` | `/api/content/flash/ingest-events` | JWT | Flash event ingestion |
+| `GET` | `/api/content/automation/status` | JWT | Get automation pipeline status |
+| `POST` | `/api/content/automation/run-now` | JWT | Trigger official monitor sweep manually |
+
+### 4.7 Payments
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/create-order` | JWT | Create Razorpay order for INR amount |
+| `POST` | `/api/verify-payment` | JWT | Verify Razorpay signature after checkout |
+| `GET` | `/user/subscription` | JWT | Get current plan + quota details |
+| `GET` | `/user/token-usage` | JWT | Get weekly LLM token consumption |
+| `POST` | `/user/upgrade-plan` | JWT | Admin-only: upgrade user plan |
+
+### 4.8 Other Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/health` | None | Health check (returns `ok`) |
+| `GET` | `/capabilities` | None | Agent capabilities + supported domains |
+| `GET` | `/config` | None | Configuration status (Supabase, OpenAI, etc.) |
+| `POST` | `/api/outreach/unsubscribe` | Rate-limited | Email unsubscribe |
+| `POST` | `/admin/reset-all-portfolios` | JWT + Admin Key | Wipe all portfolios |
+| `GET` | `/admin/ikg/health` | JWT + Admin email | IKG corpus health dashboard |
+| `GET` | `/metrics/snapshot` | JWT + Admin email | DAU/MAU/retention snapshot |
+| `GET` | `/ops/control-tower` | Optional | Control tower dashboard UI |
+| `GET` | `/api/ops/control-tower` | Optional | Control tower API data |
+| `POST` | `/api/chat` | JWT | Standalone chat (JSON) |
+| `POST` | `/api/chat/stream` | JWT | Standalone chat (SSE) |
 
 ---
 
-## Portfolio System
+## 5. Data Flow & Workflows
 
-### Architecture
+### 5.1 Research Query — Standard/Deep
 
 ```
-                    POST /api/portfolio/upload-cas
-                    POST /api/portfolio/upload-document
-                    POST /api/portfolio/upload-screenshot
-                    POST /portfolio/mirror  (manual entry)
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 PORTFOLIO INGESTION                         │
-│  ┌────────────┐  ┌────────────┐  ┌─────────────────────┐   │
-│  │ eCAS Parser│  │ PDF Parser │  │ Screenshot OCR      │   │
-│  │ cas_adapter│  │ pdf_trans- │  │ image_ingestion     │   │
-│  │ .py        │  │ former.py  │  │ .py                 │   │
-│  │            │  │ mineru_    │  │                     │   │
-│  │ CAMS/KFin  │  │ trans.py   │  │                     │   │
-│  └────────────┘  └────────────┘  └─────────────────────┘   │
-│                              │                              │
-│              Extraction Schema (portfolio_schema.py)        │
-│              → List of Position objects                     │
-│                              │                              │
-│                   User Review / Confirmation                │
-│                              │                              │
-│                              ▼                              │
-│              Position Mirror DB (portfolio_mirrors.py)      │
-│              → SQLite, per-tenant, active flag              │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 PORTFOLIO ANALYTICS                         │
-│  ┌───────────┐ ┌──────────┐ ┌─────────┐ ┌──────────────┐ │
-│  │ Analytics │ │ Sectors  │ │Alerts   │ │Stress Test   │ │
-│  │ P&L,      │ │ Sector   │ │Price    │ │Scenario      │ │
-│  │ XIRR,     │ │ breakup, │ │alerts,  │ │analysis,     │ │
-│  │ allocation│ │concentra-│ │MA alerts│ │monte carlo   │ │
-│  │           │ │tion risk │ │52w high │ │              │ │
-│  └───────────┘ └──────────┘ └─────────┘ └──────────────┘ │
-│  ┌───────────┐ ┌──────────┐ ┌─────────┐ ┌──────────────┐ │
-│  │ Dividends │ │ Tax      │ │ Corp    │ │ MF Analytics │ │
-│  │ History + │ │ STCG/LTCG│ │Actions  │ │ Scheme       │ │
-│  │ Upcoming  │ │ Summary  │ │ Split,  │ │ performance  │ │
-│  │           │ │          │ │ Bonus   │ │ NAV tracking │ │
-│  └───────────┘ └──────────┘ └─────────┘ └──────────────┘ │
-│  ┌───────────┐ ┌──────────┐ ┌────────────────────────────┐ │
-│  │Action     │ │Holding   │ │ Portfolio News              │ │
-│  │Queue      │ │Detail    │ │ News relevant to holdings   │ │
-│  │Daily      │ │Deep dive │ │                             │ │
-│  └───────────┘ └──────────┘ └────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                                                                     │
+│  FRONTEND                                                           │
+│  ┌──────────┐    ┌────────────┐    ┌──────────────────────────┐   │
+│  │ ChatInput │───▶│ POST       │───▶│ SSE Stream Consumer      │   │
+│  │           │    │ /chat/     │    │ (EventSource-like,       │   │
+│  │ "Analyze  │    │ research   │    │  auto-reconnect,         │   │
+│  │  TCS..."  │    │            │    │  Last-Event-ID)          │   │
+│  └──────────┘    └──────┬─────┘    └──────────┬───────────────┘   │
+│                         │                      │                    │
+└─────────────────────────┼──────────────────────┼────────────────────┘
+                          │                      │
+                          ▼                      │
+┌─────────────────────────────────────────────────┼────────────────────┐
+│  BACKEND GATEWAY (FastAPI)                      │                    │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  1. AUTH: verify JWT from cookie/bearer/query param           │   │
+│  │  2. RATE LIMIT: check token budget + rate limit               │   │
+│  │  3. PROMPT GUARD: regex injection detection                   │   │
+│  │  4. CONTEXTUALIZER: LLM detects follow-up vs new query        │   │
+│  │  5. INTENT ROUTER: classify (portfolio_scope/comparison/      │   │
+│  │     deep/standard) + auto-select geography + domains          │   │
+│  │  6. SESSION: create SessionRecord, open EventBus              │   │
+│  │  7. ASYNC TASK: launch _runner() in background               │   │
+│  │  8. SSE: stream events back to client                         │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  RESEARCH RUNNER (run_agent.py)                              │   │
+│  │                                                              │   │
+│  │  Phase 1: ENTITY RESOLUTION                                  │   │
+│  │    ┌─────┐   ┌─────┐   ┌─────┐                              │   │
+│  │    │ IKG │   │ CIN │   │Yahoo│                              │   │
+│  │    │entity│──▶│lookup│──▶│symb │  → "Tata Consultancy →     │   │
+│  │    │resolv│   │     │   │resl │     CIN L22210MH1995 →      │   │
+│  │    └─────┘   └─────┘   └─────┘     TCS.NS"                  │   │
+│  │                                                              │   │
+│  │  Phase 2: ENRICHMENT (parallel, asyncio)                     │   │
+│  │    ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐            │   │
+│  │    │Yahoo │ │NSE   │ │SEBI  │ │SEC   │ │News  │ ...           │   │
+│  │    │Fin   │ │Snapshot│ │Filings│ │EDGAR │ │RSS  │            │   │
+│  │    └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘ └──┬───┘            │   │
+│  │       └────┬───┴─────┬───┴──────┴───────┴─────┘             │   │
+│  │            ▼                                                │   │
+│  │       Enrichment Context Bundle                              │   │
+│  │                                                              │   │
+│  │  Phase 3: SPECIALIST SUB-AGENTS (parallel waves)             │   │
+│  │                                                              │   │
+│  │  Wave 0 (no deps):                                          │   │
+│  │  ┌──────────┐  ┌──────────┐                                 │   │
+│  │  │Financials│  │  News    │                                 │   │
+│  │  │  Agent   │  │  Agent   │                                 │   │
+│  │  └────┬─────┘  └────┬─────┘                                 │   │
+│  │       └──────┬──────┘                                       │   │
+│  │              ▼                                              │   │
+│  │  Wave 1 (depends on financials & news):                      │   │
+│  │  ┌────────┐ ┌──────┐ ┌──────────┐ ┌────────┐               │   │
+│  │  │Valuat. │ │Risk  │ │Governance│ │Competit│               │   │
+│  │  └───┬────┘ └──┬───┘ └────┬─────┘ └───┬────┘               │   │
+│  │      └────┬────┴────┬─────┴─────┬────┘                      │   │
+│  │           ▼                                                  │   │
+│  │  Wave 2 (depends on all above):                              │   │
+│  │  ┌──────────┐ ┌─────────┐ ┌──────────┐                      │   │
+│  │  │Technical │ │  Macro  │ │Community │                      │   │
+│  │  └──────────┘ └─────────┘ └──────────┘                      │   │
+│  │                                                              │   │
+│  │  Phase 4: BLIND-SPOT DETECTION                               │   │
+│  │    BlindSpotAgent scans for gaps → triggers additional runs   │   │
+│  │                                                              │   │
+│  │  Phase 5: REFLECTION LOOP                                    │   │
+│  │    Grader scores → if < threshold → gap-filling re-run        │   │
+│  │                                                              │   │
+│  │  Phase 6: SYNTHESIS                                         │   │
+│  │    LLM synthesizes all evidence → structured memo             │   │
+│  │    + charts (Matplotlib) + metric cards                       │   │
+│  │                                                              │   │
+│  │  Phase 7: FACT-CHECKING                                      │   │
+│  │    AccuracyValidator verifies claims against sources          │   │
+│  │                                                              │   │
+│  │  Phase 8: OUTPUT                                            │   │
+│  │    - Save memo.md to disk                                    │   │
+│  │    - Persist chat history                                    │   │
+│  │    - Update memory facts                                     │   │
+│  │    - Update token usage                                      │   │
+│  │    - Emit result + done events                               │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Portfolio Endpoints
+### 5.2 Deep Research — Detailed Flow
 
-All portfolio endpoints live in `finagent/gateway/run.py`:
+```
+User Query → POST /research/deep
+    │
+    ▼
+┌──────────────────────────────────────────┐
+│  1. Intent Analysis & Pass Selection     │
+│     LLM picks from these available passes:│
+│     - financials (always included)        │
+│     - valuation                           │
+│     - risk                                │
+│     - governance                          │
+│     - shareholding                        │
+│     - macro_sector                        │
+│     - hidden_catalysts                    │
+│     - news_narrative                      │
+│     - peer_comparison                     │
+│     - capital_allocation                  │
+│     - competitive_moat                    │
+│     - historical_sentiment                │
+└──────────────┬───────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────┐
+│  2. EVIDENCE PASSES — ALL IN PARALLEL    │
+│     asyncio.gather(                      │
+│       financials_evidence(),             │
+│       valuation_evidence(),              │
+│       risk_evidence(),                   │
+│       governance_evidence(),             │
+│       ...                                │
+│     )                                    │
+│     Each pass runs entity resolution →   │
+│     enrichment → specialist agent →      │
+│     structured evidence block            │
+└──────────────┬───────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────┐
+│  3. GUARDRAIL PASS                       │
+│     If evidence gaps detected →           │
+│     rerun missing passes with more       │
+│     aggressive retrieval                  │
+└──────────────┬───────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────┐
+│  4. SYNTHESIS PASS (with Reflection)      │
+│     - Integrate all evidence blocks       │
+│     - Resolve contradictions              │
+│     - Generate structured answer          │
+│     - Build charts, metrics, citations    │
+│     - Quality self-reflection loop        │
+└──────────────┬───────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────┐
+│  5. AnswerArtifact                       │
+│     {                                     │
+│       "sections": [...],                  │
+│       "charts": [...],                    │
+│       "metrics": [...],                   │
+│       "citations": [...],                 │
+│       "confidence": 0.82,                 │
+│       "memo_md": "..."                   │
+│     }                                     │
+│                                           │
+│  6. Optional Export: PDF / DOCX / XLSX   │
+└──────────────────────────────────────────┘
+```
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/portfolio/mirror` | Get current holdings |
-| POST | `/portfolio/mirror` | Replace holdings manually |
-| DELETE | `/portfolio/mirror` | Clear all holdings |
-| POST | `/portfolio/mirror/ecas` | Replace holdings from eCAS |
-| POST | `/api/portfolio/upload-cas` | Upload eCAS/PDF/CSV/XLSX |
-| POST | `/api/portfolio/upload-document` | Upload document |
-| POST | `/api/portfolio/upload-screenshot` | Upload screenshot (OCR) |
-| POST | `/api/portfolio/confirm-extraction` | Confirm extracted holdings |
-| POST | `/api/portfolio/cancel-extraction` | Cancel extraction |
-| GET | `/portfolio/analytics` | Full portfolio analytics |
-| GET | `/portfolio/sectors` | Sector breakdown |
-| GET | `/portfolio/holding/{symbol}` | Single holding detail |
-| GET | `/portfolio/alerts` | Price/Moving Average alerts |
-| GET | `/portfolio/news` | Portfolio-relevant news |
-| GET | `/portfolio/corporate-actions` | Bonuses, splits, dividends |
-| GET | `/portfolio/tax-summary` | STCG/LTCG summary |
-| GET | `/portfolio/dividends` | Dividend history + upcoming |
-| POST | `/portfolio/stress-test` | Run stress test scenario |
-| GET | `/portfolio/mf-analytics` | Mutual fund analytics |
-| GET | `/portfolio/today` | Today's action queue |
-| GET | `/portfolio/brief` | Text summary for chat context |
+### 5.3 User Onboarding Flow
 
-### Portfolio-Scoped Research
+```
+┌──────────┐    ┌─────────┐    ┌────────────┐    ┌───────────┐
+│ Landing  │───▶│ Google  │───▶│ Get Started│───▶│ Upload    │
+│ Page     │    │ or Email│    │ Page       │    │ Portfolio │
+│          │    │ Signup  │    │            │    │           │
+└──────────┘    └────┬────┘    └────────────┘    └─────┬─────┘
+                     │                                 │
+                     ▼               ┌─────────────────┼───────────┐
+              ┌──────────┐          │                              │
+              │ JWT      │          ▼               ▼              ▼
+              │ Minted   │    ┌──────────┐  ┌──────────┐  ┌───────────┐
+              └──────────┘    │ CAS/PDF  │  │ CSV/XLSX │  │Screenshot │
+                              │ Upload   │  │ Upload   │  │ Upload    │
+                              └────┬─────┘  └────┬─────┘  └─────┬─────┘
+                                   │              │               │
+                                   ▼              ▼               ▼
+                              ┌───────────────────────────────────────┐
+                              │         PARSING PIPELINE               │
+                              │  CAS ─▶ casparser ─▶ positions         │
+                              │  PDF ─▶ PyMuPDF/Azure DI ─▶ positions  │
+                              │  CSV ─▶ pandas ─▶ positions            │
+                              │  Image─▶ GPT-4o Vision ─▶ positions    │
+                              │  XLSX─▶ openpyxl ─▶ positions          │
+                              └──────────────────┬────────────────────┘
+                                                 │
+                                                 ▼
+                              ┌───────────────────────────────────────┐
+                              │         EXTRACTION REVIEW              │
+                              │  Positions: [{symbol, quantity, cost}]│
+                              │  ISIN Resolution → NSE/BSE symbols      │
+                              │  Portfolio Guardrails validation        │
+                              │  → Show user for confirmation           │
+                              └──────────────────┬────────────────────┘
+                                                 │
+                                                 ▼
+                              ┌───────────────────────────────────────┐
+                              │  Confirm → Save to Portfolio Mirror     │
+                              │  Set onboarding_status = 'onboarded'   │
+                              │  Redirect to Dashboard                 │
+                              └───────────────────────────────────────┘
+```
 
-When a user has holdings and asks a general question like "should I rebalance?", `is_portfolio_scope_query()` in `intent_router.py` detects portfolio scope and feeds holdings data into the agent loop's context, enabling:
-- "What's my worst performing stock?" → queries portfolio + analyzes
-- "Am I overexposed to IT?" → computes sector allocation + research
-- "Show me news affecting my holdings" → portfolio news endpoint
+### 5.4 Content Automation Flow
 
-The `query_guards.py` module prevents false classification: when a portfolio query contains comparison words like "vs" or "compared to", it is treated as a portfolio query, not a company-vs-company comparison.
+```
+┌────────────────────────────┐
+│   OFFICIAL MONITOR         │
+│   (Polling every 30 min)   │
+│                            │
+│  ┌──────┐ ┌──────┐ ┌─────┐│
+│  │ SEBI │ │ BSE  │ │ NSE ││  ← RSS feeds + scrapers
+│  │ RSS  │ │ RSS  │ │ RSS ││
+│  └──┬───┘ └──┬───┘ └──┬──┘│
+│     └──────┬──┴──────┬───┘│
+│            ▼          ▼    │
+└────────────┬──────────┬────┘
+             │          │
+     Raw filings/announcements
+             │
+             ▼
+┌────────────────────────────┐
+│   FILING TRIAGE            │
+│   Materiality classifier   │
+│   ┌─────────────────────┐  │
+│   │ Score 0-1 per filing │  │
+│   │ > 0.7 → Article     │  │
+│   │ 0.3-0.7 → Brief     │  │
+│   │ < 0.3 → Skip        │  │
+│   └─────────────────────┘  │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│   FLASH CONTENT ENGINE     │
+│   1. Research context       │
+│   2. Synthesis              │
+│   3. Structured article     │
+│      - Headline             │
+│      - Summary              │
+│      - Analysis body        │
+│      - Market impact        │
+│      - Charts/metrics       │
+│      - Citations            │
+│      - Cover image prompt   │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│   EDITORIAL REVIEW         │
+│   - Livemint dedupe check   │
+│   - Accuracy validation     │
+│   - SEO metadata generation │
+│   → Draft status           │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│   PUBLISH                  │
+│   - Write to insights/ dir │
+│   - Update sitemap         │
+│   - Submit to Google       │
+│     Search Console         │
+│   - Mirror to public hub   │
+└────────────────────────────┘
+```
+
+### 5.5 IKG Data Pipeline
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                     APSCHEDULER (Cron)                     │
+│                                                            │
+│  Every 6h ─▶ NSE Corporate Filings Scraper                 │
+│  Every 12h─▶ BSE Announcements Scraper                     │
+│  Every 24h─▶ SEBI Enforcement Orders Scraper               │
+│  Every 24h─▶ MCA Director/Company Data Scraper              │
+│  Quarterly─▶ Shareholding Pattern Scraper                  │
+│  Daily    ─▶ BSE End-of-Day Data Scraper                   │
+│  Weekly   ─▶ Annual Report Extraction (Docling + Azure DI) │
+│  Weekly   ─▶ Governance Score Recompute                    │
+└──────────────────────┬─────────────────────────────────────┘
+                       │
+                       ▼ Dispatch to Celery
+┌────────────────────────────────────────────────────────────┐
+│                    CELERY WORKER POOL                       │
+│  10 concurrent threads across 6 queues:                    │
+│                                                            │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌───────────┐       │
+│  │  nse    │ │  bse    │ │  sebi   │ │ documents │       │
+│  │ queue   │ │  queue  │ │  queue  │ │  queue    │       │
+│  └────┬────┘ └────┬────┘ └────┬────┘ └─────┬─────┘       │
+│       └──────┬─────┴──────┬────┴──────┬────┘              │
+│              │            │           │                    │
+│  ┌──────────┴────────────┴───────────┴────────────┐      │
+│  │        POSTGRESQL 16 (IKG Database)             │      │
+│  │  - companies, directors, financial facts         │      │
+│  │  - shareholding, enforcement, XBRL facts         │      │
+│  │  - index constituents                           │      │
+│  └──────────┬──────────────────────────────────────┘      │
+│             │                                              │
+│  ┌──────────┴──────────┐                                   │
+│  │                     │                                   │
+│  ▼                     ▼                                   │
+│ ┌───────┐     ┌────────────┐                               │
+│ │Qdrant │     │   Neo4j    │                               │
+│ │Vector │     │  Graph DB  │                               │
+│ │Embed  │     │            │                               │
+│ └───────┘     │ - Companies│                               │
+│               │ - Directors│                               │
+│               │ - Edges    │                               │
+│               │   (inter-  │                               │
+│               │   locks,   │                               │
+│               │   filings) │                               │
+│               └────────────┘                               │
+└────────────────────────────────────────────────────────────┘
+```
+
+### 5.6 Portfolio Analytics Flow
+
+```
+User Portfolio Mirror (PostgreSQL)
+    │
+    │ positions: [{symbol, quantity, avg_cost, isin, ...}]
+    │
+    ▼
+┌───────────────────────────────────────────────────┐
+│              ANALYTICS COMPUTATION                 │
+│                                                   │
+│  ┌─────────────────────┐ ┌─────────────────────┐  │
+│  │ CORE ANALYTICS       │ │ GOVERNANCE X-RAY    │  │
+│  │ - Portfolio value    │ │ - IKG score lookup  │  │
+│  │ - Day change P&L     │ │   per holding       │  │
+│  │ - Total returns      │ │ - Red/orange/green  │  │
+│  │ - XIRR               │ │   classification    │  │
+│  │ - Beta, Sharpe,      │ │ - Board quality     │  │
+│  │   Sortino ratios     │ │ - Enforcement flags │  │
+│  └─────────────────────┘ └─────────────────────┘  │
+│                                                   │
+│  ┌─────────────────────┐ ┌─────────────────────┐  │
+│  │ SECTOR ANALYSIS      │ │ STRESS TEST          │  │
+│  │ - Sector weights     │ │ - 2008-style crash  │  │
+│  │ - Sub-sector drill   │ │ - COVID-style crash  │  │
+│  │ - Concentration      │ │ - Interest rate      │  │
+│  │   risk metrics       │ │   shock              │  │
+│  └─────────────────────┘ │ - Monte Carlo (1000   │  │
+│                           │   simulations)       │  │
+│  ┌─────────────────────┐ └─────────────────────┘  │
+│  │ TAX SUMMARY (India)  │                         │
+│  │ - LTCG (>1Y holdings)│ ┌─────────────────────┐  │
+│  │ - STCG (<1Y holdings)│ │ DIVIDEND TRACKING   │  │
+│  │ - Tax liability est. │ │ - Historical          │  │
+│  └─────────────────────┘ │ - Calendar            │  │
+│                           │ - Yield analysis      │  │
+│  ┌─────────────────────┐ └─────────────────────┘  │
+│  │ ALERTS & ACTIONS     │                         │
+│  │ - Over-concentration │ ┌─────────────────────┐  │
+│  │ - Governance risk    │ │ AI COMMENTARY       │  │
+│  │ - Earnings calendar  │ │ - LLM generates      │  │
+│  │ - Stop-loss breach   │ │   natural-language   │  │
+│  │ - Corp action alert  │ │   portfolio review   │  │
+│  └─────────────────────┘ └─────────────────────┘  │
+│                                                   │
+└───────────────────────┬───────────────────────────┘
+                        │
+                        ▼
+              Frontend Dashboard
+```
 
 ---
 
-## Memory System
+## 6. Multi-Agent Research Engine (FinAgent)
 
-**Directory:** `finagent/memory/`
+### 6.1 Architecture
 
-### Architecture
-
-```
-┌────────────────────────────────────────────────────┐
-│                  MEMORY SYSTEM                      │
-│                                                     │
-│  ┌──────────────────┐    ┌────────────────────┐    │
-│  │  Memory Store     │    │  Chat Memory       │    │
-│  │  store.py         │    │  chat_memory.py    │    │
-│  │  SQLite           │    │  SQLite            │    │
-│  │  memory.sqlite3   │    │  chat_memory.db    │    │
-│  └──────────────────┘    └────────────────────┘    │
-│                                                     │
-│  Fact Types:                 Chat:                  │
-│  • identity                  • Per-session          │
-│  • financial                 • User messages        │
-│  • risk                      • Assistant responses  │
-│  • market_data               • For follow-up        │
-│  • news_event                  detection            │
-│  • conflict                                          │
-│  • sentiment                                         │
-│  • valuation                                         │
-└────────────────────────────────────────────────────┘
-```
-
-### Memory Store (`memory/store.py`)
-
-- Per-user isolation (scoped by tenant)
-- Facts normalized by target (`normalize_target()`)
-- Fact categories: identity, financial, risk, market_data, news_event, conflict, sentiment, valuation
-- Recalled on subsequent sessions via `recall_facts(target, limit=n)`
-- Stale fact pruning and deduplication
-
-### Chat Memory (`memory/chat_memory.py`)
-
-- Per-session chat history persistence
-- `ChatMemoryManager` class:
-  - `save_message(session_id, role, content)`
-  - `get_history(session_id, limit=n)` → returns recent messages
-  - `clear_history(session_id)`
-- Used by intent router for follow-up detection
-- Used to build conversation context for the LLM
-
-### Memory Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/memory/stats` | Memory statistics |
-| GET | `/memory/facts` | Browse stored facts |
-| GET | `/memory/sessions` | Session summaries |
-| DELETE | `/memory/clear/{target}` | Clear target facts |
-
----
-
-## Entity Resolution & Geography
-
-**Directory:** `finagent/geo/`
-
-### Resolution Pipeline
+The FinAgent is a **multi-agent LLM orchestration system** designed for equity research. It coordinates 10+ specialist AI agents that run in **parallel waves** based on dependency ordering.
 
 ```
-User query: "Analyze TCS"
-           │
-           ▼
-  resolve_entity(query, geography_hint=None)
-  finagent/geo/entity_resolver.py
-           │
-           ├──► Extract potential ticker ("TCS")
-           ├──► Check mapping table (ticker_mapper.py)
-           │    → "TCS" → "TCS.NS" (NSE), market cap, sector
-           ├──► Determine geography (jurisdiction_profiles.py)
-           │    → India (IN) profile
-           ├──► Apply exchange suffix policy
-           │    → .NS for NSE, .BO for BSE
-           ├──► Load preferred data domains (source_policy.py)
-           │    → screener.in, moneycontrol.com, nseindia.com
-           └──► Return ResolvedEntity:
-                 • ticker: "TCS.NS"
-                 • name: "Tata Consultancy Services"
-                 • geography: "IN"
-                 • exchange: "NSE"
-                 • preferred_domains: ["screener.in", ...]
+┌─────────────────────────────────────────────────────────┐
+│                    ORCHESTRATOR                          │
+│  (backend/finagent/agents/orchestrator.py)               │
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │              WAVE SCHEDULING                      │   │
+│  │  Agent dependency graph → topological sort →     │   │
+│  │  parallel waves (asyncio.gather per wave)        │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │              CONTEXT MANAGEMENT                   │   │
+│  │  Per-agent context loaders → context_window_     │   │
+│  │  budget enforcement → token counting             │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │              QUALITY CONTROL                      │   │
+│  │  Grader agent → blind-spot agent → verifier      │   │
+│  │  → reflection loop (re-run if < threshold)      │   │
+│  └─────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Components
+### 6.2 Specialist Agents
 
-| File | Purpose |
-|------|---------|
-| `entity_resolver.py` | Main entity resolution: ticker extraction, suffix application, mapping table lookup |
-| `ticker_mapper.py` | Symbol-to-ticker mapping database (e.g., "TCS" → "TCS.NS") |
-| `jurisdiction_profiles.py` | Country-specific config: data sources, currency, exchange conventions |
-| `source_policy.py` | Preferred domain URLs per country/sector for web search |
-| `query_localizer.py` | Adapts search queries for local context (IN vs US) |
-| `currency_policy.py` | Currency formatting: INR defaults to crore/lakh, US to millions/billions |
+| Agent | File | Domain | Key Outputs |
+|-------|------|--------|-------------|
+| **Financials** | `specialists/financials.py` | P&L, Balance Sheet, Cash Flow | Revenue CAGR, margin trends, ROE/ROCE, FCF yield, debt ratios |
+| **Valuation** | `specialists/valuation.py` | DCF, multiples | Intrinsic value, P/E 5Y range, EV/EBITDA, PEG ratio, DCF with sensitivity |
+| **Risk** | `specialists/risk.py` | Risk factors | Beta, VaR, concentration risk, regulatory risk, operational risk, geopolitical |
+| **Governance** | `specialists/governance.py` | Corporate governance | Board composition, related-party transactions, SEBI orders, promoter pledges |
+| **Competitor** | `specialists/competitor.py` | Peer comparison | Market share, positioning, moat analysis, competitive advantages |
+| **Macro** | `specialists/macro.py` | Macroeconomic | GDP growth linkage, interest rate sensitivity, currency exposure, sector outlook |
+| **News** | `specialists/news.py` | News sentiment | Sentiment score, key events timeline, market impact analysis |
+| **Technical** | `specialists/technical.py` | Price action | Support/resistance, RSI, MACD, moving averages, volume analysis |
+| **Accounting** | `specialists/accounting.py` | Forensic accounting | Red flags, earnings quality, auditor opinion, related-party analysis |
+| **Community** | `specialists/community.py` | Social sentiment | Reddit/HN/StockTwits sentiment, trending topics, retail interest |
 
-### Geography Profiles
-
-**India (IN):**
-- Exchange suffixes: .NS (NSE), .BO (BSE)
-- Data sources: yfinance, Screener.in, Moneycontrol, NSE, BSE
-- Preferred domains: screener.in, moneycontrol.com, nseindia.com, bseindia.com
-- Currency: INR (crore/lakh formatting)
-- News: SEBI filings, BSE/NSE announcements, AMFI
-- Social: IndianStreetBets, ValuePickr
-
-**United States (US):**
-- Exchange suffixes: none (direct symbol)
-- Data sources: yfinance, SEC EDGAR
-- Preferred domains: sec.gov, seekingalpha.com, gurufocus.com
-- Currency: USD (millions/billions)
-- News: SEC filings, Bloomberg, Reuters
-- Social: WallStreetBets, StockTwits
-
----
-
-## Synthesis & Output
-
-**Directory:** `finagent/synthesis.py`, `finagent/output/`
-
-### Synthesis Pipeline
-
-```
-All research data
-  │
-  ▼
-EnrichmentBundle (dataclass)
-  • india_snap: IndiaCompanySnapshot
-  • sebi_filing: SEBIFiling
-  • shareholding: dict
-  • yahoo: YahooQuote
-  • wikipedia: WikipediaSummary
-  • fx: FxRate
-  • news: list[NewsItem]
-  • And more populated at runtime by run_agent.py
-  │
-  ▼
-synthesize_memo(bundle, config) → SynthesisResult
-  │
-  ├──► Build system prompt (prompt_builder.py)
-  │    → INR-first formatting instructions
-  │    → Confidentiality and disclaimer
-  │
-  ├──► Format enrichment data as structured context
-  │    → Numbers formatted in INR (crore/lakh) for IN companies
-  │    → All citations tracked
-  │
-  ├──► Call OpenAI GPT-4o (with token streaming)
-  │    → Falls back to template-based synthesis when no API key
-  │    → 8-section memo template
-  │    → Include conflict warnings
-  │    → Include confidence score with rationale
-  │    → Include data freshness timestamps
-  │
-  └──► Return formatted markdown memo
-  │
-  ▼
-build_answer_artifact() → structured AnswerArtifact for frontend
-```
-
-### 8-Section Memo Template
-
-1. **Executive Summary** — 2-3 paragraph TL;DR with key metrics and verdict
-2. **Business Overview** — What the company does, segments, market position
-3. **Financial Analysis** — Revenue/PAT trends, margins, ratios, cash flow quality
-4. **Valuation** — Fair value estimate with bullish/bearish/best-estimate, peer comparison
-5. **Risks & Red Flags** — Key risk factors, accounting red flags, regulatory concerns
-6. **Market Sentiment** — News sentiment, social media buzz, analyst consensus
-7. **Competitive Landscape** — Peer comparison table, market share, moat analysis
-8. **Verdict / Investment Thesis** — Bull/bear/base scenarios, conviction level, catalysts
-
-### Output Components (`output/`)
-
-| File | Purpose |
-|------|---------|
-| `contracts.py` | `OutputMode` enum (quick/moderate/deep), `ResponseDepth` enum, `AnswerArtifact` model |
-| `intent_classifier.py` | Classifies query complexity → `ResponseDepth`, extracts finance entities |
-| `memo_formatter.py` | Converts raw memo sections to display-ready format |
-| `renderer.py` | Markdown-to-JSON rendering engine |
-| `artifact_builder.py` | Builds structured answer artifacts for the frontend |
-| `chart_generator.py` | Matplotlib chart image generation |
-| `confidence_scorer.py` | 0-100 confidence with source weighting |
-| `conflict_reporter.py` | Cross-source conflict detection and reporting |
-| `report_exporter.py` | Export to PDF/HTML |
-| `templates.py` | Output templates for different response modes |
-| `query_guards.py` | Guards against misclassifying portfolio comparison queries as company comparisons |
-
-### Intent Classification (`intent.py`, `output/intent_classifier.py`)
-
-Two-layer intent system:
-1. `intent.py` — Keyword-based intent detection and rich mode classification (chart, news, valuation, comparison, filing, snapshot)
-2. `output/intent_classifier.py` — Complexity classification (simple/moderate/complex) and `ResponseDepth` assignment
-
-### Rich Response Builder (`rich_builder.py`)
-
-Assembles typed `RichResponse` objects that the React frontend renders as metric cards, charts, comparison tables, strengths/risks panels, and other structured visuals. Falls back to plain markdown when tool outputs are insufficient.
-
-### Valuation Engine (`tools/valuation_engine.py`)
-
-All calculations are deterministic:
-
-- **DCF** — Free cash flow projection, terminal value (perpetuity growth / exit multiple), WACC discounting
-- **PE Valuation** — Trailing and forward PE, industry-adjusted
-- **Graham Number** — Benjamin Graham intrinsic value formula
-- **EV/EBITDA** — Enterprise value to EBITDA multiple comparison
-- **DDM** — Dividend discount model with growth assumptions
-- **WACC** — Cost of equity (CAPM) + cost of debt, country risk premium
-- **CAGR** — Compounded annual growth rate over configurable periods
-- **Piotroski F-Score** — 9-point accounting quality score
-- **Altman Z-Score** — Bankruptcy prediction model
-- **DuPont Analysis** — ROE decomposition (profit margin × asset turnover × equity multiplier)
-
-Each function returns a Pydantic model with:
-- The computed value
-- Input assumptions (transparent)
-- Intermediate calculations (auditable)
-- Confidence level
-
----
-
-## Data Layer & External Providers
-
-### Provider Map
-
-```
-                    ┌─────────────────┐
-                    │   finagent      │
-                    └────────┬────────┘
-                             │
-        ┌────────────────────┼────────────────────┐
-        │                    │                    │
-        ▼                    ▼                    ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│  yfinance      │   │  SEC EDGAR    │   │  NSE / BSE    │
-│  • Quotes      │   │  • Company    │   │  • Screener.in│
-│  • Financials  │   │    Facts      │   │  • Moneycontrol│
-│  • History     │   │  • Filings    │   │  • Shareholding│
-│  • Dividends   │   │  • XBRL Data  │   │  • Corp Actions│
-└───────────────┘   └───────────────┘   └───────────────┘
-        │                    │                    │
-        ▼                    ▼                    ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│  News & Social │   │  Web Search   │   │  Reference    │
-│  • Google News │   │  • DuckDuckGo │   │  • Wikipedia  │
-│  • Reddit      │   │  • Crawl4AI   │   │  • Forex API  │
-│  • HackerNews  │   │  • SearXNG    │   │               │
-│  • StockTwits  │   │               │   │               │
-└───────────────┘   └───────────────┘   └───────────────┘
-```
-
-### Data Fetch Pattern
-
-All data fetchers follow a consistent pattern:
+### 6.3 Agent Execution Example
 
 ```python
-# finagent/tools/data/ — re-exports
-# finagent/tools/data/yahoo_finance.py
-async def fetch_yahoo_quote(symbol: str) -> YahooQuote:
-    """Fetch via yfinance, return structured Pydantic model."""
+# Orchestrator schedules specialists in waves:
 
-# Usage in run_agent.py (parallel):
-results = await asyncio.gather(
-    fetch_yahoo_quote(ticker),
-    fetch_wikipedia_summary(ticker),
-    fetch_india_snapshot(ticker),
-    fetch_news(ticker),
-    search_reddit(ticker),
-    # ... etc
+# Wave 0 — Independent (no dependencies)
+wave_0 = asyncio.gather(
+    financials_agent.run(query, context),      # Financial statements
+    news_agent.run(query, context),            # News + sentiment
 )
+
+# Wave 1 — Depends on Wave 0 outputs
+wave_1 = asyncio.gather(
+    valuation_agent.run(query, context, deps={financials_result}),
+    risk_agent.run(query, context, deps={financials_result, news_result}),
+    governance_agent.run(query, context, deps={financials_result}),
+    competitor_agent.run(query, context, deps={financials_result}),
+)
+
+# Wave 2 — Depends on all prior outputs
+wave_2 = asyncio.gather(
+    macro_agent.run(query, context, deps={financials, competitor}),
+    technical_agent.run(query, context, deps={risk, valuation}),
+    community_agent.run(query, context, deps={news}),
+    accounting_agent.run(query, context, deps={financials}),
+)
+
+# Quality gates
+blindspot_result = blindspot_agent.run(all_results)
+quality_score = grader_agent.score(all_results)
+if quality_score < threshold:
+    gap_fill_rerun(query, target_gaps)
 ```
 
-### Caching
+### 6.4 Reflection Loop
 
-- **Per-session query cache** (`tools/data/cache.py`): In-memory cache for the duration of a research session
-- **News cache** (`news/cache.py`): SQLite-backed cache with configurable TTL
-- **News deduplication** (`news/dedupe.py`): Cosine similarity + title matching
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│ Generate  │───▶│  Grade   │───▶│ <threshold│───▶│ Gap-fill │
+│ response  │    │ quality  │ NO │           │ YES│ re-run   │
+└──────────┘    └──────────┘    └─────┬─────┘    └────┬─────┘
+                                      │               │
+                                      ▼               │
+                              ┌──────────┐    ◄───────┘
+                              │  Done    │    (up to 3 iterations)
+                              └──────────┘
+```
+
+### 6.5 LLM Provider Resolution
+
+```python
+# runtime_provider.py
+# Resolves which LLM to use based on task + availability:
+
+For synthesis:   OpenAI GPT-5.4-mini (primary) → Azure Foundry (fallback)
+For sub-agents:  OpenAI GPT-4o-mini (primary) → Azure Foundry (fallback) → xAI Grok-3 (fallback)
+For embeddings:  OpenAI text-embedding-3-small
+For intent:      OpenAI GPT-4o-mini
+```
 
 ---
 
-## Frontend Architecture
+## 7. Intelligent Knowledge Graph (IKG)
 
-### Directory Structure
+### 7.1 Overview
 
-```
-Frontend/app/src/
-├── main.tsx                    # React entry, AuthProvider wrapper
-├── App.tsx                     # Route definitions, auth guards
-├── index.css                   # Global styles (dark theme design system)
-├── api/
-│   └── client.ts               # Full API client (all endpoints, SSE streaming)
-├── context/
-│   └── AuthContext.tsx          # Auth state, Google OAuth, onboarding
-├── data/
-│   └── indianStocks.ts         # Indian stock reference data for search
-├── pages/
-│   ├── Dashboard.tsx           # Main workspace
-│   ├── Login.tsx               # Auth pages (login + signup + password reset)
-│   ├── Onboarding.tsx          # Portfolio onboarding
-│   ├── LandingPage.tsx         # Product landing page
-│   ├── Features.tsx            # Feature showcase
-│   ├── Pricing.tsx             # Pricing tiers
-│   └── Testimonials.tsx        # User testimonials
-└── components/
-    ├── layout/
-    │   ├── AppShell.tsx        # Main layout wrapper
-    │   ├── Logo.tsx            # Logo component
-    │   └── Sidebar.tsx         # Navigation sidebar
-    ├── chat/
-    │   ├── AgentThinking.tsx   # Agent progress visualization
-    │   ├── ChatInput.tsx       # Chat input + depth selector
-    │   ├── MessageBubble.tsx   # Chat message rendering
-    │   ├── RichResponse.tsx    # Rich data visualization
-    │   ├── SuggestedPrompts.tsx # Prompt suggestions
-    │   ├── CalloutBlock.tsx    # Callout/highlight block
-    │   ├── HtmlArtifact.tsx    # HTML artifact renderer
-    │   └── SectionBlock.tsx    # Section block wrapper
-    ├── charts/
-    │   ├── AreaChart.tsx       # Chart.js area chart
-    │   ├── BarChart.tsx        # Chart.js bar chart
-    │   ├── DonutChart.tsx      # Chart.js donut chart
-    │   ├── InteractiveChart.tsx # Interactive time-series
-    │   ├── MetricCard.tsx      # Single metric display
-    │   ├── ThemeProvider.ts    # Chart.js theming
-    │   ├── RadarChart.tsx      # Radar/spider chart
-    │   ├── TreemapChart.tsx    # Treemap visualization
-    │   └── TableBlock.tsx      # Table rendering block
-    └── dashboard/
-        ├── IndexTickerCard.tsx  # Nifty/Sensex ticker
-        ├── PortfolioTable.tsx   # Holdings table
-        ├── QuickActions.tsx     # Quick action buttons
-        ├── QuickPulse.tsx       # Market pulse overview
-        ├── RecentInsights.tsx   # Recent research list
-        ├── Sparkline.tsx        # Mini chart
-        ├── WatchlistCard.tsx    # User watchlist
-        └── AssetHistoryModal.tsx # Asset history modal
-```
+The IKG is a **comprehensive knowledge base of Indian companies** built from regulatory data sources. It combines:
 
-### Route Configuration (`App.tsx`)
+- **Relational data** (PostgreSQL 16) — structured financials, directors, filings
+- **Vector embeddings** (Qdrant) — semantic search over documents
+- **Graph data** (Neo4j) — director interlock networks, corporate relationships
+
+### 7.2 Data Sources
+
+| Source | Data | Frequency |
+|--------|------|-----------|
+| **NSE Corporate Filings** | Financial results, press releases, announcements | Every 6 hours |
+| **BSE Announcements** | Same as NSE + additional filings | Every 12 hours |
+| **SEBI Enforcement** | Orders, adjudications, settlements | Daily |
+| **MCA (Ministry of Corporate Affairs)** | Company master data, director details | Daily |
+| **Annual Reports** | Full PDF extraction via Docling + Azure DI | Weekly |
+| **XBRL Filings** | Structured financial facts (P&L, BS, CF) | Weekly |
+| **Shareholding Patterns** | Promoter, FII, DII, public holdings | Quarterly |
+| **BSE EOD Data** | Daily prices, volumes, market cap | Daily |
+| **Conference Call Transcripts** | Management commentary | Event-driven |
+
+### 7.3 Evidence-Based Governance Scoring
 
 ```
-HashRouter:
-  /                  → LandingPage (marketing)
-  /pricing           → Pricing page
-  /testimonials      → Testimonials page
-  /features          → Features page
-  /login             → Login page (PublicRoute guard)
-  /signup            → Login page — signup tab (PublicRoute guard)
-  /onboarding        → Portfolio onboarding (ProtectedRoute, requireOnboarded=false)
-  /dashboard         → Main workspace (ProtectedRoute, requireOnboarded=true)
-  *                  → Redirect to /
+┌─────────────────────────────────────────────────────────────┐
+│                GOVERNANCE SCORING PIPELINE                   │
+│                                                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│  │ SEBI Orders  │  │ Auditor      │  │ Shareholding        │ │
+│  │ - Penalties  │  │ - Qualified  │  │ - Promoter pledge % │ │
+│  │ - Bans       │  │   opinions   │  │ - FII confidence    │ │
+│  │ - Warnings   │  │ - Auditor    │  │ - Pledged promoter  │ │
+│  └──────┬───────┘  │   changes    │  └──────────┬──────────┘ │
+│         │          └──────┬───────┘             │            │
+│         ▼                ▼                     ▼            │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │              WEIGHTED SCORING ENGINE                     │ │
+│  │                                                         │ │
+│  │  Regulatory:    30% weight  │  Board Independence: 20%  │ │
+│  │  Related-Party: 20% weight  │  Auditor Quality:    10%  │ │
+│  │  Promoter Pledge:15% weight │  Earnings Quality:   15%  │ │
+│  │                                                         │ │
+│  │  Total Score: 0-100 (higher = better governance)        │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                                                             │
+│  Output:                                                     │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ Score  │ Label          │ Color  │ Action            │    │
+│  │────────│────────────────│────────│───────────────────│    │
+│  │ 80-100 │ Excellent      │ Green  │ No concerns        │    │
+│  │ 60-79  │ Fair           │ Yellow │ Monitor            │    │
+│  │ 40-59  │ Warning        │ Orange │ Caution advised    │    │
+│  │ 0-39   │ Red Flag       │ Red    │ Serious concerns   │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-`ProtectedRoute` checks authentication and optionally verifies onboarding status. `PublicRoute` redirects authenticated users away from auth pages.
+### 7.4 Director Network Analysis
 
-### Auth State (`context/AuthContext.tsx`)
+```
+Neo4j Graph Query:
+  MATCH (c:Company)<-[:DIRECTOR_OF]-(d:Director)-[:DIRECTOR_OF]->(other:Company)
+  WHERE c.cin = $cin
+  RETURN d, other
+
+Output: Board interlock map showing:
+  - Common directors across companies
+  - Network density metrics
+  - Potential conflict of interest patterns
+```
+
+### 7.5 Company Provenance (Citation-Backed Facts)
+
+```
+For any company fact, the system traces back to the source filing:
+
+Example:
+  "TCS reported ₹2,45,315 Cr revenue in FY2025"
+  └── Source: NSE Corporate Filing #12345 (2025-04-10)
+      ├── URL: https://nsearchives.nseindia.com/...
+      ├── Filing Type: Annual Audited Results
+      ├── Page: 3, Paragraph: 2
+      └── Extraction Date: 2025-04-11
+```
+
+---
+
+## 8. Portfolio Analytics Engine
+
+### 8.1 Core Modules
+
+```
+portfolio/
+├── analytics.py          # Returns, risk metrics, allocation
+├── sectors.py            # Sector/sub-sector classification
+├── news.py               # Per-holding + portfolio-level news
+├── alerts.py             # Rule-based alert computation
+├── stress_test.py        # Monte Carlo + historical scenarios
+├── tax.py                # Indian capital gains tax (LTCG/STCG)
+├── dividends.py          # Yield, history, calendar
+├── corporate_actions.py  # Bonus, splits, buybacks notification
+├── governance_xray.py    # IKG governance overlay per holding
+├── action_queue.py       # AI-generated daily recommendations
+├── holding_detail.py     # Single holding deep dive
+├── commentary.py         # LLM natural language portfolio review
+└── mf_analytics.py       # Mutual fund specific analysis
+```
+
+### 8.2 Stress Test Examples
+
+```
+Scenario: "2008 Financial Crisis"
+  - Nifty 50 drawdown: -55%
+  - Portfolio impact: -48% (better diversified)
+  - Max single stock drawdown: -82%
+
+Scenario: "COVID-19 Crash (Mar 2020)"
+  - Nifty 50 drawdown: -38%
+  - Portfolio impact: -31%
+
+Scenario: "Interest Rate Shock (+200 bps)"
+  - Financial sector impact: -15%
+  - Real estate impact: -22%
+  - Tech sector impact: -5%
+
+Monte Carlo (1000 simulations, 1Y horizon):
+  - 95% VaR: -₹3,25,000
+  - Expected shortfall: -₹4,10,000
+  - Best case (95th %ile): +₹6,80,000
+```
+
+---
+
+## 9. Content Automation Engine
+
+### 9.1 Flash Content Engine
+
+The Flash Content Engine automatically generates research articles from official filings:
+
+```
+flash_engine.py (~4979 lines)
+
+Core workflow:
+  1. Monitor official sources (SEBI/BSE/NSE RSS)
+  2. Ingest new filings/announcements
+  3. Filing Triage → classify materiality
+  4. Research Context → fetch company background, sector, peers
+  5. Article Generation → LLM produces structured article
+  6. Editorial Review → accuracy, originality, SEO checks
+  7. Cover Image → DALL-E prompt generation
+  8. Publish → write HTML, update sitemap, submit to Google
+```
+
+### 9.2 Article Structure
+
+```json
+{
+  "slug": "tcs-q4-fy2025-results-analysis",
+  "headline": "TCS Q4 FY2025: Revenue Hits ₹62,000 Cr, Margins Expand to 26%",
+  "summary": "Tata Consultancy Services reported Q4 revenue...",
+  "sections": [
+    {
+      "heading": "Revenue Analysis",
+      "content": "...",
+      "chart": { "type": "bar", "title": "Quarterly Revenue Trend", ... }
+    },
+    {
+      "heading": "Margin Analysis",
+      "content": "...",
+      "callout": { "type": "info", "text": "EBIT margin expanded 120bps YoY" }
+    },
+    {
+      "heading": "Segment Performance",
+      "content": "...",
+      "table": { "headers": ["Vertical", "Revenue", "Growth"], "rows": [...] }
+    },
+    {
+      "heading": "Market Reaction",
+      "content": "...",
+      "metric_cards": [
+        { "label": "Stock Move", "value": "+3.2%", "trend": "up" }
+      ]
+    }
+  ],
+  "citations": [
+    { "source": "NSE Filing", "url": "...", "text": "..." }
+  ],
+  "seo": {
+    "meta_description": "TCS Q4 FY2025 results analysis: Revenue, margins...",
+    "keywords": ["TCS", "Q4 Results", "IT Sector"],
+    "cover_image_alt": "TCS Q4 FY2025 financial results chart"
+  }
+}
+```
+
+---
+
+## 10. Frontend Architecture
+
+### 10.1 Component Hierarchy
+
+```
+App (HashRouter)
+│
+├── AuthProvider (React Context)
+│   ├── user, token, isAuthenticated, isOnboarded
+│   ├── login(), logout(), refreshUser()
+│   └── Toast notifications + WhatsApp invite prompt
+│
+├── TelemetryRouteTracker
+│   └── Tracks page views via Azure App Insights
+│
+├── CommandPalette (global, Ctrl+K)
+│
+└── Routes
+    │
+    ├── /            → LandingPage      (Public)
+    ├── /pricing     → Pricing          (Public)
+    ├── /testimonials→ Testimonials     (Public)
+    ├── /features    → Features         (Public)
+    ├── /contact     → ContactUs        (Public)
+    ├── /login       → Login            (PublicRoute → redirect if authenticated)
+    │
+    ├── /app         → GatewayPage      (ProtectedRoute)
+    ├── /insights    → InsightsStudio   (ProtectedRoute)
+    │
+    ├── /onboarding/manual   → ManualEntry    (Protected, pre-onboarding)
+    ├── /onboarding/upload   → UploadPage     (Protected, pre-onboarding)
+    ├── /onboarding/watchlist→ WatchlistStep  (Protected, pre-onboarding)
+    │
+    └── /dashboard   → Dashboard        (ProtectedRoute, requires onboarded)
+        │
+        └── AppShell
+            ├── Sidebar (Logo, navigation, user profile)
+            │
+            └── Content Area
+                ├── QuickPulse (animated market ticker bar)
+                ├── IndexTickerCard × N (Nifty, Sensex, NASDAQ, S&P 500, BTC, USDINR)
+                │
+                ├── PortfolioTable
+                │   └── Row: AssetHistoryModal, CompanyIntelModal
+                │
+                ├── GovernancePanel (per-holding governance overlay)
+                ├── WatchlistCard (custom watchlist)
+                │
+                ├── Chat Interface
+                │   ├── ChatInput (text input + enter key)
+                │   ├── SuggestedPrompts (contextual suggestions)
+                │   └── MessageBubble (per message)
+                │       ├── User message (plain text)
+                │       └── AI response
+                │           ├── AgentThinking (animated dots + step label)
+                │           ├── RichResponse
+                │           │   ├── SectionBlock (heading + text)
+                │           │   ├── CalloutBlock (warning/info/success)
+                │           │   ├── MetricCard (single metric display)
+                │           │   ├── TableBlock (sortable data table)
+                │           │   ├── Chart (AreaChart, BarChart, DonutChart,
+                │           │   │         RadarChart, TreemapChart)
+                │           │   └── HtmlArtifact (embedded HTML)
+                │           └── ExportPanel (download PDF/DOCX/XLSX)
+                │
+                ├── ResearchTimeline (session history)
+                ├── RecentInsights (latest published articles)
+                ├── QuickActions (one-click research prompts)
+                │
+                └── InsightsStudio Mode
+                    ├── ArticleQueueTable
+                    ├── ArticleReader
+                    ├── DraftReviewDrawer
+                    └── FlashJobMonitor
+```
+
+### 10.2 API Client Layer
 
 ```typescript
-interface AuthContextType {
-  user: User | null;
+// frontend/src/api/client.ts (~2200+ lines)
+
+// Core pattern — all API calls go through this client:
+async function apiCall<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  const res = await fetch(`${BACKEND_URL}${path}`, {
+    ...options,
+    headers: {
+      ...options?.headers,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (res.status === 401) { /* redirect to login */ }
+  if (!res.ok) { throw new ApiError(res); }
+  return res.json();
+}
+
+// SSE Stream consumer:
+function streamEvents(sessionId: string, onEvent: (evt) => void): AbortController {
+  const controller = new AbortController();
+  const url = `${BACKEND_URL}/sessions/${sessionId}/stream`;
+  // Uses fetch with streaming, parses SSE protocol manually
+  // Auto-reconnect on disconnect with Last-Event-ID header
+  return controller;
+}
+
+// Auth calls:    apiClient.auth.*
+// Research:      apiClient.research.*
+// Portfolio:     apiClient.portfolio.*
+// Market:        apiClient.market.*
+// Company:       apiClient.company.*
+// Content:       apiClient.content.*
+// Payments:      apiClient.payments.*
+```
+
+### 10.3 Auth Context
+
+```typescript
+// frontend/src/context/AuthContext.tsx (~626 lines)
+
+interface AuthState {
+  user: UserProfile | null;
   token: string | null;
   isAuthenticated: boolean;
+  isOnboarded: boolean;
   isLoading: boolean;
-  onboarded: boolean;
-  login: (email, password, remember?) => Promise<void>;
-  signup: (name, email, password, mobile, code) => Promise<void>;
-  googleLogin: (credential) => Promise<void>;
-  logout: () => Promise<void>;
-  showToast: (message, type?) => void;
-  updateUserMobile: (mobile) => void;
-  setOnboarded: (next) => void;
-  refreshOnboardingStatus: () => Promise<boolean>;
 }
+
+// Google OAuth:
+// 1. Load Google Identity Services script
+// 2. google.accounts.id.initialize({ client_id, callback: handleCredentialResponse })
+// 3. POST /auth/google with credential
+// 4. Store JWT, set user, redirect
+
+// Email Auth:
+// 1. POST /auth/signup or /auth/login
+// 2. Store JWT, set user, redirect
+
+// Token persistence:
+// - httpOnly cookie (auto-included with requests)
+// - localStorage (for API Authorization header)
+// - Token refresh on app mount via GET /auth/me
 ```
-
-- Token stored in localStorage
-- Google OAuth via Google Identity Services (GIS) — inline script injection, not a npm package
-- Automatically validates token on app load
-- No UI framework dependency (no Tailwind, MUI, Ant Design) — pure CSS design system
-
-### API Client (`api/client.ts`)
-
-Key features:
-- Dynamic backend URL resolution (runtime config `__BACKEND_URL`, `__CONFIG__`, env var `VITE_BACKEND_API_URL`, or Vite proxy)
-- Bearer token injection on every authenticated request
-- Configurable timeouts: auth 15s, mirror status 8s, chat start 20s
-- Full coverage: auth, portfolio, research, memory, chat, market data endpoints
-- SSE streaming with `streamSession(sessionId)`:
-  - Uses `EventSource` API
-  - 25-second proactive reconnect (works with AWS API Gateway 30s limit)
-  - Parses JSON event data, calls `onEvent` callback per event type
-
-### Dashboard (`pages/Dashboard.tsx`)
-
-The dashboard is organized into sections:
-1. **Portfolio Overview** — Holdings table, allocation donut, top movers, alerts
-2. **Market Pulse** — Ticker cards, watchlist with sparklines, sector heatmap
-3. **Research Chat** — Chat input, message history, agent thinking panel, rich responses (memos, charts, callouts, sections, HTML artifacts)
-4. **Recent Insights** — Saved memos and research sessions
-5. **Quick Actions** — Pre-built research prompts
-
-State management is entirely React `useState`/`useRef` with no external library.
 
 ---
 
-## Gateway & API Endpoints
+## 11. Database Schema
 
-**File:** `finagent/gateway/run.py`
+### 11.1 Supabase (User-Facing PostgreSQL)
 
-### Complete Endpoint Reference
+```sql
+-- profiles: Core user table
+CREATE TABLE public.profiles (
+  id UUID PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  auth_provider TEXT,           -- 'google' | 'email'
+  mobile TEXT,
+  plan TEXT DEFAULT 'free',     -- 'free' | 'pro' | 'enterprise'
+  avatar_url TEXT,
+  referral_source TEXT,
+  onboarding_status TEXT DEFAULT 'pending',  -- 'pending' | 'onboarding' | 'onboarded'
+  onboarded_at TIMESTAMPTZ,
+  deep_runs_used INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-#### Auth
+-- token_usage: Weekly LLM token tracking
+CREATE TABLE public.token_usage (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id),
+  prompt_tokens INTEGER,
+  completion_tokens INTEGER,
+  model TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/auth/google` | No | Google OAuth login/signup |
-| POST | `/auth/google/update-mobile` | Yes | Update mobile number |
-| POST | `/auth/signup` | No | Email + password signup |
-| POST | `/auth/login` | No | Email + password login |
-| POST | `/auth/logout` | Yes | Invalidate session |
-| POST | `/auth/send-verification` | No | Send email verification code |
-| POST | `/auth/forgot-password` | No | Send password reset code |
-| POST | `/auth/reset-password` | No | Reset password with code |
+-- subscription_payments: Razorpay transactions
+CREATE TABLE public.subscription_payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES profiles(id),
+  razorpay_order_id TEXT,
+  razorpay_payment_id TEXT,
+  razorpay_signature TEXT,
+  amount INTEGER,               -- in paise (INR)
+  currency TEXT DEFAULT 'INR',
+  plan_id TEXT,
+  plan_name TEXT,
+  status TEXT,                  -- 'created' | 'paid' | 'failed'
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-#### Research & Sessions
+-- contacts: Scraped financial advisor leads
+CREATE TABLE public.contacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source TEXT,                  -- 'sebi' | 'linkedin' | 'amfi'
+  name TEXT,
+  email TEXT,
+  phone TEXT,
+  linkedin_url TEXT,
+  designation TEXT,
+  organisation TEXT,
+  sebi_registration TEXT,
+  priority_score INTEGER DEFAULT 0,
+  opted_out BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/research/start` | Yes | Standard research (auto-depth) |
-| POST | `/research/deep` | Yes | Multi-pass deep research |
-| POST | `/chat/research` | Yes | Chat-friendly research entry |
-| POST | `/sessions/{id}/stop` | Yes | Cancel running session |
-| DELETE | `/sessions/{id}` | Yes | Delete session artifacts |
-| GET | `/sessions/{id}/status` | Yes | Session status |
-| GET | `/sessions/{id}/events` | Yes | Poll events (JSON array) |
-| GET | `/sessions/{id}/stream` | Yes | SSE event stream |
-| GET | `/sessions/{id}/result` | Yes | Final result + memo |
-| GET | `/sessions/{id}/memo` | Yes | Memo markdown |
-| GET | `/memos` | Yes | List saved memos |
-| GET | `/chat/history` | Yes | Chat history |
+-- outreach_leads / outreach_sends / outreach_events
+-- Email/SMS outreach campaign management
 
-#### Portfolio
+-- outreach_unsubscribes: GDPR-compliant unsubscribe
+CREATE TABLE public.outreach_unsubscribes (
+  email TEXT PRIMARY KEY,
+  unsubscribed_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/portfolio/mirror` | Yes | Get holdings |
-| POST | `/portfolio/mirror` | Yes | Replace holdings |
-| DELETE | `/portfolio/mirror` | Yes | Clear holdings |
-| POST | `/portfolio/mirror/ecas` | Yes | Replace from eCAS data |
-| POST | `/api/portfolio/upload-cas` | Yes | Upload eCAS/PDF/CSV/XLSX |
-| POST | `/api/portfolio/upload-document` | Yes | Upload document |
-| POST | `/api/portfolio/upload-screenshot` | Yes | Upload screenshot |
-| POST | `/api/portfolio/confirm-extraction` | Yes | Confirm extraction |
-| POST | `/api/portfolio/cancel-extraction` | Yes | Cancel extraction |
-| GET | `/portfolio/analytics` | Yes | Portfolio analytics |
-| GET | `/portfolio/news` | Yes | Portfolio news |
-| GET | `/portfolio/sectors` | Yes | Sector breakdown |
-| GET | `/portfolio/holding/{symbol}` | Yes | Holding detail |
-| GET | `/portfolio/corporate-actions` | Yes | Corporate actions |
-| GET | `/portfolio/alerts` | Yes | Portfolio alerts |
-| GET | `/portfolio/tax-summary` | Yes | Tax summary |
-| GET | `/portfolio/dividends` | Yes | Dividend data |
-| POST | `/portfolio/stress-test` | Yes | Run stress test |
-| GET | `/portfolio/mf-analytics` | Yes | MF analytics |
-| GET | `/portfolio/today` | Yes | Today's action queue |
-| GET | `/portfolio/brief` | Yes | Portfolio text brief |
+-- export_jobs: Document export tracking
+CREATE TABLE public.export_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES profiles(id),
+  session_id TEXT,
+  format TEXT,                  -- 'pdf' | 'docx' | 'xlsx'
+  status TEXT DEFAULT 'pending',-- 'pending' | 'processing' | 'done' | 'error'
+  file_path TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-#### Market Data
+-- verification_codes: Auth OTPs
+CREATE TABLE public.verification_codes (
+  id BIGSERIAL PRIMARY KEY,
+  email TEXT,
+  mobile TEXT,
+  code TEXT,
+  purpose TEXT,                 -- 'signup' | 'login' | 'reset'
+  expires_at TIMESTAMPTZ,
+  used BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/market/history` | Yes | Market price history |
-| GET | `/market/quotes` | Yes | Live market quotes |
-| GET | `/market/news` | Yes | Market news |
-| GET | `/market/indices` | Yes | Index data (Nifty, Sensex) |
+-- scrape_jobs / scrape_checkpoints / extraction_rules
+-- Background scraping and data extraction job management
+```
 
-#### Memory & User
+### 11.2 IKG Database (PostgreSQL 16 — Separate Instance)
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/memory/stats` | Yes | Memory statistics |
-| GET | `/memory/facts` | Yes | Browse facts |
-| GET | `/memory/sessions` | Yes | Session summaries |
-| DELETE | `/memory/clear/{target}` | Yes | Clear target facts |
-| GET | `/user/token-usage` | Yes | Token usage stats |
+```sql
+-- Company master data
+companies (cin, name, status, incorporation_date, category, sub_category,
+           class, authorised_cap, paidup_cap, state, roc_code)
 
-#### System & Pages
+-- Directors
+directors (din, name, designation, appointment_date, cin)
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/health` | No | Health check |
-| GET | `/capabilities` | No | Agent capabilities |
-| GET | `/config` | No | Config info |
-| GET | `/` | No | Landing page (HTML) |
-| GET | `/app` | No | Widget page (loads React app) |
-| GET | `/landing` | No | Landing page |
-| GET | `/login` | No | Login page |
-| GET | `/signup` | No | Signup page |
-| GET | `/profile` | No | Profile page |
-| GET | `/settings` | No | Settings page |
+-- Financial facts (XBRL)
+financial_facts (cin, fact_id, concept, value, unit, period, filing_date, source_url)
+
+-- Shareholding patterns
+shareholding (cin, quarter, promoter_pct, fii_pct, dii_pct, public_pct,
+              pledged_promoter_pct, total_shares)
+
+-- SEBI enforcement
+sebi_enforcement (order_id, date, cin, company_name, type, penalty_amount,
+                  summary, url)
+
+-- Annual reports
+annual_reports (cin, year, source_url, extracted_text, key_findings)
+
+-- Index constituents
+index_constituents (index_name, symbol, isin, weight, effective_date)
+
+-- Governance scores (computed)
+governance_scores (cin, score, regulatory_sub_score, board_sub_score,
+                   rpt_sub_score, promoter_sub_score, computed_at)
+```
+
+### 11.3 Neo4j Graph Schema (Director/Company Network)
+
+```
+(:Company {cin, name, status})
+(:Director {din, name, gender})
+(:Filings {filing_id, type, date, cin})
+
+Relationships:
+  (:Director)-[:DIRECTOR_OF {designation, from_date, to_date}]->(:Company)
+  (:Company)-[:FILED {type, date}]->(:Filings)
+  (:Director)-[:BOARD_INTERLOCK {via_company}]->(:Director)
+  (:Company)-[:PEER_OF {similarity_score}]->(:Company)
+```
 
 ---
 
-## Security & Auth
+## 12. State Management
 
-### Authentication Flow
+### 12.1 Backend State
 
-```
-┌─────────────────────────────────────────────────────┐
-│                  AUTH ARCHITECTURE                   │
-│                                                      │
-│  ┌──────────────┐         ┌──────────────────┐      │
-│  │  Email/Pass  │────────►│  Supabase Auth    │      │
-│  │  Signup/Login│         │  (or Local JWT)   │      │
-│  └──────────────┘         └────────┬─────────┘      │
-│                                    │                 │
-│  ┌──────────────┐                  │                 │
-│  │  Google      │─────────────────►│                 │
-│  │  OAuth (GIS) │                  │                 │
-│  └──────────────┘                  ▼                 │
-│                          ┌──────────────────┐      │
-│                          │  JWT Token        │      │
-│                          │  • user_id       │      │
-│                          │  • email         │      │
-│                          │  • tenant_id     │      │
-│                          │  • exp           │      │
-│                          └────────┬─────────┘      │
-│                                   │                  │
-│                          Set as Bearer token         │
-│                          in Authorization header     │
-│                                   │                  │
-│                                   ▼                  │
-│                          ┌──────────────────┐      │
-│                          │  auth_guard.py    │      │
-│                          │  • Verify JWT     │      │
-│                          │  • Extract user   │      │
-│                          │  • Check expiry   │      │
-│                          └──────────────────┘      │
-└─────────────────────────────────────────────────────┘
-```
+| Store | Technology | Scope | Persistence |
+|-------|-----------|-------|-------------|
+| **Session Store** | In-memory dict + JSON files | Per session | Disk (JSON), volatile on restart |
+| **Event Bus** | `asyncio.Queue` per session + JSONL append | Per session | Disk (JSONL), capped at max entries |
+| **Memory Store** | Tiered (episodic/semantic/procedural) | Per user | Supabase PostgreSQL / SQLite fallback |
+| **Portfolio Mirror** | PostgreSQL (Supabase) | Per user | Durable |
+| **TTL Cache** | In-memory dict + Redis optional | Global | In-memory (LRU + TTL) |
+| **Token Usage** | PostgreSQL (Supabase) | Per user, weekly | Durable |
+| **Rate Limiting** | PostgreSQL sliding window | Per endpoint class | Durable |
+| **JWT Blacklist** | SQLite / PostgreSQL | Global | Persistent |
+| **Pipeline Runs** | PostgreSQL (IKG) | Global | Durable |
 
-### Key Security Features
+### 12.2 Frontend State
 
-- **Rate Limiting:** `InMemSlidingWindowRateLimiter` — configurable requests/window per IP or token
-- **JWT Validation:** `auth_guard.py` supports both local JWT secrets and Supabase auth tokens
-- **CORS:** Configurable origins via `CORS_ORIGINS` environment variable
-- **Input Validation:** Pydantic models for all request bodies
-- **Password Hashing:** Via Supabase (argon2) or local bcrypt
-- **Email Verification:** Supabase email verification flow
-- **Password Reset:** Email code → reset flow
-
-### Supabase Integration (`gateway/supabase_client.py`)
-
-- REST API client using httpx
-- Manages user creation, auth, profile updates
-- Email verification and password reset flows
-- Admin API key for server-side operations
+| Store | Technology | Persistence |
+|-------|-----------|-------------|
+| **Auth** | React Context + localStorage/sessionStorage | Browser storage |
+| **UI State** | Component `useState`/`useEffect` | None (in-memory) |
+| **Onboarding** | localStorage keyed by email | Browser storage |
+| **Manual Portfolio** | localStorage | Browser storage |
+| **SSE Connection** | Custom fetch stream | In-memory |
+| **Telemetry Session** | Azure App Insights | Azure cloud |
 
 ---
 
-## Monitoring & Telemetry
+## 13. Authentication & Security
 
-ProspektLab uses **Azure Application Insights** for both frontend and backend telemetry, with structured event tracking, dependency monitoring, and exception reporting.
+### 13.1 Authentication Methods
 
-### Frontend Telemetry (`Frontend/app/src/telemetry.ts`)
+```
+┌──────────────────┐     ┌─────────────────┐     ┌──────────────────┐
+│  Google OAuth    │     │  Email/Password │     │  Supabase JWT    │
+│  (GIS popup)     │     │  (Supabase Auth)│     │  (direct token)  │
+└────────┬─────────┘     └────────┬────────┘     └────────┬─────────┘
+         │                        │                        │
+         ▼                        ▼                        ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    FastAPI Auth Guard                            │
+│  auth_guard.py                                                   │
+│                                                                  │
+│  get_current_user() extracts token from:                         │
+│    1. Authorization: Bearer <token> header                       │
+│    2. prospektlab_token cookie (httpOnly)                        │
+│    3. ?token=<token> query param (GET requests only)             │
+│                                                                  │
+│  Token validation:                                               │
+│    - Verify JWT signature (HS256)                                │
+│    - Check issuer (prospektlab) and audience (prospektlab-api)  │
+│    - Check expiry (30 days) with 60s clock skew                  │
+│    - Check jti against blacklist (revoked tokens)                │
+│    ─ Accept fallback: verify Supabase-issued JWT with Supabase  │
+│       project secret                                              │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-- Custom lightweight telemetry client (no SDK dependency)
-- Batched envelope posting to Application Insights ingestion endpoint
-- Tracks:
-  - **Page views** — route changes via `TelemetryRouteTracker`
-  - **Custom events** — user actions (login, research, portfolio)
-  - **Dependencies** — API call duration and success/failure
-  - **Exceptions** — unhandled errors with stack traces
-  - **Metrics** — custom measurements
-- Runtime configuration via `window.__CONFIG__.telemetry` (injected by Amplify build)
-- Configuration keys: `connectionString`, `roleName`, `cloudRoleInstance`, `enabled`
+### 13.2 Authorization Levels
 
-### Backend Telemetry (`finagent/telemetry.py`)
+```
+Token Budget Enforcement:
+  - Free plan:   1,000,000 tokens/week, 1 deep research run/week
+  - Pro plan:    2,000,000 tokens/week, unlimited deep research
+  - Checked on research/deep/content generation endpoints
 
-- `TelemetryClient` class with async support (httpx)
-- Tracks:
-  - **Requests** — HTTP method, URL, duration, status code, result code
-  - **Custom events** — research phases, agent execution, data fetches
-  - **Exceptions** — captured with stack trace and severity
-  - **Metrics** — token usage, latency, quality scores
-- Telemetry user context: email, user_id, tenant_id, auth_provider
-- Environment-driven configuration via `APPINSIGHTS_*` variables
-- Graceful degradation: telemetry failures never block application logic
+Session Ownership (BOLA protection):
+  - verify_session_ownership(): tenant_id + email must match session metadata
+  - Applied to all /sessions/{id}/* endpoints
 
-### Runtime Configuration (`env-config.js`)
+Admin Gates:
+  - /admin/* endpoints: email must be in allowed list
+  - /ops/control-tower: email allowlist (CONTROL_TOWER_ALLOWED_EMAILS)
+  - /metrics/snapshot: email allowlist (FINAGENT_METRICS_ADMIN_EMAILS)
+  - Admin reset: requires ADMIN_RESET_KEY env var
+```
 
-Generated at Amplify build time, this file injects:
-- `window.__BACKEND_URL` — backend API base URL
-- `window.__CONFIG__` — environment, telemetry connection string, role names
+### 13.3 Rate Limiting
 
-For local development, `env-config.js` defaults to `http://127.0.0.1:8000`.
+```
+Rate limiter classes (sliding window in PostgreSQL):
+
+  research_rate_limiter:    5 requests  / 60 seconds
+  auth_rate_limiter:       10 requests  / 60 seconds
+  default_rate_limiter:   100 requests  / 60 seconds
+```
+
+### 13.4 Security Hardening
+
+```
+Headers:
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https:;
+    img-src 'self' data: https:; connect-src 'self' https://*.supabase.co
+    (per-route variations for ops, insights, main app)
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000
+
+Input Safety:
+  - Prompt injection guard (regex patterns for known attacks: "ignore instructions",
+    "DAN", "jailbreak", "system prompt", etc.)
+  - File upload: magic byte validation, size limits, extension whitelist
+  - HTML sanitization on output
+  - CORS: whitelist of allowed origins via CORS_ORIGINS env var
+
+Cookie Security:
+  - httpOnly: true
+  - SameSite: Lax
+  - Secure: true (in production)
+```
 
 ---
 
-## Deployment
+## 14. Deployment & Infrastructure
 
-### Docker
-
-**File:** `Dockerfile`
-
-```dockerfile
-FROM python:3.11-slim
-# Install system deps (Chromium libs for Crawl4AI)
-# Install Python deps from finagent/requirements-finagent.txt
-# Run crawl4ai-setup to download Chromium browser binary
-# Copy finagent/ into /app/finagent/
-# Expose 8080
-# CMD: uvicorn finagent.gateway.run:app --host 0.0.0.0 --port 8080
-```
-
-The Dockerfile runs only the FastAPI gateway. MCP servers (discovery, quant) would be deployed as separate containers in production.
-
-### AWS Amplify Build (`Frontend/app/amplify.yml`)
-
-The Amplify build pipeline:
-
-1. **preBuild:** `npm ci` to install dependencies, generates `public/env-config.js` from environment variables (`BACKEND_API_URL`, `APPINSIGHTS_ENABLED`, `APPINSIGHTS_CONNECTION_STRING`)
-2. **build:** `npm run build` (Vite production build → `dist/`)
-3. **postBuild:** Verification of build output
-4. **Artifacts:** `dist/` directory served via CloudFront CDN
-5. **Cache:** `node_modules/` preserved between builds
-6. **Rewrites:** SPA fallback for client-side routing; API proxy rewrites configured in Amplify Console for `/auth`, `/chat`, `/portfolio`, etc.
-
-### AWS Infrastructure
+### 14.1 Deployment Topology
 
 ```
-┌────────────────────────────────────────────────────┐
-│                    AWS CLOUD                        │
-│                                                     │
-│  ┌──────────────┐    ┌──────────────────────────┐  │
-│  │  GitHub       │    │  AWS ECR                 │  │
-│  │  Actions      │───►│  Container Registry       │  │
-│  └──────────────┘    └─────────┬────────────────┘  │
-│                                │                     │
-│  ┌──────────────┐              │                     │
-│  │  AWS          │              ▼                     │
-│  │  CodeBuild    │───► ┌──────────────────────┐    │
-│  └──────────────┘      │  AWS ECS Fargate     │    │
-│                        │  • Task definition    │    │
-│                        │  • Service (8080)     │    │
-│                        │  • Auto-scaling       │    │
-│                        └──────────────────────┘    │
-│                                                     │
-│  ┌──────────────────────────┐                       │
-│  │  AWS Amplify             │                       │
-│  │  • Frontend/app/ → dist/ │                       │
-│  │  • CDN (CloudFront)      │                       │
-│  │  • HTTPS                 │                       │
-│  └──────────────────────────┘                       │
-└────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                          AWS CLOUD                                    │
+│                                                                      │
+│  ┌─────────────────────┐         ┌──────────────────────────────┐   │
+│  │   AWS Amplify        │         │   AWS ECS Fargate             │   │
+│  │   (Frontend SPA)     │  HTTPS  │   (Backend Gateway)           │   │
+│  │                      │────────▶│                               │   │
+│  │  Region: us-east-1   │         │  Task: 1 vCPU, 2GB RAM       │   │
+│  │  Build: npm ci &&    │         │  Port: 8080                   │   │
+│  │  vite build          │         │  Image: ECR                   │   │
+│  │  Artifacts: dist/    │         │  Auto-scaling: 1-4 tasks     │   │
+│  └─────────────────────┘         └──────────────────────────────┘   │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │   AWS CodeBuild + CodePipeline                                │   │
+│  │  Source: GitHub → Build: Docker → Push: ECR → Deploy: ECS    │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│                          AZURE CLOUD                                  │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │   Azure Linux VM (IKG Workers)                                 │   │
+│  │                                                                │   │
+│  │   Docker Compose stack:                                        │   │
+│  │   ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐      │   │
+│  │   │ Postgres │ │  Redis   │ │  Qdrant  │ │  Celery   │      │   │
+│  │   │    16    │ │    7     │ │  Vector  │ │  Workers  │      │   │
+│  │   │          │ │ (broker) │ │    DB    │ │ (10 thr.) │      │   │
+│  │   └──────────┘ └──────────┘ └──────────┘ └───────────┘      │   │
+│  │   ┌──────────┐ ┌──────────────┐                              │   │
+│  │   │  Neo4j   │ │  Scheduler   │                              │   │
+│  │   │  Graph   │ │ (APScheduler)│                              │   │
+│  │   └──────────┘ └──────────────┘                              │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │   Azure Communication Services (ACS)                           │   │
+│  │   - Email delivery (verification, notifications)               │   │
+│  │   - SMS delivery (verification OTP)                            │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │   Azure Monitor + Application Insights                         │   │
+│  │   - Backend telemetry                                          │   │
+│  │   - Frontend telemetry                                         │   │
+│  │   - IKG pipeline monitoring                                    │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│                          SUPABASE CLOUD                               │
+│                                                                      │
+│  Managed PostgreSQL:                                                  │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐              │
+│  │ profiles │ │ token_   │ │ payments │ │ contacts │               │
+│  │          │ │ usage    │ │          │ │          │               │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘              │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐                           │
+│  │ outreach │ │ verif.   │ │ export   │                           │
+│  │  tables  │ │  codes   │ │  jobs    │                           │
+│  └──────────┘ └──────────┘ └──────────┘                           │
+│                                                                      │
+│  Auth Service:                                                       │
+│  - Google OAuth social login                                         │
+│  - Email/password with Admin API                                     │
+│  - JWT verification via project secret                               │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-### CI/CD Pipelines
+### 14.2 Docker Compose — IKG Stack
 
-**GitHub Actions (`.github/workflows/deploy-production.yml`)**:
-- Trigger: push to `production` or `main`
-- Build Docker image, push to ECR
-- Update ECS task definition, force new deployment
-- Health check (curl `/health`)
-- Trigger Amplify deploy
-- Slack notification
+```yaml
+# deployment/docker-compose.ikg.yml (simplified)
 
-**AWS CodeBuild (`buildspec.yml`, `buildspec-prod.yml`)**:
-- Alternative deployment path
-- Docker build + push to ECR
-- ECS service update
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ikg
+      POSTGRES_USER: ikg_user
+      POSTGRES_PASSWORD: ${IKG_DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
 
-### Environment Variables
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  neo4j:
+    image: neo4j:5-community
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+
+  celery-worker:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.ikg-worker
+    command: celery -A finagent.ikg.pipeline.celery_app worker
+             --concurrency=10
+             --queues=nse,bse,sebi,documents,financials,graph
+    depends_on:
+      - postgres
+      - redis
+      - qdrant
+      - neo4j
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.ikg-worker
+    command: python -m finagent.ikg.pipeline.scheduler
+    depends_on:
+      - postgres
+      - redis
+```
+
+### 14.3 Background Services
+
+| Service | Entry Point | Schedule |
+|---------|-------------|----------|
+| **Gateway periodic tasks** | `gateway/run.py` (FastAPI lifespan) | Every 5 min: reap completed tasks, cleanup old sessions, cleanup SQLite |
+| **IKG Scheduler** | `finagent.ikg.pipeline.scheduler` | APScheduler cron: 6h/12h/24h intervals for different scrapers |
+| **Celery Workers** | `finagent.ikg.pipeline.celery_app` | Continuous, 10 threads across 6 queues |
+| **Dreaming Layer** | `finagent.dreaming.scheduler` | Nightly at 2 AM IST: consolidation, pattern detection, preloading |
+| **Content Official Monitor** | `finagent.content.official_monitor` | Every 30 min: poll SEBI/BSE/NSE RSS |
+| **Flash Content Engine** | `finagent.content.flash_engine` | On-demand: article generation from filings |
+
+---
+
+## 15. CI/CD Pipelines
+
+### 15.1 Frontend (AWS Amplify)
+
+```yaml
+# amplify-buildspec.yml
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - cd frontend
+        - npm ci
+        - echo "Backend URL: $BACKEND_API_URL"
+    build:
+      commands:
+        - npx tsc
+        - npx vite build --config vite.config.mjs
+  artifacts:
+    baseDirectory: frontend/dist
+    files:
+      - '**/*'
+```
+
+**Runtime Config Injection:**
+```javascript
+// frontend/public/env-config.js (generated at deploy time)
+window.__ENV = {
+  BACKEND_API_URL: "https://api.prospektlab.com",
+  // Dynamically replaced based on environment
+};
+```
+
+### 15.2 Backend (AWS CodeBuild)
+
+```yaml
+# buildspec.yml
+phases:
+  pre_build:
+    commands:
+      - echo "Logging into ECR..."
+      - aws ecr get-login-password | docker login --username AWS --password-stdin $ECR_REPO
+      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+  build:
+    commands:
+      - docker build -t $ECR_REPO:latest -t $ECR_REPO:$IMAGE_TAG .
+      - docker push $ECR_REPO:latest
+      - docker push $ECR_REPO:$IMAGE_TAG
+  post_build:
+    commands:
+      - aws ecs update-service --cluster prospektlab-prod --service prospektlab-backend --force-new-deployment
+```
+
+### 15.3 IKG Workers (Manual Deployment)
+
+```powershell
+# deployment/deploy-azure-ikg.ps1
+# 1. SSH into Azure VM
+# 2. git pull latest code
+# 3. docker-compose -f docker-compose.ikg.yml up -d --build
+# 4. Verify: check_ikg_counts.sh
+```
+
+---
+
+## 16. Configuration Reference
+
+### 16.1 Environment Variables
+
+#### Required
 
 | Variable | Purpose |
 |----------|---------|
-| `OPENAI_API_KEY` | OpenAI API key for GPT-4o |
-| `FINAGENT_HOME` | Override data directory (default: `.finagent/`) |
-| `CORS_ORIGINS` | Allowed CORS origins (comma-separated) |
+| `JWT_SECRET` | HS256 signing key for local JWTs |
+| `OPENAI_API_KEY` | OpenAI API key for LLM calls |
 | `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_KEY` | Supabase admin/service key |
-| `JWT_SECRET` | JWT signing secret |
-| `MCP_DISCOVERY_URL` | Discovery MCP server URL (default: `http://127.0.0.1:8003/mcp`) |
-| `MCP_QUANT_URL` | Quant MCP server URL (default: `http://127.0.0.1:8005/mcp`) |
-| `SMTP_*` | SMTP config for email verification/password reset |
-| `FINAGENT_MAX_STEPS` | Default max research steps |
-| `FINAGENT_DEEP_DIVE` | Enable deep dive (true/false) |
-| `FINAGENT_REFLECTION` | Enable reflection loop (true/false) |
-| `FINAGENT_QUALITY_THRESHOLD` | Min quality score for reflection |
-| `FINAGENT_MEMORY` | Enable memory system (true/false) |
+| `SUPABASE_KEY` | Supabase service role key |
+| `SUPABASE_JWT_SECRET` | Supabase project JWT secret for verifying Supabase tokens |
+| `SUPABASE_DB_URL` | Direct PostgreSQL connection URL (postgres://...) |
+| `IKG_DATABASE_URL` | IKG PostgreSQL connection URL |
+| `CORS_ORIGINS` | Comma-separated allowed origins |
 
----
+#### AI/LLM
 
-## Data Flow Diagrams
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `FINAGENT_MODEL` | `gpt-5.4-mini` | Default LLM for sub-agents |
+| `FINAGENT_SYNTH_MODEL` | `gpt-5.4-mini` | LLM for synthesis |
+| `FINAGENT_LIGHT_MODEL` | `gpt-4o-mini` | LLM for lightweight tasks (intent, contextualizer) |
+| `AZURE_AI_FOUNDRY_API_KEY` | — | Azure Foundry endpoint key (fallback) |
+| `XAI_API_KEY` | — | xAI Grok API key (final fallback) |
+| `FINAGENT_TEMPERATURE` | `0.3` | LLM temperature |
+| `FINAGENT_MAX_TOKENS` | `4096` | Max completion tokens |
+| `FINAGENT_SYNTH_MAX_TOKENS` | `16384` | Max tokens for synthesis |
 
-### Research Session: Full Data Flow
+#### Quotas & Limits
 
-```
-User Query: "Analyze TCS valuation"
-     │
-     ▼
-┌──────────────────────────────────────────────────────────┐
-│ GATEWAY: run.py                                           │
-│                                                            │
-│  route_objective() in intent_router.py                    │
-│    ├── ChatHistory (context for follow-up detection)       │
-│    ├── Entity Extraction → "TCS"                           │
-│    ├── Complexity → moderate                               │
-│    ├── Deep Research? → No                                 │
-│    └── Portfolio Scope? → No                               │
-│                                                            │
-│  Spawn: asyncio.create_task(run_research_session(...))     │
-│  Return: { "session_id": "abc-123" }                       │
-└──────────────────────────┬───────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────┐
-│ CORE LOOP: run_agent.py                                   │
-│                                                            │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │ 1. IDENTIFY                                         │   │
-│  │    resolve_entity("TCS") →                           │   │
-│  │      ticker: "TCS.NS"                               │   │
-│  │      name: "Tata Consultancy Services"              │   │
-│  │      geo: "IN"  sector: "IT"                        │   │
-│  │      preferred_domains: [screener.in, ...]          │   │
-│  │    load memory facts, retrieve playbooks             │   │
-│  └────────────────────────────────────────────────────┘   │
-│                              │                             │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │ 2. ENRICHMENT (parallel, asyncio.gather)            │   │
-│  │    fetch_yahoo_quote("TCS.NS")                      │   │
-│  │    fetch_wikipedia_summary("TCS")                    │   │
-│  │    fetch_india_snapshot("TCS")                       │   │
-│  │    get_usd_inr()                                     │   │
-│  │    fetch_news("TCS")                                 │   │
-│  │    search_reddit("TCS")                              │   │
-│  │    search_hackernews("TCS")                          │   │
-│  │    fetch_stocktwits("TCS")                           │   │
-│  │    fetch_shareholding_pattern("TCS.NS")              │   │
-│  │    ↓ EnrichmentBundle populated                     │   │
-│  └────────────────────────────────────────────────────┘   │
-│                              │                             │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │ 3. BREADTH SURVEY                                    │   │
-│  │    localize_search_query("TCS valuation", "IN")      │   │
-│  │    → "Tata Consultancy Services valuation analysis" │   │
-│  │                                                      │   │
-│  │    4 search angles (each → DuckDuckGo → top 6 URLs) │   │
-│  │    Angle 1: "business overview + fundamentals"       │   │
-│  │    Angle 2: "growth catalysts + future outlook"      │   │
-│  │    Angle 3: "risk factors + red flags"              │   │
-│  │    Angle 4: "competitive landscape + industry"       │   │
-│  │                                                      │   │
-│  │    Each URL → scrape → dedup → score                 │   │
-│  │    → 24 scraped documents (filtered/scored)          │   │
-│  └────────────────────────────────────────────────────┘   │
-│                              │                             │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │ 4. DEEP DIVE (iterative, up to 4 rounds)            │   │
-│  │    Round 1: "Why is TCS PE premium shrinking?"      │   │
-│  │    Round 2: "TCS AI/GenAI revenue contribution"     │   │
-│  │    → Stop after 2 rounds (no significant gaps)       │   │
-│  └────────────────────────────────────────────────────┘   │
-│                              │                             │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │ 5. ANALYSIS                                          │   │
-│  │    Multi-agent waves (10 specialists)                │   │
-│  │    detect_conflicts(findings)                        │   │
-│  │    score_research(data, findings)                    │   │
-│  │    Verifier cross-checks claims                      │   │
-│  │    Blind-spot detector fills gaps                    │   │
-│  │    Quality ≥ 75 → skip reflection                    │   │
-│  └────────────────────────────────────────────────────┘   │
-│                              │                             │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │ 6. SYNTHESIS                                         │   │
-│  │    synthesize_memo(bundle) → 8-section markdown      │   │
-│  │    • Executive Summary                               │   │
-│  │    • Business Overview                               │   │
-│  │    • Financial Analysis (INR crore)                   │   │
-│  │    • Valuation (DCF: ₹3842 PE: ₹3950 EV/EBITDA)     │   │
-│  │    • Risks & Red Flags                               │   │
-│  │    • Market Sentiment                                │   │
-│  │    • Competitive Landscape                           │   │
-│  │    • Verdict: Buy with 15% margin of safety          │   │
-│  │                                                      │   │
-│  │    build_answer_artifact() → frontend-ready data     │   │
-│  └────────────────────────────────────────────────────┘   │
-│                              │                             │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │ PERSISTENCE                                          │   │
-│  │    store_facts() → SQLite                            │   │
-│  │    save_memo() → .finagent/memos/                    │   │
-│  │    save_session_events() → JSONL                     │   │
-│  │    maybe_promote_playbook() → playbooks.sqlite3      │   │
-│  └────────────────────────────────────────────────────┘   │
-│                                                            │
-│  Event Bus: BUS.emit() at every step                       │
-│  → phase, step_start, agent_start, source, done            │
-└──────────────────────────┬───────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────┐
-│ FRONTEND: Dashboard.tsx                                   │
-│                                                            │
-│  SSE stream receives events in order:                      │
-│    phase: "enriching"                                      │
-│    step_start: "Fetching Yahoo Finance quote..."           │
-│    step_end: "Yahoo Finance complete"                      │
-│    agent_start: "Valuation Analysis"                       │
-│    agent_end: "Valuation complete"                         │
-│    source: "screener.in"                                   │
-│    done: { memo_url: "..." }                               │
-│                                                            │
-│  AgentThinking.tsx shows live progress                     │
-│  MessageBubble.tsx renders final memo                      │
-│  RichResponse.tsx shows charts, metrics, citations          │
-└──────────────────────────────────────────────────────────┘
-```
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `WEEKLY_TOKEN_LIMIT` | `1000000` | Free plan weekly token budget |
+| `PRO_WEEKLY_TOKEN_LIMIT` | `2000000` | Pro plan weekly token budget |
+| `FREE_WEEKLY_DEEP_RUNS` | `1` | Free plan deep research quota/week |
 
-### Portfolio Ingestion Flow
+#### Payments
 
-```
-User uploads eCAS PDF
-     │
-     ▼
-POST /api/portfolio/upload-cas
-     │
-     ▼
-parse_portfolio_document(bytes, filename)
-     │
-     ├── PDF? → pdf_transformer.py (PyMuPDF) → extract tables
-     ├── XLSX? → openpyxl → extract rows
-     ├── CSV? → csv module → extract rows
-     └── CAS? → cas_adapter.py → parse CAMS/KFintech eCAS
-     │
-     ▼
-File parsed → raw text/tables
-     │
-     ▼
-mineru_transformer.py / markdown_extractor.py
-→ Convert to structured markdown
-     │
-     ▼
-isin_resolver.py
-→ Resolve ISIN → ticker + name
-     │
-     ▼
-PortfolioExtractionSchema (Pydantic)
-→ List of extracted positions with confidence
-     │
-     ▼
-Return to frontend for user review
-     │
-     ├── POST /api/portfolio/confirm-extraction
-     │   → Save to position_mirrors table
-     │   → Trigger analytics computation
-     │
-     └── POST /api/portfolio/cancel-extraction
-         → Discard extraction
+| Variable | Purpose |
+|----------|---------|
+| `RAZORPAY_KEY_ID` | Razorpay API key ID |
+| `RAZORPAY_KEY_SECRET` | Razorpay API key secret |
+| `VITE_RAZORPAY_KEY_ID` | Frontend Razorpay key (passed to React via Vite) |
+
+#### Communication
+
+| Variable | Purpose |
+|----------|---------|
+| `ACS_EMAIL_CONNECTION_STRING` | Azure email delivery endpoint |
+| `ACS_SMS_CONNECTION_STRING` | Azure SMS delivery endpoint |
+| `PROSPEKTLAB_FROM_EMAIL` | Sender email address |
+
+#### Infrastructure
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PROSPEKTLAB_ENV` | — | `production` | `local` |
+| `BACKEND_API_URL` | — | Backend URL (for frontend injection) |
+| `FINAGENT_HOME` | `.finagent` | Agent state directory |
+| `NSE_COOKIE_STRING` | — | NSE session bypass cookie for scrapers |
+| `MCA_COMPANY_MASTER_CSV` | — | Path to company master CSV |
+| `FINAGENT_DEFAULT_GEO` | `IN` | Default geography |
+| `FINAGENT_EXCHANGE_SUFFIX` | `.NS` | Default exchange suffix |
+
+#### Admin
+
+| Variable | Purpose |
+|----------|---------|
+| `ADMIN_RESET_KEY` | Secret key for admin reset endpoint |
+| `CONTROL_TOWER_ALLOWED_EMAILS` | Comma-separated emails for control tower access |
+| `FINAGENT_METRICS_ADMIN_EMAILS` | Comma-separated emails for metrics access |
+
+### 16.2 Python Settings (FinAgentSettings)
+
+```python
+# finagent/settings.py
+@dataclass
+class FinAgentSettings:
+    model: str                        # GPT model for sub-agents
+    synthesis_model: str              # GPT model for final synthesis
+    light_model: str                  # Fast model for intent/contextualizer
+    temperature: float = 0.3
+    max_tokens: int = 4096
+    synthesis_max_tokens: int = 16384
+    default_geo: str = "IN"
+    exchange_suffix: str = ".NS"
+    max_refinement_rounds: int = 3     # Reflection loop iterations
+    blind_spot_threshold: float = 0.6  # Quality threshold for re-runs
+    search_web: bool = True
+    search_news: bool = True
+    search_social: bool = False        # Reddit/HN/StockTwits (opt-in)
 ```
 
 ---
 
-## Complete File Inventory
+## 17. Third-Party Integrations
 
-### Backend Python Files
+### AI/LLM
+| Provider | Service | Models Used |
+|----------|---------|-------------|
+| **OpenAI** | Chat Completions API | GPT-5.4-mini, GPT-4o-mini, text-embedding-3-small |
+| **Azure AI Foundry** | OpenAI on Azure | GPT-4o-mini (fallback) |
+| **xAI** | Grok API | Grok-3 (fallback) |
 
-#### Core (`finagent/` root)
+### Database & Storage
+| Provider | Service | Purpose |
+|----------|---------|---------|
+| **Supabase** | Managed PostgreSQL | User data, payments, token usage, outreach |
+| **Qdrant** | Vector Database | Embedding search for IKG documents |
+| **Neo4j** | Graph Database | Director interlock networks, corporate relationships |
+| **Redis** | In-memory store | Celery message broker, optional TTL cache |
 
-| File | Purpose |
+### Cloud Services
+| Provider | Service | Purpose |
+|----------|---------|---------|
+| **AWS ECS Fargate** | Container hosting | Backend gateway |
+| **AWS Amplify** | Web hosting | Frontend SPA |
+| **AWS CodeBuild** | CI/CD | Docker build + ECR push + ECS deploy |
+| **AWS CodePipeline** | CI/CD | Orchestrate CodeBuild stages |
+| **Azure VMs** | Virtual machines | IKG worker Docker Compose host |
+| **Azure Communication Services** | Email + SMS | Verification codes, notifications |
+| **Azure Document Intelligence** | AI document parsing | PDF → structured text for portfolio ingestion |
+| **Azure Cognitive Search** | Full-text + semantic search | Document search for RAG |
+| **Azure Application Insights** | Telemetry | Backend + frontend monitoring |
+| **Azure Monitor** | Monitoring | IKG pipeline health |
+
+### Data Sources
+| Source | Type | Data |
+|--------|------|------|
+| **Yahoo Finance** | API | Quotes, history, indices, fundamentals |
+| **NSE India** | Web scraping | Corporate filings, index constituents, equity snapshots |
+| **BSE India** | Web scraping | Announcements, EOD data, shareholding patterns |
+| **SEBI** | Web scraping | Enforcement orders, intermediary data |
+| **MCA** | CSV / Web scraping | Company master data, director KMP data |
+| **SEC EDGAR** | API | US company filings (Form 10-K, 10-Q, 8-K) |
+| **Reddit** | API | Social sentiment (r/IndianStockMarket, r/stocks) |
+| **Hacker News** | API | Tech/startup sentiment |
+| **StockTwits** | API | Retail trader sentiment |
+| **Wikipedia** | API | Entity data enrichment |
+| **Google Search Console** | API | Sitemap submission for SEO |
+| **RBI** | RSS | Monetary policy, circulars, press releases |
+| **AMFI** | Web scraping | Mutual fund NAV, AUM data |
+| **SearXNG** | Self-hosted search | Privacy-focused web search |
+| **Crawl4AI** | Library | AI-optimized web crawling |
+| **DuckDuckGo** | API | Web search |
+
+### Auth & Payments
+| Provider | Service | Purpose |
+|----------|---------|---------|
+| **Google Identity Services** | OAuth 2.0 | Social login |
+| **Supabase Auth** | Auth Admin API | Email/password management |
+| **Razorpay** | Payment Gateway | INR subscription payments |
+
+### Document Processing
+| Library/Service | Purpose |
+|-----------------|---------|
+| **casparser** | CAMS/KFintech CAS PDF parsing |
+| **pypdf / PyMuPDF** | Generic PDF extraction |
+| **openpyxl** | Excel file parsing |
+| **python-docx** | DOCX generation for exports |
+| **msoffcrypto-tool** | Password-protected Excel files |
+| **Azure Doc Intelligence** | Cloud-based structured extraction |
+| **Docling** | IBM's document understanding (annual reports) |
+| **MinerU** | Document structure extraction |
+
+### DevOps Tools
+| Tool | Purpose |
 |------|---------|
-| `__init__.py` | Package init, Windows CA cert fix, .env loading, version (0.1.0) |
-| `__main__.py` | `python -m finagent` entry point |
-| `run_agent.py` | Core agent loop (6-phase pipeline: identify → enrich → breadth → deep-dive → analysis → synthesis) |
-| `synthesis.py` | LLM memo synthesis engine (OpenAI streaming + template fallback) |
-| `events.py` | SessionBus: in-process pub/sub event bus with JSONL persistence |
-| `api.py` | Legacy standalone FastAPI |
-| `cli.py` | CLI: preflight, run-stub commands |
-| `accuracy_validator.py` | Claim validation and source confidence scoring |
-| `intent.py` | Keyword-based intent detection + rich mode classification |
-| `rich_builder.py` | RichResponse builder: turns tool outputs into typed structured visuals |
-| `paths.py` | Data directory path resolution |
-| `prompt_builder.py` | System prompt loader |
-| `research_planner.py` | ResearchPlan, PlanStep Pydantic models |
-| `runtime_provider.py` | LLM provider resolution (OpenAI/xAI) |
-| `settings.py` | Environment-driven FinAgentSettings |
-| `telemetry.py` | Azure Application Insights telemetry client (async httpx) |
-| `portfolio_mirrors.py` | Position mirror CRUD (SQLite) |
-| `portfolio_sentinel.py` | Portfolio monitoring |
-| `test_events.py` | Event bus tests |
-
-#### Reference Data (`finagent/data/`)
-
-| File | Purpose |
-|------|---------|
-| `isin_master.json` | ISIN-to-ticker lookup map for Indian equities |
-| `nifty500_sectors.json` | Nifty 500 sector classification data |
-| `amfi_schemes_meta.json` | Indian mutual fund scheme metadata from AMFI |
-| `news_cache.sqlite3` | Cached news articles with TTL |
-| `sector_cache.sqlite3` | Cached sector classification data |
-| `build_isin_master.py` | Script to rebuild ISIN master from source data |
-| `generate_sector_lookup.py` | Script to regenerate sector lookup data |
-
-#### Agent (`finagent/agent/`)
-
-| File | Purpose |
-|------|---------|
-| `reflection.py` | Reflection loop for iterative self-improvement |
-
-#### Agents (`finagent/agents/`)
-
-| File | Purpose |
-|------|---------|
-| `__init__.py` | Re-exports: Orchestrator, SubAgentContext, Verifier, detect_blind_spots |
-| `base.py` | BaseSubAgent ABC, SubAgentContext, Finding, AgentTaskResult |
-| `blindspot.py` | Auto-generate follow-up questions for uncovered areas |
-| `orchestrator.py` | Wave-based parallel agent execution engine |
-| `verifier.py` | Cross-agent claim verification and confidence adjustment |
-| `specialists/__init__.py` | `default_roster()` factory (10 agents) |
-| `specialists/accounting.py` | Forensic accounting anomaly detection |
-| `specialists/community.py` | Reddit/StockTwits/HN sentiment analysis |
-| `specialists/competitor.py` | Peer comparison and competitive analysis |
-| `specialists/financials.py` | Financial statement analysis |
-| `specialists/governance.py` | Corporate governance review |
-| `specialists/macro.py` | Macro-economic overlay |
-| `specialists/news.py` | News sentiment and material events |
-| `specialists/risk.py` | Risk factor identification |
-| `specialists/technical.py` | Technical price analysis |
-| `specialists/valuation.py` | Valuation framework analysis |
-
-#### Analysis (`finagent/analysis/`)
-
-| File | Purpose |
-|------|---------|
-| `conflicts.py` | Cross-source conflict detection |
-| `quality.py` | Research quality scoring (0-100) |
-
-#### Gateway (`finagent/gateway/`)
-
-| File | Purpose |
-|------|---------|
-| `run.py` | Main FastAPI gateway: all REST + SSE endpoints (~60 routes) |
-| `auth_guard.py` | JWT validation (local + Supabase) |
-| `session.py` | SessionRecord dataclass |
-| `supabase_client.py` | Supabase Admin API client |
-| `server.cjs` | CommonJS server entry point |
-| `test_gateway.py` | Gateway tests |
-| `test_security.py` | Security tests |
-| `landing.html` | Static landing page |
-| `login.html` | Static login page |
-| `signup.html` | Static signup page |
-| `profile.html` | Static profile page |
-| `settings.html` | Static settings page |
-| `widget.html` | Static widget page |
-| `components/Charts/` | Server-side chart components |
-
-#### Geography & Entity Resolution (`finagent/geo/`)
-
-| File | Purpose |
-|------|---------|
-| `entity_resolver.py` | Main entity resolution pipeline |
-| `ticker_mapper.py` | Symbol-to-ticker lookup database |
-| `currency_policy.py` | Currency formatting policies |
-| `jurisdiction_profiles.py` | Country-specific data source configs |
-| `query_localizer.py` | Search query adaptation per geography |
-| `source_policy.py` | Preferred web domains per entity type |
-| `test_entity_resolver.py` | Entity resolver tests |
-
-#### Harness (`finagent/harness/`)
-
-| File | Purpose |
-|------|---------|
-| `context_manager.py` | Context compression strategies |
-| `error_recovery.py` | Error recovery and retry logic |
-| `footprint_enforcer.py` | Token/memory/resource limit enforcement |
-| `human_gates.py` | Human-in-the-loop approval checkpoints |
-| `interrupt_handler.py` | SIGINT/SIGTERM graceful shutdown |
-| `orchestrator.py` | Harness-level orchestration |
-| `preflight.py` | Pre-flight clarification prompt generation |
-
-#### Ingestion (`finagent/ingestion/`)
-
-| File | Purpose |
-|------|---------|
-| `cas_adapter.py` | CAMS/KFintech eCAS statement parser |
-| `image_ingestion.py` | Screenshot OCR portfolio extraction |
-| `isin_resolver.py` | ISIN → ticker resolution |
-| `markdown_extractor.py` | Markdown table extraction |
-| `mineru_transformer.py` | MinerU PDF transformer |
-| `pdf_transformer.py` | Generic PDF text/table extraction (PyMuPDF) |
-| `portfolio_document.py` | Unified parser (PDF/CSV/XLSX/CAS) |
-| `portfolio_schema.py` | Pydantic models for extracted holdings |
-
-#### Memory (`finagent/memory/`)
-
-| File | Purpose |
-|------|---------|
-| `chat_memory.py` | Chat history SQLite persistence |
-| `store.py` | Memory fact store with per-user scoping |
-
-#### News (`finagent/news/`)
-
-| File | Purpose |
-|------|---------|
-| `cache.py` | News caching with TTL |
-| `dedupe.py` | News article deduplication |
-| `scorer.py` | News relevance scoring |
-| `sources/amfi_source.py` | AMFI India mutual fund data |
-| `sources/bse_announcements.py` | BSE corporate announcements |
-| `sources/nse_announcements.py` | NSE corporate announcements |
-| `sources/rss_aggregator.py` | Generic RSS feed aggregation |
-| `sources/searxng_source.py` | SearXNG meta-search news |
-| `sources/sebi_rss.py` | SEBI regulatory RSS feed |
-
-#### Output (`finagent/output/`)
-
-| File | Purpose |
-|------|---------|
-| `contracts.py` | OutputMode, ResponseDepth enums, AnswerArtifact model |
-| `intent_classifier.py` | Query complexity → OutputMode classification |
-| `memo_formatter.py` | Memo markdown formatting |
-| `renderer.py` | Markdown/JSON rendering |
-| `artifact_builder.py` | Structured answer artifact construction |
-| `chart_generator.py` | Matplotlib chart image generation |
-| `confidence_scorer.py` | 0-100 confidence with source weighting |
-| `conflict_reporter.py` | Cross-source conflict reporting |
-| `report_exporter.py` | PDF/HTML report export |
-| `templates.py` | Output templates per response mode |
-| `query_guards.py` | Portfolio comparison query guards |
-| `test_artifact_builder.py` | Artifact builder tests |
-
-#### Playbooks (`finagent/playbooks/`)
-
-| File | Purpose |
-|------|---------|
-| `executor.py` | Playbook execution engine |
-| `promoter.py` | Playbook promotion logic (reuse detection) |
-| `retriever.py` | Playbook retrieval by keyword/similarity |
-| `schema.py` | Playbook data model |
-| `store.py` | Playbook SQLite persistence |
-
-#### Portfolio (`finagent/portfolio/`)
-
-| File | Purpose |
-|------|---------|
-| `action_queue.py` | Daily action queue builder |
-| `alerts.py` | Price/MA/event alert computation |
-| `analytics.py` | Core portfolio analytics (P&L, XIRR, allocation) |
-| `corporate_actions.py` | Bonus/split/dividend corporate actions |
-| `dividends.py` | Dividend history and upcoming calendar |
-| `holding_detail.py` | Per-holding deep analysis |
-| `mf_analytics.py` | Mutual fund scheme analytics |
-| `news.py` | Portfolio-level news aggregation |
-| `sectors.py` | Sector allocation and breakdown |
-| `stress_test.py` | Scenario-based stress testing |
-| `tax.py` | STCG/LTCG tax computation |
-
-#### Retrieval (`finagent/retrieval/`)
-
-| File | Purpose |
-|------|---------|
-| `dense_index.py` | Dense vector (embedding) index |
-| `fusion.py` | Hybrid result fusion (dense + sparse) |
-| `graph_index.py` | Graph-based document indexing |
-| `planner.py` | Retrieval plan builder |
-| `reranker.py` | Result reranking |
-| `sparse_index.py` | Sparse keyword (BM25) index |
-| `test_planner.py` | Planner tests |
-| `test_reranker.py` | Reranker tests |
-
-#### Router (`finagent/router/`)
-
-| File | Purpose |
-|------|---------|
-| `domain_taxonomy.py` | Agent-to-keyword taxonomy mapping |
-| `geography_router.py` | Geography-based routing decisions |
-| `intent_router.py` | Intent classification, entity extraction, portfolio scope, query routing |
-| `policies.py` | Deep research trigger policy (keyword matching) |
-| `tool_selector.py` | Tool selection by intent/entity |
-| `test_intent_router.py` | Intent router tests |
-
-#### State (`finagent/state/`)
-
-| File | Purpose |
-|------|---------|
-| `checkpoint.py` | Checkpoint, StepResult data models |
-| `citation_log.py` | Citation tracking and source linking |
-| `compression.py` | Context compression utilities |
-| `research_state.py` | Research state store (SQLite) |
-| `session_context.py` | Thread-local session context (contextvars: active agents, MCPs, websites per async task chain) |
-
-#### Storage (`finagent/storage/`)
-
-| File | Purpose |
-|------|---------|
-| `sqlite.py` | SQLite WAL connection helper |
-| `supabase_store.py` | Supabase PostgreSQL-backed storage for portfolio mirrors, rate limiting (shared across containers) |
-
-#### Tools — Data (`finagent/tools/data/`)
-
-| File | Purpose |
-|------|---------|
-| `yahoo_finance.py` | yfinance quote + fundamentals |
-| `india.py` | NSE/Screener.in/Moneycontrol/SEBI fetchers |
-| `sec_edgar.py` | SEC EDGAR company facts API |
-| `sec_filings.py` | SEC filing narratives |
-| `wikipedia.py` | Wikipedia REST summary API |
-| `news_feed.py` | Google News RSS fetcher |
-| `reddit.py` | Reddit search |
-| `hackernews.py` | HN Algolia search API |
-| `stocktwits.py` | StockTwits sentiment API |
-| `forex.py` | USD/INR forex rate fetcher |
-| `units.py` | Indian number formatting (crore/lakh) |
-| `cache.py` | Per-session in-memory query cache |
-| `test_units.py` | Units tests |
-
-#### Tools — Web (`finagent/tools/web/`)
-
-| File | Purpose |
-|------|---------|
-| `scraper.py` | DuckDuckGo search + HTML scraping |
-| `crawl4ai_sites.py` | Crawl4AI full-page extraction |
-| `searxng_client.py` | SearXNG meta-search client |
-| `http_fetcher.py` | Shared async httpx client |
-| `table_parser.py` | HTML table extraction |
-| `test_ingestion.py` | Ingestion tests |
-
-#### Tools — MCP Servers (`finagent/tools/mcp_servers/`)
-
-| File | Status | Purpose |
-|------|--------|---------|
-| `discovery_server.py` | **Active** | Consolidated OSINT & Data Discovery (NSE + search + docs) |
-| `quant_server.py` | **Active** | Consolidated Quantitative Compute (fundamentals + valuation + risk) |
-| `nse_server.py` | Legacy | Standalone NSE Market Data |
-| `research_server.py` | Legacy | Standalone Web & News Search |
-| `fundamentals_server.py` | Legacy | Standalone Fundamentals |
-| `docs_server.py` | Legacy | Standalone Documents |
-| `mcp_valuation.py` | Legacy | Standalone Valuation |
-
-#### Tools — Other (`finagent/tools/`)
-
-| File | Purpose |
-|------|---------|
-| `registry.py` | Tool registry |
-| `mcp_config.py` | MCP server connection configuration (discovery + quant) |
-| `valuation_engine.py` | Deterministic finance math (DCF, PE, Graham, etc.) |
-| `mcp/dynamic_loader.py` | Dynamic MCP tool loading |
-| `browser/deep_crawler.py` | Playwright deep crawler (ARCHIVED — NOT ACTIVE) |
-| `social/viral_verifier.py` | Pump-and-dump signal detection |
-| `prospektlab/enricher.py` | Entity enrichment |
-| `prospektlab/entity_fetcher.py` | Entity data fetching |
-| `prospektlab/event_monitor.py` | Event monitoring |
-| `prospektlab/exporter.py` | Data export |
-| `prospektlab/navigator.py` | Data navigation |
-
-#### Tests (`finagent/tests/`)
-
-| File | Purpose |
-|------|---------|
-| `test_synthesis_speed_profiles.py` | Synthesis speed tests |
-| `test_rich_builder.py` | Rich builder tests |
-| `test_v3_backend_contract.py` | V3 backend contract tests |
-
-### Frontend TypeScript Files
-
-#### Root & API
-
-| File | Purpose |
-|------|---------|
-| `main.tsx` | React entry point, AuthProvider |
-| `App.tsx` | Route definitions, auth guards |
-| `index.css` | Global design system (dark theme) |
-| `telemetry.ts` | Azure Application Insights telemetry client (batched envelope posting) |
-| `api/client.ts` | Full API client + SSE streaming |
-| `context/AuthContext.tsx` | Auth state + Google OAuth |
-| `data/indianStocks.ts` | Indian stock reference data |
-
-#### Pages
-
-| File | Purpose |
-|------|---------|
-| `pages/Dashboard.tsx` | Main workspace |
-| `pages/Login.tsx` | Auth pages (login, signup, password reset) |
-| `pages/Onboarding.tsx` | Portfolio onboarding |
-| `pages/LandingPage.tsx` | Product landing page |
-| `pages/Features.tsx` | Feature showcase |
-| `pages/Pricing.tsx` | Pricing tiers |
-| `pages/Testimonials.tsx` | User testimonials |
-| `pages/ContactUs.tsx` | Contact form page |
-
-#### Components — Layout
-
-| File | Purpose |
-|------|---------|
-| `components/layout/AppShell.tsx` | Main layout wrapper |
-| `components/layout/Logo.tsx` | Logo |
-| `components/layout/Sidebar.tsx` | Navigation sidebar |
-
-#### Components — Chat
-
-| File | Purpose |
-|------|---------|
-| `components/chat/AgentThinking.tsx` | Agent progress visualization |
-| `components/chat/ChatInput.tsx` | Chat input + depth selector |
-| `components/chat/MessageBubble.tsx` | Chat message rendering |
-| `components/chat/RichResponse.tsx` | Rich data visualization |
-| `components/chat/SuggestedPrompts.tsx` | Prompt suggestions |
-| `components/chat/CalloutBlock.tsx` | Callout/highlight rendering |
-| `components/chat/HtmlArtifact.tsx` | HTML artifact rendering |
-| `components/chat/SectionBlock.tsx` | Section block wrapper |
-
-#### Components — Charts
-
-| File | Purpose |
-|------|---------|
-| `components/charts/AreaChart.tsx` | Chart.js area chart |
-| `components/charts/BarChart.tsx` | Chart.js bar chart |
-| `components/charts/DonutChart.tsx` | Chart.js donut chart |
-| `components/charts/InteractiveChart.tsx` | Interactive time-series |
-| `components/charts/MetricCard.tsx` | Single metric card |
-| `components/charts/ThemeProvider.ts` | Chart.js theme config |
-| `components/charts/RadarChart.tsx` | Radar/spider chart |
-| `components/charts/TreemapChart.tsx` | Treemap visualization |
-| `components/charts/TableBlock.tsx` | Table rendering |
-
-#### Components — Dashboard
-
-| File | Purpose |
-|------|---------|
-| `components/dashboard/IndexTickerCard.tsx` | Nifty/Sensex ticker |
-| `components/dashboard/PortfolioTable.tsx` | Holdings table |
-| `components/dashboard/QuickActions.tsx` | Quick action buttons |
-| `components/dashboard/QuickPulse.tsx` | Market pulse overview |
-| `components/dashboard/RecentInsights.tsx` | Recent research list |
-| `components/dashboard/Sparkline.tsx` | Mini sparkline chart |
-| `components/dashboard/WatchlistCard.tsx` | User watchlist |
-| `components/dashboard/AssetHistoryModal.tsx` | Asset history modal |
-
-### Infrastructure Files
-
-| File | Purpose |
-|------|---------|
-| `Dockerfile` | Python 3.11-slim, Crawl4AI + Chromium, FastAPI gateway |
-| `pyproject.toml` | Project metadata, core dependencies (summary only) |
-| `uv.lock` | UV lockfile for local development |
-| `package.json` | Root: Playwright dependency only (for browser tests) |
-| `finagent/requirements-finagent.txt` | **Authoritative** dependency list for production builds |
-| `.github/workflows/deploy-production.yml` | CI/CD: build → ECR → ECS → Amplify |
-| `buildspec.yml` | AWS CodeBuild specification |
-| `buildspec-prod.yml` | AWS CodeBuild production specification |
-| `Frontend/app/amplify.yml` | AWS Amplify build specification (Vite build + env-config.js generation) |
-| `deployment/` | Deployment configurations (backend deploy scripts, Fargate YAML, Supabase SQL) |
-| `scratch/` | Ad-hoc scripts and experimental code |
-| `start_server.ps1` | Local server start script (PowerShell) |
+| **Docker** | Containerization |
+| **Docker Compose** | Multi-service IKG stack |
+| **uv** | Python package manager |
+| **Playwright/Patchright** | Headless browser automation for scrapers |
+| **fastmcp** | MCP server framework |
+| **Celery** | Distributed task queue |
+| **APScheduler** | Cron-based scheduling |
 
 ---
 
-## Architectural Principles
-
-1. **LLM for reasoning only** — All math, data fetching, and formatting happen in deterministic Python. The LLM synthesizes, interprets, and writes — never calculates.
-
-2. **India-first, US-second** — Defaults to IN geography, `.NS` exchange suffix, NSE/Screener.in data, SEBI filings, INR formatting (crore/lakh). US is fully supported but secondary.
-
-3. **Parallelism everywhere** — Enrichment fetches, multi-agent waves, deep research passes, and data operations all run concurrently via `asyncio.gather()`.
-
-4. **Deterministic finance math** — `valuation_engine.py` handles all calculations with Pydantic-validated inputs and transparent intermediate steps.
-
-5. **Event-driven SSE** — The `SessionBus` decouples the agent loop from the HTTP gateway. Events are buffered, persisted to JSONL, and replayable.
-
-6. **Multi-agent Hermes pattern** — 10 specialist sub-agents run in dependency-aware waves, each returning structured findings. An orchestrator merges, a verifier cross-checks, and a blind-spot detector fills gaps.
-
-7. **Two-layer intent system** — `intent_router.py` handles query routing (entities, depth, portfolio scope, deep research eligibility) while `intent.py` handles rich output mode classification.
-
-8. **Durable memory** — Facts persist across sessions per user, enabling long-term learning about companies, sectors, and events.
-
-9. **Portfolio-aware research** — The system understands the user's actual holdings and can scope research to portfolio context, with guards against misclassification.
-
-10. **Structured output** — All outputs follow a consistent 8-section memo template with citations, confidence scores, conflict reports, and geography-appropriate formatting.
-
-11. **Consolidated MCP layer** — Two active MCP servers (discovery + quant) consolidate what was previously 5+ standalone servers, simplifying deployment.
-
-12. **Double dependency source** — `requirements-finagent.txt` is the authoritative production dependency list; `pyproject.toml` is a summary. The Dockerfile uses `requirements-finagent.txt`.
-
----
-
-*Document generated from full codebase analysis. Last updated: May 2026.*
+> **Document Version:** 1.0  
+> **Generated:** June 2026  
+> **Platform:** ProspektLab — Financial Intelligence Operating System

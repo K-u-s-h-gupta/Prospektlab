@@ -17,24 +17,6 @@ services:
       retries: 10
     restart: unless-stopped
 
-  memgraph:
-    image: memgraph/memgraph-mage:latest
-    ports:
-      - "${IKG_MEMGRAPH_BOLT_BIND:-127.0.0.1:7688}:7687"
-    volumes:
-      - memgraph_data:/var/lib/memgraph
-    command: ["--log-level=INFO"]
-    restart: unless-stopped
-
-  memgraph-lab:
-    image: memgraph/lab:latest
-    ports:
-      - "${IKG_MEMGRAPH_LAB_BIND:-127.0.0.1:3001}:3000"
-    depends_on:
-      memgraph:
-        condition: service_started
-    restart: unless-stopped
-
   redis:
     image: redis:7
     command: ["redis-server", "--appendonly", "yes"]
@@ -58,7 +40,7 @@ services:
       context: ..
       dockerfile: deployment/Dockerfile.ikg-worker
     env_file:
-      - ../finagent/.env
+      - ../backend/finagent/.env
     environment:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -68,11 +50,9 @@ services:
       IKG_BACKEND: postgres
       IKG_DATABASE_URL: postgresql://ikg_user:${IKG_POSTGRES_PASSWORD:-ikg_password_change_me}@postgres:5432/ikg
       DATABASE_URL: postgresql://ikg_user:${IKG_POSTGRES_PASSWORD:-ikg_password_change_me}@postgres:5432/ikg
-      MEMGRAPH_URI: bolt://memgraph:7687
-      MEMGRAPH_USER: ""
-      MEMGRAPH_PASSWORD: ""
-      FINAGENT_GRAPH_SERVING_BACKEND: memgraph
       FINAGENT_RETRIEVAL_BACKEND: qdrant_postgres
+      FINAGENT_GRAPH_SERVING_BACKEND: postgres
+      FINAGENT_LISTED_COMPANY_SCOPE: all_listed
       FINAGENT_DISABLE_AZURE_SEARCH: "1"
       FINAGENT_DI_PROVIDER: local_first
       FINAGENT_DI_LOCAL_MIN_CHARS_PER_PAGE: "250"
@@ -81,21 +61,29 @@ services:
       FINAGENT_SCHEDULER_USE_CELERY: "1"
       FINAGENT_SCHEDULER_ENABLE_CRON: "0"
       FINAGENT_SCHEDULER_ENABLE_DREAMING: "0"
+      FINAGENT_NSE_UNIVERSE: ${FINAGENT_NSE_UNIVERSE:-nifty500}
+      FINAGENT_PIPELINE_YEARS_BACK: ${FINAGENT_PIPELINE_YEARS_BACK:-3}
       FINAGENT_CELERY_PREFETCH: "1"
       FINAGENT_PIPELINE_PARALLEL_WORKERS: "24"
-      FINAGENT_SHP_QUARTERS: "40"
-      FINAGENT_BSE_SHP_MAX_QUARTERS: "40"
+      FINAGENT_SHP_QUARTERS: "20"
+      FINAGENT_BSE_SHP_MAX_QUARTERS: "20"
       FINAGENT_IKG_XBRL_FACT_LIMIT: "100000"
       FINAGENT_QDRANT_INDEX_BATCH_SIZE: "8"
+      FINAGENT_QDRANT_INCREMENTAL: "1"
       FINAGENT_EMBEDDING_BATCH_SIZE: "8"
       FINAGENT_EMBEDDING_MAX_CHARS: "2500"
       FINAGENT_EMBEDDING_BATCH_DELAY_S: "8"
+      FINAGENT_EMBEDDING_SHRINK_ON_429: "1"
       FINAGENT_ANNUAL_REPORT_EXTRACT_MODE: targeted
       FINAGENT_ANNUAL_REPORT_TARGETED_TOP_N: "100"
+      FINAGENT_ANNUAL_REPORT_YEARS_BACK: ${FINAGENT_ANNUAL_REPORT_YEARS_BACK:-3}
+      FINAGENT_ANNUAL_REPORTS_PER_COMPANY: "3"
       FINAGENT_ANNUAL_REPORT_REQUIRE_TABLES: "0"
+      FINAGENT_CORP_FILINGS_HYDRATE_LIMIT: ${FINAGENT_CORP_FILINGS_HYDRATE_LIMIT:-250}
+      MCA_COMPANY_MASTER_CSV: ${MCA_COMPANY_MASTER_CSV:-data/company_master_data_2026-06-01.csv}
       # Tiered memory (workers don't dream; scheduler does)
       MEMORY_DATABASE_URL: ${MEMORY_DATABASE_URL:-}
-      # NSE cookie injection — set in finagent/.env to bypass 403 on cloud IPs
+      # NSE cookie injection — set in backend/finagent/.env to bypass 403 on cloud IPs
       NSE_COOKIE_STRING: ${NSE_COOKIE_STRING:-}
     command:
       - celery
@@ -114,10 +102,8 @@ services:
         condition: service_started
       qdrant:
         condition: service_started
-      memgraph:
-        condition: service_started
-      memgraph-lab:
-        condition: service_started
+    volumes:
+      - ../data:/app/data:ro
     restart: unless-stopped
 
   scheduler:
@@ -125,7 +111,7 @@ services:
       context: ..
       dockerfile: deployment/Dockerfile.ikg-worker
     env_file:
-      - ../finagent/.env
+      - ../backend/finagent/.env
     environment:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -135,11 +121,9 @@ services:
       IKG_BACKEND: postgres
       IKG_DATABASE_URL: postgresql://ikg_user:${IKG_POSTGRES_PASSWORD:-ikg_password_change_me}@postgres:5432/ikg
       DATABASE_URL: postgresql://ikg_user:${IKG_POSTGRES_PASSWORD:-ikg_password_change_me}@postgres:5432/ikg
-      MEMGRAPH_URI: bolt://memgraph:7687
-      MEMGRAPH_USER: ""
-      MEMGRAPH_PASSWORD: ""
-      FINAGENT_GRAPH_SERVING_BACKEND: memgraph
       FINAGENT_RETRIEVAL_BACKEND: qdrant_postgres
+      FINAGENT_GRAPH_SERVING_BACKEND: postgres
+      FINAGENT_LISTED_COMPANY_SCOPE: all_listed
       FINAGENT_DISABLE_AZURE_SEARCH: "1"
       FINAGENT_DI_PROVIDER: local_first
       FINAGENT_DI_LOCAL_MIN_CHARS_PER_PAGE: "250"
@@ -148,19 +132,27 @@ services:
       FINAGENT_SCHEDULER_USE_CELERY: "1"
       FINAGENT_SCHEDULER_ENABLE_CRON: "1"
       FINAGENT_SCHEDULER_ENABLE_DREAMING: "1"
-      FINAGENT_SHP_QUARTERS: "40"
-      FINAGENT_BSE_SHP_MAX_QUARTERS: "40"
+      FINAGENT_NSE_UNIVERSE: ${FINAGENT_NSE_UNIVERSE:-nifty500}
+      FINAGENT_PIPELINE_YEARS_BACK: ${FINAGENT_PIPELINE_YEARS_BACK:-3}
+      FINAGENT_SHP_QUARTERS: "20"
+      FINAGENT_BSE_SHP_MAX_QUARTERS: "20"
       FINAGENT_IKG_XBRL_FACT_LIMIT: "100000"
       FINAGENT_QDRANT_INDEX_BATCH_SIZE: "8"
+      FINAGENT_QDRANT_INCREMENTAL: "1"
       FINAGENT_EMBEDDING_BATCH_SIZE: "8"
       FINAGENT_EMBEDDING_MAX_CHARS: "2500"
       FINAGENT_EMBEDDING_BATCH_DELAY_S: "8"
+      FINAGENT_EMBEDDING_SHRINK_ON_429: "1"
       FINAGENT_ANNUAL_REPORT_EXTRACT_MODE: targeted
       FINAGENT_ANNUAL_REPORT_TARGETED_TOP_N: "100"
+      FINAGENT_ANNUAL_REPORT_YEARS_BACK: ${FINAGENT_ANNUAL_REPORT_YEARS_BACK:-3}
+      FINAGENT_ANNUAL_REPORTS_PER_COMPANY: "3"
       FINAGENT_ANNUAL_REPORT_REQUIRE_TABLES: "0"
+      FINAGENT_CORP_FILINGS_HYDRATE_LIMIT: ${FINAGENT_CORP_FILINGS_HYDRATE_LIMIT:-250}
+      MCA_COMPANY_MASTER_CSV: ${MCA_COMPANY_MASTER_CSV:-data/company_master_data_2026-06-01.csv}
       # Tiered memory / dreaming layer (nightly 2 AM IST)
       MEMORY_DATABASE_URL: ${MEMORY_DATABASE_URL:-}
-      # NSE cookie injection — set in finagent/.env to bypass 403 on cloud IPs
+      # NSE cookie injection — set in backend/finagent/.env to bypass 403 on cloud IPs
       NSE_COOKIE_STRING: ${NSE_COOKIE_STRING:-}
     command: ["python", "-m", "finagent.ikg.pipeline.scheduler"]
     depends_on:
@@ -170,16 +162,13 @@ services:
         condition: service_started
       qdrant:
         condition: service_started
-      memgraph:
-        condition: service_started
-      memgraph-lab:
-        condition: service_started
       celery-worker:
         condition: service_started
+    volumes:
+      - ../data:/app/data:ro
     restart: unless-stopped
 
 volumes:
   postgres_data:
-  memgraph_data:
   redis_data:
   qdrant_storage:

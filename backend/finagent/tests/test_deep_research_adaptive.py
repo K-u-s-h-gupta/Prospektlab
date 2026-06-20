@@ -93,6 +93,7 @@ def test_strong_ikg_can_stop_evidence_early():
 async def test_deep_research_only_recalls_memory_on_first_and_final_pass(monkeypatch):
     import finagent.gateway.run as gateway
 
+    monkeypatch.setenv("FINAGENT_USE_SWARM_DEEP", "0")
     gateway._TASKS.clear()
     calls: list[object] = []
 

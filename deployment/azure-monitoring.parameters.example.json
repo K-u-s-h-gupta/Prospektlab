@@ -1,0 +1,15 @@
+{
+  "location": "centralindia",
+  "workspaceName": "prospektlab-monitoring",
+  "appInsightsName": "prospektlab-appinsights",
+  "purviewAccountName": "prospektlab-purview",
+  "purviewManagedResourceGroupName": "prospektlab-purview-managed",
+  "retentionInDays": 90,
+  "dailyQuotaGb": 50,
+  "targetMonthlyUsd": 100,
+  "hardCapMonthlyUsd": 120,
+  "defenderScopeMode": "focused",
+  "purviewEnableGovernance": true,
+  "purviewEnableSecurity": true,
+  "purviewSourceMode": "all_available"
+}

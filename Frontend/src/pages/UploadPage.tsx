@@ -47,6 +47,7 @@ export const UploadPage: React.FC = () => {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null);
+  const [reviewToken, setReviewToken] = useState<string | null>(null);
   const [reviewPositions, setReviewPositions] = useState<any[]>([]);
   const [sourceType, setSourceType] = useState<string>('unknown');
   const [isReviewing, setIsReviewing] = useState(false);
@@ -103,25 +104,48 @@ export const UploadPage: React.FC = () => {
     });
   };
 
+  // Persist extracted holdings locally. The dashboard reads holdings from
+  // `prospektlab_manual_portfolio` in open-access/guest mode, so the upload must
+  // write there (plus the legacy `prospektlab_portfolio` key) for the portfolio
+  // tab to populate when the cloud mirror is unavailable.
+  const persistLocalPortfolio = (positions: any[]): boolean => {
+    const mapped = mapPositionsToPortfolioItems(Array.isArray(positions) ? positions : []);
+    if (mapped.length === 0) return false;
+    const manualPayload = mapped.map((m) => ({
+      symbol: m.symbol,
+      name: m.name,
+      quantity: m.qty,
+      avg_cost: m.avgCost,
+      sector: m.sector,
+    }));
+    setPortfolio(mapped);
+    localStorage.setItem('prospektlab_manual_portfolio', JSON.stringify(manualPayload));
+    localStorage.setItem('prospektlab_portfolio', JSON.stringify(mapped));
+    return true;
+  };
+
   const verifyMirrorSync = async (fallbackPositions: any[] = []): Promise<boolean> => {
     let lastError: any = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const mirror = await getPortfolioMirror();
         const mirrorPositions = Array.isArray(mirror?.positions) ? mirror.positions : [];
         const count = Number(mirror?.count || mirrorPositions.length || 0);
         if (count > 0) {
-          const mapped = mapPositionsToPortfolioItems(mirrorPositions.length > 0 ? mirrorPositions : fallbackPositions);
-          if (mapped.length > 0) {
-            setPortfolio(mapped);
-            localStorage.setItem('prospektlab_portfolio', JSON.stringify(mapped));
+          if (persistLocalPortfolio(mirrorPositions.length > 0 ? mirrorPositions : fallbackPositions)) {
             return true;
           }
         }
       } catch (err: any) {
         lastError = err;
       }
-      await new Promise(resolve => setTimeout(resolve, 700 * (attempt + 1)));
+      await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+    // Cloud mirror unreachable or empty (sync down or guest mode). localStorage is
+    // the source of truth — persist the extracted holdings so the portfolio tab
+    // still populates instead of failing the whole upload.
+    if (persistLocalPortfolio(fallbackPositions)) {
+      return true;
     }
     if (lastError) console.error('Portfolio mirror verification failed', lastError);
     return false;
@@ -159,6 +183,7 @@ export const UploadPage: React.FC = () => {
     setUploadedFileName(file.name);
     setShowPasswordInput(false);
     setPendingFile(null);
+    setReviewToken(null);
 
     let currentStep = 0;
     const progressTimer = setInterval(() => {
@@ -182,6 +207,7 @@ export const UploadPage: React.FC = () => {
 
       if (res.code === "REVIEW_REQUIRED" || res.status === "REVIEW_REQUIRED" || res.sync_status === "REVIEW_REQUIRED") {
         setReviewId(res.review_id);
+        setReviewToken(res.review_token || null);
         setReviewPositions(res.positions || []);
         setSourceType(res.source_type || (isImage ? 'image' : 'pdf'));
         setIsReviewing(true);
@@ -221,12 +247,13 @@ export const UploadPage: React.FC = () => {
     setIsSubmittingReview(true);
     setErrorMsg(null);
     try {
-      const res = await confirmExtraction(reviewId, reviewPositions, sourceType);
+      const res = await confirmExtraction(reviewId, reviewPositions, sourceType, reviewToken);
       if (res && res.positions) {
         const verified = await verifyMirrorSync(res.positions);
         if (verified) {
           setIsReviewing(false);
           setReviewId(null);
+          setReviewToken(null);
           setReviewPositions([]);
           setOnboarded(true);
           navigate('/onboarding/watchlist');
@@ -249,6 +276,7 @@ export const UploadPage: React.FC = () => {
     finally {
       setIsReviewing(false);
       setReviewId(null);
+      setReviewToken(null);
       setReviewPositions([]);
       setPendingFile(null);
     }

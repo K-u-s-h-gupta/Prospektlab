@@ -16,6 +16,7 @@ from typing import Any, Literal
 
 from finagent.output.contracts import AnswerArtifact
 from finagent.output.report_exporter import export_docx, export_pdf, export_xlsx
+from finagent.output.pptx_generator import generate_pptx
 from finagent.paths import finagent_data_path
 
 logger = logging.getLogger("finagent.export_jobs")
@@ -25,7 +26,7 @@ _EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 _TTL_SECONDS = 86400  # 24 hours
 
-ExportFormat = Literal["pdf", "docx", "xlsx"]
+ExportFormat = Literal["pdf", "docx", "xlsx", "pptx"]
 
 
 @dataclass
@@ -86,6 +87,10 @@ async def _run_export(job: ExportJob, artifact: AnswerArtifact, style: str) -> N
         elif job.format == "xlsx":
             loop = asyncio.get_running_loop()
             data = await loop.run_in_executor(None, export_xlsx, artifact)
+        elif job.format == "pptx":
+            loop = asyncio.get_running_loop()
+            path = await loop.run_in_executor(None, generate_pptx, artifact, str(job.path))
+            data = path.read_bytes()
         else:
             raise ValueError(f"Unsupported format: {job.format}")
 

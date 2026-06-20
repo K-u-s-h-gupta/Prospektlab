@@ -1,1 +1,0 @@
-"""HTTP / SSE gateway package."""

@@ -192,7 +192,7 @@ export const ManualEntry: React.FC = () => {
         <div style={{ textAlign: 'center' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Enter your holdings</h2>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Type the stocks or mutual funds you own. Date of purchase is optional. No login required yet.
+            Type the stocks or mutual funds you own. Date of purchase is optional. No account setup is required.
           </p>
         </div>
 
@@ -360,7 +360,7 @@ export const ManualEntry: React.FC = () => {
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)' }}>
           <span>{validRows} of {totalRows} rows ready</span>
-          <span style={{ color: 'var(--text-muted)' }}>Login required later for AI chat</span>
+          <span style={{ color: 'var(--text-muted)' }}>AI chat opens once your holdings are synced</span>
         </div>
 
         <div style={{ display: 'flex', gap: '14px' }}>
@@ -386,3 +386,4 @@ export const ManualEntry: React.FC = () => {
 };
 
 export default ManualEntry;
+

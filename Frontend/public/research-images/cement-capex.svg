@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" fill="none">
+  <rect width="1200" height="500" fill="#14233B"></rect>
+  <defs><linearGradient id="gc1" x1="0" y1="0" x2="1200" y2="500"><stop offset="0" stop-color="#3A4860" stop-opacity=".3"></stop><stop offset="1" stop-color="#14233B"></stop></linearGradient></defs>
+  <rect width="1200" height="500" fill="url(#gc1)"></rect>
+  <g stroke="rgba(234,227,214,.04)" stroke-width="1"><line x1="0" y1="125" x2="1200" y2="125"></line><line x1="0" y1="250" x2="1200" y2="250"></line><line x1="0" y1="375" x2="1200" y2="375"></line></g>
+  
+  <g transform="translate(160,120)">
+    <rect width="100" height="60" rx="4" fill="rgba(234,227,214,.08)" stroke="rgba(234,227,214,.1)"></rect>
+    <rect x="120" y="-20" width="100" height="80" rx="4" fill="rgba(234,227,214,.06)" stroke="rgba(234,227,214,.08)"></rect>
+    <rect x="60" y="70" width="100" height="50" rx="4" fill="rgba(234,227,214,.07)" stroke="rgba(234,227,214,.09)"></rect>
+    <rect x="-20" y="70" width="80" height="50" rx="4" fill="rgba(234,227,214,.05)" stroke="rgba(234,227,214,.07)"></rect>
+    <rect x="170" y="70" width="80" height="80" rx="4" fill="rgba(22,122,83,.1)" stroke="rgba(22,122,83,.2)"></rect>
+  </g>
+  
+  <g transform="translate(550,100)">
+    <rect x="0" y="200" width="50" height="100" fill="rgba(22,122,83,.12)"></rect><rect x="70" y="170" width="50" height="130" fill="rgba(22,122,83,.16)"></rect>
+    <rect x="140" y="140" width="50" height="160" fill="rgba(22,122,83,.2)"></rect><rect x="210" y="100" width="50" height="200" fill="rgba(22,122,83,.24)"></rect>
+    <rect x="280" y="60" width="50" height="240" fill="rgba(22,122,83,.3)"></rect><rect x="350" y="30" width="50" height="270" fill="rgba(22,122,83,.36)"></rect>
+  </g>
+  
+  <g transform="translate(1000,60)" stroke="rgba(234,227,214,.1)" stroke-width="2">
+    <line x1="50" y1="0" x2="50" y2="300"></line><line x1="0" y1="0" x2="120" y2="0"></line><line x1="120" y1="0" x2="120" y2="40"></line>
+    <line x1="50" y1="0" x2="0" y2="60"></line><line x1="50" y1="0" x2="100" y2="60"></line>
+  </g>
+  <text x="600" y="460" text-anchor="middle" fill="rgba(234,227,214,.1)" font-family="monospace" font-size="11" letter-spacing="6">CEMENT · CAPEX CYCLE · INFRASTRUCTURE</text>
+</svg>

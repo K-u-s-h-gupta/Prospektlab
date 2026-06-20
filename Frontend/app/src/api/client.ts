@@ -119,6 +119,7 @@ export interface ControlTowerSnapshot {
 
 const AUTH_TOKEN_KEY = 'prospektlab_auth_token';
 const AUTH_TOKEN_SESSION_KEY = 'prospektlab_auth_token_session';
+const GUEST_ID_KEY = 'prospektlab_guest_id';
 
 // ── Runtime Backend URL Support (for Amplify + separate ECS backend) ─────
 function getApiBase(): string {
@@ -152,7 +153,13 @@ function isCrossOriginApi(): boolean {
 }
 
 function requestCredentials(): RequestCredentials {
-  return isCrossOriginApi() ? 'omit' : 'include';
+  // Guests depend on the httpOnly guest cookie to keep a stable tenant_id
+  // between upload and confirm-extraction calls.
+  return getAuthToken() ? (isCrossOriginApi() ? 'omit' : 'include') : 'include';
+}
+
+function resolveRequestCredentials(options?: RequestInit): RequestCredentials {
+  return options?.credentials ?? requestCredentials();
 }
 
 const AUTH_REQUEST_TIMEOUT_MS = 15000;
@@ -227,7 +234,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
     return await fetch(url, {
       ...options,
       headers: withAuthHeaders(headers),
-      credentials: requestCredentials(),
+      credentials: resolveRequestCredentials(options),
       signal: controller.signal,
     }).then((res) => {
       recordDependency(url, options, startMs, res, requestId);
@@ -259,6 +266,16 @@ function getStoredAuthToken(): string | null {
     sessionStorage.getItem(AUTH_TOKEN_SESSION_KEY) ||
     null
   );
+}
+
+function getGuestId(): string {
+  if (typeof window === 'undefined') return '';
+  let gid = (localStorage.getItem(GUEST_ID_KEY) || '').trim();
+  if (!/^g_[0-9a-f]{8,40}$/.test(gid)) {
+    gid = `g_${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`;
+    localStorage.setItem(GUEST_ID_KEY, gid);
+  }
+  return gid;
 }
 
 function getAuthToken(): string | null {
@@ -297,6 +314,9 @@ function withAuthHeaders(headers?: HeadersInit): HeadersInit {
   const merged = new Headers(headers || {});
   if (token) {
     merged.set('Authorization', `Bearer ${token}`);
+  } else {
+    const gid = getGuestId();
+    if (gid) merged.set('X-Prospekt-Guest-Id', gid);
   }
   return merged;
 }
@@ -367,7 +387,7 @@ async function fetchApi(url: string, options?: RequestInit): Promise<Response> {
   const res = await fetch(url, {
     ...(options || {}),
     headers: withAuthHeaders(headers),
-    credentials: requestCredentials(),
+    credentials: resolveRequestCredentials(options),
   });
   recordDependency(url, options, startMs, res, requestId);
   if (res.status === 401) {

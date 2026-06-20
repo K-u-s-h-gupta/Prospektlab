@@ -1,4 +1,5 @@
 import { buildTelemetryHeaders, getTelemetryRequestId, getTelemetrySessionId, isTelemetryEnabled, trackDependency, trackEvent, trackException } from '../telemetry';
+import { sanitizeMojibakeValue } from '../utils/textSanitizer';
 
 export interface ChatRequest {
   message: string;
@@ -47,6 +48,111 @@ export interface MarketHistoryResponse {
   message?: string;
 }
 
+export interface WatchlistSnapshotQuote {
+  symbol: string;
+  name: string;
+  price: number;
+  price_label: string;
+  change: number;
+  change_label: string;
+  change_pct: number;
+  change_pct_label: string;
+  direction: 'up' | 'down';
+  source: string;
+  source_url?: string;
+  isin?: string;
+}
+
+export interface WatchlistSnapshotHistory {
+  symbol: string;
+  name: string;
+  dates: string[];
+  prices: number[];
+  source?: string;
+  as_of?: string;
+}
+
+export interface WatchlistSnapshotSummarySource {
+  headline: string;
+  url: string;
+  source: string;
+  published: string;
+  category: string;
+  source_tier: number;
+}
+
+export interface WatchlistSnapshotSummary {
+  key: string;
+  symbol: string;
+  name: string;
+  date: string;
+  date_label: string;
+  price: number;
+  price_label: string;
+  pct: number;
+  pct_label: string;
+  direction: 'up' | 'down';
+  summary: string;
+  source_count: number;
+  sources: WatchlistSnapshotSummarySource[];
+}
+
+export interface WatchlistSnapshotNewsItem {
+  id: string;
+  symbol: string;
+  headline: string;
+  source: string;
+  published: string;
+  time: string;
+  url: string;
+  image?: string;
+  source_tier: number;
+  category: string;
+}
+
+export interface WatchlistSnapshotResponse {
+  as_of: string;
+  period: MarketHistoryPeriod;
+  refresh_after_ms: number;
+  quotes: WatchlistSnapshotQuote[];
+  movers: WatchlistSnapshotQuote[];
+  histories: Record<string, WatchlistSnapshotHistory>;
+  daily_summaries: WatchlistSnapshotSummary[];
+  notable_movements: WatchlistSnapshotSummary[];
+  news: WatchlistSnapshotNewsItem[];
+  source_health: {
+    quotes: 'ok' | 'stale' | 'unavailable';
+    history: 'ok' | 'stale' | 'unavailable';
+    news: 'ok' | 'stale' | 'unavailable';
+    official: 'ok' | 'stale' | 'unavailable';
+  };
+}
+
+export interface ScreenerSearchItem {
+  symbol: string;
+  cin?: string | null;
+  isin?: string | null;
+  name: string;
+  sector?: string;
+  confidence?: number | null;
+  source?: string;
+}
+
+export interface ScreenerSearchResponse {
+  query: string;
+  items: ScreenerSearchItem[];
+  as_of: string;
+}
+
+export interface ScreenerQueryResponse {
+  as_of: string;
+  query: string;
+  parsed_filter: Record<string, any>;
+  universe_size: number;
+  match_count: number;
+  matches: Array<Record<string, any>>;
+}
+
 export interface PositionInput {
   symbol: string;
   exchange?: string;
@@ -76,6 +182,7 @@ export interface AuthUser {
 
 const AUTH_TOKEN_KEY = 'prospektlab_auth_token';
 const AUTH_TOKEN_SESSION_KEY = 'prospektlab_auth_token_session';
+const GUEST_ID_KEY = 'prospektlab_guest_id';
 
 // ── Runtime Backend URL Support (for Amplify + separate ECS backend) ─────
 function getApiBase(): string {
@@ -115,9 +222,18 @@ function requestCredentials(): RequestCredentials {
   return getAuthToken() ? (isCrossOriginApi() ? 'omit' : 'include') : 'include';
 }
 
+function resolveRequestCredentials(options?: RequestInit): RequestCredentials {
+  return options?.credentials ?? requestCredentials();
+}
+
 const AUTH_REQUEST_TIMEOUT_MS = 15000;
 const MIRROR_STATUS_TIMEOUT_MS = 8000;
-const CHAT_START_TIMEOUT_MS = 60000;
+const CHAT_START_TIMEOUT_MS = 90000;
+// Uploads run server-side LLM/casparser extraction. Keep the client ceiling a bit
+// above the backend parse timeouts (90s doc / 60s screenshot) so the server's
+// clean 504 wins, while still guaranteeing the UI never hangs forever.
+const DOCUMENT_UPLOAD_TIMEOUT_MS = 120000;
+const SCREENSHOT_UPLOAD_TIMEOUT_MS = 90000;
 
 function summarizeTelemetryPath(url: string): string {
   try {
@@ -187,7 +303,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
     return await fetch(url, {
       ...options,
       headers: withAuthHeaders(headers),
-      credentials: requestCredentials(),
+      credentials: resolveRequestCredentials(options),
       signal: controller.signal,
     }).then((res) => {
       recordDependency(url, options, startMs, res, requestId);
@@ -219,6 +335,16 @@ function getStoredAuthToken(): string | null {
     sessionStorage.getItem(AUTH_TOKEN_SESSION_KEY) ||
     null
   );
+}
+
+function getGuestId(): string {
+  if (typeof window === 'undefined') return '';
+  let gid = (localStorage.getItem(GUEST_ID_KEY) || '').trim();
+  if (!/^g_[0-9a-f]{8,40}$/.test(gid)) {
+    gid = `g_${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`;
+    localStorage.setItem(GUEST_ID_KEY, gid);
+  }
+  return gid;
 }
 
 function getAuthToken(): string | null {
@@ -253,6 +379,9 @@ function withAuthHeaders(headers?: HeadersInit): HeadersInit {
   const merged = new Headers(headers || {});
   if (token) {
     merged.set('Authorization', `Bearer ${token}`);
+  } else {
+    const gid = getGuestId();
+    if (gid) merged.set('X-Prospekt-Guest-Id', gid);
   }
   return merged;
 }
@@ -303,7 +432,7 @@ function handleAuthFailure() {
   _cachedUser = null;
   setAuthToken(null);
   if (typeof window !== 'undefined') {
-    window.location.hash = '#/login';
+    window.location.hash = '#/dashboard/overview';
   }
 }
 
@@ -314,7 +443,7 @@ async function fetchApi(url: string, options?: RequestInit): Promise<Response> {
   const res = await fetch(url, {
     ...(options || {}),
     headers: withAuthHeaders(headers),
-    credentials: requestCredentials(),
+    credentials: resolveRequestCredentials(options),
   });
   recordDependency(url, options, startMs, res, requestId);
   if (res.status === 401) {
@@ -324,6 +453,11 @@ async function fetchApi(url: string, options?: RequestInit): Promise<Response> {
 }
 
 // ── Auth Endpoints ──────────────────────────────────────────────────────
+
+async function parseJsonSanitized<T = any>(res: Response): Promise<T> {
+  const payload = await res.json();
+  return sanitizeMojibakeValue(payload) as T;
+}
 
 export async function apiLogin(email: string, password: string, remember: boolean = true): Promise<any> {
   const res = await fetchWithTimeout(
@@ -544,7 +678,7 @@ export async function getPortfolioMirror(): Promise<any> {
   if (!res.ok) {
     throw new Error(`Failed to load portfolio mirror: ${res.statusText}`);
   }
-  return res.json();
+  return parseJsonSanitized(res);
 }
 
 export async function replacePortfolioMirror(positions: PositionInput[]): Promise<any> {
@@ -569,7 +703,7 @@ export async function replacePortfolioMirror(positions: PositionInput[]): Promis
     });
     throw new Error(errorData.detail?.message || errorData.detail || `Failed to replace portfolio mirror: ${res.statusText}`);
   }
-  const result = await res.json();
+  const result = await parseJsonSanitized(res);
   trackEvent('portfolio_mirror_replace_completed', {
     source: 'frontend',
     position_count: positions.length,
@@ -606,7 +740,7 @@ export async function syncManualPortfolio(positions: ManualPositionInput[]): Pro
     });
     throw new Error(errorData.detail?.message || errorData.detail || `Failed to sync manual portfolio: ${res.statusText}`);
   }
-  const result = await res.json();
+  const result = await parseJsonSanitized(res);
   trackEvent('portfolio_manual_sync_completed', {
     source: 'frontend',
     position_count: positions.length,
@@ -628,11 +762,16 @@ export async function uploadPortfolioDocument(file: File, password?: string): Pr
     formData.append('password', password);
   }
 
-  const res = await fetchApi(apiUrl('/api/portfolio/upload-cas'), {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
+  const res = await fetchWithTimeout(
+    apiUrl('/api/portfolio/upload-cas'),
+    {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    },
+    DOCUMENT_UPLOAD_TIMEOUT_MS,
+    'Document upload timed out. Try a broker CSV/XLSX export or a clear screenshot.',
+  );
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -645,7 +784,7 @@ export async function uploadPortfolioDocument(file: File, password?: string): Pr
     throw new Error(errorData.detail?.message || errorData.detail || `Failed to parse document: ${res.statusText}`);
   }
 
-  const result = await res.json();
+  const result = await parseJsonSanitized(res);
   trackEvent('portfolio_upload_completed', {
     source: 'frontend',
     upload_type: 'document',
@@ -665,11 +804,16 @@ export async function uploadPortfolioScreenshot(file: File): Promise<any> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetchApi(apiUrl('/api/portfolio/upload-screenshot'), {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
+  const res = await fetchWithTimeout(
+    apiUrl('/api/portfolio/upload-screenshot'),
+    {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    },
+    SCREENSHOT_UPLOAD_TIMEOUT_MS,
+    'Screenshot upload timed out. Try a smaller, clearer image or a broker CSV/XLSX export.',
+  );
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -682,7 +826,7 @@ export async function uploadPortfolioScreenshot(file: File): Promise<any> {
     throw new Error(errorData.detail?.message || errorData.detail || `Failed to parse screenshot: ${res.statusText}`);
   }
 
-  const result = await res.json();
+  const result = await parseJsonSanitized(res);
   trackEvent('portfolio_upload_completed', {
     source: 'frontend',
     upload_type: 'screenshot',
@@ -692,7 +836,12 @@ export async function uploadPortfolioScreenshot(file: File): Promise<any> {
   return result;
 }
 
-export async function confirmExtraction(reviewId: string, positions?: any[], sourceType?: string): Promise<any> {
+export async function confirmExtraction(
+  reviewId: string,
+  positions?: any[],
+  sourceType?: string,
+  reviewToken?: string | null,
+): Promise<any> {
   trackEvent('portfolio_extraction_confirm_requested', {
     source: 'frontend',
     review_id: reviewId,
@@ -709,6 +858,7 @@ export async function confirmExtraction(reviewId: string, positions?: any[], sou
       review_id: reviewId,
       positions: positions,
       source_type: sourceType,
+      review_token: reviewToken || undefined,
     }),
   });
 
@@ -722,7 +872,7 @@ export async function confirmExtraction(reviewId: string, positions?: any[], sou
     throw new Error(errorData.detail?.message || errorData.detail || `Failed to confirm extraction: ${res.statusText}`);
   }
 
-  const result = await res.json();
+  const result = await parseJsonSanitized(res);
   trackEvent('portfolio_extraction_confirm_completed', {
     source: 'frontend',
     review_id: reviewId,
@@ -749,7 +899,7 @@ export async function cancelExtraction(): Promise<any> {
     throw new Error(errorData.detail || `Failed to cancel extraction: ${res.statusText}`);
   }
 
-  const result = await res.json();
+  const result = await parseJsonSanitized(res);
   trackEvent('portfolio_extraction_cancel_completed', {
     source: 'frontend',
   });
@@ -763,7 +913,7 @@ export async function getPortfolioAnalytics(benchmark: string = 'NIFTY50', perio
   if (!res.ok) {
     throw new Error(`Failed to fetch portfolio analytics: ${res.statusText}`);
   }
-  return res.json();
+  return parseJsonSanitized(res);
 }
 
 export async function deletePortfolioMirror(): Promise<any> {
@@ -774,7 +924,7 @@ export async function deletePortfolioMirror(): Promise<any> {
   if (!res.ok) {
     throw new Error(`Failed to clear portfolio: ${res.statusText}`);
   }
-  return res.json();
+  return parseJsonSanitized(res);
 }
 
 export async function getPortfolioNews(limit: number = 12): Promise<any> {
@@ -784,7 +934,7 @@ export async function getPortfolioNews(limit: number = 12): Promise<any> {
   if (!res.ok) {
     throw new Error(`Failed to fetch portfolio news: ${res.statusText}`);
   }
-  return res.json();
+  return parseJsonSanitized(res);
 }
 
 export async function getPortfolioSectors(): Promise<any> {
@@ -794,7 +944,7 @@ export async function getPortfolioSectors(): Promise<any> {
   if (!res.ok) {
     throw new Error(`Failed to fetch portfolio sectors: ${res.statusText}`);
   }
-  return res.json();
+  return parseJsonSanitized(res);
 }
 
 // ── Governance & Network intelligence ──────────────────────────────────────
@@ -1044,16 +1194,19 @@ export async function getPortfolioCommentary(): Promise<any> {
 
 export async function startResearch(message: string, mode: 'standard' | 'deep', portfolioContext?: string): Promise<any> {
   const rewrittenMessage = portfolioContext ? `${portfolioContext} ${message}` : message;
+  // Keep deep mode explicit, but route standard chat through the lightweight backend mode.
+  const apiMode = mode === 'standard' ? 'chat' : 'deep';
   const payload: Record<string, any> = {
     // Keep a clean user query for portfolio-scope routing and target detection.
     target: message,
     // Keep enriched context for synthesis quality.
     message: rewrittenMessage,
-    mode,
+    mode: apiMode,
   };
   trackEvent('research_start_requested', {
     source: 'frontend',
     mode,
+    backend_mode: apiMode,
     has_portfolio_context: Boolean(portfolioContext),
     message_length: message.length,
   });
@@ -1566,34 +1719,46 @@ export async function verifyRazorpayPayment(
 }
 
 export async function getMarketQuotes(symbols: string[]): Promise<any> {
-  const res = await fetchApi(apiUrl(`/market/quotes?symbols=${encodeURIComponent(symbols.join(','))}`), {
-    credentials: 'include',
-  });
+  const res = await fetchWithTimeout(
+    apiUrl(`/market/quotes?symbols=${encodeURIComponent(symbols.join(','))}`),
+    { credentials: 'include' },
+    12000,
+    'Market quotes request timed out. Please retry.',
+  );
   if (!res.ok) {
     throw new Error(`Failed to fetch market quotes: ${res.statusText}`);
   }
-  return res.json();
+  return parseJsonSanitized(res);
 }
 
-export async function getMarketNews(query?: string): Promise<any> {
-  const qStr = query ? `?query=${encodeURIComponent(query)}` : '';
-  const res = await fetchApi(apiUrl(`/market/news${qStr}`), {
-    credentials: 'include',
-  });
+export async function getMarketNews(query?: string, limit: number = 10): Promise<any> {
+  const params = new URLSearchParams();
+  if (query) params.set('query', query);
+  params.set('limit', String(Math.max(1, Math.min(60, Number(limit) || 10))));
+  const qStr = params.toString();
+  const res = await fetchWithTimeout(
+    apiUrl(`/market/news${qStr ? `?${qStr}` : ''}`),
+    { credentials: 'include' },
+    12000,
+    'Market news request timed out. Please retry.',
+  );
   if (!res.ok) {
     throw new Error(`Failed to fetch market news: ${res.statusText}`);
   }
-  return res.json();
+  return parseJsonSanitized(res);
 }
 
 export async function getMarketIndices(): Promise<any> {
-  const res = await fetchApi(apiUrl('/market/indices'), {
-    credentials: 'include',
-  });
+  const res = await fetchWithTimeout(
+    apiUrl('/market/indices'),
+    { credentials: 'include' },
+    20000,
+    'Market indices request timed out. Please retry.',
+  );
   if (!res.ok) {
     throw new Error(`Failed to fetch market indices: ${res.statusText}`);
   }
-  return res.json();
+  return parseJsonSanitized(res);
 }
 
 export async function getMarketHistory(
@@ -1614,10 +1779,145 @@ export async function getMarketHistory(
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Failed to fetch market history: ${res.statusText}`);
   }
-  return res.json();
+  return parseJsonSanitized(res);
+}
+
+export async function getWatchlistSnapshot(
+  symbols: string[],
+  period: MarketHistoryPeriod = '1M',
+): Promise<WatchlistSnapshotResponse> {
+  const params = new URLSearchParams({
+    symbols: symbols.join(','),
+    period,
+  });
+  const res = await fetchWithTimeout(
+    apiUrl(`/watchlist/snapshot?${params.toString()}`),
+    { credentials: 'include' },
+    15000,
+    'Watchlist snapshot timed out. Showing available live quotes.',
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch watchlist snapshot: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
 }
 
 // ── Flash Content Engine API ──────────────────────────────────────────────────
+
+export async function screenerSearch(query: string, limit = 8): Promise<ScreenerSearchResponse> {
+  const params = new URLSearchParams({
+    q: query,
+    limit: String(limit),
+  });
+  const res = await fetchWithTimeout(
+    apiUrl(`/screener/search?${params.toString()}`),
+    { credentials: 'include' },
+    8000,
+    'Screener search timed out. Please retry.',
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to search screener universe: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
+}
+
+export async function getScreenerSnapshot(identifier: string, period: MarketHistoryPeriod = '1Y'): Promise<any> {
+  const params = new URLSearchParams({ period });
+  const res = await fetchWithTimeout(
+    apiUrl(`/screener/company/${encodeURIComponent(identifier)}/snapshot?${params.toString()}`),
+    { credentials: 'include' },
+    15000,
+    'Screener snapshot timed out. Showing cached data if available.',
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to load screener snapshot: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
+}
+
+export async function getScreenerFinancials(identifier: string): Promise<any> {
+  const res = await fetchWithTimeout(
+    apiUrl(`/screener/company/${encodeURIComponent(identifier)}/financials`),
+    { credentials: 'include' },
+    18000,
+    'Screener financials timed out. Try refreshing this section.',
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to load screener financials: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
+}
+
+export async function getScreenerTechnicals(identifier: string, period: MarketHistoryPeriod = '1Y'): Promise<any> {
+  const params = new URLSearchParams({ period });
+  const res = await fetchWithTimeout(
+    apiUrl(`/screener/company/${encodeURIComponent(identifier)}/technicals?${params.toString()}`),
+    { credentials: 'include' },
+    12000,
+    'Screener technicals timed out. Please retry.',
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to load screener technicals: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
+}
+
+export async function getScreenerEvents(identifier: string, limit = 25): Promise<any> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const res = await fetchWithTimeout(
+    apiUrl(`/screener/company/${encodeURIComponent(identifier)}/events?${params.toString()}`),
+    { credentials: 'include' },
+    12000,
+    'Screener events timed out. Please retry.',
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to load screener events: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
+}
+
+export async function getScreenerAnalysis(identifier: string): Promise<any> {
+  const res = await fetchWithTimeout(
+    apiUrl(`/screener/company/${encodeURIComponent(identifier)}/analyze`),
+    { credentials: 'include' },
+    25000,
+    'Screener analysis is still loading. Please retry in a moment.',
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to load screener analysis: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
+}
+
+export async function runScreenerQuery(
+  query: string,
+  limit = 25,
+  universe: string[] = [],
+): Promise<ScreenerQueryResponse> {
+  const res = await fetchWithTimeout(
+    apiUrl('/screener/query'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ query, limit, universe }),
+    },
+    15000,
+    'Screener query timed out. Please try a narrower query.',
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to run screener query: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
+}
 
 export interface FlashGenerationRequest {
   mode?: 'flash' | 'deep' | 'research';
@@ -1803,7 +2103,7 @@ export async function listContentArticles(
     credentials: 'include',
   });
   if (!res.ok) throw new Error(`Failed to list articles: ${res.statusText}`);
-  return res.json();
+  return parseJsonSanitized(res);
 }
 
 export async function getContentArticle(slug: string, routeBase = 'insights'): Promise<ArticleDetail> {
@@ -1812,7 +2112,7 @@ export async function getContentArticle(slug: string, routeBase = 'insights'): P
     { credentials: 'include' },
   );
   if (!res.ok) throw new Error(`Article not found: ${slug}`);
-  return res.json();
+  return parseJsonSanitized(res);
 }
 
 export async function getContentArticleHtml(slug: string, routeBase = 'insights'): Promise<string> {
@@ -1922,3 +2222,4 @@ export async function downloadExportAndSave(jobId: string, format: ExportFormat)
     URL.revokeObjectURL(url);
   }, 100);
 }
+

@@ -24,13 +24,46 @@ $CandidateVenvs = @(
     "D:\PROSPEKTLAB\.venv-finagent-311\Scripts\python.exe"
 )
 
-$VenvPython = $CandidateVenvs | Where-Object { Test-Path $_ } | Select-Object -First 1
+function Test-PythonCandidate {
+    param(
+        [string]$PythonPath
+    )
+
+    if (-not (Test-Path $PythonPath)) {
+        return $false
+    }
+
+    $venvRoot = Split-Path -Parent (Split-Path -Parent $PythonPath)
+    $pyvenvCfg = Join-Path $venvRoot "pyvenv.cfg"
+    if (-not (Test-Path $pyvenvCfg)) {
+        return $false
+    }
+
+    & $PythonPath -c "import uvicorn; import finagent" *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
+$VenvPython = $null
+foreach ($candidate in $CandidateVenvs) {
+    if (Test-PythonCandidate -PythonPath $candidate) {
+        $VenvPython = $candidate
+        break
+    }
+}
 
 if (-not $VenvPython) {
-    Write-Host "[ERROR] Virtual environment Python not found at:" -ForegroundColor Red
-    Write-Host $VenvPython -ForegroundColor Yellow
+    if (Get-Command python -ErrorAction SilentlyContinue) {
+        python -c "import uvicorn; import finagent" *> $null
+        if ($LASTEXITCODE -eq 0) {
+            $VenvPython = "python"
+        }
+    }
+}
+
+if (-not $VenvPython) {
+    Write-Host "[ERROR] No working Python runtime found for backend startup." -ForegroundColor Red
     Write-Host ""
-    Write-Host "Please create/restore one of the project venvs or update the path in this script." -ForegroundColor Red
+    Write-Host "Expected a venv with pyvenv.cfg and installed backend deps (uvicorn + finagent)." -ForegroundColor Red
     exit 1
 }
 

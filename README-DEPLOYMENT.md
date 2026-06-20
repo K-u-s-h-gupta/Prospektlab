@@ -435,3 +435,27 @@ Ready? Start with QUICK_START_DEPLOYMENT.md now!
 					Last Updated: 2024
 					Status: Production Ready ✅
 					Version: 1.0 - Complete Package
+
+
+AZURE SECURITY + GOVERNANCE CHECKLIST (Focused Scope)
+=====================================================
+
+Use this when deploying Azure Monitor/Application Insights/Sentinel together with Defender for Cloud and Purview:
+
+1) IaC and deploy entrypoint
+- Template: `deployment/azure-monitoring.bicep`
+- Subscription defender template: `deployment/azure-security-subscription.bicep`
+- Deploy script: `deployment/deploy-azure-monitoring.ps1`
+
+2) Runbook and source inventory
+- Runbook: `deployment/AZURE-SECURITY-GOVERNANCE-RUNBOOK.md`
+- Purview source inventory template: `deployment/purview-sources.sample.json`
+
+3) Guardrail automation
+- Budget thresholds are created in deploy script (50/75/90/100).
+- Hard-cap throttle script: `deployment/azure-cost-guardrail.ps1`
+
+4) Rollback toggles
+- Skip defender: `-SkipDefender`
+- Skip budget: `-SkipBudget`
+- Disable Purview lanes: `-PurviewEnableGovernance $false -PurviewEnableSecurity $false`

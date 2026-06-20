@@ -1,0 +1,207 @@
+[
+    {
+        "source":  "/robots.txt",
+        "target":  "/robots.txt",
+        "status":  "200"
+    },
+    {
+        "source":  "/sitemap.xml",
+        "target":  "/sitemap.xml",
+        "status":  "200"
+    },
+    {
+        "source":  "/unsubscribe",
+        "target":  "/unsubscribe/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/unsubscribe/",
+        "target":  "/unsubscribe/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/organic-traffic-platform",
+        "target":  "/insights/organic-traffic-platform/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/organic-traffic-platform/",
+        "target":  "/insights/organic-traffic-platform/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/auth/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/auth/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/sessions/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/sessions/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/memos\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/memos\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/config\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/config\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/capabilities\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/capabilities\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/health\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/health\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/memory/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/memory/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/research/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/research/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/chat/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/chat/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/portfolio/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/portfolio/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/api/portfolio/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/api/portfolio/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/api/content/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/api/content/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/api/outreach/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/api/outreach/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/user/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/user/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/market/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/market/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/login",
+        "target":  "/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/signup",
+        "target":  "/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/profile",
+        "target":  "/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/settings",
+        "target":  "/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/app",
+        "target":  "/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/landing",
+        "target":  "/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/research",
+        "target":  "/insights/research/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/research/",
+        "target":  "/insights/research/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/research/index.html",
+        "target":  "/insights/research/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/strategy",
+        "target":  "/insights/strategy/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/strategy/",
+        "target":  "/insights/strategy/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/manual-tcs-q3-fy25-earnings-overview",
+        "target":  "/insights/manual-tcs-q3-fy25-earnings-overview/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/manual-tcs-q3-fy25-earnings-overview/",
+        "target":  "/insights/manual-tcs-q3-fy25-earnings-overview/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/manual-infosys-q3-fy25-results-overview",
+        "target":  "/insights/manual-infosys-q3-fy25-results-overview/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/manual-infosys-q3-fy25-results-overview/",
+        "target":  "/insights/manual-infosys-q3-fy25-results-overview/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/sebi-analyse-the-official-update-for-63-moons-technologies-limited-disclosure-under",
+        "target":  "/insights/sebi-analyse-the-official-update-for-63-moons-technologies-limited-disclosure-under/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/sebi-analyse-the-official-update-for-63-moons-technologies-limited-disclosure-under/",
+        "target":  "/insights/sebi-analyse-the-official-update-for-63-moons-technologies-limited-disclosure-under/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/company-analyse-the-official-update-for-alldigi-tech-limited-resignation-of-director-k",
+        "target":  "/insights/company-analyse-the-official-update-for-alldigi-tech-limited-resignation-of-director-k/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/company-analyse-the-official-update-for-alldigi-tech-limited-resignation-of-director-k/",
+        "target":  "/insights/company-analyse-the-official-update-for-alldigi-tech-limited-resignation-of-director-k/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "\u003c/^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp|xml)$)([^.]+$)/\u003e",
+        "target":  "/index.html",
+        "status":  "200"
+    }
+]
