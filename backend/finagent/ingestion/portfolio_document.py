@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from finagent.ingestion.cas_adapter import cas_adapter
-from finagent.ingestion.portfolio_guardrails import enforce_document_guardrails
 from finagent.ingestion.pdf_transformer import DocumentTransformError, document_to_markdown
 from finagent.ingestion.markdown_extractor import extract_positions_from_markdown
 from finagent.ingestion.portfolio_schema import PortfolioExtractionSchema
@@ -82,9 +81,13 @@ async def parse_portfolio_document(data: bytes, filename: str, password: str = "
     )
     extraction.diagnostics["transformer"] = transformed.transformer
     extraction.diagnostics["filename"] = filename
-    return enforce_document_guardrails(extraction, transformed.markdown, filename=filename)
+    return extraction
 
 
 def extraction_to_position_dicts(extraction: PortfolioExtractionSchema) -> list[dict[str, Any]]:
     return [pos.model_dump() | {"active": True} for pos in extraction.positions]
+
+
+def extraction_to_transaction_dicts(extraction: PortfolioExtractionSchema) -> list[dict[str, Any]]:
+    return [txn.model_dump() for txn in extraction.transactions]
 

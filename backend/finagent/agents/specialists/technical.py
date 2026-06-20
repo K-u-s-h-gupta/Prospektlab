@@ -45,23 +45,31 @@ class TechnicalAgent(BaseSubAgent):
     async def execute(self, ctx: SubAgentContext) -> AgentTaskResult:
         out = AgentTaskResult(agent_name=self.name)
         y = ctx.bundle.yahoo
+        ticker = getattr(y, "symbol", None) or getattr(y, "ticker", None) or ctx.target
+        currency = getattr(y, "currency", None) or ""
         closes = getattr(y, "series_closes", None) or []
+        low_52w = getattr(y, "low_52w", None)
+        if low_52w is None:
+            low_52w = getattr(y, "fifty_two_week_low", None)
+        high_52w = getattr(y, "high_52w", None)
+        if high_52w is None:
+            high_52w = getattr(y, "fifty_two_week_high", None)
 
-        if y.price is not None and y.low_52w is not None and y.high_52w is not None:
-            span = y.high_52w - y.low_52w
-            pos = (y.price - y.low_52w) / span if span > 0 else None
+        if y.price is not None and low_52w is not None and high_52w is not None:
+            span = high_52w - low_52w
+            pos = (y.price - low_52w) / span if span > 0 else None
             out.findings.append(
                 Finding(
                     agent=self.name,
                     kind="technical",
                     headline=f"At {pos * 100:.0f}% of 52-week range" if pos is not None else "52-week range available",
                     detail=(
-                        f"Current ${y.price:,.2f} sits between 52w low ${y.low_52w:,.2f} "
-                        f"and 52w high ${y.high_52w:,.2f}."
+                        f"Current {currency} {y.price:,.2f} sits between 52w low {currency} {low_52w:,.2f} "
+                        f"and 52w high {currency} {high_52w:,.2f}."
                     ),
                     confidence="HIGH",
-                    evidence=[f"https://finance.yahoo.com/quote/{y.symbol}"],
-                    metrics={"position_in_52w": pos, "price": y.price, "low_52w": y.low_52w, "high_52w": y.high_52w},
+                    evidence=[f"https://finance.yahoo.com/quote/{ticker}"],
+                    metrics={"position_in_52w": pos, "price": y.price, "low_52w": low_52w, "high_52w": high_52w},
                 )
             )
 
@@ -89,7 +97,7 @@ class TechnicalAgent(BaseSubAgent):
                         + (f"Max drawdown in window: {mdd * 100:.1f}%." if mdd is not None else "")
                     ),
                     confidence="MEDIUM",
-                    evidence=[f"https://finance.yahoo.com/quote/{y.symbol}"],
+                    evidence=[f"https://finance.yahoo.com/quote/{ticker}"],
                     metrics={"ma20": ma20, "ma50": ma50, "last": last, "vol_20d": vol, "max_drawdown": mdd},
                 )
             )

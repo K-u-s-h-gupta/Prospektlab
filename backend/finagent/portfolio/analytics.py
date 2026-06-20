@@ -670,13 +670,33 @@ def compute_portfolio_analytics(
     for pos in positions:
         ticker = pos.exchange_symbol
         kind = (pos.kind or "equity").strip().lower()
-        quote = _fetch_quote_cached(ticker) if kind == "equity" else {}
-        quote_price = _positive_float(quote.get("price"))
+        quote_price: float = 0.0
+        day_change_pct = 0.0
+        price_source = "mirror"
+        nav_data: dict[str, Any] | None = None
+
+        if kind in {"mf", "gold_mf", "silver_mf"}:
+            # Refresh NAV via mfapi.in (AMFI)
+            if pos.amfi:
+                from finagent.news.sources.amfi_source import fetch_amfi_nav
+                nav_data = fetch_amfi_nav(pos.amfi)
+                if nav_data:
+                    quote_price = nav_data.get("nav", 0.0)
+                    price_source = "amfi"
+        elif kind in {"equity", "etf", "gold", "silver", "sgb", "bond"}:
+            # yfinance for equities, ETFs, gold ETFs, SGBs, bonds
+            quote = _fetch_quote_cached(ticker)
+            quote_price = _positive_float(quote.get("price"))
+            day_change_pct = _finite_float(quote.get("day_change_pct"), 0.0) or 0.0
+            price_source = quote.get("source", "yfinance")
+        else:
+            quote = _fetch_quote_cached(ticker) if ticker else {}
+            quote_price = _positive_float(quote.get("price"))
+            day_change_pct = _finite_float(quote.get("day_change_pct"), 0.0) or 0.0
+            price_source = quote.get("source", "yfinance")
+
         mirror_price = _positive_float(pos.last_price)
         price = quote_price or mirror_price
-        day_change_pct = _finite_float(quote.get("day_change_pct"), 0.0) or 0.0
-        if kind == "mf":
-            day_change_pct = 0.0
         quantity = _positive_float(pos.quantity)
         mkt_val = price * quantity if price and quantity else _positive_float(pos.market_value)
         cost = _positive_float(pos.cost_basis) or (_positive_float(pos.avg_cost) * quantity)
@@ -701,8 +721,8 @@ def compute_portfolio_analytics(
             "industry": pos.industry,
             "isin": pos.isin,
             "amfi": pos.amfi,
-            "price_source": quote.get("source") if quote_price else ("mirror" if mirror_price else "unavailable"),
-            "as_of": quote.get("as_of") or pos.as_of,
+            "price_source": price_source if quote_price else ("mirror" if mirror_price else "unavailable"),
+            "as_of": quote.get("as_of") if kind not in {"mf", "gold_mf", "silver_mf"} else (nav_data.get("date") if nav_data else pos.as_of),
         })
 
     total_value = sum(_positive_float(p.get("market_value")) for p in enriched_positions)

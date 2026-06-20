@@ -14,8 +14,46 @@ logger = logging.getLogger("finagent.news.sources.amfi")
 _AMFI_NAV_URL = "https://api.mfapi.in/mf/{amfi}"
 
 
+def fetch_amfi_nav(amfi: str) -> dict[str, Any] | None:
+    """Fetch latest NAV + meta for a single MF scheme via mfapi.in.
+
+    Returns dict with keys: nav, date, scheme_name, fund_house, scheme_code,
+    or None on failure.
+    """
+    if not amfi:
+        return None
+    cache_key = f"amfi_nav:{amfi}"
+    cached = cache_get(cache_key, ttl_minutes=60, source="amfi")
+    if cached is not None:
+        return cached
+    try:
+        import httpx
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.get(_AMFI_NAV_URL.format(amfi=amfi))
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            meta = data.get("meta", {})
+            nav_list = data.get("data", [])
+            if not nav_list:
+                return None
+            nav = nav_list[0]
+            result = {
+                "nav": float(nav.get("nav", 0) or 0),
+                "date": str(nav.get("date", "")),
+                "scheme_name": str(meta.get("scheme_name", "")),
+                "fund_house": str(meta.get("fund_house", "")),
+                "scheme_code": str(meta.get("scheme_code", "")),
+            }
+            cache_set(cache_key, result, source="amfi")
+            return result
+    except Exception as exc:
+        logger.debug("AMFI NAV fetch failed for %s: %s", amfi, exc)
+        return None
+
+
 def fetch_amfi_updates(amfi: str, scheme_name: str = "") -> list[dict[str, Any]]:
-    """Fetch latest NAV and meta for a single MF scheme via AMFI."""
+    """Fetch latest NAV and meta for a single MF scheme via AMFI (news format)."""
     if not amfi:
         return []
     cache_key = f"amfi:{amfi}"
@@ -31,7 +69,8 @@ def fetch_amfi_updates(amfi: str, scheme_name: str = "") -> list[dict[str, Any]]
                 return []
             data = resp.json()
             meta = data.get("meta", {})
-            nav = data.get("data", [{}])[0]
+            nav_list = data.get("data", [])
+            nav = nav_list[0] if nav_list else {}
             results = []
             if meta:
                 results.append({

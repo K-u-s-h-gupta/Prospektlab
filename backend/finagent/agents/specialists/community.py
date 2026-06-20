@@ -19,9 +19,9 @@ class CommunityAgent(BaseSubAgent):
     async def execute(self, ctx: SubAgentContext) -> AgentTaskResult:
         out = AgentTaskResult(agent_name=self.name)
         b = ctx.bundle
-        reddit = (b.reddit if b else None) or []
-        hn = (b.hackernews if b else None) or []
-        st = b.stocktwits if b else None
+        reddit = (getattr(b, "reddit", None) if b else None) or []
+        hn = (getattr(b, "hackernews", None) if b else None) or []
+        st = getattr(b, "stocktwits", None) if b else None
 
         if reddit:
             bull = sum(1 for p in reddit if p.sentiment == "bullish")

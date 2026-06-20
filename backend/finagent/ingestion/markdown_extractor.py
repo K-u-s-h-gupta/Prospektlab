@@ -160,11 +160,29 @@ def _row_to_position(row: dict[str, str]) -> tuple[PortfolioPositionSchema | Non
     exchange = (row.get("exchange") or "NSE").strip().upper()
 
     if isin.startswith("INF"):
-        kind = "mf"
-        exchange = "AMFI"
+        # INF-prefixed ISINs can be MFs or ETFs (e.g., gold ETFs like GOLDBEES)
+        if "etf" in lower or "bees" in lower or "exchange traded" in lower:
+            kind = "etf"
+            exchange = "NSE" if exchange not in {"BSE", "BO", ".BO"} else "BSE"
+        else:
+            kind = "mf"
+            exchange = "AMFI"
+    elif "sovereign gold bond" in lower or "sgb" in lower or isin.startswith("IN0020"):
+        kind = "sgb"
+        exchange = "NSE"
+    elif "gold" in lower and "fund" in lower and "silver" not in lower:
+        kind = "gold"
+        exchange = "NSE" if exchange not in {"BSE", "BO", ".BO"} else "BSE"
+    elif "silver" in lower and "fund" in lower:
+        kind = "silver"
+        exchange = "NSE" if exchange not in {"BSE", "BO", ".BO"} else "BSE"
     elif "mutual fund" in lower or "scheme" in lower or exchange == "AMFI":
         kind = "mf"
         exchange = "AMFI"
+    elif "gold" in lower or "silver" in lower:
+        # Physical metal / ETF / SGB fallback
+        kind = "etf" if "etf" in lower or "bees" in lower else "gold" if "gold" in lower else "silver"
+        exchange = "NSE" if exchange not in {"BSE", "BO", ".BO"} else "BSE"
     else:
         kind = "equity"
         exchange = "BSE" if exchange in {"BSE", "BO", ".BO"} else "NSE"
