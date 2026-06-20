@@ -13,10 +13,11 @@ phases:
       - echo Building the Docker image...          
       - docker build -t "$REPOSITORY_URI:latest" .
       - echo Validating backend image imports...
-      - docker run --rm "$REPOSITORY_URI:latest" python -c "from finagent.ingestion.portfolio_schema import PortfolioTransactionSchema; import finagent.gateway.run as gateway; print(gateway.app.title)"
+      - docker run --rm -e JWT_SECRET=codebuild-smoke-secret "$REPOSITORY_URI:latest" python -c "from finagent.ingestion.portfolio_schema import PortfolioTransactionSchema; import finagent.gateway.run as gateway; print(gateway.app.title)"
       - docker tag "$REPOSITORY_URI:latest" "$REPOSITORY_URI:$IMAGE_TAG"
   post_build:
     commands:
+      - if [ "$CODEBUILD_BUILD_SUCCEEDING" -ne 1 ]; then echo "Build failed; skipping image push and ECS deployment."; exit 1; fi
       - echo Build completed on `date`
       - echo Pushing the Docker image...
       - docker push "$REPOSITORY_URI:latest"
