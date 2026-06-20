@@ -9,7 +9,7 @@ def resolve_source_dir() -> str:
     return "finagent"
 
 
-def zipdir(path, ziph):
+def zipdir(path, ziph, archive_root=None):
     # Walk the directory
     for root, dirs, files in os.walk(path):
         # Skip __pycache__ and hidden folders
@@ -22,9 +22,8 @@ def zipdir(path, ziph):
             if file.endswith('.db') or file.endswith('.sqlite') or file.endswith('.zip') or file.endswith('.log'):
                 continue
             filePath = os.path.join(root, file)
-            # We want the paths inside the zip to start with 'finagent/'
-            # Since 'path' is 'finagent', the parent dir is the root directory
-            archivePath = os.path.relpath(filePath, os.path.dirname(path))
+            rel_path = os.path.relpath(filePath, path)
+            archivePath = os.path.join(archive_root, rel_path) if archive_root else os.path.relpath(filePath, ".")
             ziph.write(filePath, archivePath)
 
 def create_zip():
@@ -43,9 +42,10 @@ def create_zip():
         # Add buildspec.yml
         if os.path.exists('buildspec.yml'):
             zipf.write('buildspec.yml', 'buildspec.yml')
-        # Add the backend package as top-level finagent/ so the Dockerfile COPY works.
+        # Preserve the Dockerfile's expected backend/finagent source path.
         if os.path.exists(source_dir):
-            zipdir(source_dir, zipf)
+            archive_root = os.path.join("backend", "finagent")
+            zipdir(source_dir, zipf, archive_root=archive_root)
             
     print("Successfully created backend.zip using Python")
 

@@ -4,40 +4,46 @@ phases:
   pre_build:
     commands:
       - echo Logging in to Amazon ECR...
-      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - export REPOSITORY_URI="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME"
+      - export IMAGE_TAG="$(echo "${CODEBUILD_BUILD_ID:-latest}" | tr ':/' '--' | tr -cd '[:alnum:]_.-')"
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
   build:
     commands:
       - echo Build started on `date`
       - echo Building the Docker image...          
-      - docker build -t $IMAGE_REPO_NAME:latest .
-      - docker tag $IMAGE_REPO_NAME:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest
+      - docker build -t "$REPOSITORY_URI:latest" .
+      - docker tag "$REPOSITORY_URI:latest" "$REPOSITORY_URI:$IMAGE_TAG"
   post_build:
     commands:
       - echo Build completed on `date`
-      - echo Tagging image with build ID...
-      - docker tag $IMAGE_REPO_NAME:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_BUILD_ID
       - echo Pushing the Docker image...
-      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest
-      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_BUILD_ID
+      - docker push "$REPOSITORY_URI:latest"
+      - docker push "$REPOSITORY_URI:$IMAGE_TAG"
       - echo Registering new task definition with tagged image...
       - |
         aws ecs describe-task-definition \
           --task-definition finagent-backend \
+          --region "$AWS_DEFAULT_REGION" \
           --query 'taskDefinition' > task-def.json
       - |
-        python3 -c "
-        import json, sys, os
-        with open('task-def.json') as f: td = json.load(f)
-        image = f\"{os.environ['AWS_ACCOUNT_ID']}.dkr.ecr.{os.environ['AWS_DEFAULT_REGION']}.amazonaws.com/{os.environ['IMAGE_REPO_NAME']}:{os.environ['CODEBUILD_BUILD_ID']}\"
+        python3 <<'PY'
+        import json
+        import os
+
+        with open('task-def.json') as f:
+            td = json.load(f)
+
+        image = f"{os.environ['REPOSITORY_URI']}:{os.environ['IMAGE_TAG']}"
         td['containerDefinitions'][0]['image'] = image
         for k in ('taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy'):
             td.pop(k, None)
-        with open('task-def-new.json','w') as f: json.dump(td, f, indent=2)
-        "
+        with open('task-def-new.json','w') as f:
+            json.dump(td, f, indent=2)
+        PY
       - echo Starting new task definition registration...
-      - NEW_TASK_DEF=$(aws ecs register-task-definition --cli-input-json file://task-def-new.json --query 'taskDefinition.taskDefinitionArn' --output text)
-      - echo "New task definition: $NEW_TASK_DEF"
+      - NEW_TASK_DEF=$(aws ecs register-task-definition --cli-input-json file://task-def-new.json --region "$AWS_DEFAULT_REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
+      - 'echo "New task definition: $NEW_TASK_DEF"'
       - echo Updating ECS service with new task definition...
-      - aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition $NEW_TASK_DEF --force-new-deployment
+      - aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" --task-definition "$NEW_TASK_DEF" --force-new-deployment --region "$AWS_DEFAULT_REGION"
       - echo "Waiting for service stability..."
-      - aws ecs wait services-stable --cluster $ECS_CLUSTER --services $(basename $ECS_SERVICE)
+      - aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --region "$AWS_DEFAULT_REGION"
