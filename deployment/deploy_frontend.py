@@ -11,12 +11,24 @@ APP_NAME = "finagent-frontend"
 APP_ID = os.getenv("AMPLIFY_APP_ID", "d1z5h6v6ty54e7")
 BRANCH_NAME = "production"
 AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
-FRONTEND_DIST_DIR = os.path.join("frontend", "dist")
 ZIP_PATH = "frontend.zip"
 API_GATEWAY_URL = os.getenv(
     "API_GATEWAY_URL",
     "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com",
 )
+
+
+def resolve_frontend_dist_dir() -> str:
+    candidates = [
+        os.getenv("FRONTEND_DIST_DIR", ""),
+        os.path.join("Frontend", "dist"),
+        os.path.join("frontend", "dist"),
+        os.path.join("Frontend", "app", "dist"),
+    ]
+    for candidate in candidates:
+        if candidate and os.path.isdir(candidate):
+            return candidate
+    return os.path.join("Frontend", "dist")
 
 # Custom rewrite/redirect rules
 CUSTOM_RULES = [
@@ -226,17 +238,18 @@ def run_cmd(cmd):
 
 def create_frontend_zip():
     print("1. Creating frontend.zip deployment package...")
-    if not os.path.isdir(FRONTEND_DIST_DIR):
+    frontend_dist_dir = resolve_frontend_dist_dir()
+    if not os.path.isdir(frontend_dist_dir):
         raise Exception(
-            f"Frontend build output not found at {FRONTEND_DIST_DIR}. "
-            "Run `npm run build` inside frontend first."
+            f"Frontend build output not found at {frontend_dist_dir}. "
+            "Run `npm run build` inside Frontend first."
         )
 
     with zipfile.ZipFile(ZIP_PATH, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, _, files in os.walk(FRONTEND_DIST_DIR):
+        for root, _, files in os.walk(frontend_dist_dir):
             for file in files:
                 file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, FRONTEND_DIST_DIR)
+                arcname = os.path.relpath(file_path, frontend_dist_dir)
                 zipf.write(file_path, arcname)
                 print(f"  Added {file_path} as {arcname}")
 
