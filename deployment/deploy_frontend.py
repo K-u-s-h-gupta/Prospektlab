@@ -2,6 +2,7 @@ import os
 import zipfile
 import json
 import subprocess
+import tempfile
 import urllib.request
 import time
 import sys
@@ -266,7 +267,7 @@ def deploy():
         
     # Apply custom rewrite rules
     print("3. Applying redirect/rewrite rules for backend proxying...")
-    rules_path = "amplify-rules-frontend.json"
+    rules_path = os.path.join(tempfile.gettempdir(), "prospektlab-amplify-rules-frontend.json")
     with open(rules_path, "w") as f:
         json.dump(CUSTOM_RULES, f, indent=2)
         
