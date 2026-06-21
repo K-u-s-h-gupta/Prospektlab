@@ -1210,9 +1210,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   const [discoverIndex, setDiscoverIndex] = useState(0);
   const [cardsPerSlide, setCardsPerSlide] = useState(() => getCardsPerSlide());
   const discoverBodyRef = useRef<HTMLDivElement>(null);
-  const discoverSlideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const isDiscoverDraggingRef = useRef(false);
-  const discoverDragStartRef = useRef<{ x: number; y: number; scrollLeft: number; pointerId: number; pointerType: string; axis?: 'x' | 'y' } | null>(null);
+  const discoverDragStartRef = useRef<{ x: number; y: number; pointerId: number; pointerType: string; axis?: 'x' | 'y' } | null>(null);
+  const discoverDragOffsetRef = useRef(0);
+  const [discoverDragOffset, setDiscoverDragOffset] = useState(0);
   const discoverDragMovedRef = useRef(false);
   const prevCardsPerSlideRef = useRef(cardsPerSlide);
   const [marketMovers, setMarketMovers] = useState<MarketMoverItem[]>(() => readCachedMarketMovers());
@@ -3377,24 +3378,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     if (nextIndex !== discoverIndex) {
       setDiscoverIndex(nextIndex);
     }
-    const slideEl = discoverSlideRefs.current[nextIndex];
-    if (slideEl) {
-      slideEl.scrollIntoView({ behavior: 'auto', inline: 'start', block: 'nearest' });
-    }
-  }, [discoverSlides, cardsPerSlide]);
+    discoverDragOffsetRef.current = 0;
+    setDiscoverDragOffset(0);
+  }, [discoverSlides.length, cardsPerSlide]);
 
   useEffect(() => {
     if (activeFeatureTab !== 'overview' || discoverSlides.length <= 1) return;
     const timer = window.setInterval(() => {
-      const next = (discoverIndex + 1) % discoverSlides.length;
-      const slideEl = discoverSlideRefs.current[next];
-      if (slideEl) {
-        slideEl.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
-      }
-      setDiscoverIndex(next);
+      if (isDiscoverDraggingRef.current) return;
+      setDiscoverIndex((prev) => (prev + 1) % discoverSlides.length);
     }, 7000);
     return () => window.clearInterval(timer);
-  }, [activeFeatureTab, discoverIndex, discoverSlides.length]);
+  }, [activeFeatureTab, discoverSlides.length]);
   const overviewMoverSource = useMemo(() => marketMovers, [marketMovers]);
 
   const overviewGainers = useMemo(
@@ -3472,21 +3467,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     setShowPortfolioSetupModal(true);
   }, [activeFeatureTab, portfolioSetupDismissed, isPortfolioSyncing, hasPortfolioHoldings, manualOverridePrompt]);
 
-  const goToDiscoverSlide = (index: number, smooth = true) => {
-    const slideEl = discoverSlideRefs.current[index];
-    if (slideEl) {
-      slideEl.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', inline: 'start', block: 'nearest' });
-    }
+  const setDiscoverOffset = (value: number) => {
+    discoverDragOffsetRef.current = value;
+    setDiscoverDragOffset(value);
   };
 
-  const handleDiscoverScroll = () => {
-    if (isDiscoverDraggingRef.current || !discoverBodyRef.current) return;
-    const el = discoverBodyRef.current;
-    const width = el.clientWidth;
-    if (width <= 0) return;
-    const max = Math.max(0, discoverSlides.length - 1);
-    const idx = Math.max(0, Math.min(Math.round(el.scrollLeft / width), max));
-    if (idx !== discoverIndex) setDiscoverIndex(idx);
+  const resetDiscoverDrag = () => {
+    isDiscoverDraggingRef.current = false;
+    discoverDragStartRef.current = null;
+    discoverBodyRef.current?.style.removeProperty('cursor');
+    document.body.style.removeProperty('user-select');
+    setDiscoverOffset(0);
   };
 
   const handleDiscoverPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -3494,10 +3485,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     const el = discoverBodyRef.current;
     isDiscoverDraggingRef.current = true;
     discoverDragMovedRef.current = false;
-    discoverDragStartRef.current = { x: e.clientX, y: e.clientY, scrollLeft: el.scrollLeft, pointerId: e.pointerId, pointerType: e.pointerType };
+    discoverDragStartRef.current = { x: e.clientX, y: e.clientY, pointerId: e.pointerId, pointerType: e.pointerType };
+    setDiscoverOffset(0);
     el.style.cursor = 'grabbing';
-    el.style.scrollSnapType = 'none';
     if (e.pointerType === 'mouse') {
+      document.body.style.userSelect = 'none';
       try { el.setPointerCapture(e.pointerId); } catch {}
     }
   };
@@ -3514,30 +3506,38 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       if (Math.max(absX, absY) < 6) return;
       start.axis = absX > absY ? 'x' : 'y';
       if (start.axis === 'y') {
-        isDiscoverDraggingRef.current = false;
-        discoverDragStartRef.current = null;
-        discoverBodyRef.current.style.cursor = '';
-        discoverBodyRef.current.style.scrollSnapType = '';
+        resetDiscoverDrag();
         return;
       }
       try { discoverBodyRef.current.setPointerCapture(start.pointerId); } catch {}
     }
 
     if (start.axis === 'y') return;
-    if (Math.abs(dx) > 4) discoverDragMovedRef.current = true;
-    discoverBodyRef.current.scrollLeft = start.scrollLeft - dx;
+    if (absX > 4) discoverDragMovedRef.current = true;
+    const maxOffset = discoverBodyRef.current ? discoverBodyRef.current.clientWidth * 0.24 : 120;
+    setDiscoverOffset(Math.max(Math.min(dx, maxOffset), -maxOffset));
   };
 
   const handleDiscoverPointerUp = () => {
-    if (!isDiscoverDraggingRef.current || !discoverDragStartRef.current) return;
-    isDiscoverDraggingRef.current = false;
+    const start = discoverDragStartRef.current;
     const el = discoverBodyRef.current;
-    if (el) {
-      el.style.cursor = '';
-      el.style.scrollSnapType = '';
-      try { el.releasePointerCapture(discoverDragStartRef.current.pointerId); } catch {}
+    if (!start || !el) {
+      resetDiscoverDrag();
+      return;
     }
-    discoverDragStartRef.current = null;
+
+    if (start.axis === 'x' && discoverSlides.length > 1) {
+      const threshold = Math.min(120, Math.max(48, el.clientWidth * 0.14));
+      const offset = discoverDragOffsetRef.current;
+      if (offset <= -threshold) {
+        setDiscoverIndex((prev) => (prev + 1) % discoverSlides.length);
+      } else if (offset >= threshold) {
+        setDiscoverIndex((prev) => (prev - 1 + discoverSlides.length) % discoverSlides.length);
+      }
+    }
+
+    try { el.releasePointerCapture(start.pointerId); } catch {}
+    resetDiscoverDrag();
   };
 
   const handleDiscoverCardClick = (e: React.MouseEvent, url?: string) => {
@@ -3827,9 +3827,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                       className="discover-nav-btn"
                       onClick={() => {
                         if (discoverSlides.length <= 1) return;
-                        const next = (discoverIndex - 1 + discoverSlides.length) % discoverSlides.length;
-                        goToDiscoverSlide(next);
-                        setDiscoverIndex(next);
+                        setDiscoverIndex((prev) => (prev - 1 + discoverSlides.length) % discoverSlides.length);
                       }}
                       disabled={discoverSlides.length <= 1}
                       aria-label="Previous discover slide"
@@ -3837,48 +3835,53 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                       <ChevronLeft size={18} />
                     </button>
                     <div
-                      className="discover-carousel-body"
+                      className={`discover-carousel-body${discoverDragOffset !== 0 ? ' is-dragging' : ''}`}
                       ref={discoverBodyRef}
-                      onScroll={handleDiscoverScroll}
                       onPointerDown={handleDiscoverPointerDown}
                       onPointerMove={handleDiscoverPointerMove}
                       onPointerUp={handleDiscoverPointerUp}
                       onPointerCancel={handleDiscoverPointerUp}
+                      onPointerLeave={handleDiscoverPointerUp}
                     >
                       {discoverSlides.length > 0 ? (
-                        discoverSlides.map((slide, slideIdx) => (
-                          <div
-                            key={slideIdx}
-                            className="discover-slide"
-                            ref={(el) => { discoverSlideRefs.current[slideIdx] = el; }}
-                          >
-                            {slide.map((item) => (
-                              <article
-                                key={item.id}
-                                className="discover-card"
-                                onClick={(e) => handleDiscoverCardClick(e, item.url)}
-                                style={{ cursor: item.url ? 'pointer' : 'default' }}
-                              >
-                                <img
-                                  src={item.image || buildNewsFallbackCover(item.headline, item.headline, item.source)}
-                                  alt={`${item.headline} cover`}
-                                  className="discover-card-image"
-                                  loading="lazy"
-                                  onError={(event) => {
-                                    event.currentTarget.src = buildNewsFallbackCover(item.headline, item.headline, item.source);
-                                  }}
-                                />
-                                <div className="discover-card-content">
-                                  <div className="discover-card-headline">{item.headline}</div>
-                                  <div className="discover-card-meta">
-                                    <span>{item.sourceCount > 0 ? `${item.sourceCount} sources` : item.source}</span>
-                                    {item.url && <ExternalLink size={12} />}
+                        <div
+                          className="discover-carousel-track"
+                          style={{ transform: `translateX(calc(${-discoverIndex * 100}% + ${discoverDragOffset}px))` }}
+                        >
+                          {discoverSlides.map((slide, slideIdx) => (
+                            <div
+                              key={slideIdx}
+                              className="discover-slide"
+                            >
+                              {slide.map((item) => (
+                                <article
+                                  key={item.id}
+                                  className="discover-card"
+                                  onClick={(e) => handleDiscoverCardClick(e, item.url)}
+                                  style={{ cursor: item.url ? 'pointer' : 'default' }}
+                                >
+                                  <img
+                                    src={item.image || buildNewsFallbackCover(item.headline, item.headline, item.source)}
+                                    alt={`${item.headline} cover`}
+                                    className="discover-card-image"
+                                    loading="lazy"
+                                    draggable={false}
+                                    onError={(event) => {
+                                      event.currentTarget.src = buildNewsFallbackCover(item.headline, item.headline, item.source);
+                                    }}
+                                  />
+                                  <div className="discover-card-content">
+                                    <div className="discover-card-headline">{item.headline}</div>
+                                    <div className="discover-card-meta">
+                                      <span>{item.sourceCount > 0 ? `${item.sourceCount} sources` : item.source}</span>
+                                      {item.url && <ExternalLink size={12} />}
+                                    </div>
                                   </div>
-                                </div>
-                              </article>
-                            ))}
-                          </div>
-                        ))
+                                </article>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
                       ) : (
                         <div className="discover-empty">
                           {newsLoading ? 'Loading discover feed...' : 'No discover cards available right now.'}
@@ -3890,9 +3893,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                       className="discover-nav-btn"
                       onClick={() => {
                         if (discoverSlides.length <= 1) return;
-                        const next = (discoverIndex + 1) % discoverSlides.length;
-                        goToDiscoverSlide(next);
-                        setDiscoverIndex(next);
+                        setDiscoverIndex((prev) => (prev + 1) % discoverSlides.length);
                       }}
                       disabled={discoverSlides.length <= 1}
                       aria-label="Next discover slide"
@@ -3907,10 +3908,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                           key={`discover-dot-${idx}`}
                           type="button"
                           className={discoverIndex === idx ? 'active' : ''}
-                          onClick={() => {
-                            goToDiscoverSlide(idx);
-                            setDiscoverIndex(idx);
-                          }}
+                          onClick={() => setDiscoverIndex(idx)}
                           aria-label={`Discover slide ${idx + 1}`}
                         />
                       ))}

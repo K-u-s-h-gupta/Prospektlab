@@ -2218,29 +2218,28 @@ button[style*="06B6D4"]:hover {
 }
 
 .discover-carousel-body {
-  display: flex;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  overscroll-behavior-y: auto;
+  display: block;
+  overflow: hidden;
+  overscroll-behavior: contain;
   touch-action: pan-y;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  gap: 0;
   min-height: 300px;
   cursor: grab;
   position: relative;
 }
 
-.discover-carousel-body::-webkit-scrollbar {
-  display: none;
-}
-
 .discover-carousel-body.is-dragging {
   cursor: grabbing;
-  scroll-snap-type: none;
+}
+
+.discover-carousel-track {
+  display: flex;
+  width: 100%;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.discover-carousel-body.is-dragging .discover-carousel-track {
+  transition: none;
 }
 
 .discover-slide {
@@ -2274,6 +2273,9 @@ button[style*="06B6D4"]:hover {
   height: 186px;
   object-fit: cover;
   display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .discover-card-content {
