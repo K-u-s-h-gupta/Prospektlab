@@ -289,8 +289,110 @@ def _upsert_features(cur: Any, rows: list[dict[str, Any]], as_of_date: str) -> i
     return n
 
 
+def _qtrid_to_quarter_end(qtrid: int) -> str | None:
+    """Map a BSE SHP quarter id → calendar quarter-end date (point-in-time axis).
+
+    Anchored on a known recent quarter; each qtrid step is one calendar quarter.
+    Anchor is configurable (IGS_SHP_ANCHOR_QTRID / IGS_SHP_ANCHOR_DATE) so it can be
+    corrected without code changes.
+    """
+    import calendar
+    from datetime import date
+
+    try:
+        anchor_qtrid = int(os.getenv("IGS_SHP_ANCHOR_QTRID", "129"))
+        ay, am, _ = (int(x) for x in os.getenv("IGS_SHP_ANCHOR_DATE", "2026-03-31").split("-"))
+    except Exception:
+        anchor_qtrid, ay, am = 129, 2026, 3
+    months_back = (anchor_qtrid - int(qtrid)) * 3
+    total = (ay * 12 + (am - 1)) - months_back
+    ny, nm0 = divmod(total, 12)
+    nm = nm0 + 1
+    if ny < 1990 or ny > 2100:
+        return None
+    return date(ny, nm, calendar.monthrange(ny, nm)[1]).isoformat()
+
+
+def build_historical_features(
+    database_url: str | None = None,
+    cins: set[str] | None = None,
+    quarters_back: int = 40,
+) -> dict[str, Any]:
+    """Build point-in-time company_features snapshots from SHP quarter history.
+
+    For each company and each historical SHP quarter Q, write a company_features row
+    dated at Q's quarter-end using only data up to Q (leak-free). This is the temporal
+    training/backtest matrix that lets the model learn pre-failure pledge trajectories.
+    Graph features (enforcement/RPT) are left null in historical rows — they are not
+    reliably dateable yet, so they stay out to avoid look-ahead leakage.
+    """
+    db_url = get_database_url(database_url)
+    if not db_url:
+        return {"success": False, "error": "no database_url", "rows_upserted": 0}
+    from psycopg.rows import dict_row
+
+    stats: dict[str, Any] = {"success": False, "rows_upserted": 0, "companies": 0}
+    try:
+        with connect_postgres(db_url, row_factory=dict_row, connect_timeout=30) as conn:
+            with conn.cursor() as cur:
+                cur.execute(_COMPANY_FEATURES_DDL)
+                conn.commit()
+                where = "where cin = any(%s)" if cins else "where cin is not null"
+                params: list[Any] = [list(cins)] if cins else []
+                cur.execute(
+                    f"""
+                    select cin,
+                           coalesce((raw_json->>'qtrid')::int, null) as qtrid,
+                           quarter, total_pledge_pct, total_promoter_holding_pct
+                    from shp_raw
+                    {where}
+                    order by cin, qtrid desc nulls last
+                    """,
+                    params,
+                )
+                by_cin: dict[str, list[dict[str, Any]]] = {}
+                for r in cur.fetchall():
+                    if r.get("qtrid") is None:
+                        continue
+                    by_cin.setdefault(r["cin"], []).append(r)
+
+                upserted = 0
+                for cin, rows in by_cin.items():
+                    rows.sort(key=lambda x: x["qtrid"], reverse=True)  # newest first
+                    # Each distinct qtrid is one as-of snapshot; features use rows at/before it.
+                    seen_q: set[int] = set()
+                    for i, row in enumerate(rows):
+                        q = int(row["qtrid"])
+                        if q in seen_q:
+                            continue
+                        seen_q.add(q)
+                        as_of = _qtrid_to_quarter_end(q)
+                        if not as_of:
+                            continue
+                        window = rows[i:i + 8]  # this quarter + up to 7 prior (newest-first)
+                        pf = compute_pledge_features(window)
+                        pf["quarter"] = row.get("quarter")
+                        _upsert_features(cur, [{"cin": cin, **pf}], as_of)
+                        upserted += 1
+                    conn.commit()
+                stats["rows_upserted"] = upserted
+                stats["companies"] = len(by_cin)
+        stats["success"] = True
+    except Exception as exc:
+        logger.error("Historical feature build failed: %s", exc)
+        stats["error"] = str(exc)
+    return stats
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    import argparse
     import json
 
-    print(json.dumps(build_company_features(), default=str, indent=2))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--historical", action="store_true", help="Build point-in-time snapshots")
+    args = parser.parse_args()
+    if args.historical:
+        print(json.dumps(build_historical_features(), default=str, indent=2))
+    else:
+        print(json.dumps(build_company_features(), default=str, indent=2))

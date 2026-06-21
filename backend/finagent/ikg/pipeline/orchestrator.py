@@ -437,6 +437,51 @@ def run_corporate_governance_director_refresh(
     return result
 
 
+def run_board_change_refresh(max_companies: int | None = None, since: str | None = None) -> PipelineRunResult:
+    """Real-time director/KMP board changes from BSE corporate announcements (Reg 30, <=24h)."""
+    result = PipelineRunResult(task_name="board_change_refresh", started_at=_now_iso())
+    result.metadata = {
+        "source_name": "BSE corporate announcements (board changes)",
+        "official_source_url": "https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w",
+        "parser_version": "bse_board_changes_v1",
+    }
+    start_t = time.time()
+    # Incremental: only fetch disclosures since the last successful run.
+    if since is None:
+        last = _last_successful_completed_at("board_change_refresh", lookback_minutes=60)
+        if last:
+            since = last[:10].replace("-", "")
+    try:
+        from finagent.ikg.scrapers.bse_board_changes import run_board_change_scraper
+        from finagent.ikg.scrapers.mca_companies import get_listed_companies
+
+        companies = get_listed_companies(database_url=_DATABASE_URL, indexed_only=_use_indexed_listed_companies())
+        if not companies:
+            result.error = "No listed companies available for board-change refresh"
+            result.success = False
+        else:
+            stats = run_board_change_scraper(
+                companies, database_url=_DATABASE_URL, since=since, max_companies=max_companies,
+            )
+            result.records_fetched = int(stats.get("events_found", 0) or 0)
+            result.records_stored = int(stats.get("events_stored", 0) or 0)
+            result.records_failed = int(stats.get("errors", 0) or 0)
+            result.success = bool(stats.get("success"))
+            result.error = stats.get("error")
+            result.metadata.update({
+                "companies_processed": stats.get("companies_processed"),
+                "since": since,
+            })
+    except Exception as exc:
+        logger.error("Board-change refresh failed: %s", exc)
+        result.error = str(exc)
+        result.success = False
+    result.duration_s = round(time.time() - start_t, 2)
+    result.completed_at = _now_iso()
+    _log_run_result(result)
+    return result
+
+
 def run_financial_data_refresh(max_companies: int | None = None) -> PipelineRunResult:
     """Phase 6: Refresh financial data (yfinance + Screener.in cross-validate)."""
     result = PipelineRunResult(task_name="financial_data_refresh", started_at=_now_iso())
@@ -1588,6 +1633,7 @@ if __name__ == "__main__":
         "bootstrap", "nse", "shp", "eod", "directors", "governance_directors", "director_kmp", "financials",
         "sebi", "sebi_filings", "corp_filings", "corp_filing_hydrate", "annual_reports", "concall", "build_graph", "nifty500_parallel", "historical_backfill", "health",
         "qdrant_index", "failure_events", "igs_features", "igs_train", "igs_score",
+        "board_changes",
     ], default="health")
     parser.add_argument("--csv-path", help="Path to MCA CSV file")
     parser.add_argument("--max-companies", type=int, help="Limit companies (for testing)")
@@ -1658,6 +1704,8 @@ if __name__ == "__main__":
         print(run_igs_model_train().to_dict())
     elif args.phase == "igs_score":
         print(run_igs_scoring_refresh(max_companies=args.max_companies).to_dict())
+    elif args.phase == "board_changes":
+        print(run_board_change_refresh(max_companies=args.max_companies).to_dict())
     elif args.phase == "qdrant_index":
         print(run_qdrant_document_index_refresh().to_dict())
     elif args.phase == "nifty500_parallel":

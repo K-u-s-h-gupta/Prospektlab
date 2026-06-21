@@ -225,6 +225,16 @@ def _build_scheduler() -> Any:
         misfire_grace_time=3600,
         replace_existing=True,
     )
+    # Real-time director/KMP board changes (SEBI LODR Reg 30, <=24h) — twice daily so
+    # appointments/cessations land within hours of the BSE filing, not next quarter.
+    scheduler.add_job(
+        _run_board_changes,
+        _cron_trigger(hour="10,20", minute=0, timezone=_IST_TIMEZONE),
+        id="board_changes_daily",
+        name="Real-time Board Changes (BSE announcements)",
+        misfire_grace_time=3600,
+        replace_existing=True,
+    )
     scheduler.add_job(
         _run_nse_nifty500,
         _cron_trigger(day=1, hour=6, minute=0, timezone=_IST_TIMEZONE),
@@ -416,6 +426,16 @@ def _run_bse_eod() -> None:
         logger.info("[SCHEDULER] bse_eod: %s", result.to_dict())
 
     _with_control_and_lock("bse_eod_daily", _run)
+
+
+def _run_board_changes() -> None:
+    def _run() -> None:
+        from finagent.ikg.pipeline.orchestrator import run_board_change_refresh
+
+        result = run_board_change_refresh()
+        logger.info("[SCHEDULER] board_changes: %s", result.to_dict())
+
+    _with_control_and_lock("board_changes_daily", _run)
 
 
 def _run_nse_nifty500() -> None:

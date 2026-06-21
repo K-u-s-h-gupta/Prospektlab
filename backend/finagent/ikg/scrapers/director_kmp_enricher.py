@@ -12,6 +12,7 @@ import hashlib
 import json
 import logging
 import re
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -428,9 +429,36 @@ def run_director_kmp_enrichment(
     candidates_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     errors = 0
 
+    # directors_raw is written by several tasks; a transaction advisory lock serialises
+    # them so concurrent inserts can't deadlock (observed 40P01 on parallel refresh).
+    _DIRECTORS_RAW_LOCK_KEY = 778201  # arbitrary fixed key shared by directors_raw writers
+    _max_attempts = 4
+    for _attempt in range(1, _max_attempts + 1):
+        try:
+            return _run_director_kmp_enrichment_locked(
+                db_url, docs, cins, _DIRECTORS_RAW_LOCK_KEY
+            )
+        except Exception as exc:
+            if "deadlock" in str(exc).lower() and _attempt < _max_attempts:
+                logger.warning("director_kmp deadlock (attempt %d); retrying", _attempt)
+                time.sleep(0.5 * _attempt)
+                continue
+            raise
+
+
+def _run_director_kmp_enrichment_locked(
+    db_url: str,
+    docs: list[dict[str, Any]],
+    cins: set[str],
+    lock_key: int,
+) -> dict[str, Any]:
+    candidates_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    errors = 0
+
     with connect_postgres(db_url, connect_timeout=30) as conn:
         _ensure_director_tables(conn)
         with conn.cursor() as cur:
+            cur.execute("select pg_advisory_xact_lock(%s)", (lock_key,))
             for doc in docs:
                 cin = str(doc.get("cin") or "").strip()
                 text = str(doc.get("extracted_text") or "")
