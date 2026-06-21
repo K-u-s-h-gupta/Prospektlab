@@ -829,6 +829,131 @@ def run_director_kmp_enrichment_refresh(
     return result
 
 
+def run_failure_events_refresh() -> PipelineRunResult:
+    """IGS Phase A: mine failure-event labels (MCA status + SEBI debarment)."""
+    result = PipelineRunResult(task_name="failure_events_refresh", started_at=_now_iso())
+    result.metadata = {
+        "source_name": "MCA master status + SEBI enforcement",
+        "official_source_url": "staging://ikg_company_master.status,enforcement_raw",
+        "parser_version": "failure_labels_v1",
+    }
+    start_t = time.time()
+    try:
+        from finagent.ikg.scrapers.failure_labels import run_failure_label_refresh
+
+        stats = run_failure_label_refresh(database_url=_DATABASE_URL)
+        mca = stats.get("mca", {})
+        sebi = stats.get("sebi", {})
+        result.records_stored = int(mca.get("rows_upserted", 0) or 0) + int(sebi.get("rows_upserted", 0) or 0)
+        result.records_fetched = int(mca.get("total_failures", 0) or 0)
+        result.success = bool(stats.get("success"))
+        if not result.success:
+            result.error = mca.get("error") or sebi.get("error") or "failure label mining incomplete"
+        result.metadata.update({
+            "mca_rows_upserted": mca.get("rows_upserted"),
+            "mca_total_failures": mca.get("total_failures"),
+            "sebi_rows_upserted": sebi.get("rows_upserted"),
+            "sebi_orders_scanned": sebi.get("orders_scanned"),
+        })
+    except Exception as exc:
+        logger.error("Failure events refresh failed: %s", exc)
+        result.error = str(exc)
+        result.success = False
+
+    result.duration_s = round(time.time() - start_t, 2)
+    result.completed_at = _now_iso()
+    _log_run_result(result)
+    return result
+
+
+def run_company_features_refresh(as_of: str | None = None, max_companies: int | None = None) -> PipelineRunResult:
+    """IGS Phase B: materialise company_features (temporal + graph) for listed companies."""
+    result = PipelineRunResult(task_name="company_features_refresh", started_at=_now_iso())
+    result.metadata = {
+        "source_name": "IKG graph + staging",
+        "official_source_url": "staging://shp_raw,directors_raw,auditor_history_raw,ikg_edges",
+        "parser_version": "igs_features_v1",
+    }
+    start_t = time.time()
+    try:
+        from finagent.ikg.igs.feature_builder import build_company_features
+        from finagent.ikg.scrapers.mca_companies import get_listed_companies
+
+        cins: set[str] | None = None
+        if max_companies:
+            companies = get_listed_companies(database_url=_DATABASE_URL, indexed_only=_use_indexed_listed_companies())
+            cins = {str(c.get("cin")).strip() for c in companies[:max_companies] if c.get("cin")}
+        stats = build_company_features(database_url=_DATABASE_URL, cins=cins, as_of=as_of)
+        result.records_stored = int(stats.get("rows_upserted", 0) or 0)
+        result.records_fetched = int(stats.get("companies", 0) or 0)
+        result.success = bool(stats.get("success"))
+        result.error = stats.get("error")
+        result.metadata.update({k: stats.get(k) for k in ("companies", "note")})
+    except Exception as exc:
+        logger.error("Company features refresh failed: %s", exc)
+        result.error = str(exc)
+        result.success = False
+    result.duration_s = round(time.time() - start_t, 2)
+    result.completed_at = _now_iso()
+    _log_run_result(result)
+    return result
+
+
+def run_igs_model_train(as_of: str | None = None) -> PipelineRunResult:
+    """IGS Phase C: train the LightGBM failure model on company_features vs failure_events."""
+    result = PipelineRunResult(task_name="igs_model_train", started_at=_now_iso())
+    result.metadata = {
+        "source_name": "company_features + failure_events",
+        "official_source_url": "staging://company_features,failure_events",
+        "parser_version": "igs_model_v1",
+    }
+    start_t = time.time()
+    try:
+        from finagent.ikg.igs.model import train_failure_model
+
+        stats = train_failure_model(database_url=_DATABASE_URL, as_of=as_of)
+        result.records_fetched = int(stats.get("n_train", 0) or 0)
+        result.records_stored = int(stats.get("n_pos", 0) or 0)
+        result.success = bool(stats.get("success"))
+        result.error = stats.get("error")
+        result.metadata.update({k: stats.get(k) for k in ("auc_cv", "n_train", "n_pos", "n_neg", "backend", "model_path", "model_version")})
+    except Exception as exc:
+        logger.error("IGS model train failed: %s", exc)
+        result.error = str(exc)
+        result.success = False
+    result.duration_s = round(time.time() - start_t, 2)
+    result.completed_at = _now_iso()
+    _log_run_result(result)
+    return result
+
+
+def run_igs_scoring_refresh(as_of: str | None = None, max_companies: int | None = None) -> PipelineRunResult:
+    """IGS Phase D: score all listed companies (rules + model) into company_governance_scores history."""
+    result = PipelineRunResult(task_name="igs_scoring_refresh", started_at=_now_iso())
+    result.metadata = {
+        "source_name": "governance rules + IGS model",
+        "official_source_url": "staging://company_features,governance_score",
+        "parser_version": "igs_scoring_v1",
+    }
+    start_t = time.time()
+    try:
+        from finagent.ikg.igs.scoring import score_all_listed
+
+        stats = score_all_listed(database_url=_DATABASE_URL, as_of=as_of, limit=max_companies)
+        result.records_stored = int(stats.get("scored", 0) or 0)
+        result.records_failed = int(stats.get("errors", 0) or 0)
+        result.success = bool(stats.get("success"))
+        result.metadata.update({k: stats.get(k) for k in ("scored", "with_model", "errors", "as_of")})
+    except Exception as exc:
+        logger.error("IGS scoring refresh failed: %s", exc)
+        result.error = str(exc)
+        result.success = False
+    result.duration_s = round(time.time() - start_t, 2)
+    result.completed_at = _now_iso()
+    _log_run_result(result)
+    return result
+
+
 def run_ikg_graph_build(max_companies: int | None = None) -> PipelineRunResult:
     """Build Supabase/Postgres graph rows from populated Nifty 500 staging tables."""
     result = PipelineRunResult(task_name="ikg_graph_build", started_at=_now_iso())
@@ -1462,7 +1587,7 @@ if __name__ == "__main__":
     parser.add_argument("--phase", choices=[
         "bootstrap", "nse", "shp", "eod", "directors", "governance_directors", "director_kmp", "financials",
         "sebi", "sebi_filings", "corp_filings", "corp_filing_hydrate", "annual_reports", "concall", "build_graph", "nifty500_parallel", "historical_backfill", "health",
-        "qdrant_index",
+        "qdrant_index", "failure_events", "igs_features", "igs_train", "igs_score",
     ], default="health")
     parser.add_argument("--csv-path", help="Path to MCA CSV file")
     parser.add_argument("--max-companies", type=int, help="Limit companies (for testing)")
@@ -1525,6 +1650,14 @@ if __name__ == "__main__":
         )
     elif args.phase == "build_graph":
         print(run_ikg_graph_build(max_companies=args.max_companies).to_dict())
+    elif args.phase == "failure_events":
+        print(run_failure_events_refresh().to_dict())
+    elif args.phase == "igs_features":
+        print(run_company_features_refresh(max_companies=args.max_companies).to_dict())
+    elif args.phase == "igs_train":
+        print(run_igs_model_train().to_dict())
+    elif args.phase == "igs_score":
+        print(run_igs_scoring_refresh(max_companies=args.max_companies).to_dict())
     elif args.phase == "qdrant_index":
         print(run_qdrant_document_index_refresh().to_dict())
     elif args.phase == "nifty500_parallel":

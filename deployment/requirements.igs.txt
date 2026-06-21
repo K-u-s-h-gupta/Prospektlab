@@ -1,0 +1,10 @@
+# IGS Phase C — predictive failure-risk model dependencies.
+# Kept in a separate file (not requirements.ikg-worker.txt) so the worker image
+# can opt into the heavier ML stack without forcing it on every build.
+# The model module imports all of these lazily/guarded, so they remain optional
+# at runtime; install this file on the training/scoring worker only.
+scikit-learn>=1.3.0
+lightgbm>=4.0.0
+shap>=0.44.0
+joblib>=1.3.0
+scikit-survival>=0.22.0

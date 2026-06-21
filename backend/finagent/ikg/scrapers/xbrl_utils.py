@@ -301,6 +301,78 @@ def extract_corporate_action_from_text(text: str) -> dict[str, Any]:
     }
 
 
+_RP_RELATIONSHIP_KEYS: tuple[tuple[str, str], ...] = (
+    (r"holding\s+compan", "holding"),
+    (r"ultimate\s+holding", "ultimate_holding"),
+    (r"fellow\s+subsidiar", "fellow_subsidiary"),
+    (r"step[\s-]?down\s+subsidiar", "step_down_subsidiary"),
+    (r"\bsubsidiar", "subsidiary"),
+    (r"\bassociate", "associate"),
+    (r"joint\s+ventur", "joint_venture"),
+    (r"key\s+management|\bkmp\b|key\s+managerial", "kmp"),
+    (r"significant\s+influence|enterprise[s]?\s+(?:over\s+which|controlled)", "related_enterprise"),
+    (r"relative[s]?\s+of", "kmp_relative"),
+)
+
+# Entity names that carry an Indian corporate suffix — the reliable signal that a
+# token span names a counterparty rather than prose.
+_RP_ENTITY_RE = re.compile(
+    r"\b([A-Z][A-Za-z0-9&.,'()\-]*(?:\s+[A-Za-z0-9&.,'()\-]+){0,8}?\s*"
+    r"(?:Private\s+Limited|Pvt\.?\s+Ltd\.?|Limited|Ltd\.?|LLP|& Co\.?|"
+    r"Industries|Enterprises|Holdings|Ventures|Trust|Foundation))\b"
+)
+
+_RP_NOISE_PREFIXES = (
+    "THE COMPANY", "COMPANY", "GROUP", "BOARD", "PARENT", "FOLLOWING", "ABOVE",
+    "RELATED PARTY", "RELATED PARTIES", "TRANSACTIONS WITH", "NATURE OF",
+    "NAME OF", "DURING THE", "AS PER", "IND AS", "AS-18", "SCHEDULE",
+)
+
+
+def extract_related_parties_from_text(text: str, *, max_parties: int = 60) -> list[dict[str, Any]]:
+    """Extract related-party counterparties from an AS-18 / Ind AS 24 note section.
+
+    Deterministic, citation-grade: every party is a named entity carrying an Indian
+    corporate suffix, classified by the nearest preceding relationship keyword.
+    Returns a list of ``{party_name, relationship, evidence}`` dicts (deduped).
+    """
+    normalized = _clean_text(text)
+    if not normalized:
+        return []
+    lowered = normalized.lower()
+    results: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for match in _RP_ENTITY_RE.finditer(normalized):
+        name = _clean_text(match.group(1)).strip(" .,:;-")
+        if len(name) < 6 or len(name) > 110:
+            continue
+        upper = name.upper()
+        if any(upper.startswith(prefix) for prefix in _RP_NOISE_PREFIXES):
+            continue
+        # Reject all-suffix / no real name token (e.g. just "Limited")
+        if len(re.sub(r"[^A-Za-z]", "", name.split()[0])) < 2:
+            continue
+        key = upper
+        if key in seen:
+            continue
+        seen.add(key)
+        # Classify relationship from the 160 chars preceding the match.
+        window = lowered[max(0, match.start() - 160): match.start()]
+        relationship = "related_party"
+        for pattern, label in _RP_RELATIONSHIP_KEYS:
+            if re.search(pattern, window):
+                relationship = label
+                break
+        results.append({
+            "party_name": name,
+            "relationship": relationship,
+            "evidence": normalized[max(0, match.start() - 40): match.end() + 40].strip(),
+        })
+        if len(results) >= max_parties:
+            break
+    return results
+
+
 def extract_auditor_names_from_text(text: str) -> list[dict[str, str]]:
     """Extract likely statutory auditor names from governance/audit text."""
     normalized = _clean_text(text)

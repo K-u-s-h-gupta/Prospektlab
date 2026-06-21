@@ -78,6 +78,99 @@ def _json_safe(value: Any) -> Any:
         return json.loads(json.dumps(value, default=str))
 
 
+def _norm_entity_name(value: Any) -> str:
+    """Normalise a name to a comparable key (upper, alnum+space, collapsed)."""
+    text = re.sub(r"[^A-Z0-9 ]", " ", str(value or "").upper())
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _parse_enforcement_entity(raw: Any) -> tuple[str | None, str | None]:
+    """Split a SEBI-order NER entity string into (person_name, company_name).
+
+    SEBI order entities arrive as either a bare company ("Shardaraj Tradefin Ltd")
+    or a person+role blob ("Chiranjit Mahanta\\nDirector of Shardaraj Tradefin Ltd").
+    """
+    s = re.sub(r"\s+", " ", str(raw or "").replace("\n", " ")).strip()
+    if not s:
+        return None, None
+    m = re.search(r"^(.*?)\b[Dd]irector\s+of\b(.*)$", s)
+    if m:
+        person = m.group(1).strip(" ,.-")
+        company = m.group(2).strip(" ,.-")
+        return (person or None), (company or None)
+    return None, s
+
+
+def _normalize_company_for_trgm(name: Any) -> str:
+    """Normalise a company name for trigram matching (mirror IKGEntityResolver)."""
+    text = str(name or "").upper().strip()
+    for suffix in (
+        " LIMITED", " LTD", " LTD.", " PRIVATE", " PVT", " PVT.",
+        " INC", " CORP", " CORPORATION", " CO.", " CO",
+    ):
+        if text.endswith(suffix):
+            text = text[: -len(suffix)].strip()
+    text = re.sub(r"\bAND\b", " ", text)
+    text = re.sub(r"[^A-Z0-9\s]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _batch_resolve_company_cins(
+    cur: Any, names: set[str], min_sim: float, *, chunk: int = 150
+) -> dict[str, tuple[str, str | None, float]]:
+    """Resolve many company names → best-match CIN in one trigram pass per chunk.
+
+    Keyed by ``_norm_entity_name(name)``. Replaces per-name connections (the slow
+    path) with a single LATERAL trigram query over the GIN-indexed master.
+    """
+    norm_map: dict[str, str] = {}
+    for raw in names:
+        key = _norm_entity_name(raw)
+        if key and len(key) >= 6:
+            norm_map.setdefault(key, _normalize_company_for_trgm(raw))
+    resolved: dict[str, tuple[str, str | None, float]] = {}
+    items = [(k, v) for k, v in norm_map.items() if v]
+    for i in range(0, len(items), chunk):
+        batch = items[i:i + chunk]
+        values_sql = ", ".join("(%s, %s)" for _ in batch)
+        params: list[Any] = []
+        for key, norm in batch:
+            params.extend([key, norm])
+        try:
+            cur.execute(
+                f"""
+                with q(key, norm) as (values {values_sql})
+                select q.key as key, m.cin as cin, m.company_name as company_name,
+                       similarity(upper(m.company_name), q.norm) as sim
+                from q
+                join lateral (
+                    select cin, company_name
+                    from ikg_company_master
+                    where upper(company_name) %% q.norm
+                    order by similarity(upper(company_name), q.norm) desc
+                    limit 1
+                ) m on true
+                """,
+                params,
+            )
+            for row in cur.fetchall():
+                cin = row.get("cin")
+                sim = float(row.get("sim") or 0)
+                if cin and sim >= min_sim:
+                    resolved[row.get("key")] = (cin, row.get("company_name"), sim)
+        except Exception as exc:
+            logger.warning("Batch enforcement resolution chunk failed: %s", exc)
+    return resolved
+
+
+def _enforcement_company_min_similarity() -> float:
+    raw = str(os.getenv("FINAGENT_ENFORCEMENT_NAME_MIN_SIM", "0.62")).strip()
+    try:
+        return max(0.30, min(float(raw), 0.95))
+    except ValueError:
+        return 0.62
+
+
 def persist_pipeline_run(result: Any, database_url: str | None = None) -> bool:
     """Persist a pipeline run result to the Supabase/Postgres IKG database."""
     db_url = get_database_url(database_url)
@@ -517,6 +610,12 @@ def build_ikg_from_staging(
                 if nifty10_cins:
                     cin_filter_sql = "WHERE cin = ANY(%s)"
                     cin_params = [list(nifty10_cins)]
+                else:
+                    # Guard against scanning the full 3.1M MCA master. An unscoped
+                    # build materialises the listed universe only; failure-label
+                    # (struck-off) companies are promoted on demand via explicit
+                    # CIN scopes, never by sweeping every registered company.
+                    cin_filter_sql = "WHERE listing_status ILIKE 'listed'"
 
                 cur.execute(
                     f"SELECT * FROM ikg_company_master {cin_filter_sql} ORDER BY company_name",
@@ -1449,21 +1548,60 @@ def build_ikg_from_staging(
                     logger.warning("Enforcement orders graph step skipped: %s", exc)
                     orders = []
 
-                # Build name-to-CIN lookup from entity aliases for name-based matching
-                _name_to_cin: dict[str, str] = {}
+                # Trigram-resolve SEBI-order NER names → CINs over the full 3.1M MCA
+                # master. cins[] is almost always empty, but companies[] carries NER
+                # names that fuzzy-match the master (incl. small/shell debarred firms).
+                # Three passes: (1) parse all orders, (2) one batched trigram resolve,
+                # (3) write — avoids the per-name connection storm that made this slow.
+                min_sim = _enforcement_company_min_similarity()
+
+                parsed_orders: list[dict[str, Any]] = []
+                all_company_names: set[str] = set()
+                for order in orders:
+                    oid = order.get("order_number")
+                    if not oid:
+                        continue
+                    entities = order.get("entities_json") or {}
+                    if isinstance(entities, str):
+                        try:
+                            entities = json.loads(entities)
+                        except Exception:
+                            entities = {}
+                    direct_cins = {str(c).strip() for c in (entities.get("cins", []) or []) if str(c or "").strip()}
+                    person_dins = {str(d).strip() for d in (entities.get("dins", []) or []) if str(d or "").strip()}
+                    company_names: set[str] = set()
+                    person_names: set[str] = set()
+                    for raw_entity in entities.get("companies", []) or []:
+                        person, company = _parse_enforcement_entity(raw_entity)
+                        if person:
+                            person_names.add(person)
+                        if company and len(_norm_entity_name(company)) >= 6:
+                            company_names.add(company)
+                            all_company_names.add(company)
+                    parsed_orders.append({
+                        "order": order, "oid": oid, "direct_cins": direct_cins,
+                        "person_dins": person_dins, "company_names": company_names,
+                        "person_names": person_names,
+                    })
+
+                # One batched trigram resolution for every unique NER company name.
+                name_to_cin = _batch_resolve_company_cins(cur, all_company_names, min_sim)
+
+                # Preload existing Person nodes (by name) so barred directors named in
+                # orders link to all their other boards — the enforcement-proximity moat.
+                person_vid_by_name: dict[str, str] = {}
                 try:
                     cur.execute(
-                        "SELECT entity_id, alias FROM ikg_entity_aliases "
-                        "WHERE entity_id LIKE 'company:%%' AND alias_type IN ('legal_name', 'nse_symbol', 'name')"
+                        "select vertex_id, properties->>'name' as name from ikg_vertices where label = 'Person'"
                     )
-                    for eid, alias in cur.fetchall():
-                        cin_val = eid.replace("company:", "")
-                        normalized = re.sub(r"\s+", " ", (alias or "").strip().upper())
-                        if normalized and len(normalized) >= 4:
-                            _name_to_cin[normalized] = cin_val
+                    for prow in cur.fetchall():
+                        nm = _norm_entity_name(prow.get("name") if isinstance(prow, dict) else prow[1])
+                        vid = prow.get("vertex_id") if isinstance(prow, dict) else prow[0]
+                        if nm and len(nm) >= 6:
+                            person_vid_by_name.setdefault(nm, vid)
                 except Exception:
                     conn.rollback()
-                    logger.debug("Could not build name-to-CIN lookup for enforcement matching")
+                    logger.debug("Could not preload Person nodes for enforcement linking")
 
                 regulator_vid = "regulator:SEBI"
                 _upsert_vertex(cur, regulator_vid, "Regulator", {
@@ -1471,12 +1609,13 @@ def build_ikg_from_staging(
                     "abbreviation": "SEBI",
                     "jurisdiction": "India",
                 })
-                enforcement_edges_created = 0
+                enforcement_company_edges = 0
+                enforcement_person_edges = 0
+                orders_linked = 0
                 with _write_pipeline(conn):
-                    for order in orders:
-                        oid = order.get("order_number")
-                        if not oid:
-                            continue
+                    for po in parsed_orders:
+                        order = po["order"]
+                        oid = po["oid"]
                         order_vid = f"regulator_action:{oid}"
                         _upsert_vertex(cur, order_vid, "RegulatorAction", {
                             "order_number": oid,
@@ -1489,50 +1628,183 @@ def build_ikg_from_staging(
                         _upsert_edge(cur, regulator_vid, order_vid, "ISSUED", {
                             "order_date": str(order.get("order_date") or ""),
                         })
-                        entities = order.get("entities_json") or {}
-                        if isinstance(entities, str):
-                            try:
-                                entities = json.loads(entities)
-                            except Exception:
-                                entities = {}
-                        linked_cins: set[str] = set()
-                        for cin in entities.get("cins", []):
-                            linked_cins.add(cin)
-                        # Match company names from NER against known entities
-                        for company_name in entities.get("companies", []):
-                            normalized = re.sub(r"\s+", " ", (company_name or "").strip().upper())
-                            if len(normalized) < 6:
-                                continue
-                            matched_cin = _name_to_cin.get(normalized)
-                            if not matched_cin:
-                                # Try stripping common suffixes for partial match
-                                for suffix in (" LIMITED", " LTD", " LTD.", " PRIVATE LIMITED", " PVT. LTD", " PVT LTD"):
-                                    base = normalized.removesuffix(suffix)
-                                    if base != normalized:
-                                        for alias_name, alias_cin in _name_to_cin.items():
-                                            if alias_name.startswith(base) and alias_cin not in linked_cins:
-                                                matched_cin = alias_cin
-                                                break
-                                    if matched_cin:
-                                        break
-                            if matched_cin:
-                                linked_cins.add(matched_cin)
-                        for cin in linked_cins:
+
+                        linked_cins: dict[str, tuple[str | None, float, str]] = {}
+                        for cin in po["direct_cins"]:
+                            linked_cins[cin] = (None, 1.0, "ner_cin")
+                        for company in po["company_names"]:
+                            hit = name_to_cin.get(_norm_entity_name(company))
+                            if hit and hit[0] not in linked_cins:
+                                linked_cins[hit[0]] = (hit[1], hit[2], "ner_name_trigram")
+
+                        for cin, (disp, sim, method) in linked_cins.items():
                             target_vid = f"company:{cin}"
                             _upsert_vertex(cur, target_vid, "Company", {
                                 "cin": cin,
+                                "company_name": disp or None,
                                 "source_citation": "SEBI_enforcement",
                             })
                             _upsert_edge(cur, order_vid, target_vid, "ENFORCEMENT_ACTION_AGAINST", {
                                 "source_citation": "SEBI_enforcement",
+                                "match_method": method,
+                                "match_confidence": round(sim, 3),
+                                "matched_name": disp,
+                                "order_date": str(order.get("order_date") or ""),
                             })
-                            enforcement_edges_created += 1
+                            enforcement_company_edges += 1
+                            _upsert_fact(
+                                cur,
+                                f"enforcement:{oid}:{cin}",
+                                target_vid,
+                                "ENFORCEMENT_ACTION_AGAINST",
+                                object_entity_id=order_vid,
+                                event_date=order.get("order_date"),
+                                source_table="enforcement_raw",
+                                source_uid=str(oid),
+                                source_url=order.get("pdf_url"),
+                                evidence_text=order.get("violation_type"),
+                                properties={"match_method": method, "match_confidence": round(sim, 3)},
+                            )
+
+                        # Person linking: explicit DINs, plus director names matched to
+                        # existing Person nodes (barred-director proximity).
+                        for din in po["person_dins"]:
+                            pvid = f"person:{din}"
+                            _upsert_vertex(cur, pvid, "Person", {"din": din, "source_citation": "SEBI_enforcement"})
+                            _upsert_edge(cur, order_vid, pvid, "ENFORCEMENT_ACTION_AGAINST", {
+                                "source_citation": "SEBI_enforcement",
+                                "match_method": "ner_din",
+                                "entity_kind": "person",
+                                "order_date": str(order.get("order_date") or ""),
+                            })
+                            enforcement_person_edges += 1
+                        for pname in po["person_names"]:
+                            pvid = person_vid_by_name.get(_norm_entity_name(pname))
+                            if not pvid:
+                                continue
+                            _upsert_edge(cur, order_vid, pvid, "ENFORCEMENT_ACTION_AGAINST", {
+                                "source_citation": "SEBI_enforcement",
+                                "match_method": "ner_name_to_din",
+                                "entity_kind": "person",
+                                "matched_name": pname,
+                                "order_date": str(order.get("order_date") or ""),
+                            })
+                            enforcement_person_edges += 1
+
+                        if linked_cins or po["person_dins"] or po["person_names"]:
+                            orders_linked += 1
 
                 conn.commit()
                 logger.info(
-                    "Created %d SEBI Enforcement vertices, %d company edges (from %d orders)",
-                    len(orders), enforcement_edges_created, len(orders),
+                    "SEBI Enforcement: %d orders, %d linked, %d company edges, %d person edges (min_sim=%.2f)",
+                    len(orders), orders_linked, enforcement_company_edges, enforcement_person_edges, min_sim,
                 )
+
+                # ── 7b. Related-party transactions → RELATED_PARTY_TRANSACTION edges ──
+                # Dim-4 builder the schema declared (RelatedPartyEdge) but nothing ever
+                # populated. corporate_xbrl_facts is empty in production, so RPT counter-
+                # parties are extracted directly from annual-report AS-18 / Ind AS 24 note
+                # sections held in document_sections.
+                rpt_params: list[Any] = ["%related part%"]
+                rpt_where = "where ds.text ilike %s"
+                if nifty10_cins:
+                    rpt_where += """
+                    and (
+                      ds.metadata->>'cin' = any(%s)
+                      or ds.metadata->>'company_cin' = any(%s)
+                      or ds.source_uid in (select report_uid from annual_reports_raw where cin = any(%s))
+                    )
+                    """
+                    rpt_params.extend([list(nifty10_cins), list(nifty10_cins), list(nifty10_cins)])
+                try:
+                    cur.execute(
+                        f"""
+                        select ds.*, ar.cin as ar_cin
+                        from document_sections ds
+                        left join annual_reports_raw ar
+                          on ds.source_table = 'annual_reports_raw' and ar.report_uid = ds.source_uid
+                        {rpt_where}
+                        order by ds.updated_at desc
+                        limit 5000
+                        """,
+                        rpt_params,
+                    )
+                    rpt_sections = cur.fetchall()
+                except Exception as exc:
+                    conn.rollback()
+                    logger.warning("Related-party section step skipped: %s", exc)
+                    rpt_sections = []
+
+                rpt_edges_created = 0
+                if rpt_sections:
+                    from finagent.ikg.scrapers.xbrl_utils import extract_related_parties_from_text
+
+                    with _write_pipeline(conn):
+                        for section in rpt_sections:
+                            metadata = section.get("metadata") or {}
+                            if isinstance(metadata, str):
+                                try:
+                                    metadata = json.loads(metadata)
+                                except Exception:
+                                    metadata = {}
+                            if not isinstance(metadata, dict):
+                                metadata = {}
+                            cin = str(
+                                metadata.get("cin")
+                                or metadata.get("company_cin")
+                                or section.get("ar_cin")
+                                or ""
+                            ).strip()
+                            if not cin:
+                                continue
+                            company_vid = f"company:{cin}"
+                            parties = extract_related_parties_from_text(str(section.get("text") or ""))
+                            if not parties:
+                                continue
+                            fiscal_year = str(
+                                metadata.get("fiscal_year") or metadata.get("report_year") or ""
+                            ).strip() or None
+                            for party in parties:
+                                pname = party.get("party_name")
+                                if not pname:
+                                    continue
+                                slug = re.sub(r"[^A-Z0-9]+", "_", pname.upper()).strip("_")[:90] or "UNKNOWN_PARTY"
+                                party_vid = f"related_party:{slug}"
+                                _upsert_vertex(cur, party_vid, "RelatedParty", {
+                                    "name": pname,
+                                    "relationship": party.get("relationship"),
+                                })
+                                _upsert_edge(cur, company_vid, party_vid, "RELATED_PARTY_TRANSACTION", {
+                                    "relationship": party.get("relationship"),
+                                    "fiscal_year": fiscal_year,
+                                    "evidence": party.get("evidence"),
+                                    "source_citation": "annual_report_AS18_IndAS24",
+                                    "source_url": section.get("source_url"),
+                                })
+                                rpt_edges_created += 1
+                                fact_hash = hashlib.sha1(
+                                    f"{cin}:{slug}:{fiscal_year or ''}".encode("utf-8")
+                                ).hexdigest()[:24]
+                                _upsert_fact(
+                                    cur,
+                                    f"rpt:{fact_hash}",
+                                    company_vid,
+                                    "RELATED_PARTY_TRANSACTION",
+                                    object_entity_id=party_vid,
+                                    source_table=section.get("source_table"),
+                                    source_uid=section.get("source_uid"),
+                                    source_url=section.get("source_url"),
+                                    evidence_text=party.get("evidence"),
+                                    properties={
+                                        "relationship": party.get("relationship"),
+                                        "fiscal_year": fiscal_year,
+                                    },
+                                )
+                    conn.commit()
+                    logger.info(
+                        "Created %d RELATED_PARTY_TRANSACTION edges from %d RPT sections",
+                        rpt_edges_created, len(rpt_sections),
+                    )
 
                 # ── 8. Canonical document_sections -> evidence graph edges ──
                 section_where = ""

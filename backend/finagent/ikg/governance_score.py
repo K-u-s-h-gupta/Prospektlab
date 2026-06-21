@@ -268,10 +268,10 @@ class GovernanceScorer:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    select quarter, total_pledge_pct, total_promoter_holding_pct, source_url, as_on_date
+                    select quarter, total_pledge_pct, total_promoter_holding_pct, fetched_at
                     from shp_raw
                     where cin = %s
-                    order by as_on_date desc nulls last, quarter desc
+                    order by fetched_at desc nulls last, quarter desc
                     limit 8
                     """,
                     (cin,),
