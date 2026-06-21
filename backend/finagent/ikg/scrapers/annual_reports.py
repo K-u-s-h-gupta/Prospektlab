@@ -74,6 +74,27 @@ _ANNUAL_BOOTSTRAP_LOCK = threading.Lock()
 _ANNUAL_BOOTSTRAPPED_URLS: set[str] = set()
 
 
+def _annual_local_first_enabled() -> bool:
+    """Whether to attempt local (PyMuPDF/pypdf) extraction before Azure DI.
+
+    Default on. Azure DI is expensive; local extraction is the primary path and
+    DI is reserved as a fallback for insufficient-text / tables-required cases.
+    """
+    return os.getenv("FINAGENT_ANNUAL_LOCAL_FIRST", "1").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _annual_local_min_chars() -> int:
+    """Minimum character count for local annual-report text to pass the gate."""
+    raw = (os.getenv("FINAGENT_ANNUAL_LOCAL_MIN_CHARS") or "").strip()
+    if not raw:
+        return 4000
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        logger.warning("Invalid FINAGENT_ANNUAL_LOCAL_MIN_CHARS=%r; using default=4000", raw)
+        return 4000
+
+
 def _response_looks_like_pdf(*, content: bytes, content_type: str = "", content_disposition: str = "", response_url: str = "") -> bool:
     payload = (content or b"").lstrip()
     if payload.startswith(b"%PDF"):
@@ -923,6 +944,87 @@ def download_annual_report(
         return None
 
 
+def _local_sections_from_pdf(
+    file_path: Path,
+    *,
+    report_uid: str,
+    cin: str | None,
+    source_url: str | None,
+    company_symbol: str | None,
+    scrip_code: str | None,
+    company_name: str | None,
+) -> list[dict[str, Any]]:
+    """Build document_sections rows from local per-page PDF text (PyMuPDF).
+
+    Produces dicts in the EXACT shape consumed by the persistence layer in
+    ``_store_annual_report_result`` (which reads: document_uid, document_type,
+    section_type, title, page_start, page_end, text, text_length,
+    tables_markdown, confidence, source_url, metadata). ``source_table`` and
+    ``source_uid`` are NOT read from the dict — the insert hardcodes them to
+    ``"annual_reports_raw"`` / the effective report_uid — so they are omitted
+    here, matching ``build_document_sections_from_extraction``'s output shape.
+
+    One section per page that has text. Downstream graph build
+    (finagent.ikg.pipeline.run_store) reads ``section["text"]`` for auditor /
+    related-party extraction and resolves the company from
+    ``metadata["cin"]`` / ``metadata["company_cin"]``, so both are populated.
+    """
+    document_uid = f"annual:{report_uid}"
+    identifier = (cin or company_symbol or scrip_code or "").strip()
+
+    def _base_metadata(page_number: int) -> dict[str, Any]:
+        metadata: dict[str, Any] = {
+            "categories": ["annual_report_local"],
+            "matched_reasons": ["local_pymupdf_full_text"],
+            "extraction_source": "pymupdf_local",
+            "page_number": page_number,
+        }
+        if identifier:
+            metadata["company_identifier"] = identifier
+        if cin:
+            metadata["cin"] = cin
+            metadata["company_cin"] = cin
+        if company_symbol:
+            metadata["nse_symbol"] = company_symbol
+        if scrip_code:
+            metadata["bse_scrip_code"] = scrip_code
+        if company_name:
+            metadata["company_name"] = company_name
+        return metadata
+
+    sections: list[dict[str, Any]] = []
+    try:
+        import fitz  # type: ignore
+
+        with fitz.open(str(file_path)) as doc:
+            for index, page in enumerate(doc):
+                page_number = index + 1
+                text = (page.get_text("text") or "").strip()
+                if not text:
+                    continue
+                sections.append({
+                    "document_uid": document_uid,
+                    "document_type": "annual_report",
+                    "section_type": "annual_report_local",
+                    "title": f"Annual report page {page_number}",
+                    "page_start": page_number,
+                    "page_end": page_number,
+                    "text": text,
+                    "text_length": len(text),
+                    "tables_markdown": "",
+                    "confidence": 0.6,
+                    "source_url": source_url,
+                    "metadata": _base_metadata(page_number),
+                })
+    except Exception as exc:
+        logger.warning(
+            "Local section extraction (PyMuPDF) failed for %s: %s", file_path, exc
+        )
+        return []
+
+    return sections
+
+
 async def process_annual_report(
     file_path: Path,
     scrip_code: str,
@@ -1014,6 +1116,111 @@ async def process_annual_report(
                 selected_pages,
                 scanned_pages,
             )
+
+        # ── Local-first quality gate ──────────────────────────────────────
+        # Azure DI is expensive. Try local PyMuPDF/pypdf extraction first; only
+        # escalate to DI when local text is insufficient or tables are required.
+        if _annual_local_first_enabled() and not _ANNUAL_REQUIRE_TABLES:
+            from finagent.ikg.scrapers._doc_extract import (
+                extract_pdf_text_local,
+                text_is_sufficient,
+            )
+
+            try:
+                file_bytes = Path(file_path).read_bytes()
+            except Exception as exc:
+                file_bytes = b""
+                logger.warning(
+                    "Local-first: failed to read PDF bytes for %s/%s (%s); falling back to DI",
+                    scrip_code,
+                    year,
+                    exc,
+                )
+
+            if file_bytes:
+                local = extract_pdf_text_local(file_bytes)
+                local_text = str(local.get("full_text") or "")
+                min_chars = _annual_local_min_chars()
+                if text_is_sufficient(local_text, min_chars=min_chars):
+                    report_uid = _annual_report_uid(scrip_code, year, pdf_url or "")
+                    result["full_text"] = local_text
+                    result["full_text_length"] = len(local_text)
+                    result["page_count"] = int(local.get("page_count") or 0)
+                    result["model_used"] = str(local.get("model") or "pymupdf_local")
+                    result["extraction_status"] = "local_ok"
+                    result["tables_count"] = 0
+                    result["kv_pairs_count"] = 0
+                    result["extraction_duration_s"] = 0.0
+
+                    # Persist text to the local cache for parity with the DI path.
+                    text_cache_dir = _REPORT_CACHE_DIR / scrip_code / "extracted"
+                    text_cache_dir.mkdir(parents=True, exist_ok=True)
+                    (text_cache_dir / f"text_{year}.txt").write_text(
+                        local_text, encoding="utf-8"
+                    )
+
+                    # Build document_sections locally so downstream auditor /
+                    # related-party extraction keeps working without DI.
+                    result["sections"] = _local_sections_from_pdf(
+                        file_path,
+                        report_uid=report_uid,
+                        cin=cin,
+                        source_url=source_url or pdf_url,
+                        company_symbol=company_ticker,
+                        scrip_code=scrip_code,
+                        company_name=company_name,
+                    )
+
+                    # Chunk + cache for GraphRAG usage (mirror of DI path).
+                    try:
+                        from finagent.graphrag.indexer import (
+                            index_document,
+                            store_chunks_to_cache,
+                        )
+
+                        chunks = index_document(
+                            local_text,
+                            source_file=str(file_path),
+                            source_type="annual_report",
+                            company_cin=cin,
+                            company_ticker=company_ticker or scrip_code,
+                        )
+                        if chunks:
+                            store_chunks_to_cache(
+                                chunks, str(company_ticker or scrip_code or "UNKNOWN")
+                            )
+                            result["chunks"] = [chunk.to_dict() for chunk in chunks]
+                            result["chunks_indexed"] = len(chunks)
+                    except Exception as exc:
+                        logger.warning(
+                            "Annual report GraphRAG indexing (local) failed for %s/%s: %s",
+                            scrip_code,
+                            year,
+                            exc,
+                        )
+
+                    result["indexed"] = True
+                    logger.info(
+                        "Processed annual report %s/%s LOCALLY (Azure DI skipped): "
+                        "%d pages, %d chars, %d sections, %d chunks [model=%s]",
+                        scrip_code,
+                        year,
+                        int(result.get("page_count") or 0),
+                        len(local_text),
+                        len(result["sections"]),
+                        int(result.get("chunks_indexed") or 0),
+                        result["model_used"],
+                    )
+                    return result
+
+                logger.info(
+                    "Local-first: local text insufficient for %s/%s "
+                    "(chars=%d < min=%d or low alpha-ratio); escalating to Azure DI",
+                    scrip_code,
+                    year,
+                    len(local_text.strip()),
+                    min_chars,
+                )
 
         di_result = await extract_annual_report(
             file_path,

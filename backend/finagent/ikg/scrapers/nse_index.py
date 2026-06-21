@@ -25,6 +25,7 @@ import httpx
 
 from finagent.ikg.db import connect_postgres, get_database_url
 from finagent.ikg.scrapers._engine import sync_get
+from finagent.ikg.scrapers._nse_session import apply_nse_cookies, nse_cookie_status
 
 logger = logging.getLogger("finagent.ikg.scrapers.nse_index")
 
@@ -60,6 +61,16 @@ _NSE_INDEX_UNIVERSES: dict[str, dict[str, Any]] = {
             "https://archives.nseindia.com/content/indices/ind_nifty1000list.csv",
         ],
     },
+    # Full NSE equity universe (~2,000 symbols) — not just an index. This is the
+    # lever that lifts the scrapeable universe past the ~500-constituent ceiling.
+    "all_nse": {
+        "label": "All NSE Equities",
+        "source": "nse_equity_list_csv",
+        "urls": [
+            "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv",
+            "https://archives.nseindia.com/content/equities/EQUITY_L.csv",
+        ],
+    },
 }
 
 _REQUEST_DELAY_S = 5.0  # NSE rate limit: 1 req/5s
@@ -89,15 +100,20 @@ def _configured_index_universe() -> dict[str, Any]:
 def _fetch_nse_constituents(timeout_s: float = 30.0) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Fetch the configured NSE constituent CSV."""
     universe = _configured_index_universe()
+    logger.info("NSE fetch — %s", nse_cookie_status())
+    headers = apply_nse_cookies(_NSE_HEADERS)
     with httpx.Client(timeout=timeout_s, follow_redirects=True, trust_env=False):
         last_error: Exception | None = None
         for csv_url in universe["urls"]:
             try:
                 logger.info("Fetching %s CSV: %s", universe["label"], csv_url)
-                resp = sync_get(csv_url, headers=_NSE_HEADERS, timeout=timeout_s)
+                resp = sync_get(csv_url, headers=headers, timeout=timeout_s)
                 resp.raise_for_status()
                 text = resp.text
-                if "Company Name" not in text or "Symbol" not in text:
+                lowered = text[:2000].lower()
+                # Accept both index CSVs ("Symbol","Company Name") and the full
+                # equity list EQUITY_L.csv ("SYMBOL","NAME OF COMPANY").
+                if "symbol" not in lowered or ("company name" not in lowered and "name of company" not in lowered):
                     logger.warning("NSE CSV response from %s missing expected header", csv_url)
                     continue
                 rows = list(csv.DictReader(io.StringIO(text)))
@@ -180,11 +196,18 @@ def parse_nse_companies(
     parsed: list[dict[str, Any]] = []
     seen_symbols: set[str] = set()
     for item in raw_data:
-        symbol = (item.get("Symbol") or item.get("symbol") or "").strip().upper()
-        name = (item.get("Company Name") or item.get("companyName") or "").strip()
-        isin = (item.get("ISIN Code") or item.get("identifier") or item.get("isin") or "").strip().upper()
-        industry = (item.get("Industry") or item.get("industry") or "").strip()
-        series = (item.get("Series") or item.get("series") or "EQ").strip().upper()
+        # Header variants: index CSV uses "Symbol"/"Company Name"/"ISIN Code";
+        # full equity list EQUITY_L.csv uses "SYMBOL"/"NAME OF COMPANY"/"ISIN NUMBER"
+        # (DictReader keys can carry leading spaces, e.g. " ISIN NUMBER").
+        norm = {str(k).strip().upper(): (v or "") for k, v in item.items() if k is not None}
+        symbol = (item.get("Symbol") or item.get("symbol") or norm.get("SYMBOL") or "").strip().upper()
+        name = (item.get("Company Name") or item.get("companyName") or norm.get("NAME OF COMPANY") or "").strip()
+        isin = (
+            item.get("ISIN Code") or item.get("identifier") or item.get("isin")
+            or norm.get("ISIN NUMBER") or norm.get("ISIN") or ""
+        ).strip().upper()
+        industry = (item.get("Industry") or item.get("industry") or norm.get("INDUSTRY") or "").strip()
+        series = (item.get("Series") or item.get("series") or norm.get("SERIES") or "EQ").strip().upper()
         sector = _industry_to_sector(industry)
 
         if not symbol or not name or symbol in seen_symbols:

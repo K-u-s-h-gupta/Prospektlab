@@ -862,6 +862,18 @@ class IKGService:
             "auditors": results.get("auditors") or [],
             "audit_firm": subgraph.get("audit_firm") or [],
         }
+        # IGS predictive governance composite (rules + model). Read the precomputed
+        # score-history row first; fall back to a live blend. Additive + fully
+        # guarded so the bundle never breaks when the IGS layer is unavailable.
+        if cin:
+            try:
+                from finagent.ikg.igs.scoring import get_latest_score
+
+                igs_score = get_latest_score(cin)
+                if igs_score:
+                    governance["igs_score"] = igs_score
+            except Exception:
+                logger.debug("IGS score lookup failed for %s", cin, exc_info=True)
         ownership = {
             "promoters": ownership_edges or graph_promoters,
             "promoter_chain": summary_promoter_chain or promoter_chain,

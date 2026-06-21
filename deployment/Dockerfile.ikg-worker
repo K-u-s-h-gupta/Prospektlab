@@ -22,4 +22,9 @@ RUN uv sync --no-dev
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
+# IGS predictive model deps (Phase C). Core trio baked so train/score survive image
+# rebuilds; shap + scikit-survival stay optional (heavy numba/scipy builds) and the
+# model degrades gracefully without them. See deployment/requirements.igs.txt.
+RUN uv pip install --no-cache-dir scikit-learn lightgbm joblib
+
 CMD ["python", "-m", "finagent.ikg.pipeline.scheduler"]
