@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAuth } from '../../context/AuthContext';
+import { APP_BETA_ACCESS_NOTE, APP_BETA_BADGE } from '../../constants/beta';
 
 interface SidebarProps {
   conversations: Array<{ id: string; title: string; date: string }>;
@@ -189,16 +190,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 Prospekt Lab
               </span>
               <span
-                className="badge badge-premium nav-text"
+                className="beta-pill nav-text"
                 style={{
                   fontSize: '8px',
-                  padding: '2px 5px',
+                  padding: '2px 6px',
                   marginRight: '8px',
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
                 }}
               >
-                PRO
+                {APP_BETA_BADGE}
               </span>
               <button
                 onClick={(event) => {
@@ -258,6 +259,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <MessageSquarePlus size={16} color="var(--accent-cyan)" />
             {!isCollapsed && <span className="nav-text">New Chat</span>}
           </button>
+          {!isCollapsed && (
+            <div className="beta-note" style={{ marginTop: 10, textAlign: 'center' }}>
+              {APP_BETA_ACCESS_NOTE}
+            </div>
+          )}
         </div>
 
         {!isCollapsed && (

@@ -11,6 +11,7 @@ import {
 } from '../api/client';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
 import { useAuth } from '../context/AuthContext';
+import { APP_BETA_ACCESS_NOTE, APP_BETA_BADGE, APP_BETA_LABEL } from '../constants/beta';
 
 interface PortfolioItem {
   symbol: string;
@@ -317,10 +318,15 @@ export const UploadPage: React.FC = () => {
           <span style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.5px' }} className="text-gradient">ProspektLab</span>
         </div>
 
+        <div className="beta-inline-group" style={{ justifyContent: 'center' }}>
+          <span className="beta-pill">{APP_BETA_BADGE}</span>
+          <span className="beta-note">{APP_BETA_LABEL} • {APP_BETA_ACCESS_NOTE}</span>
+        </div>
+
         <div style={{ textAlign: 'center' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Upload your statement</h2>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Upload your eCAS PDF, broker statement, or a screenshot of your holdings. PDFs may need your PAN as the password.
+            Upload your eCAS PDF, broker statement, or a screenshot of your holdings. PDFs may need your PAN as the password. Beta access remains free for invited users.
           </p>
         </div>
 

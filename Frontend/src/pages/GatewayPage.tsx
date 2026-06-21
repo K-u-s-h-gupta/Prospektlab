@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/layout/Logo';
 import { Keyboard, UploadCloud, ArrowRight, TrendingUp, ShieldCheck, BadgeInfo } from 'lucide-react';
 import { trackEvent } from '../telemetry';
+import { APP_BETA_ACCESS_NOTE, APP_BETA_BADGE, APP_BETA_LABEL } from '../constants/beta';
 
 interface GatewaySetupCardProps {
   embedded?: boolean;
@@ -84,12 +85,17 @@ export const GatewaySetupCard: React.FC<GatewaySetupCardProps> = ({ embedded = f
           </span>
         </div>
 
+        <div className="beta-inline-group" style={{ justifyContent: 'center' }}>
+          <span className="beta-pill">{APP_BETA_BADGE}</span>
+          <span className="beta-note">{APP_BETA_LABEL} • {APP_BETA_ACCESS_NOTE}</span>
+        </div>
+
         <div style={{ textAlign: 'center' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>
             Build your command center
           </h2>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Tell us a little about yourself, then choose how you want to set up your portfolio.
+            You are in the invite-only beta. Tell us a little about yourself, then choose how you want to set up your portfolio.
           </p>
         </div>
 
@@ -184,7 +190,7 @@ export const GatewaySetupCard: React.FC<GatewaySetupCardProps> = ({ embedded = f
             <div>
               <div style={{ fontSize: '14px', fontWeight: 600 }}>Type manually</div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                Enter your holdings quickly. No account setup is required to preview your dashboard.
+                Enter your holdings quickly. Shared beta access is enough to preview your dashboard.
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-cyan)', fontSize: '12px', fontWeight: 600, marginTop: 'auto' }}>
@@ -230,7 +236,7 @@ export const GatewaySetupCard: React.FC<GatewaySetupCardProps> = ({ embedded = f
             <div>
               <div style={{ fontSize: '14px', fontWeight: 600 }}>Upload eCAS / Screenshot</div>
               <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                Sync your real broker statement for the most accurate analysis.
+                Sync your real broker statement for the most accurate beta analysis.
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-indigo)', fontSize: '12px', fontWeight: 600, marginTop: 'auto' }}>

@@ -43,6 +43,7 @@ import {
 import { Search, Sparkles, MessageSquare, ChevronRight, ChevronDown, ChevronLeft, Activity, TrendingDown, ExternalLink } from 'lucide-react';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
 import { buildProspektCover } from '../utils/coverArt';
+import { APP_BETA_ACCESS_NOTE, APP_BETA_BADGE, APP_BETA_CHAT_FOOTER, APP_BETA_DEEP_NOTE } from '../constants/beta';
 
 type DashboardFeatureTab = 'overview' | 'portfolio' | 'watchlist' | 'screener' | 'earnings' | 'governance';
 
@@ -5090,7 +5091,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                     <Sparkles size={12} /> Full thesis
                     {!isPro && (
                       <span style={{ position: 'absolute', top: -6, right: -6, background: 'var(--gradient-brand)', color: '#0f172a', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 999 }}>
-                        PRO
+                        {APP_BETA_BADGE}
                       </span>
                     )}
                   </button>
@@ -5145,10 +5146,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                           }}>{isDeepPremium ? '🔒' : '⚠'}</div>
                           <div>
                             <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: isDeepPremium ? '#38BDF8' : '#F87171' }}>
-                              {isDeepPremium ? 'Deep Mode is Pro' : 'Research Limit Reached'}
+                              {isDeepPremium ? 'Deep Mode beta limit' : 'Research Limit Reached'}
                             </h4>
                             <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                              {isDeepPremium ? 'Free tier includes 1 deep run per week' : 'Weekly allocation exhausted'}
+                              {isDeepPremium ? APP_BETA_DEEP_NOTE : 'Weekly allocation exhausted for this beta seat'}
                             </span>
                           </div>
                         </div>
@@ -5168,22 +5169,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                         </div>
 
                         {detail.upgrade_available && !isPro && (
-                          <button
-                            onClick={() => navigate('/pricing')}
-                            style={{
-                              width: '100%',
-                              padding: '10px',
-                              borderRadius: 8,
-                              border: 'none',
-                              background: 'var(--gradient-brand)',
-                              color: '#0f172a',
-                              fontSize: 13,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Subscribe to Pro — Unlock Deep Mode
-                          </button>
+                          <div style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            borderRadius: 8,
+                            border: '1px solid rgba(56, 189, 248, 0.14)',
+                            background: 'rgba(56, 189, 248, 0.07)',
+                            color: 'var(--text-secondary)',
+                            fontSize: 12,
+                            lineHeight: 1.45,
+                          }}>
+                            {APP_BETA_ACCESS_NOTE}
+                          </div>
                         )}
 
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px', marginTop: '4px' }}>
@@ -5227,9 +5224,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
               onPendingConsumed={() => setPendingChatQuery(null)}
             />
             <div className="chat-rail-footer">
-              {isPro
-                ? 'Arthik • Pro • Unlimited Deep • Esc to stop'
-                : 'Arthik • Free • 1 Deep run/week • Esc to stop'}
+              {APP_BETA_CHAT_FOOTER}
             </div>
           </div>
           </div>
