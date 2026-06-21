@@ -362,12 +362,7 @@
   .foot-col a:hover { opacity: 1; color: #fff; }
   .foot-base { display: flex; justify-content: space-between; align-items: center; padding: 22px 0 30px; border-top: 1px solid rgba(255,255,255,0.08); font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em; color: rgba(234,227,214,0.5); flex-wrap: wrap; gap: 14px; }
 
-  /* ── Custom cursor ── */
-  .cursor-dot, .cursor-ring { position: fixed; top: 0; left: 0; z-index: 9999; pointer-events: none; border-radius: 50%; mix-blend-mode: difference; }
-  .cursor-dot { width: 6px; height: 6px; background: #fff; transform: translate(-50%,-50%); }
-  .cursor-ring { width: 34px; height: 34px; border: 1px solid #fff; transform: translate(-50%,-50%); transition: width .25s var(--ease), height .25s var(--ease), background .25s, opacity .25s; }
-  .cursor-ring.is-hover { width: 54px; height: 54px; background: rgba(255,255,255,0.12); }
-  @media (hover: none), (pointer: coarse) { .cursor-dot, .cursor-ring { display: none; } }
+
 
   /* ── Responsive ── */
   @media (max-width: 1080px) { .mb-grid { grid-template-columns: repeat(3, 1fr); } }
@@ -825,22 +820,7 @@
   function redrawSparks(){ sparkEls.forEach(function(c){ drawSpark(c,false); }); }
   window.addEventListener("resize", function(){ clearTimeout(window._sparkTimer); window._sparkTimer = setTimeout(redrawSparks,200); });
 
-  /* ── Custom cursor ── */
-  if(!window.matchMedia("(pointer: coarse)").matches){
-    var dot=document.createElement("div"); dot.className="cursor-dot";
-    var ring=document.createElement("div"); ring.className="cursor-ring";
-    document.body.appendChild(dot); document.body.appendChild(ring);
-    var mx=0,my=0,rx=0,ry=0;
-    document.addEventListener("mousemove", function(e){
-      mx=e.clientX; my=e.clientY;
-      dot.style.transform="translate("+mx+"px,"+my+"px) translate(-50%,-50%)";
-    });
-    (function loop(){ rx+=(mx-rx)*0.18; ry+=(my-ry)*0.18; ring.style.transform="translate("+rx+"px,"+ry+"px) translate(-50%,-50%)"; requestAnimationFrame(loop); })();
-    document.querySelectorAll("a,button,.chip,.story-card,[data-cursor]").forEach(function(el){
-      el.addEventListener("mouseenter",function(){ring.classList.add("is-hover");});
-      el.addEventListener("mouseleave",function(){ring.classList.remove("is-hover");});
-    });
-  }
+
 
   /* ── Magnetic buttons ── */
   if(!reduce && !window.matchMedia("(pointer: coarse)").matches){
