@@ -2174,14 +2174,15 @@ button[style*="06B6D4"]:hover {
 .discover-carousel-shell {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 12px;
   align-items: stretch;
+  position: relative;
 }
 
 .discover-nav-btn {
   align-self: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.25);
   background: rgba(15, 23, 42, 0.72);
@@ -2190,6 +2191,8 @@ button[style*="06B6D4"]:hover {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 .discover-nav-btn svg {
   width: 16px;
@@ -2202,6 +2205,7 @@ button[style*="06B6D4"]:hover {
 .discover-nav-btn:hover {
   color: var(--text-primary);
   border-color: rgba(56, 189, 248, 0.42);
+  background: rgba(15, 23, 42, 0.92);
 }
 
 .discover-nav-btn:disabled {
@@ -2210,10 +2214,35 @@ button[style*="06B6D4"]:hover {
 }
 
 .discover-carousel-body {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  gap: 0;
+  min-height: 300px;
+  cursor: grab;
+  position: relative;
+}
+
+.discover-carousel-body::-webkit-scrollbar {
+  display: none;
+}
+
+.discover-carousel-body.is-dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;
+}
+
+.discover-slide {
+  flex: 0 0 100%;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  min-height: 300px;
+  gap: 12px;
+  scroll-snap-align: start;
+  min-width: 0;
 }
 
 .discover-card {
@@ -2224,27 +2253,29 @@ button[style*="06B6D4"]:hover {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100%;
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
 .discover-card:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   border-color: rgba(56, 189, 248, 0.4);
 }
 
 .discover-card-image {
   width: 100%;
-  height: 162px;
+  height: 186px;
   object-fit: cover;
   display: block;
 }
 
 .discover-card-content {
-  padding: 12px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 126px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .discover-card-headline {
@@ -2272,6 +2303,8 @@ button[style*="06B6D4"]:hover {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  min-height: 300px;
 }
 
 .discover-dots {
@@ -2279,7 +2312,7 @@ button[style*="06B6D4"]:hover {
   justify-content: center;
   align-items: center;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .discover-dots button {
@@ -2290,6 +2323,7 @@ button[style*="06B6D4"]:hover {
   background: rgba(148, 163, 184, 0.35);
   padding: 0;
   cursor: pointer;
+  transition: width 0.2s ease, background 0.2s ease;
 }
 
 .discover-dots button.active {
@@ -2444,16 +2478,46 @@ button[style*="06B6D4"]:hover {
   }
 }
 
+@media (max-width: 1200px) {
+  .discover-carousel-shell { gap: 10px; }
+  .discover-card-image { height: 170px; }
+}
+
+@media (max-width: 1024px) {
+  .discover-slide { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .discover-card-image { height: 200px; }
+}
+
 @media (max-width: 780px) {
   .discover-carousel-shell {
     grid-template-columns: 32px minmax(0, 1fr) 32px;
     gap: 8px;
   }
-
   .discover-nav-btn {
-    display: inline-flex;
     width: 30px;
     height: 30px;
+  }
+  .discover-nav-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .discover-slide { grid-template-columns: 1fr; }
+  .discover-card-image { height: 210px; }
+  .discover-card-content { padding: 12px; }
+  .discover-card-headline { font-size: 16px; }
+  .discover-dots { margin-top: 8px; }
+}
+
+@media (min-width: 1400px) {
+  .discover-carousel-shell { gap: 16px; }
+  .discover-slide { gap: 16px; }
+  .discover-card-image { height: 200px; }
+  .discover-nav-btn {
+    width: 40px;
+    height: 40px;
   }
 }
 
