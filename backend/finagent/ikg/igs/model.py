@@ -158,7 +158,9 @@ class ModelBundle:
 
 # ── DB load: features joined to a binary failure label ────────────────────────
 
-def _load_training_frame(db_url: str, as_of: str | None) -> tuple[list[list[float]], list[int], dict[str, Any]]:
+def _load_training_frame(
+    db_url: str, as_of: str | None, *, temporal: bool = False
+) -> tuple[list[list[float]], list[int], list[str], dict[str, Any]]:
     """Load ``(X, y, stats)`` from Postgres.
 
     The label is 1 when the company (by CIN) has at least one
@@ -174,12 +176,17 @@ def _load_training_frame(db_url: str, as_of: str | None) -> tuple[list[list[floa
 
     rows_x: list[list[float]] = []
     labels: list[int] = []
+    groups: list[str] = []
     n_pos = 0
 
-    # Pick the feature snapshot: an explicit as_of, else the newest per cin.
+    # Pick the feature snapshot: an explicit as_of; else temporal (ALL point-in-time
+    # snapshots, for a richer trajectory-aware fit) or just the newest per cin.
     if as_of:
         feature_filter = "cf.as_of_date = %(as_of)s"
         params: dict[str, Any] = {"as_of": as_of}
+    elif temporal:
+        feature_filter = "true"
+        params = {}
     else:
         feature_filter = """cf.as_of_date = (
             select max(c2.as_of_date) from company_features c2 where c2.cin = cf.cin
@@ -206,10 +213,14 @@ def _load_training_frame(db_url: str, as_of: str | None) -> tuple[list[list[floa
                 rows_x.append(feature_vector(row))
                 label = 1 if row.get("label_is_failure") else 0
                 labels.append(label)
+                groups.append(str(row.get("cin") or ""))
                 n_pos += label
 
-    stats = {"n_train": len(labels), "n_pos": n_pos, "n_neg": len(labels) - n_pos}
-    return rows_x, labels, stats
+    stats = {
+        "n_train": len(labels), "n_pos": n_pos, "n_neg": len(labels) - n_pos,
+        "temporal": temporal, "n_groups": len(set(groups)),
+    }
+    return rows_x, labels, groups, stats
 
 
 def _column_medians(rows_x: list[list[float]]) -> list[float]:
@@ -263,8 +274,11 @@ def train_failure_model(
     except ImportError as exc:
         return {"success": False, "error": f"joblib unavailable: {exc}"}
 
+    # Temporal mode trains on every point-in-time snapshot (trajectory-aware) and
+    # uses cin-grouped CV so a company's quarters never straddle folds (no leakage).
+    temporal = (as_of is None) and os.getenv("IGS_TEMPORAL_TRAIN", "1").strip().lower() in {"1", "true", "yes", "on"}
     try:
-        rows_x, labels, stats = _load_training_frame(db_url, as_of)
+        rows_x, labels, groups, stats = _load_training_frame(db_url, as_of, temporal=temporal)
     except Exception as exc:
         logger.error("IGS training load failed: %s", exc)
         return {"success": False, "error": f"load failed: {exc}"}
@@ -319,10 +333,22 @@ def train_failure_model(
         from sklearn.model_selection import StratifiedKFold, cross_val_score
 
         n_splits = max(2, min(5, int(stats["n_pos"]), int(stats["n_neg"])))
-        if n_splits >= 2:
+        if n_splits >= 2 and temporal and len(set(groups)) >= n_splits:
+            # Group-aware CV: keep all of a company's snapshots in one fold so the
+            # reported AUC is leak-free (the only honest number for a moat claim).
+            from sklearn.model_selection import GroupKFold
+
+            gkf = GroupKFold(n_splits=n_splits)
+            scores = cross_val_score(
+                estimator, x_arr, y_arr, cv=gkf, groups=np.asarray(groups), scoring="roc_auc"
+            )
+            auc_cv = float(np.mean(scores))
+            stats["cv"] = "group_kfold_by_cin"
+        elif n_splits >= 2:
             skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
             scores = cross_val_score(estimator, x_arr, y_arr, cv=skf, scoring="roc_auc")
             auc_cv = float(np.mean(scores))
+            stats["cv"] = "stratified_kfold"
     except Exception as exc:  # pragma: no cover - depends on sklearn presence
         logger.warning("IGS AUC CV skipped: %s", exc)
 
@@ -795,7 +821,7 @@ def train_novelty_model(
 
     out_path = model_path or os.getenv("IGS_NOVELTY_MODEL_PATH") or "/app/models/igs_iforest.pkl"
     try:
-        rows_x, _labels, stats = _load_training_frame(db_url, as_of)
+        rows_x, _labels, _groups, stats = _load_training_frame(db_url, as_of)
     except Exception as exc:
         return {"success": False, "error": f"load failed: {exc}", "optional": True}
     if stats["n_train"] < 2:
