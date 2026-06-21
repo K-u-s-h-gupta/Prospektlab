@@ -920,20 +920,29 @@ def run_failure_events_refresh() -> PipelineRunResult:
     start_t = time.time()
     try:
         from finagent.ikg.scrapers.failure_labels import run_failure_label_refresh
+        from finagent.ikg.scrapers.bse_delisting import run_bse_delisting_labels
 
         stats = run_failure_label_refresh(database_url=_DATABASE_URL)
+        bse = run_bse_delisting_labels(database_url=_DATABASE_URL)
         mca = stats.get("mca", {})
         sebi = stats.get("sebi", {})
-        result.records_stored = int(mca.get("rows_upserted", 0) or 0) + int(sebi.get("rows_upserted", 0) or 0)
+        result.records_stored = (
+            int(mca.get("rows_upserted", 0) or 0)
+            + int(sebi.get("rows_upserted", 0) or 0)
+            + int(bse.get("rows_upserted", 0) or 0)
+        )
         result.records_fetched = int(mca.get("total_failures", 0) or 0)
-        result.success = bool(stats.get("success"))
+        result.success = bool(stats.get("success") and bse.get("success"))
         if not result.success:
-            result.error = mca.get("error") or sebi.get("error") or "failure label mining incomplete"
+            result.error = mca.get("error") or sebi.get("error") or bse.get("error") or "failure label mining incomplete"
         result.metadata.update({
             "mca_rows_upserted": mca.get("rows_upserted"),
             "mca_total_failures": mca.get("total_failures"),
             "sebi_rows_upserted": sebi.get("rows_upserted"),
             "sebi_orders_scanned": sebi.get("orders_scanned"),
+            "bse_delisting_upserted": bse.get("rows_upserted"),
+            "bse_delisting_mapped": bse.get("mapped"),
+            "bse_delisting_fetched": bse.get("fetched"),
         })
     except Exception as exc:
         logger.error("Failure events refresh failed: %s", exc)
