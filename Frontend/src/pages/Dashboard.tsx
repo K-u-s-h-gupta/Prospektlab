@@ -3218,95 +3218,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
   const hasEngaged = messages.some((msg, index) => msg.sender === 'user' || index > 0);
 
-  /* ─────────────────────────────────────────────
-     ARTHIK PERSONALIZED GREETING
-  ───────────────────────────────────────────── */
-  const getArthikGreeting = (): string => {
-    const hour = new Date().getHours();
-    const name = (user?.name || localStorage.getItem('prospektlab_username') || 'there').split(/\s+/)[0];
-    const portfolioSize = portfolio.length;
-    const marketOpen = hour >= 9 && hour < 16;
-    const isWeekend = [0, 6].includes(new Date().getDay());
-
-    const timeOfDay =
-      hour < 5 ? 'night' :
-      hour < 12 ? 'morning' :
-      hour < 17 ? 'afternoon' :
-      hour < 21 ? 'evening' : 'night';
-
-    const greetings: string[] = [];
-
-    if (timeOfDay === 'night') {
-      greetings.push(
-        `Still up, ${name}? Markets are closed, but the best moves are planned in silence. What's on your mind?`,
-        `Late night research session, ${name}? I like that. What are you digging into?`,
-        `The markets sleep, but the sharp money never does. What's keeping you up, ${name}?`
-      );
-    } else if (timeOfDay === 'morning') {
-      if (marketOpen && !isWeekend) {
-        greetings.push(
-          `Markets are live, ${name}. Nifty opened a few minutes ago. What's the first thing you want to check?`,
-          `Good morning, ${name}. The opening bell just rang. Want a quick scan of your watchlist?`,
-          `Morning, ${name}. Fresh tape, fresh numbers. What should we look at first?`
-        );
-      } else {
-        greetings.push(
-          `Good morning, ${name}. Markets are closed today, but there's always something to read. What's on your mind?`,
-          `Morning, ${name}. No market action today, but we can still prep for tomorrow. What are you thinking about?`,
-          `Hey ${name}. Quiet morning with no market noise — perfect time to dig deep into something. What do you want to explore?`
-        );
-      }
-    } else if (timeOfDay === 'afternoon') {
-      if (marketOpen && !isWeekend) {
-        greetings.push(
-          `Afternoon, ${name}. Mid-session often reveals the real trend. What do you want to analyze?`,
-          `Hey ${name}. The market's been running for a few hours now. Want to check how your positions are holding up?`,
-          `Good afternoon, ${name}. Want me to run a quick risk check on your book while the tape is active?`
-        );
-      } else {
-        greetings.push(
-          `Afternoon, ${name}. No live tape right now, but we can still build conviction. What are you researching?`,
-          `Hey ${name}. Quiet afternoon — perfect for deep research. What company do you want to understand better?`
-        );
-      }
-    } else { // evening
-      if (marketOpen && !isWeekend) {
-        greetings.push(
-          `Evening, ${name}. Markets are closing soon. Want a summary of what moved today?`,
-          `Hey ${name}. The closing bell is coming up. Should we review how your positions performed today?`,
-          `Good evening, ${name}. Last hour of trading — want me to flag anything unusual in your watchlist?`
-        );
-      } else {
-        greetings.push(
-          `Evening, ${name}. Markets are closed. Want me to run a DCF on something you've been watching?`,
-          `Hey ${name}. The market's done for the day. Perfect time to research without the noise. What do you want to explore?`,
-          `Good evening, ${name}. Want me to audit a stock you've been thinking about buying?`
-        );
-      }
-    }
-
-    // Portfolio-aware additions
-    if (portfolioSize > 0) {
-      greetings.push(
-        `Hey ${name}. You've got ${portfolioSize} positions in your book. Want me to check what's changed since yesterday?`,
-        `Hi ${name}. Your portfolio has ${portfolioSize} holdings. Should I run a quick risk scan?`,
-        `Welcome back, ${name}. I see ${portfolioSize} positions in your portfolio. Anything specific you want me to dig into?`
-      );
-    } else {
-      greetings.push(
-        `Hey ${name}. Your portfolio is empty right now — want me to help you build a watchlist?`,
-        `Hi ${name}. No holdings synced yet. Want me to find a few solid names to start tracking?`,
-        `Welcome, ${name}. Let's start building your research dashboard. What sector interests you?`
-      );
-    }
-
-    // Pick one based on a rotating hash of the current hour
-    const index = (hour + new Date().getDate()) % greetings.length;
-    return greetings[index];
-  };
-
-  const arthikGreeting = getArthikGreeting();
-
   const activeIndices = useMemo(() =>
     [...liveIndexData.india].sort((a, b) => b.changePct - a.changePct),
     [liveIndexData.india]
@@ -3411,14 +3322,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
   const suggestions = portfolio.length > 0
     ? [
-        `What is the pros and cons of my equities?`,
-        `Why is ${portfolio[0]?.symbol || 'my top holding'} moving against me?`,
-        `Where's the hidden risk in my portfolio?`,
+        `Pros and cons of my equities`,
+        `Why is ${portfolio[0]?.symbol || 'my top holding'} moving?`,
+        `Find hidden portfolio risk`,
       ]
     : [
-        `What's moving the Nifty right now?`,
-        `Is this a dip or a trap?`,
-        `Give me the bull case on Tata Motors.`,
+        `What's moving Nifty now?`,
+        `Is this dip a trap?`,
+        `Bull case on Tata Motors`,
       ];
 
   const portfolioExposure = useMemo(() => {
@@ -5071,7 +4982,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
             {!hasEngaged ? (
               <>
                 <div className="chat-rail-greeting">
-                  {arthikGreeting}
+                  What should Arthik analyze?
                 </div>
 
                 {suggestions.map((s, i) => (
@@ -5086,11 +4997,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                   <button
                     className="mode-chip"
                     onClick={() => handleSuggestQuery('Deep research: build a complete investment thesis on RELIANCE.', 'deep')}
-                    style={{ position: 'relative' }}
                   >
                     <Sparkles size={12} /> Full thesis
                     {!isPro && (
-                      <span style={{ position: 'absolute', top: -6, right: -6, background: 'var(--gradient-brand)', color: '#0f172a', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 999 }}>
+                      <span className="mode-chip-beta">
                         {APP_BETA_BADGE}
                       </span>
                     )}
