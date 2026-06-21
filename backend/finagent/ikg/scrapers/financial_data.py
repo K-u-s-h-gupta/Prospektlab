@@ -444,9 +444,13 @@ def run_financial_data_scraper(
     )
 
     def _process_company(company: dict[str, Any]) -> dict[str, int]:
-        ticker = str(company.get("nse_symbol") or "").strip().upper()
+        # Exchange-agnostic: NSE-only, BSE-only, and dual-listed all covered.
+        # yfinance supports .NS (NSE) and .BO (BSE); screener.in resolves both an
+        # NSE symbol and a BSE scrip code in its /company/<id>/ URL.
+        nse = str(company.get("nse_symbol") or "").strip().upper()
+        bse = str(company.get("bse_scrip_code") or "").strip()
         cin = company.get("cin")
-        if not ticker:
+        if not nse and not bse:
             return {
                 "companies_processed": 0,
                 "yf_success": 0,
@@ -454,12 +458,17 @@ def run_financial_data_scraper(
                 "validated_stored": 0,
             }
 
-        yf_data = fetch_yfinance_financials(ticker)
+        yf_data = fetch_yfinance_financials(nse) if nse else None
+        if not yf_data and bse:
+            yf_data = fetch_yfinance_financials(f"{bse}.BO")
         time.sleep(0.25)
-        screener_data = fetch_screener_financials(ticker)
+        screener_data = fetch_screener_financials(nse) if nse else None
+        if not screener_data and bse:
+            screener_data = fetch_screener_financials(bse)
         time.sleep(_REQUEST_DELAY_S)
 
-        validated = cross_validate_financials(yf_data, screener_data, ticker)
+        label = nse or (f"{bse}.BO" if bse else "")
+        validated = cross_validate_financials(yf_data, screener_data, label)
         stored = store_financials_to_postgres(
             validated,
             cin,
