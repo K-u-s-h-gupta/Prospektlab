@@ -52,6 +52,7 @@ const DEFAULT_CHAT_WIDTH = 360;
 const MAX_CHAT_WIDTH = 440;
 
 const getViewportWidth = () => (typeof window === 'undefined' ? 1440 : window.innerWidth);
+const isMobileViewport = () => getViewportWidth() <= 768;
 
 const getMaxChatWidth = () => {
   const viewport = getViewportWidth();
@@ -1079,6 +1080,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   const [isDraggingChat, setIsDraggingChat] = useState(false);
   const [isChatHidden, setIsChatHidden] = useState(() => {
     const savedWidth = localStorage.getItem(CHAT_WIDTH_STORAGE_KEY);
+    if (isMobileViewport()) return true;
     return savedWidth ? parseInt(savedWidth, 10) <= 0 : false;
   });
 
@@ -1210,7 +1212,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   const discoverBodyRef = useRef<HTMLDivElement>(null);
   const discoverSlideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const isDiscoverDraggingRef = useRef(false);
-  const discoverDragStartRef = useRef<{ x: number; scrollLeft: number; pointerId: number } | null>(null);
+  const discoverDragStartRef = useRef<{ x: number; y: number; scrollLeft: number; pointerId: number; pointerType: string; axis?: 'x' | 'y' } | null>(null);
   const discoverDragMovedRef = useRef(false);
   const prevCardsPerSlideRef = useRef(cardsPerSlide);
   const [marketMovers, setMarketMovers] = useState<MarketMoverItem[]>(() => readCachedMarketMovers());
@@ -3488,21 +3490,42 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   };
 
   const handleDiscoverPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0 || e.pointerType !== 'mouse' || !discoverBodyRef.current) return;
+    if ((e.pointerType === 'mouse' && e.button !== 0) || !discoverBodyRef.current) return;
     const el = discoverBodyRef.current;
     isDiscoverDraggingRef.current = true;
     discoverDragMovedRef.current = false;
-    discoverDragStartRef.current = { x: e.clientX, scrollLeft: el.scrollLeft, pointerId: e.pointerId };
+    discoverDragStartRef.current = { x: e.clientX, y: e.clientY, scrollLeft: el.scrollLeft, pointerId: e.pointerId, pointerType: e.pointerType };
     el.style.cursor = 'grabbing';
     el.style.scrollSnapType = 'none';
-    try { el.setPointerCapture(e.pointerId); } catch {}
+    if (e.pointerType === 'mouse') {
+      try { el.setPointerCapture(e.pointerId); } catch {}
+    }
   };
 
   const handleDiscoverPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isDiscoverDraggingRef.current || !discoverDragStartRef.current || !discoverBodyRef.current) return;
-    const dx = e.clientX - discoverDragStartRef.current.x;
+    const start = discoverDragStartRef.current;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+
+    if (start.pointerType !== 'mouse' && !start.axis) {
+      if (Math.max(absX, absY) < 6) return;
+      start.axis = absX > absY ? 'x' : 'y';
+      if (start.axis === 'y') {
+        isDiscoverDraggingRef.current = false;
+        discoverDragStartRef.current = null;
+        discoverBodyRef.current.style.cursor = '';
+        discoverBodyRef.current.style.scrollSnapType = '';
+        return;
+      }
+      try { discoverBodyRef.current.setPointerCapture(start.pointerId); } catch {}
+    }
+
+    if (start.axis === 'y') return;
     if (Math.abs(dx) > 4) discoverDragMovedRef.current = true;
-    discoverBodyRef.current.scrollLeft = discoverDragStartRef.current.scrollLeft - dx;
+    discoverBodyRef.current.scrollLeft = start.scrollLeft - dx;
   };
 
   const handleDiscoverPointerUp = () => {
