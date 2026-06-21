@@ -89,6 +89,7 @@ create table if not exists company_features (
     own_enforcement_count int, director_enforcement_count int, enforcement_proximity_hops int,
     auditor_count_5y int, mid_term_auditor_change boolean,
     rpt_party_count int, rpt_relationship_types int,
+    director_other_boards int, shared_failure_director_count int, enforcement_2hop_count int,
     beneish_m_score numeric, accrual_ratio numeric,
     feature_version text not null default 'igs_features_v1',
     computed_at timestamptz not null default now(),
@@ -96,6 +97,9 @@ create table if not exists company_features (
 );
 create index if not exists idx_company_features_asof on company_features (as_of_date);
 create index if not exists idx_company_features_cin on company_features (cin);
+alter table company_features add column if not exists director_other_boards int;
+alter table company_features add column if not exists shared_failure_director_count int;
+alter table company_features add column if not exists enforcement_2hop_count int;
 """
 
 
@@ -244,6 +248,45 @@ def build_company_features(
                         "rpt_relationship_types": int(r["rel_types"] or 0),
                     })
 
+                # 7) Director-network contagion (the cross-company moat signal):
+                #    shared directors who also sit on failed / enforced boards.
+                cur.execute(
+                    """
+                    with tgt(cin) as (select unnest(%s::text[])),
+                    co_din as (
+                        select replace(e.to_vertex_id, 'company:', '') as cin, e.from_vertex_id as din
+                        from ikg_edges e
+                        join tgt on tgt.cin = replace(e.to_vertex_id, 'company:', '')
+                        where e.label = 'DIRECTOR_OF'
+                    ),
+                    din_other as (
+                        select e.from_vertex_id as din, replace(e.to_vertex_id, 'company:', '') as other_cin
+                        from ikg_edges e where e.label = 'DIRECTOR_OF'
+                    )
+                    select cd.cin,
+                           count(distinct dou.other_cin) filter (where dou.other_cin <> cd.cin) as other_boards,
+                           count(distinct cd.din) filter (
+                               where exists (select 1 from failure_events fe
+                                             where fe.cin = dou.other_cin and fe.is_failure)
+                           ) as shared_failure_directors,
+                           count(distinct cd.din) filter (
+                               where exists (select 1 from ikg_edges en
+                                             where en.label = 'ENFORCEMENT_ACTION_AGAINST'
+                                               and en.to_vertex_id = 'company:' || dou.other_cin)
+                           ) as enf2
+                    from co_din cd
+                    join din_other dou on dou.din = cd.din
+                    group by cd.cin
+                    """,
+                    (targets,),
+                )
+                for r in cur.fetchall():
+                    feats.setdefault(r["cin"], {"cin": r["cin"]}).update({
+                        "director_other_boards": int(r["other_boards"] or 0),
+                        "shared_failure_director_count": int(r["shared_failure_directors"] or 0),
+                        "enforcement_2hop_count": int(r["enf2"] or 0),
+                    })
+
                 # Derived: enforcement proximity hops.
                 for c, f in feats.items():
                     own = int(f.get("own_enforcement_count") or 0)
@@ -267,6 +310,7 @@ _FEATURE_COLUMNS = (
     "director_count", "board_churn_12m", "recent_cessations_12m",
     "own_enforcement_count", "director_enforcement_count", "enforcement_proximity_hops",
     "auditor_count_5y", "mid_term_auditor_change", "rpt_party_count", "rpt_relationship_types",
+    "director_other_boards", "shared_failure_director_count", "enforcement_2hop_count",
     "beneish_m_score", "accrual_ratio",
 )
 

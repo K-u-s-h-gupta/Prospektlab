@@ -63,6 +63,9 @@ FEATURE_COLUMNS: list[str] = [
     "mid_term_auditor_change",
     "rpt_party_count",
     "rpt_relationship_types",
+    "director_other_boards",
+    "shared_failure_director_count",
+    "enforcement_2hop_count",
     "beneish_m_score",
     "accrual_ratio",
 ]

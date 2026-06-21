@@ -482,6 +482,41 @@ def run_board_change_refresh(max_companies: int | None = None, since: str | None
     return result
 
 
+def run_governance_board_refresh(max_companies: int | None = None) -> PipelineRunResult:
+    """Full current boards from BSE quarterly Corporate Governance reports (Reg 27)."""
+    result = PipelineRunResult(task_name="governance_board_refresh", started_at=_now_iso())
+    result.metadata = {
+        "source_name": "BSE corporate governance reports (Reg 27 full board)",
+        "official_source_url": "https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w",
+        "parser_version": "bse_governance_board_v1",
+    }
+    start_t = time.time()
+    try:
+        from finagent.ikg.scrapers.bse_governance_board import run_governance_board_scraper
+        from finagent.ikg.scrapers.mca_companies import get_listed_companies
+
+        companies = get_listed_companies(database_url=_DATABASE_URL, indexed_only=_use_indexed_listed_companies())
+        if not companies:
+            result.error = "No listed companies available for governance-board refresh"
+            result.success = False
+        else:
+            stats = run_governance_board_scraper(companies, database_url=_DATABASE_URL, max_companies=max_companies)
+            result.records_fetched = int(stats.get("director_candidates", 0) or 0)
+            result.records_stored = int(stats.get("directors_stored", 0) or 0)
+            result.records_failed = int(stats.get("errors", 0) or 0)
+            result.success = bool(stats.get("success"))
+            result.error = stats.get("error")
+            result.metadata.update({k: stats.get(k) for k in ("companies_processed", "reports_found")})
+    except Exception as exc:
+        logger.error("Governance-board refresh failed: %s", exc)
+        result.error = str(exc)
+        result.success = False
+    result.duration_s = round(time.time() - start_t, 2)
+    result.completed_at = _now_iso()
+    _log_run_result(result)
+    return result
+
+
 def run_financial_data_refresh(max_companies: int | None = None) -> PipelineRunResult:
     """Phase 6: Refresh financial data (yfinance + Screener.in cross-validate)."""
     result = PipelineRunResult(task_name="financial_data_refresh", started_at=_now_iso())
@@ -1633,7 +1668,7 @@ if __name__ == "__main__":
         "bootstrap", "nse", "shp", "eod", "directors", "governance_directors", "director_kmp", "financials",
         "sebi", "sebi_filings", "corp_filings", "corp_filing_hydrate", "annual_reports", "concall", "build_graph", "nifty500_parallel", "historical_backfill", "health",
         "qdrant_index", "failure_events", "igs_features", "igs_train", "igs_score",
-        "board_changes",
+        "board_changes", "governance_board",
     ], default="health")
     parser.add_argument("--csv-path", help="Path to MCA CSV file")
     parser.add_argument("--max-companies", type=int, help="Limit companies (for testing)")
@@ -1706,6 +1741,8 @@ if __name__ == "__main__":
         print(run_igs_scoring_refresh(max_companies=args.max_companies).to_dict())
     elif args.phase == "board_changes":
         print(run_board_change_refresh(max_companies=args.max_companies).to_dict())
+    elif args.phase == "governance_board":
+        print(run_governance_board_refresh(max_companies=args.max_companies).to_dict())
     elif args.phase == "qdrant_index":
         print(run_qdrant_document_index_refresh().to_dict())
     elif args.phase == "nifty500_parallel":
