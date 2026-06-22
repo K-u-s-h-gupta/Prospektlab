@@ -196,14 +196,30 @@ def _load_training_frame(
         )"""
         params = {}
 
+    # Point-in-time label (leak-free, date-aware):
+    #   • dated failure → positive only for snapshots inside the pre-failure window
+    #     [event_date - horizon, event_date] (i.e. "failure is imminent"); snapshots
+    #     long before, or after, the event are negative.
+    #   • undated failure (most MCA strike-offs / BSE delistings) → label ONLY the
+    #     latest snapshot positive, never historical ones (we can't know when it began).
+    horizon_months = int(os.getenv("IGS_LABEL_HORIZON_MONTHS", "18"))
+    params["horizon"] = horizon_months
     query = f"""
         select cf.*,
                coalesce((
-                   select bool_or(fe.is_failure)
+                   select bool_or(
+                       case
+                         when fe.event_date is not null then
+                              cf.as_of_date <= fe.event_date
+                              and fe.event_date <= (cf.as_of_date + (%(horizon)s || ' months')::interval)
+                         else cf.as_of_date = (
+                              select max(c3.as_of_date) from company_features c3 where c3.cin = cf.cin
+                         )
+                       end
+                   )
                    from failure_events fe
                    where fe.cin = cf.cin
                      and fe.is_failure = true
-                     and (fe.event_date is null or fe.event_date >= cf.as_of_date)
                ), false) as label_is_failure
         from company_features cf
         where {feature_filter}
