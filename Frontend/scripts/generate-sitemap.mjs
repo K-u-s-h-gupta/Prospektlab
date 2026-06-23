@@ -28,15 +28,24 @@ const staticRoutes = [
   { loc: '/', priority: '1.0', changefreq: 'weekly' },
   { loc: '/get-started', priority: '0.8', changefreq: 'weekly' },
   { loc: '/dashboard/overview', priority: '0.9', changefreq: 'daily' },
+  { loc: '/dashboard/portfolio', priority: '0.8', changefreq: 'daily' },
+  { loc: '/dashboard/watchlist', priority: '0.8', changefreq: 'daily' },
+  { loc: '/dashboard/screener', priority: '0.8', changefreq: 'daily' },
+  { loc: '/dashboard/earnings', priority: '0.7', changefreq: 'weekly' },
+  { loc: '/dashboard/governance', priority: '0.7', changefreq: 'weekly' },
   { loc: '/insights-studio', priority: '0.8', changefreq: 'weekly' },
+  { loc: '/insights/research/', priority: '0.9', changefreq: 'daily' },
 ];
 
 function generateSitemap() {
   const urls = [];
+  const seen = new Set();
 
   staticRoutes.forEach(route => {
+    const loc = `${BASE_URL}${route.loc}`;
+    seen.add(loc);
     urls.push({
-      loc: `${BASE_URL}${route.loc}`,
+      loc,
       lastmod: formatDate(new Date()),
       changefreq: route.changefreq,
       priority: route.priority,
@@ -52,8 +61,11 @@ function generateSitemap() {
         const dirPath = path.join(INSIGHTS_DIR, slug);
         const indexPath = path.join(dirPath, 'index.html');
         if (fs.existsSync(indexPath)) {
+          const loc = `${BASE_URL}/insights/${slug}/`;
+          if (seen.has(loc)) return;
+          seen.add(loc);
           urls.push({
-            loc: `${BASE_URL}/insights/${slug}/`,
+            loc,
             lastmod: getLastmod(dirPath),
             changefreq: 'monthly',
             priority: '0.8',

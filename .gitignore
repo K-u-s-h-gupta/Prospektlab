@@ -11,6 +11,8 @@ ENV/
 
 # Local / agent state
 .finagent/
+.proxy/
+.upstox/
 backend/finagent/.env
 frontend/.env
 *.sqlite3

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Logo } from '../components/layout/Logo';
 import { useAuth } from '../context/AuthContext';
+import { safeLocalStorageGet, safeLocalStorageSet } from '../utils/browserStorage';
 
 /* ─────────────────────────────────────────────
    DATA
@@ -15,25 +16,25 @@ import { useAuth } from '../context/AuthContext';
 const ACTIVITY_FEED = [
   { avatar: 'RK', name: 'Rahul K.', city: 'Mumbai', action: 'flagged a promoter pledge risk on ASIANPAINT', time: '2 min ago', color: '#38BDF8' },
   { avatar: 'PV', name: 'Priya V.', city: 'Bengaluru', action: 'ran DCF on RELIANCE. Found 12.3% upside.', time: '4 min ago', color: '#818CF8' },
-  { avatar: 'AS', name: 'Ankit S.', city: 'Hyderabad', action: 'compared TCS vs INFY. Rebalanced ₹8L.', time: '7 min ago', color: '#34D399' },
+  { avatar: 'AS', name: 'Ankit S.', city: 'Hyderabad', action: 'compared TCS vs INFY. Rebalanced Rs 8L.', time: '7 min ago', color: '#34D399' },
   { avatar: 'DM', name: 'Deepa M.', city: 'Chennai', action: "avoided a likely default. Altman Z flagged it.", time: '11 min ago', color: '#A78BFA' },
   { avatar: 'VR', name: 'Vikram R.', city: 'Pune', action: 'generated a deep research memo on HDFCBANK', time: '15 min ago', color: '#F59E0B' },
-  { avatar: 'SN', name: 'Sneha N.', city: 'Delhi', action: 'spotted a ₹2.3L saving before Asian Paints dropped', time: '18 min ago', color: '#38BDF8' },
+  { avatar: 'SN', name: 'Sneha N.', city: 'Delhi', action: 'spotted a Rs 2.3L saving before Asian Paints dropped', time: '18 min ago', color: '#38BDF8' },
 ];
 
 const REVIEWS = [
-  { name: 'CA, Mumbai', location: 'Mumbai', role: 'CA & Part-time Investor', avatar: 'AM', stars: 5, title: 'Caught the Asian Paints drop before it happened', body: "Was about to add Asian Paints at ₹2,850. Arthik flagged the promoter pledge increase. I held off. Stock dropped 14% in three weeks. That call saved me ₹2.3 Lakhs on a ₹16L position.", result: 'Saved ₹2.3L in 3 weeks' },
-  { name: 'Tech professional, Bengaluru', location: 'Bengaluru', role: 'Tech Lead, Flipkart', avatar: 'PK', stars: 5, title: 'Replaced my broker research entirely', body: "Broker's PDF said BUY on everything. Arthik gave me a DCF on TCS in eight seconds. I changed the growth rate. Fair value updated in real time. Cancelled my ₹18K/yr subscription.", result: 'Cancelled ₹18K/yr broker research' },
-  { name: 'Business owner, Delhi', location: 'New Delhi', role: 'Business Owner', avatar: 'VG', stars: 4, title: 'Stopped losing money on Telegram tips', body: "Lost ₹4.8L over 18 months chasing tips. Arthik shows me actual numbers. Piotroski. Debt ratios. Cash flows. Portfolio up 22% in eight months. I understand every position I hold.", result: 'Portfolio up 22% in 8 months' },
+  { name: 'CA, Mumbai', location: 'Mumbai', role: 'CA & Part-time Investor', avatar: 'AM', stars: 5, title: 'Caught the Asian Paints drop before it happened', body: "Was about to add Asian Paints at Rs 2,850. Arthik flagged the promoter pledge increase. I held off. Stock dropped 14% in three weeks. That call saved me Rs 2.3 Lakhs on a Rs 16L position.", result: 'Saved Rs 2.3L in 3 weeks' },
+  { name: 'Tech professional, Bengaluru', location: 'Bengaluru', role: 'Tech Lead, Flipkart', avatar: 'PK', stars: 5, title: 'Replaced my broker research entirely', body: "Broker's PDF said BUY on everything. Arthik gave me a DCF on TCS in eight seconds. I changed the growth rate. Fair value updated in real time. Cancelled my Rs 18K/yr subscription.", result: 'Cancelled Rs 18K/yr broker research' },
+  { name: 'Business owner, Delhi', location: 'New Delhi', role: 'Business Owner', avatar: 'VG', stars: 4, title: 'Stopped losing money on Telegram tips', body: "Lost Rs 4.8L over 18 months chasing tips. Arthik shows me actual numbers. Piotroski. Debt ratios. Cash flows. Portfolio up 22% in eight months. I understand every position I hold.", result: 'Portfolio up 22% in 8 months' },
   { name: 'Dentist, Chennai', location: 'Chennai', role: 'Dentist & HNI Investor', avatar: 'SI', stars: 5, title: 'Altman Z saved my capital', body: "Arthik's Altman Z-Score flagged concentrated wholesale borrowing plus declining interest coverage. I passed. The company defaulted eleven weeks later. Paid for itself 100x in one decision.", result: 'Avoided a likely default' },
-  { name: 'Engineer, Jaipur', location: 'Jaipur', role: 'Civil Engineer', avatar: 'MT', stars: 5, title: 'Found a 34% margin-of-safety stock', body: "My advisor had me in 12 overlapping mutual funds. Arthik surfaced a small-cap. 0.6x book. Zero debt. 18% ROE. Bought at ₹142. It's at ₹208 now.", result: '₹142 → ₹208 in 5 months' },
+  { name: 'Engineer, Jaipur', location: 'Jaipur', role: 'Civil Engineer', avatar: 'MT', stars: 5, title: 'Found a 34% margin-of-safety stock', body: "My advisor had me in 12 overlapping mutual funds. Arthik surfaced a small-cap. 0.6x book. Zero debt. 18% ROE. Bought at Rs 142. It's at Rs 208 now.", result: 'Rs 142 → Rs 208 in 5 months' },
   { name: 'Small business owner, Kochi', location: 'Kochi', role: 'Small Business Owner', avatar: 'KN', stars: 4, title: 'It took 20 minutes to trust it. Now I can\'t stop.', body: "First time I asked 'Should I average down on Zomato?' Arthik gave me burn-rate analysis, competitive moat, and Graham valuation in one response. Goldman Sachs in my pocket.", result: 'First good Zomato call in 2 years' },
 ];
 
 const FAQS = [
   { q: "Is this SEBI-registered investment advice?", a: "No. ProspektLab is an analytical tool, not a SEBI-registered advisor. Arthik pulls public data and runs standard models. You make the call. We recommend a SEBI-registered advisor for final decisions." },
-  { q: "How is this different from ChatGPT?", a: "ChatGPT trains on 2023 data. Arthik pulls live NSE feeds. ChatGPT gives opinions. Arthik shows you the math, with editable assumptions. Also: ChatGPT costs ₹1,650/month. Arthik's free tier is actually useful." },
-  { q: "What's the catch with the free tier?", a: "No catch. 20 queries per day. Live data. Basic valuations. Portfolio tracking. The free tier saves most users from one bad trade in week one. After that, ₹499/month feels cheap." },
+  { q: "How is this different from ChatGPT?", a: "ChatGPT trains on 2023 data. Arthik pulls live NSE feeds. ChatGPT gives opinions. Arthik shows you the math, with editable assumptions. Also: ChatGPT costs Rs 1,650/month. Arthik's free tier is actually useful." },
+  { q: "What's the catch with the free tier?", a: "No catch. 20 queries per day. Live data. Basic valuations. Portfolio tracking. The free tier saves most users from one bad trade in week one. After that, Rs 499/month feels cheap." },
   { q: "How accurate are the models?", a: "Same models as sell-side research. Two-stage DCF. Altman Z. Piotroski F-Score. Graham formula. The difference: every assumption is visible. Every number is editable. Broker research hides the math. We show it." },
   { q: "Where is my portfolio data stored?", a: "In your browser. Not on our servers. We never see your holdings. Clear your cache, you re-import. That's the trade-off for real privacy." },
   { q: "Which brokers work for import?", a: "Zerodha, Groww, Upstox, ICICI Direct, and anything that exports a standard trade book CSV or PDF. If your broker gives you a statement, Arthik can read it." },
@@ -122,7 +123,8 @@ const getContext = (): Context => {
 
   let visitCount = 1;
   if (typeof window !== 'undefined') {
-    visitCount = parseInt(localStorage.getItem('pl_visits') || '0', 10) + 1;
+    const storedVisits = parseInt(safeLocalStorageGet('pl_visits', '0'), 10);
+    visitCount = (Number.isFinite(storedVisits) ? storedVisits : 0) + 1;
   }
   let visitorLine = '';
   if (visitCount === 2) visitorLine = "Back again. We thought you would be.";
@@ -150,19 +152,23 @@ const getContext = (): Context => {
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isAuthenticated, onboarded } = useAuth();
+  useAuth();
 
   /* URL/localStorage personalization (existing) */
   const urlName = searchParams.get('name') || searchParams.get('investor') || searchParams.get('ref') || '';
-  const savedName = typeof window !== 'undefined' ? (localStorage.getItem('prospektlab_username') || '') : '';
+  const savedName = safeLocalStorageGet('prospektlab_username');
   const personalName = urlName || savedName;
   const PN = personalName ? personalName.charAt(0).toUpperCase() + personalName.slice(1) : '';
-  useEffect(() => { if (urlName) localStorage.setItem('prospektlab_username', urlName); }, [urlName]);
+  useEffect(() => {
+    if (urlName) {
+      safeLocalStorageSet('prospektlab_username', urlName);
+    }
+  }, [urlName]);
 
   /* AUTOMATIC personalization (no input required) */
   const ctx = useMemo(() => getContext(), []);
   useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('pl_visits', String(ctx.visitCount));
+    safeLocalStorageSet('pl_visits', String(ctx.visitCount));
   }, [ctx.visitCount]);
 
   /* UI state */
@@ -200,8 +206,7 @@ export const LandingPage: React.FC = () => {
     setMobileMenuOpen(false);
   }, []);
 
-  const ctaTarget = isAuthenticated && onboarded ? '/dashboard' : '/get-started';
-  const handleCTA = () => navigate(ctaTarget);
+  const handleCTA = () => navigate('/dashboard/overview');
   const handleAuthAction = () => navigate('/dashboard');
 
   const toast = ACTIVITY_FEED[toastIdx];
@@ -431,7 +436,7 @@ export const LandingPage: React.FC = () => {
               <div style={{ padding:'20px 18px', display:'flex', flexDirection:'column', gap:16 }}>
                 <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
                   <div style={{ background:'rgba(56,189,248,0.1)', border:'1px solid rgba(56,189,248,0.2)', borderRadius:'14px 14px 4px 14px', padding:'10px 14px', fontSize:13, color:'var(--text-primary)', maxWidth:280, lineHeight:1.5 }}>
-                    Should I buy RELIANCE at ₹2,931? What's the real intrinsic value?
+                    Should I buy RELIANCE at Rs 2,931? What's the real intrinsic value?
                   </div>
                   <div style={{ width:28, height:28, borderRadius:'50%', background:'rgba(255,255,255,0.06)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                     <Users size={12} color="var(--text-muted)" />
@@ -445,7 +450,7 @@ export const LandingPage: React.FC = () => {
                       <span style={{ fontSize:10, background:'rgba(52,211,153,0.1)', color:'var(--profit)', padding:'2px 6px', borderRadius:4, fontWeight:700 }}>LIVE</span>
                     </div>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:14 }}>
-                      {[['DCF Value','₹3,240','+10.5%','var(--profit)'],['P/E Ratio','22.5x','5yr avg 24x','var(--text-muted)'],['Piotroski','7/9','Strong','var(--accent-cyan)']].map(([l,v,s,c]) => (
+                      {[['DCF Value','Rs 3,240','+10.5%','var(--profit)'],['P/E Ratio','22.5x','5yr avg 24x','var(--text-muted)'],['Piotroski','7/9','Strong','var(--accent-cyan)']].map(([l,v,s,c]) => (
                         <div key={l} style={{ background:'rgba(3,7,18,0.6)', borderRadius:10, padding:'10px 8px', textAlign:'center', border:'1px solid var(--border-subtle)' }}>
                           <div style={{ fontSize:9, color:'var(--text-muted)', marginBottom:5, letterSpacing:'0.06em', textTransform:'uppercase', fontWeight:600 }}>{l}</div>
                           <div style={{ fontSize:15, fontWeight:800, color:c, fontFamily:'var(--font-mono)' }}>{v}</div>
@@ -454,7 +459,7 @@ export const LandingPage: React.FC = () => {
                       ))}
                     </div>
                     <p style={{ fontSize:12, lineHeight:1.65, color:'var(--text-secondary)', marginBottom:10 }}>
-                      <strong style={{ color:'var(--text-primary)' }}>Verdict:</strong> Reasonable entry. Debt/equity <strong style={{ color:'var(--accent-cyan)' }}>0.42x</strong>. ROE <strong style={{ color:'var(--profit)' }}>11.8%</strong>. For a 15% margin of safety, wait for ₹2,700. Otherwise fair value for a quality compounder.
+                      <strong style={{ color:'var(--text-primary)' }}>Verdict:</strong> Reasonable entry. Debt/equity <strong style={{ color:'var(--accent-cyan)' }}>0.42x</strong>. ROE <strong style={{ color:'var(--profit)' }}>11.8%</strong>. For a 15% margin of safety, wait for Rs 2,700. Otherwise fair value for a quality compounder.
                     </p>
                     <div style={{ display:'flex', gap:6, fontSize:10, color:'var(--text-muted)' }}>
                       <span style={{ background:'rgba(56,189,248,0.06)', padding:'2px 8px', borderRadius:4 }}>NSE India</span>
@@ -524,7 +529,7 @@ export const LandingPage: React.FC = () => {
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:20 }} className="pain-3col">
             {[
               { icon:MessageSquare, title:"Research is a sales brochure.", body:"Every broker report ends with BUY. Every page. Every quarter. Hold doesn't pay brokerage.", stat:"0 SELL ratings in your inbox last year" },
-              { icon:AlertTriangle, title:"Tips are someone else's exit.", body:"The Telegram tip you bought at the top? That's their distribution. You're not the audience. You're the buyer.", stat:"₹4.8L average annual tip loss" },
+              { icon:AlertTriangle, title:"Tips are someone else's exit.", body:"The Telegram tip you bought at the top? That's their distribution. You're not the audience. You're the buyer.", stat:"Rs 4.8L average annual tip loss" },
               { icon:BarChart3, title:"Data isn't insight.", body:"Screener gives you 47 ratios. You stare at them and buy Reliance because it 'feels safe'. That's branding. Not investing.", stat:"23 stocks owned. 0 understood." },
             ].map((c, i) => (
               <div key={i} className="card-hover" style={{ background:'rgba(15,23,42,0.45)', border:'1px solid rgba(251,113,133,0.12)', borderRadius:18, padding:28, display:'flex', flexDirection:'column', gap:14 }}>
@@ -553,7 +558,7 @@ export const LandingPage: React.FC = () => {
             <div style={{ width:30, height:1, background:'var(--border-hover)' }} />
           </div>
           <p style={{ fontSize:15, color:'var(--text-secondary)', lineHeight:1.75, maxWidth:620, margin:'0 auto' }}>
-            You don't have a luck problem. You have a knowledge gap. The kind that costs ₹2L on Asian Paints because nobody told you the promoter pledged more shares. That gap is the only thing we close.
+            You don't have a luck problem. You have a knowledge gap. The kind that costs Rs 2L on Asian Paints because nobody told you the promoter pledged more shares. That gap is the only thing we close.
           </p>
         </div>
       </section>

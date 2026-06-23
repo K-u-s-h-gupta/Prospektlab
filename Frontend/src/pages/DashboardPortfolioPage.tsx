@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useMarketFeed, pricesToQuotesData } from '../hooks/useMarketFeed';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
 import { WatchlistCard, WatchlistStock } from '../components/dashboard/WatchlistCard';
@@ -24,7 +25,6 @@ import {
   replacePortfolioMirror,
   AgentEventData,
   getMarketIndices,
-  getMarketQuotes,
   getMarketNews,
   getPortfolioNews,
   getPortfolioBrief,
@@ -85,10 +85,10 @@ function fmtINR(v: any): string {
   if (!Number.isFinite(n)) return '—';
   const sign = n < 0 ? '-' : '';
   const a = Math.abs(n);
-  if (a >= 1e7) return `${sign}₹${(a / 1e7).toFixed(2)} Cr`;
-  if (a >= 1e5) return `${sign}₹${(a / 1e5).toFixed(2)} L`;
-  if (a >= 1e3) return `${sign}₹${(a / 1e3).toFixed(1)}k`;
-  return `${sign}₹${a.toFixed(0)}`;
+  if (a >= 1e7) return `${sign}Rs ${(a / 1e7).toFixed(2)} Cr`;
+  if (a >= 1e5) return `${sign}Rs ${(a / 1e5).toFixed(2)} L`;
+  if (a >= 1e3) return `${sign}Rs ${(a / 1e3).toFixed(1)}k`;
+  return `${sign}Rs ${a.toFixed(0)}`;
 }
 
 function MetricCard({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: string; tone?: 'up' | 'down' | 'neutral' | 'accent' }) {
@@ -637,23 +637,25 @@ export const DashboardPortfolioPage: React.FC = () => {
     setWatchlistStocks(mapped);
   }, [watchlist, allStockData]);
 
-  // Fetch quotes whenever user universe changes or periodically
+  // ── Real-time market feed (WebSocket → polling fallback) ──────────────────
+  const { prices: livePrices, indexData: liveIndexDataFeed } = useMarketFeed(userUniverseSymbols);
+
+  // Merge live WebSocket prices into quotesData
   useEffect(() => {
-    if (userUniverseSymbols.length === 0) return;
-    const fetchQuotes = async () => {
-      try {
-        const data = await getMarketQuotes(userUniverseSymbols);
-        if (data) {
-          setQuotesData(data);
-        }
-      } catch (e) {
-        console.error('Failed to fetch market quotes', e);
-      }
-    };
-    fetchQuotes();
-    const interval = setInterval(fetchQuotes, 20000);
-    return () => clearInterval(interval);
-  }, [userUniverseSymbols]);
+    if (Object.keys(livePrices).length > 0) {
+      const fresh = pricesToQuotesData(livePrices);
+      setQuotesData(prev => ({ ...prev, ...fresh }));
+    }
+  }, [livePrices]);
+
+  // Merge live index data from feed
+  useEffect(() => {
+    if (liveIndexDataFeed && Object.keys(liveIndexDataFeed).length > 0) {
+      setLiveIndexData(liveIndexDataFeed as any);
+      setIndicesLoading(false);
+      setIndicesError(null);
+    }
+  }, [liveIndexDataFeed]);
 
   useEffect(() => {
     let cancelled = false;
@@ -704,7 +706,8 @@ export const DashboardPortfolioPage: React.FC = () => {
     };
   }, [selectedBenchmark, portfolioMirrorVersion]);
 
-  // Fetch indices on mount and periodically
+  // Indices now come from useMarketFeed hook above.
+  // Keep a one-shot fetch on mount for immediate data before WS connects.
   useEffect(() => {
     let cancelled = false;
     const fetchIndices = async () => {
@@ -717,19 +720,15 @@ export const DashboardPortfolioPage: React.FC = () => {
         }
       } catch (e: any) {
         if (!cancelled) {
-          console.error('Failed to fetch market indices', e);
           setIndicesError(e.message || 'Failed to load market indices');
           setIndicesLoading(false);
         }
       }
     };
     fetchIndices();
-    const interval = setInterval(fetchIndices, 60000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    return () => { cancelled = true; };
   }, []);
+
 
   // Fetch news on mount and periodically
   useEffect(() => {
@@ -1718,10 +1717,10 @@ export const DashboardPortfolioPage: React.FC = () => {
         .join(', ');
       
       const holdingsStr = enrichedPortfolio
-        .map(p => `${p.name} (${p.symbol}, ${p.qty} shares @ ₹${p.avgCost} cost, current ₹${p.current}, sector: ${p.sector})`)
+        .map(p => `${p.name} (${p.symbol}, ${p.qty} shares @ Rs ${p.avgCost} cost, current Rs ${p.current}, sector: ${p.sector})`)
         .join('; ');
 
-      return `[USER PORTFOLIO SUMMARY: ${enrichedPortfolio.length} holdings worth ₹${portfolioSummary.totalValue.toLocaleString('en-IN')}, total P&L: ₹${portfolioSummary.totalPnL.toLocaleString('en-IN')} (${portfolioTotalReturnPct.toFixed(1)}%). Top sectors: ${breakdownSectors}. Holdings: ${holdingsStr}]`;
+      return `[USER PORTFOLIO SUMMARY: ${enrichedPortfolio.length} holdings worth Rs ${portfolioSummary.totalValue.toLocaleString('en-IN')}, total P&L: Rs ${portfolioSummary.totalPnL.toLocaleString('en-IN')} (${portfolioTotalReturnPct.toFixed(1)}%). Top sectors: ${breakdownSectors}. Holdings: ${holdingsStr}]`;
     }
 
     if (scope === 'specific_holding') {
@@ -1735,7 +1734,7 @@ export const DashboardPortfolioPage: React.FC = () => {
             const costBasis = p.qty * p.avgCost;
             const pnl = p.qty * p.current - costBasis;
             const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
-            return `${p.name} (${p.symbol}) - ${p.qty} shares @ ₹${p.avgCost} avg cost, current ₹${p.current}, unrealized P&L ₹${pnl.toLocaleString('en-IN')} (${pnlPct.toFixed(1)}%), representing ${((p.qty * p.current / portfolioSummary.totalValue) * 100).toFixed(1)}% of total portfolio, sector: ${p.sector}`;
+            return `${p.name} (${p.symbol}) - ${p.qty} shares @ Rs ${p.avgCost} avg cost, current Rs ${p.current}, unrealized P&L Rs ${pnl.toLocaleString('en-IN')} (${pnlPct.toFixed(1)}%), representing ${((p.qty * p.current / portfolioSummary.totalValue) * 100).toFixed(1)}% of total portfolio, sector: ${p.sector}`;
           })
           .join('; ');
 
@@ -1744,7 +1743,7 @@ export const DashboardPortfolioPage: React.FC = () => {
     }
 
     // Default general query - inject light summary context anyway
-    return `[USER PORTFOLIO VALUE: ₹${portfolioSummary.totalValue.toLocaleString('en-IN')} across ${enrichedPortfolio.length} positions]`;
+    return `[USER PORTFOLIO VALUE: Rs ${portfolioSummary.totalValue.toLocaleString('en-IN')} across ${enrichedPortfolio.length} positions]`;
   };
 
   const buildPortfolioFallbackAnswer = (_query: string, reason?: string) => {
@@ -2823,7 +2822,7 @@ export const DashboardPortfolioPage: React.FC = () => {
                         {portfolioStats.best.name}
                       </div>
                       <div className="stat-tile-sub">
-                        +{Math.abs(portfolioStats.best.pnlPct).toFixed(2)}% · ₹{Math.abs(portfolioStats.best.pnl).toLocaleString('en-IN')}
+                        +{Math.abs(portfolioStats.best.pnlPct).toFixed(2)}% · Rs {Math.abs(portfolioStats.best.pnl).toLocaleString('en-IN')}
                       </div>
                     </div>
                     <div className="stat-tile">
@@ -2841,7 +2840,7 @@ export const DashboardPortfolioPage: React.FC = () => {
                         {portfolioStats.worst.name}
                       </div>
                       <div className="stat-tile-sub">
-                        {portfolioStats.worst.pnlPct.toFixed(2)}% · ₹{portfolioStats.worst.pnl.toLocaleString('en-IN')}
+                        {portfolioStats.worst.pnlPct.toFixed(2)}% · Rs {portfolioStats.worst.pnl.toLocaleString('en-IN')}
                       </div>
                     </div>
                   </>
@@ -2861,7 +2860,7 @@ export const DashboardPortfolioPage: React.FC = () => {
                       {portfolioStats.best.name}
                     </div>
                     <div className="stat-tile-sub">
-                      {portfolioStats.best.pnlPct >= 0 ? '+' : ''}{portfolioStats.best.pnlPct.toFixed(2)}% · ₹{Math.abs(portfolioStats.best.pnl).toLocaleString('en-IN')}
+                      {portfolioStats.best.pnlPct >= 0 ? '+' : ''}{portfolioStats.best.pnlPct.toFixed(2)}% · Rs {Math.abs(portfolioStats.best.pnl).toLocaleString('en-IN')}
                     </div>
                   </div>
                 )}
@@ -2883,7 +2882,7 @@ export const DashboardPortfolioPage: React.FC = () => {
                 </div>
                 <div className="stat-tile">
                   <div className="stat-tile-label">Value at Risk (95%)</div>
-                  <div className="stat-tile-value" style={{ color: 'var(--loss)' }}>₹{portfolioStats.var95.toFixed(0)}</div>
+                  <div className="stat-tile-value" style={{ color: 'var(--loss)' }}>Rs {portfolioStats.var95.toFixed(0)}</div>
                   <div className="stat-tile-sub">Estimated 1-day max loss</div>
                 </div>
                 <div className="stat-tile stat-tile-cta" onClick={() => handleSuggestQuery('Audit my portfolio — what is the single biggest risk hiding in my book right now?', 'deep')}>
@@ -3099,7 +3098,7 @@ export const DashboardPortfolioPage: React.FC = () => {
                             <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px' }}>
                               <div style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '11px', marginBottom: '4px' }}>MUTUAL FUND ASSETS</div>
                               <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                                ₹{displayedMfValue.toLocaleString('en-IN')}
+                                Rs {displayedMfValue.toLocaleString('en-IN')}
                               </div>
                               <div style={{ color: 'var(--text-muted)', marginTop: '4px', fontSize: '10px' }}>
                                 {schemeCount} Active Scheme{schemeCount > 1 ? 's' : ''}
@@ -3190,7 +3189,7 @@ export const DashboardPortfolioPage: React.FC = () => {
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
                                       <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                                        ₹{(item.qty * item.current).toLocaleString('en-IN')}
+                                        Rs {(item.qty * item.current).toLocaleString('en-IN')}
                                       </div>
                                       <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                                         Weight: <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{weightInPortfolio.toFixed(1)}%</span>
@@ -3364,7 +3363,7 @@ export const DashboardPortfolioPage: React.FC = () => {
                     <div className="mover-name">{s.name}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div className="mover-price">₹{s.price}</div>
+                    <div className="mover-price">Rs {s.price}</div>
                     <div className="mover-pct" style={{ color: 'var(--profit)' }}>+{(s.changePct ?? 0).toFixed(2)}%</div>
                   </div>
                 </div>
@@ -3381,7 +3380,7 @@ export const DashboardPortfolioPage: React.FC = () => {
                     <div className="mover-name">{s.name}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div className="mover-price">₹{s.price}</div>
+                    <div className="mover-price">Rs {s.price}</div>
                     <div className="mover-pct" style={{ color: 'var(--loss)' }}>{(s.changePct ?? 0).toFixed(2)}%</div>
                   </div>
                 </div>
@@ -3398,7 +3397,7 @@ export const DashboardPortfolioPage: React.FC = () => {
                     <div className="mover-name">{s.name}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div className="mover-price">₹{s.price}</div>
+                    <div className="mover-price">Rs {s.price}</div>
                     <div className="mover-pct" style={{ color: (s.changePct ?? 0) >= 0 ? 'var(--profit)' : 'var(--loss)' }}>
                       {(s.changePct ?? 0) >= 0 ? '+' : ''}{(s.changePct ?? 0).toFixed(2)}%
                     </div>

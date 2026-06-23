@@ -3,7 +3,7 @@ import { X, FileText, ExternalLink, Sparkles } from 'lucide-react';
 import { ArticleDetail } from '../../api/client';
 
 /**
- * Editorial article reader — based on the ProspektLab design system handoff
+ * Editorial article reader  -  based on the ProspektLab design system handoff
  * (newsroom layout: hero-banner + data panel + rail + prose with key points,
  * inline metrics, pull quotes). Re-themed to the existing ProspektLab dark
  * glassmorphism colours (no Tailwind, no UI lib).
@@ -81,11 +81,11 @@ export const ArticleReader: React.FC<Props> = ({ detail, onClose }) => {
               <span className="ar-byline"><span className="ar-av">PL</span> ProspektLab Desk</span>
               <span>{fmt(detail.generated_at)}</span>
               <span>{readMinutes(a)} min read</span>
-              <span>Educational · No recommendation</span>
+              <span>Educational  -  No recommendation</span>
             </div>
           </header>
 
-          {/* DATA PANEL — only if we have metrics */}
+          {/* DATA PANEL  -  only if we have metrics */}
           {metrics.length > 0 && (
             <section className="ar-data-panel">
               <div className="ar-data-grid">
@@ -94,7 +94,7 @@ export const ArticleReader: React.FC<Props> = ({ detail, onClose }) => {
                     <div className="ar-stat-k">{m.label}</div>
                     <div className="ar-stat-v">{m.value}</div>
                     {(m.change || m.period) && (
-                      <div className="ar-stat-sub">{[m.change, m.period].filter(Boolean).join(' · ')}</div>
+                      <div className="ar-stat-sub">{[m.change, m.period].filter(Boolean).join('  -  ')}</div>
                     )}
                   </div>
                 ))}
@@ -142,7 +142,7 @@ export const ArticleReader: React.FC<Props> = ({ detail, onClose }) => {
             </aside>
 
             <div className="ar-prose">
-              {/* LiveMint-style inverted pyramid: lede → context → analyst */}
+              {/* LiveMint-style inverted pyramid: lede -> context -> analyst */}
               {lede && <p className="ar-lede">{lede}</p>}
               {ctx && <p className="ar-context">{ctx}</p>}
               {analyst && (
@@ -198,9 +198,10 @@ export const ArticleReader: React.FC<Props> = ({ detail, onClose }) => {
 function enrichInline(text: string): string {
   const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return escaped.replace(
-    /([₹$]?\d[\d,]*(?:\.\d+)?\s?(?:%|bps|cr|crore|lakh|bn|billion|trillion|x)?)/gi,
+    /((?:Rs\s*|[$])?\d[\d,]*(?:\.\d+)?\s?(?:%|bps|cr|crore|lakh|bn|billion|trillion|x)?)/gi,
     (m) => `<strong class="ar-num">${m}</strong>`,
   );
 }
 
 export default ArticleReader;
+

@@ -61,6 +61,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Any
 from urllib.parse import quote as url_quote
 
 import httpx
@@ -142,6 +143,7 @@ class YahooQuote:
     annual_net_income: list[float] = field(default_factory=list)
     annual_net_income_dates: list[str] = field(default_factory=list)
     business_summary: str | None = None
+    company_info: dict[str, Any] = field(default_factory=dict)
 
 
 def _safe_float(val) -> float | None:
@@ -223,6 +225,24 @@ def _fetch_yfinance_sync(ticker: str) -> YahooQuote | None:
         # Business summary
         summary_text = info.get("longBusinessSummary") or info.get("description")
 
+        # Company profile facts (qualitative — not part of numeric metrics)
+        company_info: dict[str, Any] = {}
+        _info_map = {
+            "sector": "sector",
+            "industry": "industry",
+            "website": "website",
+            "employees": "fullTimeEmployees",
+            "city": "city",
+            "state": "state",
+            "country": "country",
+            "long_name": "longName",
+            "exchange_name": "fullExchangeName",
+        }
+        for out_key, yf_key in _info_map.items():
+            val = info.get(yf_key)
+            if val not in (None, ""):
+                company_info[out_key] = val
+
         # Price history (last 1 month, daily)
         series_dates: list[str] = []
         series_closes: list[float] = []
@@ -300,6 +320,7 @@ def _fetch_yfinance_sync(ticker: str) -> YahooQuote | None:
             annual_net_income=net_values,
             annual_net_income_dates=net_dates,
             business_summary=str(summary_text).strip() if summary_text else None,
+            company_info=company_info,
         )
 
     except Exception as exc:

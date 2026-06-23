@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Chart as ChartJS,
@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { getMarketQuotes, getWatchlistSnapshot, MarketHistoryPeriod } from '../../api/client';
+import { useMarketFeed } from '../../hooks/useMarketFeed';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../../data/indianStocks';
 import type { WatchlistStock } from './WatchlistCard';
 import { buildProspektCover } from '../../utils/coverArt';
@@ -160,7 +161,7 @@ const formatMovementLabel = (ts: number): string =>
   new Date(ts).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit' });
 
 const toINR = (value: number) =>
-  Number.isFinite(value) ? `\u20B9${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : '\u20B9--';
+  Number.isFinite(value) ? `Rs ${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : 'Rs --';
 
 const fallbackCover = (seed: string, title = '', symbol = '', source = '') =>
   buildProspektCover({
@@ -204,6 +205,28 @@ export const WatchlistWorkspace: React.FC<WatchlistWorkspaceProps> = ({
   const [dailyMovementSummaries, setDailyMovementSummaries] = useState<MovementEvent[]>([]);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const autoPromptRef = useRef(false);
+
+  // Real-time prices via Upstox feed (WebSocket -> HTTP fallback). Overlays the
+  // slower snapshot poll, which still drives histories + news.
+  const { prices: liveFeedPrices } = useMarketFeed(symbols, { includeIndices: false });
+  useEffect(() => {
+    if (!liveFeedPrices || Object.keys(liveFeedPrices).length === 0) return;
+    setLiveQuotes((prev) => {
+      const next = { ...prev };
+      for (const sym of symbols) {
+        const tick = liveFeedPrices[sym.toUpperCase()];
+        if (!tick || !Number.isFinite(Number(tick.price)) || Number(tick.price) <= 0) continue;
+        const key = normalizeSymbol(sym);
+        next[key] = {
+          symbol: key,
+          name: prev[key]?.name || tick.company_name || findDisplayName(key, key),
+          price: Number(tick.price),
+          changePct: Number.isFinite(Number(tick.change_pct)) ? Number(tick.change_pct) : (prev[key]?.changePct ?? 0),
+        };
+      }
+      return next;
+    });
+  }, [liveFeedPrices, symbols]);
 
   useEffect(() => {
     setDraftSymbols(symbols);
@@ -643,7 +666,7 @@ export const WatchlistWorkspace: React.FC<WatchlistWorkspaceProps> = ({
         {
           key: `${focus}-fallback`,
           dateLabel: 'Latest',
-          priceLabel: `\u20B9${stock.price}`,
+          priceLabel: `Rs ${stock.price}`,
           pctLabel: `${stock.changePct >= 0 ? '+' : ''}${stock.changePct.toFixed(2)}%`,
           direction: stock.changePct >= 0 ? 'up' : 'down',
           summary: `${stock.name} is moving today. Load more history to unlock detailed movement explanations.`,
@@ -847,7 +870,7 @@ export const WatchlistWorkspace: React.FC<WatchlistWorkspaceProps> = ({
                       </span>
                     </button>
                     <div style={{ justifySelf: 'end', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
-                      {'\u20B9'}{stock.price}
+                      {'Rs '}{stock.price}
                     </div>
                     <div style={{ justifySelf: 'end', fontSize: 12, color: isUp ? 'var(--profit)' : 'var(--loss)' }}>
                       {stock.change}
@@ -1224,4 +1247,5 @@ export const WatchlistWorkspace: React.FC<WatchlistWorkspaceProps> = ({
 };
 
 export default WatchlistWorkspace;
+
 

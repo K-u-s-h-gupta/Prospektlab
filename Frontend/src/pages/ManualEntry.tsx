@@ -309,7 +309,7 @@ export const ManualEntry: React.FC = () => {
                   type="number"
                   min="0"
                   step="0.01"
-                  placeholder="Avg ₹"
+                  placeholder="Avg Rs "
                   value={row.avgCost}
                   onChange={(e) => updateRow(row.id, 'avgCost', e.target.value)}
                   className="me-c-avg"

@@ -213,7 +213,7 @@ def contains_internal_language(text: str) -> bool:
 
 def sanitize_public_text(text: str) -> str:
     out = text or ""
-    if any(token in out for token in ("Ã", "Â", "â")):
+    if any(token in out for token in ("Ã", "", "â")):
         try:
             repaired = out.encode("cp1252", errors="ignore").decode("utf-8", errors="ignore")
             if repaired and repaired.count("�") <= out.count("�"):
@@ -221,20 +221,20 @@ def sanitize_public_text(text: str) -> str:
         except Exception:
             pass
     replacements = {
-        "â€”": "—",
-        "â€“": "–",
-        "â€˜": "'",
-        "â€™": "'",
-        "â€œ": '"',
-        "â€": '"',
-        "â€¦": "...",
-        "â€¢": "•",
-        "â†’": "→",
-        "â‚¹": "₹",
-        "Â·": "·",
-        "Â±": "±",
-        "Â ": " ",
-        "Â": "",
+        " - ": "—",
+        " - ": "–",
+        "'": "'",
+        "'": "'",
+        """: '"',
+        """: '"',
+        "...": "...",
+        "-": "•",
+        "->": "→",
+        "Rs ": "₹",
+        " - ": "·",
+        "+/-": "±",
+        " ": " ",
+        "": "",
     }
     for bad, good in replacements.items():
         out = out.replace(bad, good)
@@ -247,7 +247,7 @@ def sanitize_public_text(text: str) -> str:
 
 def sanitize_public_text(text: str) -> str:
     out = text or ""
-    if any(token in out for token in ("Ã", "Â", "â")):
+    if any(token in out for token in ("Ã", "", "â")):
         try:
             repaired = out.encode("cp1252", errors="ignore").decode("utf-8", errors="ignore")
             if repaired and repaired.count("ï¿½") <= out.count("ï¿½"):
@@ -256,18 +256,18 @@ def sanitize_public_text(text: str) -> str:
             pass
 
     replacements = {
-        "Ã¢â‚¬â€": " - ",
-        "Ã¢â‚¬â€œ": " - ",
+        " - ": " - ",
+        " - ": " - ",
         "Ã¢â‚¬Ëœ": "'",
         "Ã¢â‚¬â„¢": "'",
         "Ã¢â‚¬Å“": '"',
-        "Ã¢â‚¬Â": '"',
-        "Ã¢â‚¬Â¦": "...",
-        "Ã¢â‚¬Â¢": " - ",
-        "Ã¢â€ â€™": "->",
-        "Ã¢â€šÂ¹": "Rs ",
-        "Ã‚Â·": " - ",
-        "Ã‚Â±": "+/-",
+        "Ã¢â‚¬": '"',
+        "Ã¢â‚¬¦": "...",
+        "Ã¢â‚¬¢": " - ",
+        "Ã¢â€ '": "->",
+        "Rs ": "Rs ",
+        "Ã‚ - ": " - ",
+        "Ã‚+/-": "+/-",
         "Ã‚ ": " ",
         "Ã‚": "",
         "\u2014": " - ",
@@ -282,7 +282,7 @@ def sanitize_public_text(text: str) -> str:
         "\u20b9": "Rs ",
         "\ufeff": " ",
         "\u00a0": " ",
-        "Â": "",
+        "": "",
     }
     for bad, good in replacements.items():
         out = out.replace(bad, good)
@@ -442,6 +442,7 @@ def review_article_package(
     evidence_claim_count: int | None = None,
     livemint_source_violations: int = 0,
     source_material: str = "",
+    archetype: str = "",
 ) -> EditorialReview:
     article = sanitize_article_package(article)
     issues: list[EditorialIssue] = []
@@ -521,14 +522,33 @@ def review_article_package(
         + [str(getattr(ev, "date", "")) + " " + str(getattr(ev, "event", "")) + " " + str(getattr(ev, "detail", "")) for ev in article.timeline]
         + ([source_material] if source_material else [])
     )
-    ungrounded = ungrounded_headline_numbers(article.title, grounded_text)
-    if ungrounded:
-        issues.append(EditorialIssue(
-            "ungrounded_headline_number",
-            "critical",
-            f"Headline stat(s) {', '.join(ungrounded)} not backed by any sourced evidence claim.",
-            "title",
-        ))
+    if archetype:
+        # Archetype-aware anchoring: a title must carry a GROUNDED, specific
+        # anchor of its story type (a grounded number for earnings/rating/M&A, a
+        # role+action for personnel, a regulator+action for regulatory, a
+        # concrete subject for trend/company). Catches vague number-free titles
+        # the numbers-only check rewards. A failure blocks publish (critical),
+        # same handling as the ungrounded_headline_number issue.
+        from finagent.content.archetype import title_anchor_ok
+
+        anchor_ok, reason_code = title_anchor_ok(article.title, archetype, grounded_text)
+        if not anchor_ok:
+            issues.append(EditorialIssue(
+                "ungrounded_headline_number",
+                "critical",
+                f"Headline lacks a grounded {archetype} anchor ({reason_code}).",
+                "title",
+            ))
+    else:
+        # Backward-compatible default: numbers-only headline grounding check.
+        ungrounded = ungrounded_headline_numbers(article.title, grounded_text)
+        if ungrounded:
+            issues.append(EditorialIssue(
+                "ungrounded_headline_number",
+                "critical",
+                f"Headline stat(s) {', '.join(ungrounded)} not backed by any sourced evidence claim.",
+                "title",
+            ))
 
     # (b) Logically broken visuals (placeholder/illustrative/single-value charts).
     for idx, visual in enumerate(article.visuals):
@@ -732,9 +752,9 @@ async def _llm_revise_article(
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.25,
-            max_completion_tokens=4000,
+            max_completion_tokens=7000,
             response_format={"type": "json_object"},
-            timeout=60,
+            timeout=90,
         )
         raw = (response.choices[0].message.content or "").strip()
         if raw.startswith("```"):
@@ -780,6 +800,7 @@ async def run_editorial_revision_loop(
     evidence_claim_count: int | None = None,
     livemint_source_violations: int = 0,
     source_material: str = "",
+    archetype: str = "",
 ) -> tuple[ContentArticlePackage, EditorialReview]:
     current = sanitize_article_package(article)
     review_ctx = dict(
@@ -788,6 +809,7 @@ async def run_editorial_revision_loop(
         evidence_claim_count=evidence_claim_count,
         livemint_source_violations=livemint_source_violations,
         source_material=source_material,
+        archetype=archetype,
     )
     review = review_article_package(current, revision_round=0, **review_ctx)
     for round_index in range(1, max_rounds + 1):

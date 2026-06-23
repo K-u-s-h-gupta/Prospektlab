@@ -71,6 +71,26 @@ _SYMBOL_ALIASES = {
 
 _KNOWN_SYMBOL_ISIN = {symbol: isin for isin, symbol in _KNOWN_ISIN_SYMBOLS.items()}
 
+# Known CINs for high-traffic symbols so governance/network resolve even when
+# the entity-resolver DB is briefly unavailable. Extend as needed.
+_KNOWN_SYMBOL_CIN = {
+    "RELIANCE": "L17110MH1973PLC019786",
+    "TCS": "L22210MH1995PLC084781",
+    "INFY": "L85110KA1981PLC013115",
+    "HDFCBANK": "L65920MH1994PLC080618",
+    "ICICIBANK": "L65190GJ1994PLC021012",
+    "ITC": "L16005WB1910PLC001985",
+    "SBIN": "L65190MH2007GOI168702",
+    "LT": "L99999MH1946PLC004768",
+    "AXISBANK": "L65110GJ1993PLC020769",
+    "KOTAKBANK": "L65110MH1985PLC038137",
+    "BHARTIARTL": "L74899HR1995PLC095967",
+    "ASIANPAINT": "L24220MH1945PLC004598",
+    "TATAMOTORS": "L28920MH1945PLC004520",
+    "MARUTI": "L34103DL1981PLC011375",
+    "HINDUNILVR": "L15140MH1933PLC002030",
+}
+
 _DEFAULT_UNIVERSE = [
     "RELIANCE",
     "TCS",
@@ -714,7 +734,11 @@ def _build_ratio_groups(snapshot: dict[str, Any], cache_row: dict[str, Any] | No
     metrics = dict(fundamentals.get("metrics") or {})
     cached_metrics = _coerce_json((cache_row or {}).get("validated_metrics_json")) or {}
     if analytics:
-        metrics.update((analytics.get("metrics") or {}))
+        for key, raw in (analytics.get("metrics") or {}).items():
+            # Prefer statement-derived value, but never overwrite a good
+            # snapshot value with None when the derivation came up empty.
+            if raw is not None or metrics.get(key) is None:
+                metrics[key] = raw
     if isinstance(cached_metrics, dict):
         for key, raw in cached_metrics.items():
             if key in metrics:
@@ -874,6 +898,10 @@ def _derive_public_financial_analytics(*, snapshot: dict[str, Any], periods: lis
         fair = _safe_div(equity_value_cr, shares_cr)
         upside = ((fair - price) / price * 100.0) if fair is not None else None
         dcf = {"status": "derived", "fair_value_per_share": round(fair, 2) if fair is not None else None, "equity_value_cr": round(equity_value_cr, 2), "upside_pct": round(upside, 2) if upside is not None else None, "assumptions": {"growth_pct": round(growth * 100, 2), "discount_pct": 12.0, "terminal_growth_pct": 4.0}, "source": "Derived from public cash-flow statements and market cap"}
+    # Statement-derived ratios — used as a fallback when live Yahoo `info`
+    # is unavailable, so the ratio panel is not riddled with "Unavailable".
+    revenue_growth_pct = ((revenue / revenue_prev - 1.0) * 100.0) if (revenue is not None and revenue_prev and revenue_prev > 0) else None
+    net_income_growth_pct = ((net_income / net_income_prev - 1.0) * 100.0) if (net_income is not None and net_income_prev and net_income_prev > 0) else None
     derived = {
         "dcf_fair_value_per_share": dcf.get("fair_value_per_share"),
         "dcf_upside_pct": dcf.get("upside_pct"),
@@ -883,6 +911,11 @@ def _derive_public_financial_analytics(*, snapshot: dict[str, Any], periods: lis
         "dupont_equity_multiplier": round(equity_multiplier, 3) if equity_multiplier is not None else metrics.get("dupont_equity_multiplier"),
         "dupont_roe_pct": round(dupont_roe, 3) if dupont_roe is not None else None,
         "operating_margin_pct": round(operating_margin, 3) if operating_margin is not None else metrics.get("operating_margin_pct"),
+        "net_margin_pct": round(net_margin, 3) if net_margin is not None else None,
+        "current_ratio": round(current_ratio, 3) if current_ratio is not None else None,
+        "return_on_assets_pct": round(roa * 100.0, 3) if roa is not None else None,
+        "revenue_growth_pct": round(revenue_growth_pct, 3) if revenue_growth_pct is not None else None,
+        "net_income_growth_pct": round(net_income_growth_pct, 3) if net_income_growth_pct is not None else None,
     }
     return {"status": "derived" if periods else "unavailable", "source": "public filings/Screener/Yahoo normalized statements", "latest_period": latest, "metrics": derived, "dcf": dcf, "piotroski": {"score": piotroski_score, "signals": signals, "source": "public statement-derived"}, "dupont": {"net_margin_pct": derived.get("dupont_net_margin_pct"), "asset_turnover": derived.get("dupont_asset_turnover"), "equity_multiplier": derived.get("dupont_equity_multiplier"), "roe_pct": derived.get("dupont_roe_pct")}}
 
@@ -1430,14 +1463,90 @@ def _profile_from_summary(summary: str | None) -> dict[str, Any]:
         if len(product_hints) >= 4 and len(client_hints) >= 3:
             break
 
+    # NOTE: products/clients via naive comma-split produced noisy fragments
+    # (e.g. whole sentences, "vision channels"). Only mission/vision matched by
+    # an explicit keyword regex are reliable enough to surface; structured
+    # products/clients are filled from provenance facts when available.
     return {
         "overview": overview or (sentences[0] if sentences else ""),
         "mission": mission,
         "vision": vision,
-        "products_services": product_hints[:4],
-        "clients": client_hints[:3],
+        "products_services": [],
+        "clients": [],
         "business_summary": text,
     }
+
+
+def _company_facts(
+    *,
+    identity: "_ResolvedIdentity",
+    india_snap: Any,
+    yahoo_quote: Any,
+    metrics: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Detailed, reliable company facts for the overview panel.
+
+    Pulls from the India snapshot + Yahoo profile (sector, industry, HQ,
+    employees, website) and the already-computed numeric metrics.
+    """
+    info = dict((getattr(yahoo_quote, "company_info", None) or {}))
+    facts: list[dict[str, str]] = []
+
+    def add(label: str, value: Any) -> None:
+        if value in (None, "", []):
+            return
+        facts.append({"label": label, "value": str(value)})
+
+    def add_money_cr(label: str, value: Any) -> None:
+        n = safe_float(value)
+        if n is None:
+            return
+        facts.append({"label": label, "value": f"Rs {n:,.0f} Cr"})
+
+    def add_inr(label: str, value: Any, digits: int = 2) -> None:
+        n = safe_float(value)
+        if n is None:
+            return
+        facts.append({"label": label, "value": f"Rs {n:,.{digits}f}"})
+
+    def add_pct(label: str, value: Any, digits: int = 2) -> None:
+        n = safe_float(value)
+        if n is None:
+            return
+        facts.append({"label": label, "value": f"{n:.{digits}f}%"})
+
+    sector = identity.sector or getattr(india_snap, "sector", None) or info.get("sector")
+    industry = getattr(india_snap, "industry", None) or info.get("industry")
+    exchange = getattr(india_snap, "exchange", None) or info.get("exchange_name")
+    employees = info.get("employees")
+    hq = " ".join(
+        str(part).strip()
+        for part in (info.get("city"), info.get("state"), info.get("country"))
+        if part
+    ).strip()
+    website = info.get("website")
+
+    add("Sector", sector)
+    add("Industry", industry)
+    add("Listed On", exchange)
+    add("ISIN", identity.isin or getattr(india_snap, "isin", None))
+    add("CIN", identity.cin or getattr(india_snap, "cin", None))
+    add_money_cr("Market Cap", metrics.get("market_cap"))
+    add_inr("52W High", getattr(india_snap, "week_52_high", None))
+    add_inr("52W Low", getattr(india_snap, "week_52_low", None))
+    add_inr("Face Value", getattr(india_snap, "face_value", None))
+    add_inr("Book Value", metrics.get("book_value"))
+    add_inr("EPS (TTM)", getattr(india_snap, "eps", None))
+    add_pct("Dividend Yield", metrics.get("dividend_yield"))
+    add("Beta", round(metrics["beta"], 2) if safe_float(metrics.get("beta")) is not None else None)
+    if employees is not None:
+        try:
+            add("Employees", f"{int(float(employees)):,}")
+        except (TypeError, ValueError):
+            add("Employees", employees)
+    add("Headquarters", hq)
+    add("Website", website)
+    return facts
 
 
 def _metric(
@@ -2575,8 +2684,10 @@ class ScreenerService:
         if symbol and not isin:
             isin = _KNOWN_SYMBOL_ISIN.get(symbol.upper(), isin)
 
+        # Exact ticker lookup is cheap and the main path to a CIN for plain
+        # symbol queries (e.g. "RELIANCE") — do not gate it on symbol_like.
         ticker_entity: ResolvedCorporateEntity | None = None
-        if symbol and not symbol_like:
+        if symbol:
             ticker_entity = await self._safe_async(
                 asyncio.to_thread(self._resolver.resolve_by_ticker, symbol),
                 timeout_s=1.5,
@@ -2594,7 +2705,7 @@ class ScreenerService:
                 source = ticker_entity.source
 
         isin_entity: ResolvedCorporateEntity | None = None
-        if isin and not cin and not symbol_like:
+        if isin and not cin:
             isin_entity = await self._safe_async(
                 asyncio.to_thread(self._resolver.resolve_by_isin, isin),
                 timeout_s=1.5,
@@ -2623,6 +2734,11 @@ class ScreenerService:
                 sector = sector or snap.sector or snap.industry or None
                 isin = isin or (snap.isin or None)
                 cin = cin or (getattr(snap, "cin", None) or None)
+
+        if not cin and symbol:
+            cin = _KNOWN_SYMBOL_CIN.get(symbol.upper())
+        if not isin and symbol:
+            isin = isin or _KNOWN_SYMBOL_ISIN.get(symbol.upper())
 
         resolved = _ResolvedIdentity(
             query=query,
@@ -3068,6 +3184,13 @@ class ScreenerService:
         delivery_depth = dict(delivery_data or {}) if isinstance(delivery_data, dict) else {"status": "unavailable"}
         delivery_depth.setdefault("source", "NSE public archives")
 
+        company_facts = _company_facts(
+            identity=identity,
+            india_snap=india_snap,
+            yahoo_quote=yahoo_quote,
+            metrics=metrics,
+        )
+
         return {
             "profile": {
                 "company_name": identity.company_name or (india_snap.company_name if india_snap else None) or (yahoo_quote.name if yahoo_quote else None) or identity.symbol,
@@ -3075,6 +3198,8 @@ class ScreenerService:
                 "cin": identity.cin,
                 "isin": identity.isin or (india_snap.isin if india_snap else None),
                 "sector": identity.sector or (india_snap.sector if india_snap else None) or (india_snap.industry if india_snap else None),
+                "industry": (india_snap.industry if india_snap else None) or (getattr(yahoo_quote, "company_info", {}) or {}).get("industry"),
+                "facts": company_facts,
                 **profile_summary,
             },
             "metrics": metrics,

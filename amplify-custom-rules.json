@@ -35,6 +35,11 @@
         "status":  "200"
     },
     {
+        "source":  "/insights/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/insights/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
         "source":  "/sessions/\u003c*\u003e",
         "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/sessions/\u003c*\u003e",
         "status":  "200"

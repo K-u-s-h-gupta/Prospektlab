@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -21,6 +21,7 @@ import {
   runScreenerQuery,
   screenerSearch,
 } from '../../api/client';
+import { useMarketFeed } from '../../hooks/useMarketFeed';
 import '../../styles/screener.css';
 
 type ScreenerViewTab = 'overview' | 'fundamentals' | 'technicals' | 'governance' | 'events';
@@ -219,6 +220,13 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
   const resolved = snapshot?.resolved || {};
   const score = snapshot?.score || {};
   const quote = snapshot?.quote || {};
+
+  // Real-time price for the open company (Upstox feed -> HTTP fallback).
+  const { prices: livePrices } = useMarketFeed(activeSymbol ? [activeSymbol] : [], { includeIndices: false });
+  const liveTick = activeSymbol ? livePrices[activeSymbol.toUpperCase()] : undefined;
+  const livePrice = liveTick?.price ?? quote?.price;
+  const liveChangePct = liveTick?.change_pct ?? quote?.change_pct;
+  const liveSource = liveTick?.source || quote?.source;
   const fundamentals = snapshot?.fundamentals || {};
   const publicDepth = fundamentals?.public_data_depth || {};
   const financialAnalytics = financialsPayload?.analytics || {};
@@ -368,14 +376,9 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
   const corporateActionRows = useMemo(() => getArray(events?.corporate_actions), [events]);
   const insiderTradeRows = useMemo(() => getArray(events?.insider_trades), [events]);
   const annualReportRows = useMemo(() => getArray(publicDepth?.annual_reports?.items), [publicDepth]);
+  const profileFacts = useMemo(() => getArray(fundamentals?.profile?.facts), [fundamentals]);
   const enforcementRows = useMemo(() => getArray(events?.enforcement), [events]);
   const peerRows = useMemo(() => getArray(peers?.items), [peers]);
-  const sourceHealthRows = useMemo(() => Object.entries(sourceHealth || {}).map(([key, value]: [string, any]) => ({
-    key,
-    label: key.replace(/_/g, ' '),
-    status: formatFreshnessStatus(value?.status),
-    count: value?.count,
-  })), [sourceHealth]);
 
   const periodColumns = useMemo(() => {
     const raw = getArray(financialsPayload?.periods);
@@ -678,16 +681,16 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
               </div>
             </div>
             <div className="screener-head-metrics">
-              <div className="screener-head-price">{fmtInr(quote?.price, 2)}</div>
-              <div className={`screener-head-change ${trendTone(quote?.change_pct)}`}>
-                {Number(quote?.change_pct) >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                {fmtPct(quote?.change_pct, 2)}
+              <div className="screener-head-price">{fmtInr(livePrice, 2)}</div>
+              <div className={`screener-head-change ${trendTone(liveChangePct)}`}>
+                {Number(liveChangePct) >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                {fmtPct(liveChangePct, 2)}
               </div>
               <div className="screener-score-pill">
                 <Gauge size={14} />
                 Score {fmtNum(score?.prospekt_score, 1)} ({score?.grade || 'Unavailable'})
               </div>
-              <div className="screener-quote-source">Quote source: {quote?.source || 'Unavailable'}</div>
+              <div className="screener-quote-source">Quote source: {liveSource || 'Unavailable'}</div>
               <div className="screener-actions-row">
                 <button type="button" className="screener-action-btn" onClick={exportSnapshotJson} disabled={!snapshot}>
                   <Download size={13} /> Export Snapshot
@@ -726,15 +729,30 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
           <div className="screener-content">
             {activeTab === 'overview' && (
               <div className="screener-section-grid">
-                <div className="screener-section">
-                  <div className="screener-section-head"><Database size={14} /> Company Fundamentals</div>
-                  <p className="screener-longtext">{fundamentals?.profile?.overview || fundamentals?.profile?.business_summary || 'Overview is not available from public sources yet.'}</p>
-                  <div className="screener-overview-points">
-                    <div><strong>Mission:</strong> {displayText(fundamentals?.profile?.mission)}</div>
-                    <div><strong>Vision:</strong> {displayText(fundamentals?.profile?.vision)}</div>
-                    <div><strong>Products/Services:</strong> {displayText(getArray(fundamentals?.profile?.products_services).slice(0, 4).join(' | '))}</div>
-                    <div><strong>Clients:</strong> {displayText(getArray(fundamentals?.profile?.clients).slice(0, 4).join(' | '), 'Not separately disclosed')}</div>
-                  </div>
+                <div className="screener-section screener-section-wide">
+                  <div className="screener-section-head"><Building2 size={14} /> Company Profile</div>
+                  <p className="screener-longtext">{fundamentals?.profile?.business_summary || fundamentals?.profile?.overview || 'Business overview is not available from public sources yet.'}</p>
+                  {profileFacts.length > 0 ? (
+                    <div className="screener-facts-grid">
+                      {profileFacts.map((fact: any, idx: number) => (
+                        <div key={`fact-${idx}`} className="screener-fact">
+                          <span className="screener-fact-label">{fact?.label}</span>
+                          <span className="screener-fact-value">{displayText(fact?.value, 'Unavailable')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="screener-empty-inline">Company facts are unavailable from current public sources.</div>
+                  )}
+                  {(fundamentals?.profile?.mission || fundamentals?.profile?.vision) && (
+                    <div className="screener-overview-points">
+                      {fundamentals?.profile?.mission && <div><strong>Mission:</strong> {fundamentals.profile.mission}</div>}
+                      {fundamentals?.profile?.vision && <div><strong>Vision:</strong> {fundamentals.profile.vision}</div>}
+                    </div>
+                  )}
+                  {getArray(fundamentals?.profile?.products_services).length > 0 && (
+                    <div className="screener-section-note">Products/Services: {getArray(fundamentals?.profile?.products_services).slice(0, 6).join(' | ')}</div>
+                  )}
                 </div>
 
                 <div className="screener-section">
@@ -827,18 +845,6 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
                   )}
                 </div>
 
-                <div className="screener-section">
-                  <div className="screener-section-head"><ShieldCheck size={14} /> Source Health</div>
-                  <div className="screener-health-grid">
-                    {sourceHealthRows.map((item) => (
-                      <div key={item.key} className="screener-health-pill">
-                        <span>{item.label}</span>
-                        <strong>{item.status}{item.count !== undefined ? ` (${item.count})` : ''}</strong>
-                      </div>
-                    ))}
-                    {sourceHealthRows.length === 0 && <div className="screener-empty-inline">Source diagnostics are unavailable.</div>}
-                  </div>
-                </div>
               </div>
             )}
 
@@ -964,21 +970,6 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
                     )}
                   </div>
                 </div>
-                <div className="screener-section">
-                  <div className="screener-section-head"><Database size={14} /> Governance Source Health</div>
-                  <div className="screener-health-grid">
-                    {['governance', 'shareholding', 'corporate', 'enforcement'].map((key) => {
-                      const item = sourceHealth?.[key] || {};
-                      return (
-                        <div key={key} className="screener-health-pill">
-                          <span>{key.replace(/_/g, ' ')}</span>
-                          <strong>{formatFreshnessStatus(item?.status)}</strong>
-                          {item?.count !== undefined && <em>{item.count} rows</em>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
             )}
 
@@ -1079,3 +1070,4 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
 };
 
 export default ScreenerWorkspace;
+

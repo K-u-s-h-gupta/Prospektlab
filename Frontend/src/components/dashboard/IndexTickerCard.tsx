@@ -7,16 +7,20 @@ export interface IndexTickerData {
   change: string;
   changePct: number;
   sparkData: number[];
+  liveSource?: string;  // "upstox_ws" | "nse_poll" | "yahoo_poll" | undefined
 }
 
 interface IndexTickerCardProps {
   data: IndexTickerData;
   active?: boolean;
   onClick?: () => void;
+  /** When true, shows a pulsing LIVE badge */
+  isLive?: boolean;
 }
 
-export const IndexTickerCard: React.FC<IndexTickerCardProps> = ({ data, active, onClick }) => {
+export const IndexTickerCard: React.FC<IndexTickerCardProps> = ({ data, active, onClick, isLive }) => {
   const positive = data.changePct >= 0;
+  const liveFromWS = isLive || data.liveSource === 'upstox_ws' || data.liveSource === 'nse_poll';
 
   return (
     <button
@@ -43,18 +47,51 @@ export const IndexTickerCard: React.FC<IndexTickerCardProps> = ({ data, active, 
         <span className="index-ticker-symbol" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.02em', color: 'var(--text-primary)' }}>
           {data.symbol}
         </span>
-        <span
-          className="index-ticker-change-pct"
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: positive ? 'var(--profit)' : 'var(--loss)',
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          {positive ? '+' : ''}
-          {data.changePct.toFixed(2)}%
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          {liveFromWS && (
+            <span
+              title="Real-time data via Upstox WebSocket"
+              style={{
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                color: '#22c55e',
+                background: 'rgba(34,197,94,0.12)',
+                border: '1px solid rgba(34,197,94,0.3)',
+                borderRadius: 4,
+                padding: '1px 5px',
+                lineHeight: 1.6,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3,
+              }}
+            >
+              <span
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: '50%',
+                  background: '#22c55e',
+                  display: 'inline-block',
+                  animation: 'pulse-dot 1.5s ease-in-out infinite',
+                }}
+              />
+              LIVE
+            </span>
+          )}
+          <span
+            className="index-ticker-change-pct"
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: positive ? 'var(--profit)' : 'var(--loss)',
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
+            {positive ? '+' : ''}
+            {data.changePct.toFixed(2)}%
+          </span>
+        </div>
       </div>
 
       <div className="index-ticker-value" style={{ fontSize: 18, fontWeight: 600, fontFamily: 'var(--font-mono)', letterSpacing: '-0.3px', color: 'var(--text-primary)' }}>

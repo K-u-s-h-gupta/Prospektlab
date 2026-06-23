@@ -1,5 +1,6 @@
 (function () {
   var prodBackend = "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com";
+  var prodRealtimeBase = "https://api.prospektlab.com";
   var host = window.location.hostname || "";
   var canonicalHost = "prospektlab.com";
   var canonicalAliases = {
@@ -17,6 +18,7 @@
     return;
   }
   var backend = isLocal ? "http://127.0.0.1:8000" : prodBackend;
+  var realtimeBase = isLocal ? backend : prodRealtimeBase;
 
   // Migration safety: recover older cached holdings into the manual snapshot key
   // so users moved across deployments/regions do not land on an empty dashboard.
@@ -58,8 +60,10 @@
   }
 
   window.__BACKEND_URL = backend;
+  window.__WS_BASE_URL = realtimeBase;
   window.__CONFIG__ = {
     apiBase: backend,
+    webSocketBase: realtimeBase,
     environment: isLocal ? "local" : "production",
     telemetry: {
       enabled: true,

@@ -8,3 +8,7 @@ outreach/state/
 outreach/scratch/
 finagent/.env
 *.log
+backend/finagent/.env
+backend/finagent/.env.*
+frontend/.env
+frontend/.env.*

@@ -147,7 +147,7 @@ export const WatchlistCard: React.FC<WatchlistCardProps> = ({
                   marginRight: '16px'
                 }}>
                   <span style={{ fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-                    ₹{stock.price}
+                    Rs {stock.price}
                   </span>
                   <span style={{
                     fontSize: '10px',

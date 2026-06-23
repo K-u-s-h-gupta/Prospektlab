@@ -1,4 +1,4 @@
-import { buildTelemetryHeaders, getTelemetryRequestId, getTelemetrySessionId, isTelemetryEnabled, trackDependency, trackEvent, trackException } from '../telemetry';
+﻿import { buildTelemetryHeaders, getTelemetryRequestId, getTelemetrySessionId, isTelemetryEnabled, trackDependency, trackEvent, trackException } from '../telemetry';
 import { sanitizeMojibakeValue } from '../utils/textSanitizer';
 
 export interface ChatRequest {
@@ -184,7 +184,7 @@ const AUTH_TOKEN_KEY = 'prospektlab_auth_token';
 const AUTH_TOKEN_SESSION_KEY = 'prospektlab_auth_token_session';
 const GUEST_ID_KEY = 'prospektlab_guest_id';
 
-// ── Runtime Backend URL Support (for Amplify + separate ECS backend) ─────
+// -- Runtime Backend URL Support (for Amplify + separate ECS backend) -----
 function getApiBase(): string {
   if (typeof window !== 'undefined') {
     const w = window as any;
@@ -323,7 +323,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-// ── Auth state (in-memory only; httpOnly cookie is the source of truth) ──
+// -- Auth state (in-memory only; httpOnly cookie is the source of truth) --
 let _cachedUser: AuthUser | null = null;
 let _cachedUserPromise: Promise<AuthUser | null> | null = null;
 let _authToken: string | null = null;
@@ -436,7 +436,7 @@ function handleAuthFailure() {
   _cachedUser = null;
   setAuthToken(null);
   if (typeof window !== 'undefined') {
-    window.location.hash = '#/dashboard/overview';
+    window.location.assign('/dashboard/overview');
   }
 }
 
@@ -456,7 +456,7 @@ async function fetchApi(url: string, options?: RequestInit): Promise<Response> {
   return res;
 }
 
-// ── Auth Endpoints ──────────────────────────────────────────────────────
+// -- Auth Endpoints ------------------------------------------------------
 
 async function parseJsonSanitized<T = any>(res: Response): Promise<T> {
   const payload = await res.json();
@@ -665,7 +665,7 @@ export async function apiLogout(): Promise<void> {
   setAuthToken(null);
 }
 
-// ── Portfolio Endpoints ──────────────────────────────────────────────────
+// -- Portfolio Endpoints --------------------------------------------------
 
 export async function getPortfolioMirror(): Promise<any> {
   const res = await fetchWithTimeout(
@@ -951,7 +951,7 @@ export async function getPortfolioSectors(): Promise<any> {
   return parseJsonSanitized(res);
 }
 
-// ── Governance & Network intelligence ──────────────────────────────────────
+// -- Governance & Network intelligence --------------------------------------
 
 export interface GovernanceFlag {
   code: string;
@@ -1194,7 +1194,7 @@ export async function getPortfolioCommentary(): Promise<any> {
   return res.json();
 }
 
-// ── Research and Chat SSE Endpoints ────────────────────────────────────────
+// -- Research and Chat SSE Endpoints ----------------------------------------
 
 export async function startResearch(message: string, mode: 'standard' | 'deep', portfolioContext?: string): Promise<any> {
   const rewrittenMessage = portfolioContext ? `${portfolioContext} ${message}` : message;
@@ -1558,7 +1558,7 @@ export function streamSession(
         phase: 'http_error',
         status_code: resp.status,
       });
-      console.warn("SSE HTTP error status:", resp.status, "— retrying in 3s");
+      console.warn("SSE HTTP error status:", resp.status, " -  retrying in 3s");
       clearTimeout(sseReconnectTimer);
       sseReconnectTimer = setTimeout(connectSSE, 3000);
       return;
@@ -1664,7 +1664,7 @@ export function streamSession(
 }
 
 
-// ── Market Data & Token Usage API Endpoints ──────────────────────────────
+// -- Market Data & Token Usage API Endpoints ------------------------------
 
 export async function getUserTokenUsage(): Promise<any> {
   const res = await fetchApi(apiUrl('/user/token-usage'), {
@@ -1726,7 +1726,7 @@ export async function getMarketQuotes(symbols: string[]): Promise<any> {
   const res = await fetchWithTimeout(
     apiUrl(`/market/quotes?symbols=${encodeURIComponent(symbols.join(','))}`),
     { credentials: 'include' },
-    12000,
+    6000,
     'Market quotes request timed out. Please retry.',
   );
   if (!res.ok) {
@@ -1757,7 +1757,7 @@ export async function getMarketIndices(): Promise<any> {
   const res = await fetchWithTimeout(
     apiUrl('/market/indices'),
     { credentials: 'include' },
-    20000,
+    6000,
     'Market indices request timed out. Please retry.',
   );
   if (!res.ok) {
@@ -1798,7 +1798,7 @@ export async function getWatchlistSnapshot(
   const res = await fetchWithTimeout(
     apiUrl(`/watchlist/snapshot?${params.toString()}`),
     { credentials: 'include' },
-    15000,
+    9000,
     'Watchlist snapshot timed out. Showing available live quotes.',
   );
   if (!res.ok) {
@@ -1808,7 +1808,7 @@ export async function getWatchlistSnapshot(
   return parseJsonSanitized(res);
 }
 
-// ── Flash Content Engine API ──────────────────────────────────────────────────
+// -- Flash Content Engine API --------------------------------------------------
 
 export async function screenerSearch(query: string, limit = 8): Promise<ScreenerSearchResponse> {
   const params = new URLSearchParams({
@@ -2169,7 +2169,7 @@ export function flashJobStatusUrl(jobId: string): string {
 }
 
 
-// ── Document export (deep mode only) ─────────────────────────────────
+// -- Document export (deep mode only) ---------------------------------
 
 export type ExportFormat = 'pdf' | 'docx' | 'xlsx';
 
@@ -2227,4 +2227,5 @@ export async function downloadExportAndSave(jobId: string, format: ExportFormat)
     URL.revokeObjectURL(url);
   }, 100);
 }
+
 

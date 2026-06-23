@@ -43,6 +43,9 @@ RUN crawl4ai-setup
 # The runtime package lives in backend/finagent; copy it into /app/finagent.
 COPY backend/finagent/ ./finagent/
 
+# Copy helper scripts (includes upstox_token_scheduler.py for daily token refresh)
+COPY scripts/ ./scripts/
+
 # Expose the port FastAPI runs on
 EXPOSE 8080
 

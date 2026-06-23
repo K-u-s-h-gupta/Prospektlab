@@ -136,6 +136,10 @@ class EvidenceBlackboard:
         # not the lossy claim dicts the canvas/UI use).
         self.raw_findings: list = []
         self.raw_docs: list = []
+        # Dedup keys so a fan-out swarm (many subtasks per skill) cannot flood
+        # the synthesis input / canvas with identical claims and findings.
+        self._seen_claim_keys: set = set()
+        self._seen_raw_keys: set = set()
 
     def _next_claim_id(self) -> str:
         self._claim_counter += 1
@@ -161,6 +165,13 @@ class EvidenceBlackboard:
             sources=sources or [],
             metrics=metrics or {},
         )
+        # Suppress exact duplicates (same domain + agent + text) so a wide
+        # fan-out swarm does not render the same claim N times.
+        key = (domain, agent, (text or "").strip().lower()[:200])
+        if (text or "").strip() and key in self._seen_claim_keys:
+            logger.debug("[BLACKBOARD] duplicate claim suppressed in %s by %s", domain, agent)
+            return claim
+        self._seen_claim_keys.add(key)
         self.domains[domain].append(claim)
         logger.debug("[BLACKBOARD] claim %s added to %s by %s", claim.claim_id, domain, agent)
         return claim
@@ -193,7 +204,16 @@ class EvidenceBlackboard:
         extra = getattr(result, "extra", None) or {}
         raw = extra.get("raw_findings")
         if raw:
-            self.raw_findings.extend(raw)
+            for f in raw:
+                key = (
+                    getattr(f, "agent", "") or "",
+                    (getattr(f, "headline", "") or "").strip().lower()[:160],
+                    (getattr(f, "detail", "") or "").strip().lower()[:120],
+                )
+                if key in self._seen_raw_keys:
+                    continue
+                self._seen_raw_keys.add(key)
+                self.raw_findings.append(f)
         docs = extra.get("raw_docs")
         if docs:
             self.raw_docs.extend(docs)

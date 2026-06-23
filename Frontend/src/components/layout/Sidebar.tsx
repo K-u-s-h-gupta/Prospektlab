@@ -11,6 +11,7 @@ import {
 import { Logo } from './Logo';
 import { useAuth } from '../../context/AuthContext';
 import { APP_BETA_ACCESS_NOTE, APP_BETA_BADGE } from '../../constants/beta';
+import { safeLocalStorageGet, safeLocalStorageSet } from '../../utils/browserStorage';
 
 interface SidebarProps {
   conversations: Array<{ id: string; title: string; date: string }>;
@@ -40,7 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { user, logout } = useAuth();
 
   const [width, setWidth] = useState<number>(() => {
-    const saved = localStorage.getItem('prospektlab_sidebar_width');
+    const saved = safeLocalStorageGet('prospektlab_sidebar_width');
     return saved ? parseInt(saved, 10) : 260;
   });
   const [isDragging, setIsDragging] = useState(false);
@@ -55,7 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (nextWidth < 120) nextWidth = 56;
       if (nextWidth > 320) nextWidth = 320;
       setWidth(nextWidth);
-      localStorage.setItem('prospektlab_sidebar_width', String(nextWidth));
+      safeLocalStorageSet('prospektlab_sidebar_width', String(nextWidth));
     };
 
     const handleMouseUp = () => {
@@ -149,7 +150,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => {
             if (isCollapsed) {
               setWidth(260);
-              localStorage.setItem('prospektlab_sidebar_width', '260');
+              safeLocalStorageSet('prospektlab_sidebar_width', '260');
               return;
             }
             dismissSidebarOnMobile();
@@ -166,7 +167,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={(event) => {
                   event.stopPropagation();
                   setWidth(260);
-                  localStorage.setItem('prospektlab_sidebar_width', '260');
+                  safeLocalStorageSet('prospektlab_sidebar_width', '260');
                 }}
               >
                 <ChevronRight size={16} color="#38BDF8" style={{ minWidth: 16, minHeight: 16, display: 'block' }} />
@@ -205,7 +206,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={(event) => {
                   event.stopPropagation();
                   setWidth(56);
-                  localStorage.setItem('prospektlab_sidebar_width', '56');
+                  safeLocalStorageSet('prospektlab_sidebar_width', '56');
                 }}
                 className="sidebar-toggle-btn"
                 title="Collapse Sidebar"

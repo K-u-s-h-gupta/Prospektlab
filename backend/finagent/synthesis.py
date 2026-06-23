@@ -154,12 +154,12 @@ def _sanitize_llm_memo(text: str) -> str:
     cleaned = text
     # Common mojibake sequences seen in Windows console / double-decoding paths.
     replacements = {
-        "Ã¢â€šÂ¹": "₹",
-        "â‚¹": "₹",
-        "â€™": "'",
-        "â€“": "-",
-        "â€œ": "\"",
-        "â€": "\"",
+        "Rs ": "₹",
+        "Rs ": "₹",
+        "'": "'",
+        " - ": "-",
+        """: "\"",
+        """: "\"",
     }
     for bad, good in replacements.items():
         cleaned = cleaned.replace(bad, good)

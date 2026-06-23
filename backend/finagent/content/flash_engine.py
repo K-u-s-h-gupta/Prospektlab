@@ -561,6 +561,20 @@ _FILLER_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\boverall[, ]", re.I),
     re.compile(r"\bneedless to say\b", re.I),
     re.compile(r"\bthis indicates that\b", re.I),
+    # Meta-language: copy that talks about the research process / its own
+    # uncertainty instead of stating a sourced fact. Never publishable.
+    re.compile(r"\bavailable data\b", re.I),
+    re.compile(r"\bresearch context\b", re.I),
+    re.compile(r"\bthe data (?:suggests|shows|indicates)\b", re.I),
+    re.compile(r"\bappears to\b", re.I),
+    re.compile(r"\bit seems\b", re.I),
+    # Referring to the internal research memo as "the notes" — leaked in audit
+    # ("cited in the notes", "according to the research notes provided").
+    re.compile(r"\bresearch notes\b", re.I),
+    re.compile(r"\bcited in the notes\b", re.I),
+    re.compile(r"\bnotes provided\b", re.I),
+    re.compile(r"\bper the notes\b", re.I),
+    re.compile(r"\b(?:in|from) the notes\b", re.I),
 )
 _SOURCE_SIGNAL_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\baccording to\b", re.I),
@@ -2700,6 +2714,84 @@ def _build_primary_evidence_context(req: "FlashGenerationRequest") -> str:
     return "\n".join(lines).strip()
 
 
+def _section_writer_enabled() -> bool:
+    return os.getenv("FINAGENT_SECTION_WRITER", "1").strip().lower() in {"1", "true", "yes", "on"}
+
+
+async def _expand_article_sections(
+    article: ContentArticlePackage,
+    memo: str,
+    req: "FlashGenerationRequest",
+    *,
+    target_words: int = 300,
+    min_words: int = 200,
+    max_concurrency: int = 4,
+) -> ContentArticlePackage:
+    """Per-section parallel expansion — the length unlock.
+
+    A single synthesis call self-limits body length (~1300 words). This expands
+    each thin section to `target_words` of dense, sourced prose in parallel,
+    using the research memo as evidence, then stitches the results back. Failures
+    fall back to the original section, so the article never regresses.
+    """
+    if not _section_writer_enabled() or not article.sections:
+        return article
+    llm_cfg = resolve_openai_config(complexity="moderate")
+    if llm_cfg is None:
+        return article
+    try:
+        import openai  # type: ignore
+    except Exception:
+        return article
+
+    client = openai.AsyncOpenAI(api_key=llm_cfg.api_key, base_url=llm_cfg.base_url)
+    model = os.getenv("FINAGENT_SYNTH_MODEL") or llm_cfg.model or "gpt-5.4-mini"
+    sem = asyncio.Semaphore(max_concurrency)
+    evidence = (req.source_markdown or "")[:6000] + "\n\n" + (memo or "")[:6000]
+
+    system = (
+        "You are a senior Indian markets correspondent expanding ONE section of a financial "
+        "article into dense, sourced prose. Use ONLY facts in the evidence. Attribute every number "
+        "('according to the filing', 'management guided'). No buy/sell/hold/target price. "
+        "No meta-language about notes/data/research. Return JSON: {\"paragraphs\": [\"...\", \"...\"]}."
+    )
+
+    async def _expand(idx: int, section: Any) -> tuple[int, list[str] | None]:
+        current = "\n\n".join(section.paragraphs or [])
+        if len(current.split()) >= min_words:
+            return idx, None  # already substantial
+        user = (
+            f"Section heading: {section.heading}\n"
+            f"Current draft:\n{current}\n\n"
+            f"Expand to {target_words}+ words across 2-3 paragraphs with concrete numbers, "
+            f"historical/peer comparison, and a clear takeaway. Evidence:\n{evidence}"
+        )
+        async with sem:
+            try:
+                resp = await client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                    temperature=0.3,
+                    max_completion_tokens=1600,
+                    response_format={"type": "json_object"},
+                    timeout=70,
+                )
+                data = json.loads(resp.choices[0].message.content or "{}")
+                paras = [str(p).strip() for p in (data.get("paragraphs") or []) if str(p).strip()]
+                if paras and sum(len(p.split()) for p in paras) > len(current.split()):
+                    return idx, paras
+            except Exception:
+                logger.debug("section expansion failed for %r", section.heading, exc_info=True)
+        return idx, None
+
+    results = await asyncio.gather(*[_expand(i, s) for i, s in enumerate(article.sections)])
+    new_sections = list(article.sections)
+    for idx, paras in results:
+        if paras:
+            new_sections[idx] = new_sections[idx].model_copy(update={"paragraphs": paras})
+    return article.model_copy(update={"sections": new_sections})
+
+
 async def _direct_json_article_call(
     memo: str,
     ikg_ctx: dict[str, Any],
@@ -2765,7 +2857,7 @@ async def _direct_json_article_call(
     schema_description = """Return JSON with EXACTLY these fields:
 {
   "slug": "<URL-safe identifier, 2-80 chars — use the provided slug>",
-  "title": "<SEO title 50-70 chars — include company/topic name>",
+  "title": "<headline 50-90 chars. MUST carry a specific GROUNDED anchor, not a vague phrase. For earnings/results/rating/M&A: include a concrete number with its metric (e.g. 'Infosys Q2 revenue up 8.6% to Rs 42,310 cr, FY26 guidance raised to 4%'); for a leadership change: name/role + action ('Infosys CFO Jayesh Sanghrajka resigns'); for a regulatory action: regulator + action ('SEBI bars XYZ promoters'). NEVER a number-free abstraction like 'keeps investor focus on demand'>",
   "description": "<meta description 140-170 chars — what the article covers>",
   "hero_eyebrow": "<short category label max 40 chars e.g. Earnings Analysis>",
   "hero_title": "<compelling headline max 100 chars>",
@@ -2857,9 +2949,9 @@ Requirements:
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.2,
-                max_completion_tokens=5000,
+                max_completion_tokens=8000,
                 response_format={"type": "json_object"},
-                timeout=80,
+                timeout=110,
             )
             raw = response.choices[0].message.content or ""
             cleaned = raw.strip()
@@ -3607,6 +3699,53 @@ def _article_word_count(article: ContentArticlePackage) -> int:
     return len(re.findall(r"\b[\w%-]+\b", " ".join(chunks)))
 
 
+def _article_body_word_count(article: ContentArticlePackage) -> int:
+    """Honest narrative length: prose paragraphs + bullets ONLY.
+
+    `_article_word_count` also counts titles, metric labels, table cells, FAQ
+    text etc., which inflates the total ~50% and let thin articles clear the
+    depth gates on metadata padding. Depth thresholds must measure real prose,
+    so the revision loop is forced to actually expand the body.
+    """
+    chunks: list[str] = []
+    for section in article.sections:
+        chunks.extend(section.paragraphs)
+        chunks.extend(section.bullets)
+    chunks.append(article.narrative_lede or "")
+    chunks.append(article.market_context or "")
+    chunks.append(article.analyst_commentary or "")
+    return len(re.findall(r"\b[\w%-]+\b", " ".join(chunks)))
+
+
+def _ensure_narrative_lede(article: ContentArticlePackage) -> ContentArticlePackage:
+    """Backfill an empty narrative_lede — the article's hook must never be blank.
+
+    The model occasionally omits narrative_lede. Rather than ship a missing
+    opener, derive an inverted-pyramid lede from the strongest metric plus the
+    hero summary (or the first substantive paragraph).
+    """
+    if (article.narrative_lede or "").strip():
+        return article
+    lead = (article.hero_summary or "").strip()
+    if not lead:
+        for section in article.sections:
+            for para in section.paragraphs:
+                if len((para or "").split()) >= 25:
+                    lead = para.strip()
+                    break
+            if lead:
+                break
+    metric_cue = ""
+    if article.metrics:
+        m = article.metrics[0]
+        metric_cue = " ".join(str(x) for x in (m.label, m.value) if x).strip()
+    lede = f"{metric_cue}. {lead}".strip(". ").strip() if (metric_cue and lead) else (lead or metric_cue)
+    lede = " ".join(lede.split())[:600]
+    if not lede:
+        return article
+    return article.model_copy(update={"narrative_lede": lede})
+
+
 def _substantive_section_count(article: ContentArticlePackage) -> int:
     count = 0
     for section in article.sections:
@@ -3740,7 +3879,7 @@ def _build_evidence_claims(article: ContentArticlePackage, evidence_pack: dict[s
 def _compute_depth_score(article: ContentArticlePackage) -> int:
     section_count = len(article.sections)
     paragraph_count = sum(len(section.paragraphs) for section in article.sections)
-    words = _article_word_count(article)
+    words = _article_body_word_count(article)
     substantive_sections = _substantive_section_count(article)
     score = 0.0
     score += min(section_count, 9) / 9 * 32
@@ -3866,7 +4005,9 @@ def _evaluate_publish_gate(
     is_official_update = _is_official_update_request(req)
     effective_content_type = _effective_content_type(req)
     sources_used = _dedupe_sources(list(evidence_pack.get("sources_used") or []))
-    word_count = _article_word_count(article)
+    # Depth thresholds measure REAL prose (paragraphs/bullets/lede), not metadata.
+    word_count = _article_body_word_count(article)
+    total_word_count = _article_word_count(article)
     section_count = len(article.sections)
     substantive_sections = _substantive_section_count(article)
     editorial_score = int(getattr(editorial_review, "total_score", 0) or 0)
@@ -3919,8 +4060,29 @@ def _evaluate_publish_gate(
     filler_hits = sum(1 for pattern in _FILLER_PATTERNS if pattern.search(lower_text))
     if filler_hits >= 2:
         reasons.append("filler_copy")
+    # Temporal hard block: a 4-digit year beyond the current year, appearing in
+    # an earnings/results context, signals a future-dated (fabricated) claim
+    # (e.g. "reported FY27 revenue of ..." written today). One such hit blocks.
+    current_year = datetime.now().year
+    if re.search(r"\b(result|results|earnings|revenue|profit|reported|posted|quarter)\b", lower_text):
+        for match in re.findall(r"\b(20\d{2})\b", article_text):
+            if int(match) > current_year:
+                reasons.append("future_dated_claim")
+                break
     if _unsupported_claims_present(article, evidence_claims, sources_used):
         reasons.append("unsupported_claims")
+    # Numeric grounding: every figure in the prose must trace to a sourced number.
+    # Only enforced when we actually have a grounded ledger; a small tolerance
+    # absorbs legitimately derived/rounded figures.
+    try:
+        from finagent.content.claim_ledger import build_ledger, verify_article_numbers
+        _ledger = build_ledger(evidence_pack, getattr(req, "source_markdown", "") or "")
+        if _ledger:
+            _ungrounded_nums = verify_article_numbers(article_text, _ledger)
+            if len(_ungrounded_nums) >= 3:
+                reasons.append("ungrounded_article_numbers")
+    except Exception:
+        logger.debug("claim-ledger numeric check skipped", exc_info=True)
     if is_official_update and str(summary.get("context_enrichment_status") or "") != "ready":
         reasons.append("context_enrichment_missing")
     if is_official_update and word_count < 700:
@@ -3975,6 +4137,7 @@ def _evaluate_publish_gate(
         "depth_score": depth_score,
         "evidence_score": evidence_score,
         "word_count": word_count,
+        "total_word_count": total_word_count,
         "section_count": section_count,
         "substantive_sections": substantive_sections,
         "source_count": len(sources_used),
@@ -4043,18 +4206,17 @@ async def generate_flash_article(
                 version += 1
             slug = f"{slug}-v{version}"
 
-    if req.mode == "flash":
-        objectives = _CONTENT_FLASH_OBJECTIVES
-        wall_limit = _FLASH_WALL_SECONDS
-    else:
-        objectives = _CONTENT_DEEP_OBJECTIVES
-        wall_limit = _DEEP_WALL_SECONDS
+    # Flash tier retired — ALL content runs the full deep research pipeline.
+    # A legacy mode="flash" request is coerced to deep so no caller can produce
+    # the thin 3-pass output any more.
+    objectives = _CONTENT_DEEP_OBJECTIVES
+    wall_limit = _DEEP_WALL_SECONDS
     total_passes = len(objectives)
 
     BUS.emit(
         job_id, "phase",
         phase="content_generation",
-        note=f"{req.mode.upper()} mode — {total_passes} passes for '{req.target[:60]}'",
+        note=f"DEEP mode — {total_passes} passes for '{req.target[:60]}'",
     )
 
     # ── IKG context (parallel pre-fetch) ─────────────────────────────────────
@@ -4168,6 +4330,10 @@ async def generate_flash_article(
             # Models
             synth_model=synth_model if is_last else fast_model,
             response_depth="deep" if is_last else "standard",
+            # Stealth scraping (crawl4ai/patchright) on EVERY pass — research
+            # passes run at "standard" depth for budget, but must still land real
+            # NSE/BSE/SEBI filings instead of degrading to Yahoo TTM fallback.
+            force_crawl4ai=True,
             # For synthesis pass: output_mode=None so the objective text drives
             # format (the objective explicitly asks for JSON). Using "news_brief"
             # was causing the synthesiser's template to override the JSON instruction
@@ -4202,33 +4368,56 @@ async def generate_flash_article(
                  label=pass_label,
                  status="done")
 
-    # ── Execute passes ────────────────────────────────────────────────────────
+    # ── Optional: Kimi-style dynamic swarm in place of the fixed passes ───────
+    # When FINAGENT_CONTENT_USE_SWARM is set, build research context with the
+    # dynamic 24-300 sub-agent swarm (run_deep_swarm_research_session) instead of
+    # the fixed objective passes. Default OFF; any failure falls back to passes.
+    _swarm_memo = ""
+    if os.getenv("FINAGENT_CONTENT_USE_SWARM", "").strip().lower() in {"1", "true", "yes", "on"}:
+        try:
+            from finagent.swarm_research import run_deep_swarm_research_session, SwarmResearchConfig
+            BUS.emit(job_id, "phase", phase="content_generation", note="Running Kimi-style research swarm")
+            scfg = SwarmResearchConfig(
+                session_id=job_id,
+                max_wall_seconds=float(os.getenv("FINAGENT_CONTENT_SWARM_WALL", "150")),
+                user_email=requested_by,
+            )
+            canvas = await run_deep_swarm_research_session(req.target, enriched_objective, cfg=scfg)
+            _swarm_memo = (getattr(canvas, "memo_md", "") or "").strip()
+            BUS.emit(job_id, "log", source="flash_engine", level="info",
+                     message=f"Swarm research memo ready ({len(_swarm_memo)} chars)")
+        except Exception as exc:
+            logger.warning("Swarm research failed for job %s, falling back to fixed passes: %s", job_id, exc)
+            _swarm_memo = ""
+
+    # ── Execute passes (skipped when the swarm already produced a memo) ────────
     started_at = asyncio.get_running_loop().time()
     parallel_count = total_passes - 1
 
-    if parallel_count > 0:
-        BUS.emit(job_id, "phase", phase="content_generation",
-                 note=f"Running {parallel_count} research passes in parallel")
-        parallel_tasks = [asyncio.create_task(_run_pass(i)) for i in range(parallel_count)]
-        parallel_results = await asyncio.gather(*parallel_tasks, return_exceptions=True)
-        for outcome in parallel_results:
-            if isinstance(outcome, Exception):
-                logger.warning("Research pass failed for job %s: %s", job_id, outcome)
-                BUS.emit(job_id, "log", source="flash_engine", level="warning",
-                         message=f"Research pass failed but synthesis will continue: {outcome}")
+    if not _swarm_memo:
+        if parallel_count > 0:
+            BUS.emit(job_id, "phase", phase="content_generation",
+                     note=f"Running {parallel_count} research passes in parallel")
+            parallel_tasks = [asyncio.create_task(_run_pass(i)) for i in range(parallel_count)]
+            parallel_results = await asyncio.gather(*parallel_tasks, return_exceptions=True)
+            for outcome in parallel_results:
+                if isinstance(outcome, Exception):
+                    logger.warning("Research pass failed for job %s: %s", job_id, outcome)
+                    BUS.emit(job_id, "log", source="flash_engine", level="warning",
+                             message=f"Research pass failed but synthesis will continue: {outcome}")
 
-    elapsed = asyncio.get_running_loop().time() - started_at
-    if elapsed > wall_limit:
-        logger.warning(
-            "Flash job %s hit wall limit %.0fs — synthesising with available context", job_id, wall_limit
-        )
+        elapsed = asyncio.get_running_loop().time() - started_at
+        if elapsed > wall_limit:
+            logger.warning(
+                "Flash job %s hit wall limit %.0fs — synthesising with available context", job_id, wall_limit
+            )
 
-    await asyncio.sleep(0.3)
-    BUS.emit(job_id, "phase", phase="content_generation", note="Running final article synthesis")
-    await _run_pass(total_passes - 1)
+        await asyncio.sleep(0.3)
+        BUS.emit(job_id, "phase", phase="content_generation", note="Running final article synthesis")
+        await _run_pass(total_passes - 1)
 
     # ── Harvest memo + quality score ──────────────────────────────────────────
-    memo = _harvest_memo(job_id)
+    memo = _swarm_memo or _harvest_memo(job_id)
     final_event = _harvest_final_event(job_id)
     quality_score = float(final_event.get("quality_score") or 0)
     evidence_pack = _build_evidence_pack(req, ikg_ctx, final_event)
@@ -4252,7 +4441,7 @@ async def generate_flash_article(
         BUS.emit(job_id, "log", source="flash_engine", level="info",
                  message=f"Article JSON ready — {len(article.sections)} sections, {len(article.faqs)} FAQs")
     article = sanitize_article_package(article)
-    baseline_words = _article_word_count(article)
+    baseline_words = _article_body_word_count(article)
     needs_revision = (
         baseline_words < 1100
         or len(article.sections) < 6
@@ -4286,7 +4475,7 @@ async def generate_flash_article(
         )
         if revised_article is not None:
             revised_article = sanitize_article_package(revised_article)
-            revised_words = _article_word_count(revised_article)
+            revised_words = _article_body_word_count(revised_article)
             if (
                 revised_words >= baseline_words
                 or len(revised_article.metrics) > len(article.metrics)
@@ -4303,6 +4492,21 @@ async def generate_flash_article(
                         f"metrics {len(article.metrics)}; visuals {len(article.visuals)})."
                     ),
                 )
+    # ── Section-wise expansion (length unlock) ───────────────────────────────
+    # A single synthesis call self-limits body length; expand thin sections in
+    # parallel to reach world-class depth. Opt-out via FINAGENT_SECTION_WRITER=0.
+    try:
+        pre_expand_words = _article_body_word_count(article)
+        if pre_expand_words < 2000:
+            article = await _expand_article_sections(article, memo, req)
+            article = sanitize_article_package(article)
+            post_expand_words = _article_body_word_count(article)
+            if post_expand_words > pre_expand_words:
+                BUS.emit(job_id, "log", source="flash_engine", level="info",
+                         message=f"Section writer expanded body {pre_expand_words} -> {post_expand_words} words.")
+    except Exception:
+        logger.debug("section-writer expansion skipped", exc_info=True)
+
     # ── Specialist research wave (10 parallel agents) ────────────────────────
     specialist_summary: dict[str, Any] = {}
     specialist_quality = 0
@@ -4376,6 +4580,21 @@ async def generate_flash_article(
     pre_evidence_claims = _build_evidence_claims(article, evidence_pack)
     is_official_source = _is_official_update_request(req)
     blended_quality = max(int(round(max(quality_score, 0.0))), int(specialist_quality or 0))
+    # Classify the story archetype once from the request + assembled article so
+    # the editorial gate can demand a GROUNDED, archetype-appropriate headline
+    # anchor (not just numbers). Falls back to numbers-only if classification or
+    # the import fails — strictly additive, never blocks generation.
+    story_archetype = ""
+    try:
+        from finagent.content.archetype import classify_archetype
+        archetype_text = " ".join(
+            [_article_plain_text(article), str(req.source_markdown or "")]
+        ).strip()
+        story_archetype = classify_archetype(
+            req.target, _effective_content_type(req), archetype_text
+        )
+    except Exception as exc:
+        logger.warning("Archetype classification failed: %s", exc)
     article, editorial_review = await run_editorial_revision_loop(
         article,
         target=req.target,
@@ -4384,8 +4603,10 @@ async def generate_flash_article(
         quality_score=blended_quality,
         evidence_claim_count=len(pre_evidence_claims),
         livemint_source_violations=livemint_dropped,
+        archetype=story_archetype,
     )
     article = sanitize_article_package(article)
+    article = _ensure_narrative_lede(article)
     editorial_score = editorial_review.total_score
     urgency_score = editorial_review.urgency_score
     combined_quality = int(round((max(quality_score, 0.0) * 0.30) + (editorial_score * 0.70)))

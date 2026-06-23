@@ -65,9 +65,35 @@ def _agent_llm_enabled() -> bool:
     return os.environ.get("FINAGENT_SWARM_LLM_AGENTS", "1") == "1"
 
 
+def _reason_complexity() -> str:
+    """Model tier for the per-agent reasoning layer.
+
+    This layer *is* the swarm's analytical intelligence (it interprets the
+    grounded floor into claims). "simple" routes to the cheapest model, which
+    caps answer quality. Default to "moderate"; override per-deployment via
+    FINAGENT_SWARM_REASON_COMPLEXITY (simple|moderate|complex).
+    """
+    val = (os.environ.get("FINAGENT_SWARM_REASON_COMPLEXITY") or "moderate").strip().lower()
+    return val if val in {"simple", "moderate", "complex"} else "moderate"
+
+
 def _build_subagent_context(task: SubTask, ctx: SwarmContext):
     from finagent.agents.base import SubAgentContext
     from finagent.synthesis import EnrichmentBundle
+
+    # NOTE: SubAgentContext has no user_email/tenant_id fields — passing them
+    # here raised TypeError and crashed EVERY grounded specialist in the deep
+    # swarm (the swarm fell back to bundle-only synthesis with no specialist
+    # findings). resolved_entity must be the ResolvedEntity object the
+    # specialists expect, not the dict the swarm context stores.
+    from finagent.geo.entity_resolver import ResolvedEntity
+
+    resolved = ctx.resolved_entity
+    if isinstance(resolved, dict):
+        try:
+            resolved = ResolvedEntity(**resolved)
+        except Exception:
+            resolved = None
 
     return SubAgentContext(
         target=ctx.target,
@@ -78,11 +104,9 @@ def _build_subagent_context(task: SubTask, ctx: SwarmContext):
         session_id=ctx.session_id,
         emit=ctx.emit,
         deadline_ms=task.budget_ms,
-        resolved_entity=ctx.resolved_entity,
+        resolved_entity=resolved,
         ikg_bundle=ctx.extra.get("ikg_bundle"),
         portfolio_symbols=ctx.portfolio_symbols,
-        user_email=ctx.user_email,
-        tenant_id=ctx.tenant_id,
     )
 
 
@@ -118,13 +142,14 @@ async def _llm_reason(skill, task: SubTask, ctx: SwarmContext, grounded: list) -
             swarm_chat(
                 skill.system_prompt,
                 user,
-                complexity="simple",
+                complexity=_reason_complexity(),
                 json_mode=True,
                 max_tokens=900,
             ),
             timeout=max(8.0, min(task.budget_ms / 1000.0, 25.0)),
         )
-        data = json.loads(content or "{}")
+        from finagent.swarm.llm import loads_lenient
+        data = loads_lenient(content)
     except Exception as exc:
         logger.warning("[RUNNER] LLM reasoning failed for %s: %s", task.agent_id, exc)
         return []
@@ -146,6 +171,56 @@ async def _llm_reason(skill, task: SubTask, ctx: SwarmContext, grounded: list) -
             )
         )
     return out
+
+
+async def _grounded_once(task: SubTask, ctx: SwarmContext, sub_ctx, cls) -> tuple:
+    """Run the deterministic specialist once per skill per swarm session.
+
+    A Kimi-style deep plan fans many subtasks onto the same skill (e.g. 8
+    distinct financials angles). The deterministic specialists, however, ignore
+    the per-task objective and read only the shared enrichment/IKG bundle — so
+    re-running them per subtask produces N identical grounded findings and (for
+    the 5 web-bound specialists) N redundant search passes. We memoise the
+    grounded floor per skill behind a per-skill lock: the first caller produces
+    it, later callers reuse it.
+
+    Returns (findings, claims, docs, status, error, elapsed_ms, is_producer).
+    Only the producer should emit the grounded floor downstream; reuse tasks
+    carry it as reasoning context but must not re-add it to the blackboard.
+    """
+    cache: dict = ctx.extra.setdefault("_grounded_cache", {})
+    locks: dict = ctx.extra.setdefault("_grounded_locks", {})
+    lock = locks.setdefault(task.agent_id, asyncio.Lock())
+    async with lock:
+        cached = cache.get(task.agent_id)
+        if cached is not None:
+            return (cached["findings"], cached["claims"], cached["docs"],
+                    cached["status"], cached["error"], cached["elapsed_ms"], False)
+        findings: list = []
+        claims: list = []
+        docs: list = []
+        status, error, elapsed_ms = "ok", None, 0
+        try:
+            # .run() (not .execute()) so preconditions, per-agent timeout, and
+            # subagent_started/done SSE events fire.
+            result = await asyncio.wait_for(
+                cls().run(sub_ctx),
+                timeout=task.budget_ms / 1000.0 + 2.0,
+            )
+            findings = list(result.findings)
+            claims = list(result.claims or [])
+            docs = list(result.new_docs or [])
+            status = result.status
+            error = result.error
+            elapsed_ms = result.elapsed_ms
+        except Exception as exc:
+            logger.exception("[RUNNER] grounded specialist %s failed", task.agent_id)
+            status, error = "failed", f"{type(exc).__name__}: {exc}"
+        cache[task.agent_id] = {
+            "findings": findings, "claims": claims, "docs": docs,
+            "status": status, "error": error, "elapsed_ms": elapsed_ms,
+        }
+        return findings, claims, docs, status, error, elapsed_ms, True
 
 
 async def run_subtask_with_skill(task: SubTask, ctx: SwarmContext) -> SubTaskResult:
@@ -171,8 +246,7 @@ async def run_subtask_with_skill(task: SubTask, ctx: SwarmContext) -> SubTaskRes
         )
 
     sub_ctx = _build_subagent_context(task, ctx)
-    legacy_map = _legacy_map()
-    cls = legacy_map.get(task.agent_id)
+    cls = _legacy_map().get(task.agent_id)
 
     grounded_findings: list = []
     grounded_claims: list = []
@@ -180,36 +254,32 @@ async def run_subtask_with_skill(task: SubTask, ctx: SwarmContext) -> SubTaskRes
     status = "ok"
     error = None
     elapsed_ms = 0
+    is_producer = True
 
     if cls is not None:
-        agent = cls()
-        try:
-            # Use .run() (not .execute()) so preconditions, per-agent timeout,
-            # and subagent_started/done SSE events fire.
-            result = await asyncio.wait_for(
-                agent.run(sub_ctx),
-                timeout=task.budget_ms / 1000.0 + 2.0,
-            )
-            grounded_findings = list(result.findings)
-            grounded_claims = list(result.claims or [])
-            new_docs = list(result.new_docs or [])
-            status = result.status
-            error = result.error
-            elapsed_ms = result.elapsed_ms
-        except Exception as exc:
-            logger.exception("[RUNNER] grounded specialist %s failed", task.agent_id)
-            status = "failed"
-            error = f"{type(exc).__name__}: {exc}"
+        (grounded_findings, grounded_claims, new_docs,
+         status, error, elapsed_ms, is_producer) = await _grounded_once(task, ctx, sub_ctx, cls)
 
-    # Layer 2: skill-prompt LLM reasoning (also the only output for
-    # reasoning-only skills like causal_war_gamer that have no specialist).
+    # Layer 2: per-task skill-prompt LLM reasoning. This is objective-specific,
+    # so it is what makes many subtasks of one skill diverge instead of merely
+    # duplicating the shared grounded floor. Also the only output for
+    # reasoning-only skills (e.g. causal_war_gamer) that have no specialist.
     reasoned: list = []
     if _agent_llm_enabled():
         reasoned = await _llm_reason(skill, task, ctx, grounded_findings)
 
-    all_findings = grounded_findings + reasoned
-    if all_findings:
+    # Only the task that produced the grounded floor emits it downstream; reuse
+    # tasks carried it as reasoning context but contribute reasoned claims only,
+    # keeping the blackboard + synthesis input free of N duplicate copies.
+    contributed_findings = (grounded_findings if is_producer else []) + reasoned
+    contributed_claims = grounded_claims if is_producer else []
+
+    if contributed_findings:
         status = "ok"
+    elif not is_producer:
+        # A duplicate of an already-grounded skill that added no new reasoning
+        # contributes nothing — skip it rather than fail (no pointless retry).
+        status = "skipped"
     elif status == "ok":
         status = "partial"
 
@@ -217,12 +287,12 @@ async def run_subtask_with_skill(task: SubTask, ctx: SwarmContext) -> SubTaskRes
         task_id=task.task_id,
         agent_id=task.agent_id,
         status=status,
-        findings=[f.to_dict() for f in all_findings],
-        claims=[c.to_dict() for c in grounded_claims] if grounded_claims else [],
+        findings=[f.to_dict() for f in contributed_findings],
+        claims=[c.to_dict() for c in contributed_claims] if contributed_claims else [],
         elapsed_ms=elapsed_ms,
         error=error,
         # Raw objects for the strong-model synthesis pass (charts/tables/memo).
-        extra={"raw_findings": all_findings, "raw_docs": new_docs},
+        extra={"raw_findings": contributed_findings, "raw_docs": new_docs if is_producer else []},
     )
 
 

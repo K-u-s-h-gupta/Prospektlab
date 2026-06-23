@@ -99,7 +99,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
             if (isPercent) {
               return ` ${val.toFixed(1)}%`;
             }
-            const formattedVal = '\u20B9' + val.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+            const formattedVal = 'Rs ' + val.toLocaleString('en-IN', { maximumFractionDigits: 0 });
             return ` ${formattedVal} · ${pct.toFixed(1)}% of portfolio`;
           }
         }
@@ -122,7 +122,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({ labels, data, title, val
       const liveTotalVal = chartValues.reduce((acc, value) => acc + value, 0);
 
       const isPercent = valueKind === 'percent' || unit === '%';
-      const centerLabel = isPercent ? '100%' : '\u20B9' + Math.round(liveTotalVal).toLocaleString('en-IN');
+      const centerLabel = isPercent ? '100%' : 'Rs ' + Math.round(liveTotalVal).toLocaleString('en-IN');
       const subLabel = isPercent ? 'Allocation' : 'Total Value';
 
       ctx.textAlign = 'center';

@@ -18,6 +18,24 @@ class Claim:
     is_material: bool
     as_of: datetime | None = None
 
+    def to_dict(self) -> dict:
+        """Blackboard/SubTaskResult-friendly view.
+
+        The swarm runner and the standard-v2 legacy bridge both serialise
+        specialist claims via `.to_dict()`; the EvidenceBlackboard reads
+        `headline`/`text`/`confidence`/`evidence` keys.
+        """
+        return {
+            "text": self.text,
+            "headline": self.text,
+            "detail": "",
+            "confidence": "MEDIUM",
+            "is_material": self.is_material,
+            "as_of": self.as_of.isoformat() if self.as_of else None,
+            "evidence": [],
+            "metrics": {},
+        }
+
 
 @dataclass
 class Source:

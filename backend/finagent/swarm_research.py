@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from datetime import datetime, timezone
@@ -61,6 +62,8 @@ class SwarmResearchConfig:
         user_email: str | None = None,
         tenant_id: str | None = None,
         portfolio_symbols: list[str] | None = None,
+        peer_targets: list[str] | None = None,
+        output_mode: str | None = None,
     ) -> None:
         self.session_id = session_id or str(uuid.uuid4())
         self.max_wall_seconds = max_wall_seconds
@@ -72,6 +75,9 @@ class SwarmResearchConfig:
         self.user_email = user_email
         self.tenant_id = tenant_id
         self.portfolio_symbols = portfolio_symbols or []
+        # Comparison support: peer entities to enrich + force comparison output.
+        self.peer_targets = peer_targets or []
+        self.output_mode = output_mode
 
 
 async def _load_enrichment_and_ikg(
@@ -85,10 +91,18 @@ async def _load_enrichment_and_ikg(
 
     entity = resolve_entity(target)
     ikg_toolkit = get_ikg_toolkit()
+    # Yahoo needs the exchange-qualified symbol (e.g. "TCS.NS"); the bare NSE
+    # label ("TCS") resolves to an unrelated US penny stock and poisons the
+    # enrichment bundle with garbage price/margins. India fetches use the NSE
+    # label. News uses the human-readable name for relevance.
+    _yahoo_sym = entity.yahoo_ticker or (
+        f"{entity.ticker_label}.NS" if getattr(entity, "country_code", "") == "IN" else entity.ticker_label
+    )
+    _news_query = entity.canonical_name or entity.ticker_label
 
     async def load_yahoo():
         try:
-            return await fetch_yahoo_quote(entity.ticker_label)
+            return await fetch_yahoo_quote(_yahoo_sym)
         except Exception as exc:
             logger.warning("[SWARM_RESEARCH] Yahoo fetch failed: %s", exc)
             return None
@@ -102,7 +116,7 @@ async def _load_enrichment_and_ikg(
 
     async def load_news():
         try:
-            return await fetch_news(entity.ticker_label)
+            return await fetch_news(_news_query)
         except Exception as exc:
             logger.warning("[SWARM_RESEARCH] News fetch failed: %s", exc)
             return []
@@ -228,6 +242,27 @@ def _legacy_result_to_subtask_result(result: Any) -> Any:
     )
 
 
+def _to_canvas_source(s: Any, idx: int) -> CanvasSource:
+    """Normalise a blackboard claim source into a CanvasSource.
+
+    Deterministic specialists carry `evidence` as a list of URL *strings*,
+    while reasoned/news findings carry dicts. Treating every source as a dict
+    crashed `_synthesize_canvas` with "'str' object has no attribute 'get'"
+    once grounded findings actually started flowing.
+    """
+    if isinstance(s, str):
+        return CanvasSource(source_id=s or f"src-{idx}", source_type="url", title="", url=s)
+    if isinstance(s, dict):
+        url = s.get("url", "")
+        return CanvasSource(
+            source_id=url or f"src-{idx}",
+            source_type=s.get("source_type", s.get("source", "unknown")),
+            title=s.get("title", ""),
+            url=url,
+        )
+    return CanvasSource(source_id=f"src-{idx}", source_type="unknown", title="", url=str(s or ""))
+
+
 async def _synthesize_canvas(
     target: str,
     objective: str,
@@ -269,12 +304,7 @@ async def _synthesize_canvas(
                 agent=claim.agent,
                 confidence=claim.confidence,
                 verified=claim.verified,
-                sources=[CanvasSource(
-                    source_id=s.get("url", f"src-{len(section.claims)}"),
-                    source_type=s.get("source_type", s.get("source", "unknown")),
-                    title=s.get("title", ""),
-                    url=s.get("url", ""),
-                ) for s in claim.sources],
+                sources=[_to_canvas_source(s, i) for i, s in enumerate(claim.sources)],
                 metrics=claim.metrics,
                 uncertainty_note=claim.uncertainty_note,
                 contradiction_id=claim.contradiction_id,
@@ -358,13 +388,14 @@ async def _run_real_synthesis(
             on_token=_on_token,
             enrichment=bundle,
             synth_model=synth_model,
-            output_mode=None,
+            output_mode=cfg.output_mode,
             response_depth=response_depth,
             entity=entity,
             specialist_findings=findings,
             session_id=cfg.session_id,
             user_email=cfg.user_email,
             is_deep_lite=False,
+            peer_targets=cfg.peer_targets or None,
         )
     except Exception as exc:
         logger.warning("[SWARM_RESEARCH] real synthesis failed, falling back to canvas memo: %s", exc)

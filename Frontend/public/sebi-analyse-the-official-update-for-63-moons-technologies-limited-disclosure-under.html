@@ -292,7 +292,7 @@
       }
       .mc-pos { background: rgba(16,185,129,0.12); color: #047857; }
       .mc-neg { background: rgba(239,68,68,0.12); color: #b91c1c; }
-      /* â”€â”€ Data list (section bullets) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+      /* -- Data list (section bullets) --------------- */
       ul.data-list {
         list-style: none;
         padding: 0;
@@ -314,7 +314,7 @@
         line-height: 1.55;
       }
       li.data-row::before {
-        content: "â†’";
+        content: "->";
         color: var(--accent);
         font-weight: 700;
         flex-shrink: 0;
@@ -614,7 +614,7 @@
       (function () {
         'use strict';
 
-        /* â”€â”€ Reading progress bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* -- Reading progress bar ------------------------ */
         const progress = document.querySelector('[data-progress]');
         let raf = null;
         const updateProgress = () => {
@@ -627,7 +627,7 @@
         updateProgress();
         window.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(updateProgress); }, { passive: true });
 
-        /* â”€â”€ TOC active section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* -- TOC active section --------------------------- */
         const tocLinks = Array.from(document.querySelectorAll('[data-toc-link]'));
         const sections = tocLinks
           .map((link) => document.querySelector(link.getAttribute('href')))
@@ -647,7 +647,7 @@
           sections.forEach((section) => observer.observe(section));
         }
 
-        /* â”€â”€ Back-to-top button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* -- Back-to-top button --------------------------- */
         const btn = document.createElement('button');
         btn.id = 'btt';
         btn.setAttribute('aria-label', 'Back to top');
@@ -674,14 +674,14 @@
         }, { passive: true });
         btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
 
-        /* â”€â”€ Highlight change indicators in metric cards â”€â”€ */
+        /* -- Highlight change indicators in metric cards -- */
         document.querySelectorAll('.mc-chg').forEach((el) => {
           const txt = el.textContent || '';
           if (txt.startsWith('+')) el.classList.add('mc-pos');
           else if (txt.startsWith('-')) el.classList.add('mc-neg');
         });
 
-        /* â”€â”€ Smooth anchor scroll (override jump chips) â”€â”€â”€ */
+        /* -- Smooth anchor scroll (override jump chips) --- */
         document.querySelectorAll('a.jump-chip, a[data-toc-link]').forEach((a) => {
           a.addEventListener('click', (e) => {
             const href = a.getAttribute('href');

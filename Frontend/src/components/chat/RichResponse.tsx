@@ -83,7 +83,7 @@ export const RichResponse: React.FC<RichResponseProps> = ({ data }) => {
             </span>
             {primary_entity.current_price && (
               <span style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                ₹{primary_entity.current_price.toLocaleString('en-IN')}
+                Rs {primary_entity.current_price.toLocaleString('en-IN')}
                 {primary_entity.change_pct !== undefined && (
                   <span style={{ 
                     fontSize: '11px', 

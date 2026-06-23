@@ -475,7 +475,7 @@ export const UploadPage: React.FC = () => {
                     <tr key={item.symbol} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: 'var(--text-primary)' }}>
                       <td style={{ padding: '8px 12px', fontWeight: 600 }}>{item.symbol}</td>
                       <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)' }}>{item.qty}</td>
-                      <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)' }}>₹{item.avgCost.toLocaleString('en-IN')}</td>
+                      <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)' }}>Rs {item.avgCost.toLocaleString('en-IN')}</td>
                       <td style={{ padding: '8px 12px' }}>
                         <span style={{ fontSize: '10px', background: 'rgba(56, 189, 248, 0.08)', color: 'var(--accent-cyan)', padding: '1px 6px', borderRadius: '4px' }}>{item.sector}</span>
                       </td>
@@ -515,7 +515,7 @@ export const UploadPage: React.FC = () => {
                         <td style={{ padding: '8px 12px', fontWeight: 600 }}>{pos.symbol || pos.isin || 'UNKNOWN'}</td>
                         <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{pos.name || ''}</td>
                         <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(pos.quantity || 0).toLocaleString('en-IN')}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{Number(pos.market_value || 0).toLocaleString('en-IN')}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>Rs {Number(pos.market_value || 0).toLocaleString('en-IN')}</td>
                         <td style={{ padding: '8px 12px', textAlign: 'right', color: pos.confidence > 0.8 ? 'var(--profit)' : 'var(--accent-orange)' }}>{Math.round(Number(pos.confidence || 0) * 100)}%</td>
                       </tr>
                     ))}

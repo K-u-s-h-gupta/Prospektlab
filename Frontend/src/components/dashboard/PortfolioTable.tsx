@@ -90,10 +90,10 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
                       </div>
                     </td>
                     <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{item.qty}</td>
-                    <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>₹{item.avgCost.toLocaleString('en-IN')}</td>
-                    <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>₹{item.current.toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>Rs {item.avgCost.toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>Rs {item.current.toLocaleString('en-IN')}</td>
                     <td style={{ padding: '14px 16px', fontFamily: 'var(--font-mono)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      ₹{item.currentValue.toLocaleString('en-IN')}
+                      Rs {item.currentValue.toLocaleString('en-IN')}
                     </td>
                     <td style={{ 
                       padding: '14px 16px', 
@@ -104,7 +104,7 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
                       whiteSpace: 'nowrap'
                     }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                        <span>{isProfit ? '+' : ''}₹{item.pnl.toLocaleString('en-IN')}</span>
+                        <span>{isProfit ? '+' : ''}Rs {item.pnl.toLocaleString('en-IN')}</span>
                         <span style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '2px' }}>
                           <ArrowUpRight size={10} style={{ transform: isProfit ? 'none' : 'rotate(90deg)' }} />
                           {isProfit ? '+' : ''}{item.pnlPct.toFixed(1)}%
@@ -154,7 +154,7 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
             <div>
               <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 600 }}>PORTFOLIO NAV</div>
               <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                ₹{totals.currentValue.toLocaleString('en-IN')}
+                Rs {totals.currentValue.toLocaleString('en-IN')}
               </div>
             </div>
             <div>
@@ -165,7 +165,7 @@ export const PortfolioTable: React.FC<PortfolioTableProps> = ({ portfolio, onSel
                 fontFamily: 'var(--font-mono)',
                 color: totals.pnl >= 0 ? 'var(--profit)' : 'var(--loss)'
               }}>
-                {totals.pnl >= 0 ? '+' : ''}₹{totals.pnl.toLocaleString('en-IN')} ({totalReturnPct.toFixed(1)}%)
+                {totals.pnl >= 0 ? '+' : ''}Rs {totals.pnl.toLocaleString('en-IN')} ({totalReturnPct.toFixed(1)}%)
               </div>
             </div>
           </div>

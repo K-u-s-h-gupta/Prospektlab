@@ -11,7 +11,7 @@ phases:
     commands:
       - echo Build started on `date`
       - echo Building the Docker image...          
-      - docker build -t "$REPOSITORY_URI:latest" .
+      - docker build --no-cache -t "$REPOSITORY_URI:latest" .
       - echo Validating backend image imports...
       - docker run --rm -e JWT_SECRET=codebuild-smoke-secret "$REPOSITORY_URI:latest" python -c "from finagent.ingestion.portfolio_schema import PortfolioTransactionSchema; import finagent.gateway.run as gateway; print(gateway.app.title)"
       - docker tag "$REPOSITORY_URI:latest" "$REPOSITORY_URI:$IMAGE_TAG"
@@ -50,3 +50,7 @@ phases:
       - aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" --task-definition "$NEW_TASK_DEF" --force-new-deployment --region "$AWS_DEFAULT_REGION"
       - echo "Waiting for service stability..."
       - aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --region "$AWS_DEFAULT_REGION"
+      - echo "Updating scheduler service with new image..."
+      - aws ecs update-service --cluster "$ECS_CLUSTER" --service finagent-backend-ikg-scheduler --force-new-deployment --region "$AWS_DEFAULT_REGION"
+      - echo "Waiting for scheduler service stability..."
+      - aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" finagent-backend-ikg-scheduler --region "$AWS_DEFAULT_REGION"

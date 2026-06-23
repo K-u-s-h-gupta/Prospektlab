@@ -4,6 +4,7 @@ import { Logo } from '../components/layout/Logo';
 import { Keyboard, UploadCloud, ArrowRight, TrendingUp, ShieldCheck, BadgeInfo } from 'lucide-react';
 import { trackEvent } from '../telemetry';
 import { APP_BETA_ACCESS_NOTE, APP_BETA_BADGE, APP_BETA_LABEL } from '../constants/beta';
+import { safeLocalStorageGet, safeLocalStorageSet } from '../utils/browserStorage';
 
 interface GatewaySetupCardProps {
   embedded?: boolean;
@@ -12,9 +13,9 @@ interface GatewaySetupCardProps {
 
 export const GatewaySetupCard: React.FC<GatewaySetupCardProps> = ({ embedded = false, onClose }) => {
   const navigate = useNavigate();
-  const [name, setName] = useState(() => localStorage.getItem('prospektlab_username') || '');
+  const [name, setName] = useState(() => safeLocalStorageGet('prospektlab_username'));
   const [style, setStyle] = useState<'Conservative' | 'Balanced' | 'Growth'>(() => {
-    const saved = localStorage.getItem('prospektlab_style');
+    const saved = safeLocalStorageGet('prospektlab_style');
     return (saved as any) || 'Balanced';
   });
 
@@ -41,9 +42,9 @@ export const GatewaySetupCard: React.FC<GatewaySetupCardProps> = ({ embedded = f
 
   const persistProfile = () => {
     if (name.trim()) {
-      localStorage.setItem('prospektlab_username', name.trim());
+      safeLocalStorageSet('prospektlab_username', name.trim());
     }
-    localStorage.setItem('prospektlab_style', style);
+    safeLocalStorageSet('prospektlab_style', style);
   };
 
   const handleManual = () => {

@@ -219,10 +219,10 @@ class SwarmOrchestrator:
             complexity="complex",
             model=self.planner_model,
             json_mode=True,
-            max_tokens=4000,
+            max_tokens=8000,
         )
-        import json
-        data = json.loads(content or "{}")
+        from finagent.swarm.llm import loads_lenient
+        data = loads_lenient(content)
         tasks = []
         for item in data.get("tasks", []):
             tasks.append(SubTask(
@@ -243,30 +243,93 @@ class SwarmOrchestrator:
         )
 
     def _deterministic_plan(self, ctx: SwarmContext) -> SwarmPlan:
-        """Fallback plan when LLM planner is unavailable."""
-        base = [
-            SubTask(task_id="t-fin", agent_id="financials_analyst", objective=f"Core financials for {ctx.target}", priority=10, dependencies=[]),
-            SubTask(task_id="t-gov", agent_id="governance_forensics", objective=f"Governance and forensic analysis for {ctx.target}", priority=15, dependencies=[]),
-            SubTask(task_id="t-risk", agent_id="risk_redflags", objective=f"Risk and red flags for {ctx.target}", priority=20, dependencies=[]),
-            SubTask(task_id="t-val", agent_id="valuation_modeler", objective=f"Valuation model for {ctx.target}", priority=25, dependencies=["t-fin"]),
-            SubTask(task_id="t-comp", agent_id="competitor_moat", objective=f"Competitive moat and peer comparison for {ctx.target}", priority=30, dependencies=["t-fin"]),
-            SubTask(task_id="t-news", agent_id="news_sentiment", objective=f"Latest news and sentiment for {ctx.target}", priority=20, dependencies=[]),
-            SubTask(task_id="t-macro", agent_id="macro_sector", objective=f"Macro and sector overlay for {ctx.target}", priority=35, dependencies=[]),
-            SubTask(task_id="t-causal", agent_id="causal_war_gamer", objective=f"Scenario analysis for {ctx.target}", priority=40, dependencies=["t-fin", "t-val"]),
+        """Fallback plan when the LLM planner is unavailable.
+
+        Even without an LLM this fans out into a real multi-agent swarm: each
+        domain is decomposed into several distinct, non-overlapping angles
+        rather than one task per skill. The grounded floor is still computed
+        once per skill (see runner memoisation); the angles diverge through the
+        per-task reasoning layer. Dependencies keep valuation/scenario work
+        after the financials floor.
+        """
+        t = ctx.target
+        # (id, skill, objective, priority, deps)
+        spec: list[tuple[str, str, str, int, list[str]]] = [
+            # Financials floor — distinct angles, all independent.
+            ("t-fin-pnl", "financials_analyst", f"P&L, revenue mix and margin trajectory for {t}", 10, []),
+            ("t-fin-bs", "financials_analyst", f"Balance sheet strength, leverage and liquidity for {t}", 11, []),
+            ("t-fin-cf", "financials_analyst", f"Cash flow quality and working-capital cycle for {t}", 12, []),
+            ("t-fin-ret", "financials_analyst", f"Multi-year growth and return ratios (ROCE/ROE) for {t}", 13, []),
+            # Governance / forensics.
+            ("t-gov-board", "governance_forensics", f"Board composition and director-network analysis for {t}", 15, []),
+            ("t-gov-pledge", "governance_forensics", f"Promoter holding trend and pledge risk for {t}", 16, []),
+            ("t-gov-rpt", "governance_forensics", f"Related-party transactions and auditor history for {t}", 17, []),
+            ("t-gov-enf", "governance_forensics", f"SEBI / regulatory enforcement history for {t}", 18, []),
+            # Risk.
+            ("t-risk-reg", "risk_redflags", f"Regulatory and legal risks for {t}", 20, []),
+            ("t-risk-ops", "risk_redflags", f"Operational and concentration risks for {t}", 21, []),
+            ("t-risk-acct", "risk_redflags", f"Accounting and financial red flags for {t}", 22, []),
+            # News / sentiment.
+            ("t-news-guid", "news_sentiment", f"Last-90-day news and management guidance for {t}", 20, []),
+            ("t-news-sent", "news_sentiment", f"Analyst actions and retail sentiment for {t}", 21, []),
+            # Macro / sector.
+            ("t-macro-sec", "macro_sector", f"Sector demand and capex cycle for {t}", 30, []),
+            ("t-macro-ovl", "macro_sector", f"Macro overlay (rates, FX, commodities) for {t}", 31, []),
+            # Valuation — depends on the financials floor.
+            ("t-val-dcf", "valuation_modeler", f"DCF base-case valuation for {t}", 25, ["t-fin-pnl"]),
+            ("t-val-mult", "valuation_modeler", f"Relative-multiples valuation vs peers for {t}", 26, ["t-fin-pnl"]),
+            ("t-val-scn", "valuation_modeler", f"Scenario and sensitivity valuation ranges for {t}", 27, ["t-fin-pnl"]),
+            # Competitor / moat — depends on the financials floor.
+            ("t-comp-peer", "competitor_moat", f"Peer benchmarking on growth and margins for {t}", 30, ["t-fin-pnl"]),
+            ("t-comp-moat", "competitor_moat", f"Moat and market-share dynamics for {t}", 31, ["t-fin-pnl"]),
+            # Causal war-game — depends on financials + valuation.
+            ("t-causal-dn", "causal_war_gamer", f"Downside-scenario war-game for {t}", 40, ["t-fin-pnl", "t-val-dcf"]),
+            ("t-causal-up", "causal_war_gamer", f"Upside-catalyst scenario for {t}", 41, ["t-fin-pnl", "t-val-dcf"]),
         ]
-        return SwarmPlan(tasks=base, reasoning="Deterministic fallback plan", estimated_agents=len(base))
+        base = [
+            SubTask(task_id=tid, agent_id=skill, objective=obj, priority=prio, dependencies=deps)
+            for (tid, skill, obj, prio, deps) in spec
+        ]
+        return SwarmPlan(
+            tasks=base,
+            reasoning="Deterministic fan-out plan (LLM planner unavailable)",
+            estimated_agents=len(base),
+        )
 
     def _build_planner_prompt(self, ctx: SwarmContext, skills: list[str]) -> str:
+        # Soft fan-out target tied to the configured ceiling. Real Kimi-style
+        # breadth comes from decomposing the question into many specific,
+        # non-overlapping sub-objectives — NOT from one task per skill.
+        target = max(24, min(self.max_tasks, 60))
+        entity = ctx.resolved_entity or {}
+        ent_line = ""
+        if isinstance(entity, dict) and entity:
+            name = entity.get("canonical_name") or entity.get("ticker_label") or ctx.target
+            sector = entity.get("sector") or entity.get("industry") or ""
+            ent_line = f"Resolved entity: {name}" + (f" (sector: {sector})" if sector else "") + "\n"
         return (
-            f"You are the coordinator of a financial research agent swarm. The user query is:\n"
-            f"'{ctx.raw_query}'\n\n"
+            "You are the coordinator of a deep financial-research agent swarm (Kimi-style). "
+            "Decompose the user's question into a WIDE plan of specific, non-overlapping "
+            "sub-objectives that run in parallel.\n\n"
+            f"User query:\n'{ctx.raw_query}'\n\n"
             f"Target entity: {ctx.target}\n"
-            f"Portfolio context: {ctx.portfolio_symbols or 'none'}\n\n"
-            f"Available agent skills:\n" + "\n".join(f"- {s}" for s in skills) + "\n\n"
-            "Create a swarm plan of up to 50 subtasks. Each task must include: task_id, agent_id, "
-            "objective (1-2 sentences), priority (lower = earlier), dependencies (task_ids), max_steps, "
-            "and budget_ms. Prefer parallel tasks. Ensure financials/valuation run early, governance/risk "
-            "run in parallel, and causal/scenario tasks depend on valuation. Return JSON with keys: reasoning, tasks."
+            f"{ent_line}"
+            f"Portfolio context: {ctx.portfolio_symbols or 'none'}\n"
+            f"Peer/comparison targets: {(ctx.extra or {}).get('peer_targets') or 'none'}\n\n"
+            f"Available agent skills (assign each task to the best-fit skill_id):\n"
+            + "\n".join(f"- {s}" for s in skills) + "\n\n"
+            f"Produce as many distinct sub-objectives as the question warrants — aim for "
+            f"~{target} tasks, and never fewer than 20. Reuse a skill MANY times for different "
+            "angles (e.g. financials -> P&L/margins, balance-sheet/leverage, cash-flow quality, "
+            "growth/return ratios; governance -> board network, promoter pledge, related-party + "
+            "auditor, enforcement). Each objective must be a concrete, answerable question, not a "
+            "broad heading.\n\n"
+            "Each task must include: task_id, agent_id (one of the skill_ids above), objective "
+            "(1-2 sentences, specific), priority (lower = earlier), dependencies (task_ids), "
+            "max_steps, budget_ms. Rules: financials tasks run first (no deps); governance/risk/"
+            "news/macro run in parallel (no deps); valuation and competitor tasks depend on at "
+            "least one financials task; causal/scenario tasks depend on a valuation task. Keep the "
+            "dependency graph acyclic. Return JSON with keys: reasoning, tasks."
         )
 
     async def _run_task(self, task: SubTask, ctx: SwarmContext) -> SubTaskResult:

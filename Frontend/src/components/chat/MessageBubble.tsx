@@ -723,7 +723,7 @@ const renderEntityCard = (entity: any, isSecondary: boolean): React.ReactNode =>
       {entity.current_price != null && (
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', marginTop: '3px' }}>
           <span style={{ fontSize: '16px', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
-            ₹{Number(entity.current_price).toLocaleString('en-IN')}
+            Rs {Number(entity.current_price).toLocaleString('en-IN')}
           </span>
           {entity.change_pct != null && (
             <span style={{
@@ -741,7 +741,7 @@ const renderEntityCard = (entity: any, isSecondary: boolean): React.ReactNode =>
         )}
         {entity.market_cap != null && (
           <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
-            ₹{(entity.currency === 'INR' && Number(entity.market_cap) < 10000000
+            Rs {(entity.currency === 'INR' && Number(entity.market_cap) < 10000000
               ? Number(entity.market_cap)
               : Number(entity.market_cap) / 1e7
             ).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr

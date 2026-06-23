@@ -371,6 +371,11 @@ class AgentLoopConfig:
     # ── Comparison: when set, synthesis fetches rich enrichment for peers ──
     peer_targets: list[str] = field(default_factory=list)
     fast_mode: bool = False
+    # Force the crawl4ai/patchright stealth fetch path even when response_depth
+    # is not DEEP. Lets content research passes (which run at "standard" depth to
+    # keep step/timeout budgets low) still scrape anti-bot sites (NSE/BSE/SEBI)
+    # instead of silently degrading to light httpx + Yahoo fallback.
+    force_crawl4ai: bool = False
 
 
 STANDARD_PRESET = dict(
@@ -1749,6 +1754,9 @@ async def run_research_session(
     )
 
     response_depth = normalize_depth(cfg.response_depth)
+    # Stealth scraping (crawl4ai/patchright) is normally DEEP-only. force_crawl4ai
+    # turns it on for any depth so research passes can land real filings.
+    _crawl4ai_enabled = (response_depth == ResponseDepth.DEEP) or cfg.force_crawl4ai
 
     # Depth policy: chat is intentionally lightweight; standard preserves the
     # bounded research config supplied by the gateway; deep forces every phase.
@@ -2225,8 +2233,8 @@ async def run_research_session(
                 preferred_domains=preferred_domains,
                 entity=entity,
                 timeout_s=timeout_s,
-                bypass_crawl4ai=(response_depth != ResponseDepth.DEEP),
-                lite_crawl=(response_depth == ResponseDepth.STANDARD),
+                bypass_crawl4ai=(not _crawl4ai_enabled),
+                lite_crawl=(response_depth == ResponseDepth.STANDARD and not cfg.force_crawl4ai),
             )
             logger.info("[AGENT-SEARCH] Breadth survey COMPLETE | docs_returned=%d", len(docs))
         except Exception as exc:
@@ -2278,8 +2286,8 @@ async def run_research_session(
                         max_results=6,
                         preferred_domains=preferred_domains,
                         entity=entity,
-                        bypass_crawl4ai=(response_depth != ResponseDepth.DEEP),
-                        lite_crawl=(response_depth == ResponseDepth.STANDARD),
+                        bypass_crawl4ai=(not _crawl4ai_enabled),
+                        lite_crawl=(response_depth == ResponseDepth.STANDARD and not cfg.force_crawl4ai),
                     ),
                     timeout=cfg.followup_search_timeout,
                 )
@@ -2408,8 +2416,8 @@ async def run_research_session(
                 max_results=max_results,
                 preferred_domains=preferred_domains,
                 entity=entity,
-                bypass_crawl4ai=(response_depth != ResponseDepth.DEEP),
-                lite_crawl=(response_depth == ResponseDepth.STANDARD),
+                bypass_crawl4ai=(not _crawl4ai_enabled),
+                lite_crawl=(response_depth == ResponseDepth.STANDARD and not cfg.force_crawl4ai),
             )
 
         def _conflicts(d: list) -> list:
@@ -2517,8 +2525,8 @@ async def run_research_session(
             ikg_bundle=bundle.ikg,
             agent_contexts=agent_contexts,
             preferred_domains=preferred_domains,
-            bypass_crawl4ai=(response_depth != ResponseDepth.DEEP),
-            lite_crawl=(response_depth == ResponseDepth.STANDARD),
+            bypass_crawl4ai=(not _crawl4ai_enabled),
+            lite_crawl=(response_depth == ResponseDepth.STANDARD and not cfg.force_crawl4ai),
             portfolio_symbols=(portfolio_sentinel.symbols if portfolio_sentinel else []),
             portfolio_risk=(portfolio_sentinel.risk if portfolio_sentinel else {}),
             runtime_rules=(portfolio_sentinel.rules if portfolio_sentinel else []),
@@ -2663,8 +2671,8 @@ async def run_research_session(
                                     max_results=4,
                                     preferred_domains=preferred_domains,
                                     entity=entity,
-                                    bypass_crawl4ai=(response_depth != ResponseDepth.DEEP),
-                                    lite_crawl=(response_depth == ResponseDepth.STANDARD),
+                                    bypass_crawl4ai=(not _crawl4ai_enabled),
+                                    lite_crawl=(response_depth == ResponseDepth.STANDARD and not cfg.force_crawl4ai),
                                 ),
                                 timeout=cfg.blindspot_per_query_timeout,
                             )

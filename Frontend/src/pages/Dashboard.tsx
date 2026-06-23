@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useMarketFeed, pricesToQuotesData } from '../hooks/useMarketFeed';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
 import { WatchlistStock } from '../components/dashboard/WatchlistCard';
@@ -44,6 +45,7 @@ import { Search, Sparkles, MessageSquare, ChevronRight, ChevronDown, ChevronLeft
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
 import { buildProspektCover } from '../utils/coverArt';
 import { APP_BETA_ACCESS_NOTE, APP_BETA_BADGE, APP_BETA_CHAT_FOOTER, APP_BETA_DEEP_NOTE } from '../constants/beta';
+import { safeLocalStorageGet } from '../utils/browserStorage';
 
 type DashboardFeatureTab = 'overview' | 'portfolio' | 'watchlist' | 'screener' | 'earnings' | 'governance';
 
@@ -245,7 +247,7 @@ const parseNewsTimestamp = (value: string) => {
   return Date.now() - amount * ms;
 };
 
-// ── Explicit document/report intent detection (gates the export panel) ──────
+// -- Explicit document/report intent detection (gates the export panel) ------
 const DOC_INTENT_RE = /\b(report|document|doc|pdf|docx|memo|write[- ]?up|deck|dossier|whitepaper|white paper|one[- ]?pager|file)\b/i;
 const DOC_VERB_RE = /\b(export|download|save|generate|create|make|produce|prepare|draft|build|give me|send me|put together)\b/i;
 const DOC_NEG_RE = /\b(do not|don'?t|no need|without|skip|not a (report|document|pdf))\b/i;
@@ -258,29 +260,29 @@ function queryWantsDocument(text: string): boolean {
   return DOC_VERB_RE.test(t) && DOC_INTENT_RE.test(t);
 }
 
-// ── Analytics presentational helpers ───────────────────────────────────────
+// -- Analytics presentational helpers ---------------------------------------
 function fmtNum(v: any, digits = 2, suffix = ''): string {
   const n = Number(v);
-  if (v === null || v === undefined || !Number.isFinite(n)) return '—';
+  if (v === null || v === undefined || !Number.isFinite(n)) return ' - ';
   return `${n.toFixed(digits)}${suffix}`;
 }
 
 function fmtINR(v: any): string {
   const n = Number(v);
-  if (!Number.isFinite(n)) return '—';
+  if (!Number.isFinite(n)) return ' - ';
   const sign = n < 0 ? '-' : '';
   const a = Math.abs(n);
-  if (a >= 1e7) return `${sign}₹${(a / 1e7).toFixed(2)} Cr`;
-  if (a >= 1e5) return `${sign}₹${(a / 1e5).toFixed(2)} L`;
-  if (a >= 1e3) return `${sign}₹${(a / 1e3).toFixed(1)}k`;
-  return `${sign}₹${a.toFixed(0)}`;
+  if (a >= 1e7) return `${sign}Rs ${(a / 1e7).toFixed(2)} Cr`;
+  if (a >= 1e5) return `${sign}Rs ${(a / 1e5).toFixed(2)} L`;
+  if (a >= 1e3) return `${sign}Rs ${(a / 1e3).toFixed(1)}k`;
+  return `${sign}Rs ${a.toFixed(0)}`;
 }
 
 function fmtINRWhole(v: any): string {
   const n = Number(v);
-  if (!Number.isFinite(n)) return '₹0';
+  if (!Number.isFinite(n)) return 'Rs 0';
   const sign = n < 0 ? '-' : '';
-  return `${sign}₹${Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+  return `${sign}Rs ${Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 }
 
 function MetricCard({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: string; tone?: 'up' | 'down' | 'neutral' | 'accent' }) {
@@ -358,8 +360,8 @@ function CorrelationHeatmap({ matrix, labels }: { matrix: Array<Array<number | n
             <tr key={i}>
               <td style={{ padding: '2px 6px', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>{short[i]}</td>
               {row.map((v, j) => (
-                <td key={j} title={`${short[i]} ↔ ${short[j]}: ${v ?? 'n/a'}`} style={{ background: cellColor(v), color: 'var(--text-primary)', textAlign: 'center', padding: '6px 8px', border: '1px solid rgba(0,0,0,0.25)', fontFamily: 'var(--font-mono)', minWidth: 36 }}>
-                  {v === null || v === undefined ? '·' : v.toFixed(2)}
+                <td key={j} title={`${short[i]} <-> ${short[j]}: ${v ?? 'n/a'}`} style={{ background: cellColor(v), color: 'var(--text-primary)', textAlign: 'center', padding: '6px 8px', border: '1px solid rgba(0,0,0,0.25)', fontFamily: 'var(--font-mono)', minWidth: 36 }}>
+                  {v === null || v === undefined ? ' - ' : v.toFixed(2)}
                 </td>
               ))}
             </tr>
@@ -409,7 +411,7 @@ const FAST_TAPE_NEWS_FALLBACKS: NewsFeedItem[] = [
     id: 'fallback-mint-companies',
     source: 'Livemint',
     time: 'Wed, 27 May 2026 11:15:00 GMT',
-    headline: 'Reliance Jio subscriber growth accelerates in Q1; ARPU touches \u20B9214 post 5G upgrades',
+    headline: 'Reliance Jio subscriber growth accelerates in Q1; ARPU touches Rs 214 post 5G upgrades',
     description:
       "Reliance Industries' telecom unit reported strong subscriber additions driven by 5G plan adoption.",
     sentiment: 'bullish',
@@ -435,7 +437,7 @@ const FAST_TAPE_NEWS_FALLBACKS: NewsFeedItem[] = [
     id: 'fallback-business-standard-companies',
     source: 'Business Standard',
     time: 'Wed, 27 May 2026 16:45:00 GMT',
-    headline: 'Tata Motors plans capital expenditure of \u20B943,000 crore for FY27; EV pipeline in focus',
+    headline: 'Tata Motors plans capital expenditure of Rs 43,000 crore for FY27; EV pipeline in focus',
     description:
       'The company outlined capex priorities across CV and PV divisions with electric-vehicle scale-up plans.',
     sentiment: 'bullish',
@@ -502,7 +504,7 @@ const FAST_TAPE_NEWS_FALLBACKS: NewsFeedItem[] = [
     time: 'Wed, 27 May 2026 08:45:00 GMT',
     headline: 'RBI maintains liquidity stance; bond yields soften as traders eye CPI print',
     description:
-      'The central bank’s operations kept short-term rates steady ahead of the inflation data release.',
+      "The central bank's operations kept short-term rates steady ahead of the inflation data release.",
     sentiment: 'neutral',
     tickers: ['NIFTY 50', 'SENSEX'],
     url: 'https://www.livemint.com/economy/',
@@ -707,7 +709,7 @@ const normalizeIndexRow = (raw: any): IndexTickerData | null => {
       ? raw.value.trim()
       : valueNum !== null
         ? valueNum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-        : '�';
+        : '--';
 
   const change =
     typeof raw.change === 'string' && raw.change.trim()
@@ -816,7 +818,7 @@ const writeCachedMarketMovers = (items: MarketMoverItem[]) => {
 };
 
 // Every benchmark here has a verified Yahoo Finance history feed. Nifty Smallcap
-// 250 and Nifty Next 50 were removed — Yahoo returns no usable history for them —
+// 250 and Nifty Next 50 were removed  -  Yahoo returns no usable history for them  - 
 // and the midcap entry is now labelled correctly (^NSEMDCP50 = Nifty Midcap 50).
 const BENCHMARKS = [
   { id: 'NIFTY50', name: 'Nifty 50', historySymbol: 'NIFTY50' },
@@ -1075,12 +1077,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
   // Resizable chat rail state
   const [chatWidth, setChatWidth] = useState<number>(() => {
-    const saved = localStorage.getItem(CHAT_WIDTH_STORAGE_KEY);
+    const saved = safeLocalStorageGet(CHAT_WIDTH_STORAGE_KEY);
     return saved ? normalizeChatWidth(parseInt(saved, 10)) : getDefaultChatWidth();
   });
   const [isDraggingChat, setIsDraggingChat] = useState(false);
   const [isChatHidden, setIsChatHidden] = useState(() => {
-    const savedWidth = localStorage.getItem(CHAT_WIDTH_STORAGE_KEY);
+    const savedWidth = safeLocalStorageGet(CHAT_WIDTH_STORAGE_KEY);
     if (isMobileViewport()) return true;
     return savedWidth ? parseInt(savedWidth, 10) <= 0 : false;
   });
@@ -1222,6 +1224,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   const [marketMoversError, setMarketMoversError] = useState<string | null>(null);
   const marketMoversRef = useRef<MarketMoverItem[]>([]);
   const liveIndiaIndexCountRef = useRef(0);
+  const overviewIndexSliderRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     marketMoversRef.current = marketMovers;
   }, [marketMovers]);
@@ -1283,8 +1286,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       const changeVal = hasPrice ? price * ((Number.isFinite(changePct) ? changePct : 0) / 100) : 0;
       const row = {
         name: q.company_name || `${sym} Limited`,
-        price: hasPrice ? price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—',
-        change: hasPrice ? `${changeVal >= 0 ? '+' : ''}${changeVal.toFixed(2)}` : '—',
+        price: hasPrice ? price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ' - ',
+        change: hasPrice ? `${changeVal >= 0 ? '+' : ''}${changeVal.toFixed(2)}` : ' - ',
         changePct: Number.isFinite(changePct) ? changePct : 0,
         sector: q.sector || 'General'
       };
@@ -1357,36 +1360,39 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       return {
         symbol,
         name: info?.name || stock?.name || `${symbol} Limited`,
-        price: info?.price ?? '—',
-        change: info?.change ?? '—',
+        price: info?.price ?? ' - ',
+        change: info?.change ?? ' - ',
         changePct: Number.isFinite(Number(info?.changePct)) ? Number(info?.changePct) : 0,
       };
     });
     setWatchlistStocks(mapped);
   }, [watchlist, allStockData]);
 
-  // Fetch quotes whenever user universe changes or periodically
+  // -- Real-time market feed (WebSocket -> HTTP fallback) --------------------
+  const shouldUseDashboardFeed = activeFeatureTab === 'overview' || activeFeatureTab === 'portfolio';
+  const { prices: livePrices, indexData: liveIndexFeed } = useMarketFeed(
+    shouldUseDashboardFeed ? userUniverseSymbols : [],
+    { includeIndices: shouldUseDashboardFeed }
+  );
+
+  // Merge live prices into quotesData
   useEffect(() => {
-    const shouldStreamQuotes =
-      activeFeatureTab === 'overview' ||
-      activeFeatureTab === 'portfolio' ||
-      activeFeatureTab === 'watchlist';
-    if (!shouldStreamQuotes || userUniverseSymbols.length === 0) return;
-    const fetchQuotes = async () => {
-      try {
-        const data = await getMarketQuotes(userUniverseSymbols);
-        if (data) {
-          setQuotesData(data);
-        }
-      } catch (e) {
-        console.error('Failed to fetch market quotes', e);
-      }
-    };
-    fetchQuotes();
-    const intervalMs = activeFeatureTab === 'watchlist' ? 15000 : 30000;
-    const interval = setInterval(fetchQuotes, intervalMs);
-    return () => clearInterval(interval);
-  }, [userUniverseSymbols, activeFeatureTab]);
+    if (Object.keys(livePrices).length > 0) {
+      const fresh = pricesToQuotesData(livePrices);
+      setQuotesData(prev => ({ ...prev, ...fresh }));
+    }
+  }, [livePrices]);
+
+  // Merge index data from live feed
+  useEffect(() => {
+    if (liveIndexFeed && Object.keys(liveIndexFeed).length > 0) {
+      const normalized = normalizeIndicesPayload(liveIndexFeed);
+      const indiaRows = normalized.india.length > 0 ? normalized.india : FALLBACK_INDIA_INDICES;
+      setLiveIndexData({ ...EMPTY_INDEX_BUCKETS, ...normalized, india: indiaRows });
+      setIndicesLoading(false);
+      setIndicesError(null);
+    }
+  }, [liveIndexFeed]);
 
   useEffect(() => {
     if (!isPortfolioFeature) return;
@@ -1493,37 +1499,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     });
     return normalized.india.length > 0;
   };
-  // Fetch indices on mount and periodically
-  useEffect(() => {
-    if (!isMarketTapeFeature) return;
-    let cancelled = false;
-    const fetchIndices = async () => {
-      try {
-        setIndicesError(null);
-        const data = await getMarketIndices();
-        if (!cancelled) {
-          const hasLiveIndiaRows = applyIndicesPayload(data);
-          if (!hasLiveIndiaRows) {
-            setIndicesError('Live index feed returned no rows. Showing fallback snapshot.');
-          }
-          setIndicesLoading(false);
-        }
-      } catch (e: any) {
-        if (!cancelled) {
-          console.error('Failed to fetch market indices', e);
-          setLiveIndexData((prev) => (prev.india?.length ? prev : { ...EMPTY_INDEX_BUCKETS, ...prev, india: FALLBACK_INDIA_INDICES }));
-          setIndicesError('Live refresh delayed. Showing latest available indices.');
-          setIndicesLoading(false);
-        }
-      }
-    };
-    fetchIndices();
-    const interval = setInterval(fetchIndices, 60000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [isMarketTapeFeature]);
+  // Indices come from useMarketFeed hook  -  no separate fetch needed.
 
   // Fetch news on mount and periodically
   useEffect(() => {
@@ -1953,7 +1929,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   }, [isAuthenticated, setOnboarded, watchlistStorageKey, conversationsStorageKey, portfolioSyncNonce]);
 
   const fetchBackendAnalytics = async () => {
-    // Each widget fetch is independent — one failure must not blank the others.
+    // Each widget fetch is independent  -  one failure must not blank the others.
     if (isAuthenticated) {
       getMfAnalytics().then(setMfAnalytics).catch(() => {});
       getTodayQueue().then(q => setActionQueue(q.items || [])).catch(() => {});
@@ -1975,7 +1951,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       const isCustom = customShockPct !== undefined;
       const custom = isCustom ? { nifty: (customShockPct as number) / 100 } : undefined;
       const res = await postStressTest(isCustom ? 'custom' : scenario, custom);
-      if (res && isCustom) res.scenario_label = `Custom · Nifty ${customShockPct}%`;
+      if (res && isCustom) res.scenario_label = `Custom  -  Nifty ${customShockPct}%`;
       setStressResult(res);
       setStressScenario(isCustom ? 'custom' : scenario);
     } catch (e) {
@@ -1989,7 +1965,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     const welcomeMsgs: Message[] = [
       {
         sender: 'ai',
-        text: `Arthik here. I don't do hope — I do numbers. Ask me anything about your book, a ticker, or the tape.`
+        text: arthikGreeting
       }
     ];
     setMessages(welcomeMsgs);
@@ -2474,7 +2450,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   );
   const visibleCommentary = backendCommentaryUsable ? commentary : dailyReadFallback;
 
-  // Tracked universe movers — resolve live change_pct by normalizing symbol format
+  // Tracked universe movers  -  resolve live change_pct by normalizing symbol format
   // quotesData may be keyed as "RELIANCE.NS" but portfolio symbols may be "RELIANCE"
   const lookupQuote = (sym: string) => {
     return lookupLiveQuote(sym);
@@ -2488,7 +2464,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     const livePrice = q?.price;
     const displayPrice = livePrice != null
       ? livePrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : s.current > 0 ? s.current.toFixed(2) : '—';
+      : s.current > 0 ? s.current.toFixed(2) : ' - ';
     const baseSymbol = normalizeMarketSymbol(s.symbol);
     return {
       symbol: baseSymbol,
@@ -2586,10 +2562,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
         .join(', ');
       
       const holdingsStr = enrichedPortfolio
-        .map(p => `${p.name} (${p.symbol}, ${p.qty} shares @ ₹${p.avgCost} cost, current ₹${p.current}, sector: ${p.sector})`)
+        .map(p => `${p.name} (${p.symbol}, ${p.qty} shares @ Rs ${p.avgCost} cost, current Rs ${p.current}, sector: ${p.sector})`)
         .join('; ');
 
-      return `[USER PORTFOLIO SUMMARY: ${enrichedPortfolio.length} holdings worth ₹${portfolioSummary.totalValue.toLocaleString('en-IN')}, total P&L: ₹${portfolioSummary.totalPnL.toLocaleString('en-IN')} (${portfolioTotalReturnPct.toFixed(1)}%). Top sectors: ${breakdownSectors}. Holdings: ${holdingsStr}]`;
+      return `[USER PORTFOLIO SUMMARY: ${enrichedPortfolio.length} holdings worth Rs ${portfolioSummary.totalValue.toLocaleString('en-IN')}, total P&L: Rs ${portfolioSummary.totalPnL.toLocaleString('en-IN')} (${portfolioTotalReturnPct.toFixed(1)}%). Top sectors: ${breakdownSectors}. Holdings: ${holdingsStr}]`;
     }
 
     if (scope === 'specific_holding') {
@@ -2603,7 +2579,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
             const costBasis = p.qty * p.avgCost;
             const pnl = p.qty * p.current - costBasis;
             const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
-            return `${p.name} (${p.symbol}) - ${p.qty} shares @ ₹${p.avgCost} avg cost, current ₹${p.current}, unrealized P&L ₹${pnl.toLocaleString('en-IN')} (${pnlPct.toFixed(1)}%), representing ${((p.qty * p.current / portfolioSummary.totalValue) * 100).toFixed(1)}% of total portfolio, sector: ${p.sector}`;
+            return `${p.name} (${p.symbol}) - ${p.qty} shares @ Rs ${p.avgCost} avg cost, current Rs ${p.current}, unrealized P&L Rs ${pnl.toLocaleString('en-IN')} (${pnlPct.toFixed(1)}%), representing ${((p.qty * p.current / portfolioSummary.totalValue) * 100).toFixed(1)}% of total portfolio, sector: ${p.sector}`;
           })
           .join('; ');
 
@@ -2612,7 +2588,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     }
 
     // Default general query - inject light summary context anyway
-    return `[USER PORTFOLIO VALUE: ₹${portfolioSummary.totalValue.toLocaleString('en-IN')} across ${enrichedPortfolio.length} positions]`;
+    return `[USER PORTFOLIO VALUE: Rs ${portfolioSummary.totalValue.toLocaleString('en-IN')} across ${enrichedPortfolio.length} positions]`;
   };
 
   const buildPortfolioFallbackAnswer = (_query: string, reason?: string) => {
@@ -2625,7 +2601,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     }
 
     const totalValue = portfolioSummary.totalValue || computedPortfolioDetails.reduce((sum, item) => sum + item.currentValue, 0);
-    const formatMoney = (value: number) => `₹${Math.round(value || 0).toLocaleString('en-IN')}`;
+    const formatMoney = (value: number) => `Rs ${Math.round(value || 0).toLocaleString('en-IN')}`;
     const topHoldings = [...computedPortfolioDetails]
       .sort((a, b) => b.currentValue - a.currentValue)
       .slice(0, 5)
@@ -3116,7 +3092,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       setChatWidth(w);
       localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, w.toString());
     }
-    // Set pending query — ChatInput will pick this up and auto-populate
+    // Set pending query  -  ChatInput will pick this up and auto-populate
     setPendingChatQuery({ id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, text: query, depth });
     // Pulse the chat rail border
     setIsChatHighlighted(true);
@@ -3153,7 +3129,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     localStorage.setItem(watchlistStorageKey, JSON.stringify(deduped));
   };
 
-  // showToast is now provided by AuthContext — visible toast notifications
+  // showToast is now provided by AuthContext  -  visible toast notifications
   const retryIndices = async () => {
     setIndicesLoading(true);
     setIndicesError(null);
@@ -3217,6 +3193,96 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   };
 
   const hasEngaged = messages.some((msg, index) => msg.sender === 'user' || index > 0);
+
+  /* ---------------------------------------------
+     ARTHIK PERSONALIZED GREETING
+  --------------------------------------------- */
+  const getArthikGreeting = (): string => {
+    const hour = new Date().getHours();
+    const name = (user?.name || safeLocalStorageGet('prospektlab_username', 'there') || 'there').split(/\s+/)[0];
+    const portfolioSize = portfolio.length;
+    const marketOpen = hour >= 9 && hour < 16;
+    const isWeekend = [0, 6].includes(new Date().getDay());
+
+    const timeOfDay =
+      hour < 5 ? 'night' :
+      hour < 12 ? 'morning' :
+      hour < 17 ? 'afternoon' :
+      hour < 21 ? 'evening' : 'night';
+
+    const greetings: string[] = [];
+
+    if (timeOfDay === 'night') {
+      greetings.push(
+        `Still up, ${name}? Markets are closed, but the best moves are planned in silence. What's on your mind?`,
+        `Late night research session, ${name}? I like that. What are you digging into?`,
+        `The markets sleep, but the sharp money never does. What's keeping you up, ${name}?`
+      );
+    } else if (timeOfDay === 'morning') {
+      if (marketOpen && !isWeekend) {
+        greetings.push(
+          `Markets are live, ${name}. Nifty opened a few minutes ago. What's the first thing you want to check?`,
+          `Good morning, ${name}. The opening bell just rang. Want a quick scan of your watchlist?`,
+          `Morning, ${name}. Fresh tape, fresh numbers. What should we look at first?`
+        );
+      } else {
+        greetings.push(
+          `Good morning, ${name}. Markets are closed today, but there's always something to read. What's on your mind?`,
+          `Morning, ${name}. No market action today, but we can still prep for tomorrow. What are you thinking about?`,
+          `Hey ${name}. Quiet morning with no market noise  -  perfect time to dig deep into something. What do you want to explore?`
+        );
+      }
+    } else if (timeOfDay === 'afternoon') {
+      if (marketOpen && !isWeekend) {
+        greetings.push(
+          `Afternoon, ${name}. Mid-session often reveals the real trend. What do you want to analyze?`,
+          `Hey ${name}. The market's been running for a few hours now. Want to check how your positions are holding up?`,
+          `Good afternoon, ${name}. Want me to run a quick risk check on your book while the tape is active?`
+        );
+      } else {
+        greetings.push(
+          `Afternoon, ${name}. No live tape right now, but we can still build conviction. What are you researching?`,
+          `Hey ${name}. Quiet afternoon  -  perfect for deep research. What company do you want to understand better?`
+        );
+      }
+    } else { // evening
+      if (marketOpen && !isWeekend) {
+        greetings.push(
+          `Evening, ${name}. Markets are closing soon. Want a summary of what moved today?`,
+          `Hey ${name}. The closing bell is coming up. Should we review how your positions performed today?`,
+          `Good evening, ${name}. Last hour of trading  -  want me to flag anything unusual in your watchlist?`
+        );
+      } else {
+        greetings.push(
+          `Evening, ${name}. Markets are closed. Want me to run a DCF on something you've been watching?`,
+          `Hey ${name}. The market's done for the day. Perfect time to research without the noise. What do you want to explore?`,
+          `Good evening, ${name}. Want me to audit a stock you've been thinking about buying?`
+        );
+      }
+    }
+
+    // Portfolio-aware additions
+    if (portfolioSize > 0) {
+      greetings.push(
+        `Hey ${name}. You've got ${portfolioSize} positions in your book. Want me to check what's changed since yesterday?`,
+        `Hi ${name}. Your portfolio has ${portfolioSize} holdings. Should I run a quick risk scan?`,
+        `Welcome back, ${name}. I see ${portfolioSize} positions in your portfolio. Anything specific you want me to dig into?`
+      );
+    } else {
+      greetings.push(
+        `Hey ${name}. Your portfolio is empty right now  -  want me to help you build a watchlist?`,
+        `Hi ${name}. No holdings synced yet. Want me to find a few solid names to start tracking?`,
+        `Welcome, ${name}. Let's start building your research dashboard. What sector interests you?`
+      );
+    }
+
+    // Pick one based on a rotating hash of the current hour
+    const index = (hour + new Date().getDate()) % greetings.length;
+    return greetings[index];
+  };
+
+  const arthikGreeting = getArthikGreeting();
+
 
   const activeIndices = useMemo(() =>
     [...liveIndexData.india].sort((a, b) => b.changePct - a.changePct),
@@ -3365,6 +3431,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   const topHoldingWeight = topHolding && portfolioSummary.totalValue > 0
     ? (topHolding.currentValue / portfolioSummary.totalValue) * 100
     : 0;
+
+  const scrollOverviewIndices = (direction: 'left' | 'right') => {
+    const track = overviewIndexSliderRef.current;
+    if (!track) return;
+    const firstCard = track.querySelector<HTMLElement>('.index-ticker-card');
+    const distance = firstCard ? firstCard.offsetWidth + 14 : Math.max(220, track.clientWidth * 0.75);
+    track.scrollBy({ left: direction === 'left' ? -distance : distance, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     if (activeFeatureTab !== 'portfolio') {
@@ -3598,7 +3672,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
               flexWrap: 'wrap'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--text-primary)' }}>
-                <span style={{ fontSize: '16px' }}>✉</span>
+                <span style={{ fontSize: '16px' }}>Email</span>
                 <span>
                   Please verify your email to secure your account. A verification code was sent to <strong>{user?.email}</strong>.
                 </span>
@@ -3615,7 +3689,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
             <>
               <div className="section-head">
                 <div className="section-title">Watchlist command center</div>
-                <span className="section-sublabel">LIVE SNAPSHOT · MANAGE · DISCOVER</span>
+                <span className="section-sublabel">LIVE SNAPSHOT  -  MANAGE  -  DISCOVER</span>
               </div>
 
               <div className="data-panel" style={{ marginBottom: 24 }}>
@@ -3666,68 +3740,91 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                     <span className="live-dot" style={{ marginRight: 6 }} /> LIVE - NSE/BSE
                   </div>
 
-                  <div className="index-grid">
-                    {indicesLoading && overviewIndices.length === 0 && (
-                      <>
-                        {[1, 2, 3, 4].map((i) => (
-                          <div key={i} className="index-ticker-card index-skeleton" style={{
-                            background: 'rgba(15, 23, 42, 0.35)',
-                            border: '1px solid var(--border-subtle)',
-                            borderRadius: 14,
-                            padding: '14px 16px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 6,
-                            minWidth: 0,
-                            width: '100%',
-                          }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                              <div className="skeleton-block" style={{ width: 72, height: 14 }} />
-                              <div className="skeleton-block" style={{ width: 48, height: 12 }} />
-                            </div>
-                            <div className="skeleton-block" style={{ width: 100, height: 20 }} />
-                            <div className="skeleton-block" style={{ width: 80, height: 12 }} />
-                            <div className="skeleton-block" style={{ width: '100%', height: 36, marginTop: 4 }} />
-                          </div>
-                        ))}
-                      </>
-                    )}
-                    {indicesError && (
-                      <div className="index-error-banner" style={{
-                        gridColumn: '1 / -1',
-                        padding: '12px 16px',
-                        background: 'rgba(239, 68, 68, 0.08)',
-                        border: '1px solid rgba(239, 68, 68, 0.2)',
-                        borderRadius: 10,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        fontSize: 12,
-                        color: 'var(--text-muted)',
+                  {indicesError && (
+                    <div className="index-error-banner" style={{
+                      marginBottom: 10,
+                      padding: '12px 16px',
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                      borderRadius: 10,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: 12,
+                      color: 'var(--text-muted)',
+                    }}>
+                      <span>{activeIndices.length > 0 ? 'Live refresh delayed, showing cached indices.' : 'Failed to load market indices'}</span>
+                      <button onClick={retryIndices} style={{
+                        background: 'transparent',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: 6,
+                        padding: '4px 12px',
+                        fontSize: 11,
+                        color: 'var(--text-primary)',
+                        cursor: 'pointer',
                       }}>
-                        <span>{activeIndices.length > 0 ? 'Live refresh delayed, showing cached indices.' : 'Failed to load market indices'}</span>
-                        <button onClick={retryIndices} style={{
-                          background: 'transparent',
-                          border: '1px solid rgba(255, 255, 255, 0.15)',
-                          borderRadius: 6,
-                          padding: '4px 12px',
-                          fontSize: 11,
-                          color: 'var(--text-primary)',
-                          cursor: 'pointer',
-                        }}>
-                          Retry
-                        </button>
-                      </div>
-                    )}
-                    {overviewIndices.map((idx) => (
-                      <IndexTickerCard
-                        key={idx.symbol}
-                        data={idx}
-                        onClick={() => openAssetHistory(idx.symbol, idx.symbol, 'index')}
-                      />
-                    ))}
-                  </div>
+                        Retry
+                      </button>
+                    </div>
+                  )}
 
+                  <div className="index-slider-shell">
+                    <button
+                      type="button"
+                      className="index-slider-nav index-slider-nav-prev"
+                      onClick={() => scrollOverviewIndices('left')}
+                      aria-label="Previous India indices"
+                    >
+                      <span className="index-slider-glyph" aria-hidden="true">&lt;</span>
+                    </button>
+                    <div
+                      ref={overviewIndexSliderRef}
+                      className="index-grid index-slider-track"
+                      role="region"
+                      aria-label="Top India Indices"
+                    >
+                      {indicesLoading && overviewIndices.length === 0 && (
+                        <>
+                          {[1, 2, 3, 4].map((i) => (
+                            <div key={i} className="index-ticker-card index-skeleton" style={{
+                              background: 'rgba(15, 23, 42, 0.35)',
+                              border: '1px solid var(--border-subtle)',
+                              borderRadius: 14,
+                              padding: '14px 16px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                              minWidth: 0,
+                              width: '100%',
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <div className="skeleton-block" style={{ width: 72, height: 14 }} />
+                                <div className="skeleton-block" style={{ width: 48, height: 12 }} />
+                              </div>
+                              <div className="skeleton-block" style={{ width: 100, height: 20 }} />
+                              <div className="skeleton-block" style={{ width: 80, height: 12 }} />
+                              <div className="skeleton-block" style={{ width: '100%', height: 36, marginTop: 4 }} />
+                            </div>
+                          ))}
+                        </>
+                      )}
+                      {overviewIndices.map((idx) => (
+                        <IndexTickerCard
+                          key={idx.symbol}
+                          data={idx}
+                          onClick={() => openAssetHistory(idx.symbol, idx.symbol, 'index')}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="index-slider-nav index-slider-nav-next"
+                      onClick={() => scrollOverviewIndices('right')}
+                      aria-label="Next India indices"
+                    >
+                      <span className="index-slider-glyph" aria-hidden="true">&gt;</span>
+                    </button>
+                  </div>
                   <div className="section-head" style={{ marginTop: 22 }}>
                     <div className="section-title">Discover</div>
                     <span className="section-sublabel">MULTI-SOURCE LIVE FEED</span>
@@ -3893,7 +3990,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                           <div key={`g-${item.symbol}`} className="overview-mover-row">
                             <div className="overview-mover-symbol">{item.symbol}</div>
                             <div className="overview-mover-name">{item.name}</div>
-                            <div className="overview-mover-price">₹{item.price.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}</div>
+                            <div className="overview-mover-price">Rs {item.price.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}</div>
                             <div className="overview-mover-change up">+{item.changePct.toFixed(2)}%</div>
                           </div>
                         ))}
@@ -3916,7 +4013,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                           <div key={`l-${item.symbol}`} className="overview-mover-row">
                             <div className="overview-mover-symbol">{item.symbol}</div>
                             <div className="overview-mover-name">{item.name}</div>
-                            <div className="overview-mover-price">₹{item.price.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}</div>
+                            <div className="overview-mover-price">Rs {item.price.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}</div>
                             <div className="overview-mover-change down">{item.changePct.toFixed(2)}%</div>
                           </div>
                         ))}
@@ -4045,7 +4142,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                 <span style={{ marginLeft: 'auto', color: 'var(--accent-cyan)', cursor: 'pointer' }}
                   onClick={() => handleSuggestQuery(`Explain how my portfolio is performing compared to ${selectedBenchmark}.`, 'standard')}
                 >
-                  Analyse return spread →
+                  Analyse return spread
                 </span>
               )}
             </div>
@@ -4069,13 +4166,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                     )}
                   </>
                 ) : (
-                  <div style={{ padding: '24px 8px', color: 'var(--text-muted)', fontSize: 12 }}>Building your health score from live price history…</div>
+                  <div style={{ padding: '24px 8px', color: 'var(--text-muted)', fontSize: 12 }}>Building your health score from live price history...</div>
                 )}
               </div>
               <div className="data-panel">
                 <div className="data-panel-head">
                   <div className="data-panel-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Sparkles size={15} color="var(--accent-cyan)" /> Arthik's daily read</div>
-                  <span className="section-sublabel">{visibleCommentary?.source === 'llm' ? 'AI' : visibleCommentary?.source === 'local' ? 'LOCAL' : 'AUTO'} • {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                  <span className="section-sublabel">{visibleCommentary?.source === 'llm' ? 'AI' : visibleCommentary?.source === 'local' ? 'LOCAL' : 'AUTO'} - {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
                 </div>
                 {visibleCommentary?.commentary ? (
                   <>
@@ -4090,12 +4187,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                         ))}
                       </div>
                     )}
-                    <button className="summary-cta" style={{ marginTop: 14 }} onClick={() => handleSuggestQuery("Give me a deeper read on my portfolio today — what should I actually do about it?", 'deep')}>
+                    <button className="summary-cta" style={{ marginTop: 14 }} onClick={() => handleSuggestQuery("Give me a deeper read on my portfolio today  -  what should I actually do about it?", 'deep')}>
                       <Sparkles size={13} /> Go deeper with Arthik
                     </button>
                   </>
                 ) : (
-                  <div style={{ padding: '20px 8px', color: 'var(--text-muted)', fontSize: 12 }}>Arthik is reading your book…</div>
+                  <div style={{ padding: '20px 8px', color: 'var(--text-muted)', fontSize: 12 }}>Arthik is reading your book...</div>
                 )}
               </div>
             </div>
@@ -4106,7 +4203,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
             <>
               <div className="section-head">
                 <div className="section-title">Arthik's read on your book</div>
-                <span className="section-sublabel">PERSONAL • {portfolio.length} POSITIONS</span>
+                <span className="section-sublabel">PERSONAL - {portfolio.length} POSITIONS</span>
               </div>
                <div className="stats-grid">
                 {computedPortfolioDetails.length > 1 ? (
@@ -4126,7 +4223,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                         {portfolioStats.best.name}
                       </div>
                       <div className="stat-tile-sub">
-                        +{Math.abs(portfolioStats.best.pnlPct).toFixed(2)}% · ₹{Math.abs(portfolioStats.best.pnl).toLocaleString('en-IN')}
+                        +{Math.abs(portfolioStats.best.pnlPct).toFixed(2)}%  -  Rs {Math.abs(portfolioStats.best.pnl).toLocaleString('en-IN')}
                       </div>
                     </div>
                     <div className="stat-tile">
@@ -4144,7 +4241,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                         {portfolioStats.worst.name}
                       </div>
                       <div className="stat-tile-sub">
-                        {portfolioStats.worst.pnlPct.toFixed(2)}% · ₹{portfolioStats.worst.pnl.toLocaleString('en-IN')}
+                        {portfolioStats.worst.pnlPct.toFixed(2)}%  -  Rs {portfolioStats.worst.pnl.toLocaleString('en-IN')}
                       </div>
                     </div>
                   </>
@@ -4164,7 +4261,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                       {portfolioStats.best.name}
                     </div>
                     <div className="stat-tile-sub">
-                      {portfolioStats.best.pnlPct >= 0 ? '+' : ''}{portfolioStats.best.pnlPct.toFixed(2)}% · ₹{Math.abs(portfolioStats.best.pnl).toLocaleString('en-IN')}
+                      {portfolioStats.best.pnlPct >= 0 ? '+' : ''}{portfolioStats.best.pnlPct.toFixed(2)}%  -  Rs {Math.abs(portfolioStats.best.pnl).toLocaleString('en-IN')}
                     </div>
                   </div>
                 )}
@@ -4186,10 +4283,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                 </div>
                 <div className="stat-tile">
                   <div className="stat-tile-label">Value at Risk (95%)</div>
-                  <div className="stat-tile-value" style={{ color: 'var(--loss)' }}>₹{portfolioStats.var95.toFixed(0)}</div>
+                  <div className="stat-tile-value" style={{ color: 'var(--loss)' }}>Rs {portfolioStats.var95.toFixed(0)}</div>
                   <div className="stat-tile-sub">Estimated 1-day max loss</div>
                 </div>
-                <div className="stat-tile stat-tile-cta" onClick={() => handleSuggestQuery('Audit my portfolio — what is the single biggest risk hiding in my book right now?', 'deep')}>
+                <div className="stat-tile stat-tile-cta" onClick={() => handleSuggestQuery('Audit my portfolio  -  what is the single biggest risk hiding in my book right now?', 'deep')}>
                   <div className="stat-tile-label" style={{ color: 'var(--accent-cyan)' }}>ASK ARTHIK</div>
                   <div style={{ fontSize: 13, lineHeight: 1.4, marginTop: 6, color: 'var(--text-primary)' }}>
                     "What's the one thing I'm missing about my book today?"
@@ -4207,9 +4304,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                   <div className="data-panel-title" style={{ fontSize: '13px', fontWeight: 600 }}>Sector Allocation</div>
                   <button
                     className="data-panel-link"
-                    onClick={() => handleSuggestQuery('Audit my sector allocation — where am I over- or under-exposed?', 'standard')}
+                    onClick={() => handleSuggestQuery('Audit my sector allocation  -  where am I over- or under-exposed?', 'standard')}
                   >
-                    Audit →
+                    Audit
                   </button>
                 </div>
                 <DonutChart
@@ -4227,7 +4324,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                     className="data-panel-link"
                     onClick={() => handleSuggestQuery('Audit my asset allocation classes.', 'standard')}
                   >
-                    Audit →
+                    Audit
                   </button>
                 </div>
                 <DonutChart
@@ -4314,16 +4411,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
-                        <MetricCard label="XIRR (money-weighted)" value={risk.xirr_pct != null ? fmtNum(risk.xirr_pct, 1, '%') : '—'} sub="Annualized, by cashflow" tone={Number(risk.xirr_pct) >= 0 ? 'up' : 'down'} />
+                        <MetricCard label="XIRR (money-weighted)" value={risk.xirr_pct != null ? fmtNum(risk.xirr_pct, 1, '%') : ' - '} sub="Annualized, by cashflow" tone={Number(risk.xirr_pct) >= 0 ? 'up' : 'down'} />
                         <MetricCard label="Annualized return" value={fmtNum(risk.annualized_return_pct, 1, '%')} sub="From NAV history" tone={Number(risk.annualized_return_pct) >= 0 ? 'up' : 'down'} />
                         <MetricCard label="Sharpe ratio" value={fmtNum(risk.sharpe, 2)} sub={`vs ${fmtNum(risk.risk_free_rate_pct, 1, '%')} risk-free`} tone={Number(risk.sharpe) >= 1 ? 'up' : Number(risk.sharpe) < 0 ? 'down' : 'neutral'} />
                         <MetricCard label="Sortino ratio" value={fmtNum(risk.sortino, 2)} sub="Downside-adjusted" tone={Number(risk.sortino) >= 1 ? 'up' : 'neutral'} />
-                        <MetricCard label="Calmar ratio" value={fmtNum(risk.calmar, 2)} sub="Return ÷ max drawdown" tone={Number(risk.calmar) >= 1 ? 'up' : 'neutral'} />
+                        <MetricCard label="Calmar ratio" value={fmtNum(risk.calmar, 2)} sub="Return / max drawdown" tone={Number(risk.calmar) >= 1 ? 'up' : 'neutral'} />
                         <MetricCard label="Volatility (ann.)" value={fmtNum(risk.annualized_volatility_pct, 1, '%')} sub="Std-dev of returns" />
                         <MetricCard label="Beta vs Nifty" value={fmtNum(risk.beta_vs_nifty, 2)} sub={Number(risk.beta_vs_nifty) > 1.1 ? 'More volatile than index' : Number(risk.beta_vs_nifty) < 0.9 ? 'Calmer than index' : 'In line with index'} />
                         <MetricCard label="Max drawdown" value={fmtNum(risk.max_drawdown_pct, 1, '%')} sub="Worst peak-to-trough" tone="down" />
-                        <MetricCard label="1-day VaR (95%)" value={varPct != null ? fmtINR(totalVal * varPct / 100) : '—'} sub={varPct != null ? `Historical · ${fmtNum(varPct, 2, '%')}` : 'Building distribution'} tone="down" />
-                        <MetricCard label="CVaR (expected shortfall)" value={cvarPct != null ? fmtINR(totalVal * cvarPct / 100) : '—'} sub={cvarPct != null ? `Avg loss beyond VaR · ${fmtNum(cvarPct, 2, '%')}` : '—'} tone="down" />
+                        <MetricCard label="1-day VaR (95%)" value={varPct != null ? fmtINR(totalVal * varPct / 100) : ' - '} sub={varPct != null ? `Historical  -  ${fmtNum(varPct, 2, '%')}` : 'Building distribution'} tone="down" />
+                        <MetricCard label="CVaR (expected shortfall)" value={cvarPct != null ? fmtINR(totalVal * cvarPct / 100) : ' - '} sub={cvarPct != null ? `Avg loss beyond VaR  -  ${fmtNum(cvarPct, 2, '%')}` : ' - '} tone="down" />
                         <MetricCard label="Diversification (HHI)" value={fmtNum(hhiPct, 0)} sub={hhiPct > 2500 ? 'Highly concentrated' : 'Well diversified'} tone={hhiPct > 2500 ? 'down' : 'up'} />
                         <MetricCard label="Top-5 concentration" value={fmtNum(risk.top5_weight_pct, 1, '%')} sub="Share in 5 biggest names" tone={Number(risk.top5_weight_pct) > 60 ? 'down' : 'neutral'} />
                       </div>
@@ -4337,7 +4434,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                               return (
                                 <div key={k} style={{ textAlign: 'center' }}>
                                   <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{k}</div>
-                                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: v == null ? 'var(--text-muted)' : Number(v) >= 0 ? 'var(--profit)' : 'var(--loss)' }}>{v == null ? '—' : `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(1)}%`}</div>
+                                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: v == null ? 'var(--text-muted)' : Number(v) >= 0 ? 'var(--profit)' : 'var(--loss)' }}>{v == null ? ' - ' : `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(1)}%`}</div>
                                 </div>
                               );
                             })}
@@ -4345,7 +4442,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                         </div>
                         <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontWeight: 600, fontSize: 11, marginBottom: 8 }}><span>UNDERWATER (DRAWDOWN)</span><span style={{ color: 'var(--loss)', fontFamily: 'var(--font-mono)' }}>{fmtNum(risk.max_drawdown_pct, 1, '%')}</span></div>
-                          {dd.length > 1 ? <DrawdownSparkline series={dd} /> : <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '10px 0' }}>Building drawdown curve…</div>}
+                          {dd.length > 1 ? <DrawdownSparkline series={dd} /> : <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '10px 0' }}>Building drawdown curve...</div>}
                         </div>
                       </div>
 
@@ -4355,7 +4452,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                             <div style={{ color: 'var(--profit)', fontWeight: 600, fontSize: 11, marginBottom: 8 }}>TOP CONTRIBUTORS</div>
                             {contributors.length === 0 ? <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>None positive yet.</div> : contributors.map((c: any) => (
                               <div key={c.symbol} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginTop: 6 }}>
-                                <span style={{ color: 'var(--text-primary)' }}>{String(c.symbol || '').replace('.NS', '').replace('.BO', '')} <span style={{ color: 'var(--text-muted)' }}>· {fmtNum(c.weight_pct, 1, '%')}</span></span>
+                                <span style={{ color: 'var(--text-primary)' }}>{String(c.symbol || '').replace('.NS', '').replace('.BO', '')} <span style={{ color: 'var(--text-muted)' }}> -  {fmtNum(c.weight_pct, 1, '%')}</span></span>
                                 <span style={{ color: 'var(--profit)', fontFamily: 'var(--font-mono)' }}>+{fmtNum(c.contribution_pct, 2, '%')}</span>
                               </div>
                             ))}
@@ -4364,7 +4461,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                             <div style={{ color: 'var(--loss)', fontWeight: 600, fontSize: 11, marginBottom: 8 }}>TOP DETRACTORS</div>
                             {detractors.length === 0 ? <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>No drags. Enjoy it.</div> : detractors.map((c: any) => (
                               <div key={c.symbol} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginTop: 6 }}>
-                                <span style={{ color: 'var(--text-primary)' }}>{String(c.symbol || '').replace('.NS', '').replace('.BO', '')} <span style={{ color: 'var(--text-muted)' }}>· {fmtNum(c.weight_pct, 1, '%')}</span></span>
+                                <span style={{ color: 'var(--text-primary)' }}>{String(c.symbol || '').replace('.NS', '').replace('.BO', '')} <span style={{ color: 'var(--text-muted)' }}> -  {fmtNum(c.weight_pct, 1, '%')}</span></span>
                                 <span style={{ color: 'var(--loss)', fontFamily: 'var(--font-mono)' }}>{fmtNum(c.contribution_pct, 2, '%')}</span>
                               </div>
                             ))}
@@ -4374,7 +4471,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
                       <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
                         Risk-adjusted ratios use a {fmtNum(risk.risk_free_rate_pct, 1, '%')} risk-free rate. VaR / CVaR are 1-day historical at 95% confidence from live price history.
-                        {actionQueue.length > 0 && <span style={{ color: 'var(--accent-cyan)', cursor: 'pointer', marginLeft: 6 }} onClick={() => handleSuggestQuery('Check my portfolio action items.', 'standard')}>· {actionQueue.length} action item{actionQueue.length > 1 ? 's' : ''} →</span>}
+                        {actionQueue.length > 0 && <span style={{ color: 'var(--accent-cyan)', cursor: 'pointer', marginLeft: 6 }} onClick={() => handleSuggestQuery('Check my portfolio action items.', 'standard')}> -  {actionQueue.length} action item{actionQueue.length > 1 ? 's' : ''}</span>}
                       </div>
                     </div>
                   );
@@ -4402,7 +4499,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                             <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px' }}>
                               <div style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '11px', marginBottom: '4px' }}>MUTUAL FUND ASSETS</div>
                               <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                                ₹{displayedMfValue.toLocaleString('en-IN')}
+                                Rs {displayedMfValue.toLocaleString('en-IN')}
                               </div>
                               <div style={{ color: 'var(--text-muted)', marginTop: '4px', fontSize: '10px' }}>
                                 {schemeCount} Active Scheme{schemeCount > 1 ? 's' : ''}
@@ -4487,13 +4584,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                                       <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{item.name}</div>
                                       <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                                         <span style={{ fontFamily: 'var(--font-mono)' }}>{item.symbol}</span>
-                                        <span>•</span>
+                                        <span>-</span>
                                         <span style={{ color: 'var(--accent-cyan)' }}>{item.sector}</span>
                                       </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
                                       <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                                        ₹{(item.qty * item.current).toLocaleString('en-IN')}
+                                        Rs {(item.qty * item.current).toLocaleString('en-IN')}
                                       </div>
                                       <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                                         Weight: <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{weightInPortfolio.toFixed(1)}%</span>
@@ -4522,9 +4619,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
                 {analyticsTab === 'stress' && (() => {
                   const scenarios = [
-                    { key: 'nifty_down_10', label: 'Nifty −10%' },
-                    { key: 'nifty_down_20', label: 'Nifty −20%' },
-                    { key: 'nifty_down_30', label: 'Nifty −30%' },
+                    { key: 'nifty_down_10', label: 'Nifty -10%' },
+                    { key: 'nifty_down_20', label: 'Nifty -20%' },
+                    { key: 'nifty_down_30', label: 'Nifty -30%' },
                     { key: 'covid_2020', label: '2020 COVID' },
                     { key: 'gfc_2008', label: '2008 GFC' },
                   ];
@@ -4532,7 +4629,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                   const loss = Number(res?.portfolio_loss_pct);
                   return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Deterministic shock engine — each holding's hit = weight × beta × shock, repriced on live betas.</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Deterministic shock engine  -  each holding's hit = weight x beta x shock, repriced on live betas.</div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         {scenarios.map(s => (
                           <button key={s.key} onClick={() => runStressTest(s.key)} disabled={stressLoading}
@@ -4548,7 +4645,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: 'var(--loss)', minWidth: 52, textAlign: 'right' }}>{stressShock}%</div>
                         <button onClick={() => runStressTest('custom', stressShock)} disabled={stressLoading}
                           style={{ padding: '8px 14px', fontSize: 11, borderRadius: 8, cursor: 'pointer', background: 'var(--loss)', border: 'none', color: '#fff', fontWeight: 700 }}>
-                          {stressLoading ? 'Running…' : 'Run shock'}
+                          {stressLoading ? 'Running...' : 'Run shock'}
                         </button>
                       </div>
                       {res && res.status === 'OK' && (
@@ -4566,7 +4663,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                               return (
                                 <div key={p.symbol} style={{ marginBottom: 8 }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
-                                    <span style={{ color: 'var(--text-primary)' }}>{String(p.symbol || '').replace('.NS', '').replace('.BO', '')} <span style={{ color: 'var(--text-muted)' }}>· β {fmtNum(p.beta, 2)} · {fmtNum(p.weight_pct, 1, '%')}</span></span>
+                                    <span style={{ color: 'var(--text-primary)' }}>{String(p.symbol || '').replace('.NS', '').replace('.BO', '')} <span style={{ color: 'var(--text-muted)' }}> -  beta {fmtNum(p.beta, 2)}  -  {fmtNum(p.weight_pct, 1, '%')}</span></span>
                                     <span style={{ color: 'var(--loss)', fontFamily: 'var(--font-mono)' }}>{impact.toFixed(2)}%</span>
                                   </div>
                                   <div style={{ height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 3 }}>
@@ -4623,22 +4720,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                                   {harvest.opportunities.slice(0, 6).map((o: any) => (
                                     <div key={o.symbol} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '8px 12px' }}>
                                       <div>
-                                        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>{String(o.symbol || '').replace('.NS', '').replace('.BO', '')} <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>· {o.gain_type}</span></div>
+                                        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>{String(o.symbol || '').replace('.NS', '').replace('.BO', '')} <span style={{ fontSize: 10, color: 'var(--text-muted)' }}> -  {o.gain_type}</span></div>
                                         <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{o.name || ''}</div>
                                       </div>
                                       <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--loss)', fontFamily: 'var(--font-mono)' }}>−{fmtINR(o.unrealized_loss).replace('-', '')}{o.loss_pct != null ? ` (${Number(o.loss_pct).toFixed(1)}%)` : ''}</div>
-                                        <div style={{ fontSize: 10, color: 'var(--profit)' }}>shield ≈ {fmtINR(o.potential_tax_shield)}</div>
+                                        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--loss)', fontFamily: 'var(--font-mono)' }}>-{fmtINR(o.unrealized_loss).replace('-', '')}{o.loss_pct != null ? ` (${Number(o.loss_pct).toFixed(1)}%)` : ''}</div>
+                                        <div style={{ fontSize: 10, color: 'var(--profit)' }}>shield ~ {fmtINR(o.potential_tax_shield)}</div>
                                       </div>
                                     </div>
                                   ))}
                                 </div>
                               </>
                             ) : (
-                              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>No harvestable losses right now — none of your holdings sit on an unrealized loss.</div>
+                              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>No harvestable losses right now  -  none of your holdings sit on an unrealized loss.</div>
                             )}
                           </div>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Estimates only — actual liability depends on your slab, other income and realized trades. Holding period uses your recorded purchase date where available.</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Estimates only  -  actual liability depends on your slab, other income and realized trades. Holding period uses your recorded purchase date where available.</div>
                         </>
                       ) : (
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 0' }}>Tax view loads once your holdings sync.</div>
@@ -4653,11 +4750,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
           {/* Top Movers */}
           <div className="section-head">
             <div className="section-title">Discover</div>
-            <span className="section-sublabel">TOP MOVERS · YOUR PORTFOLIO</span>
+            <span className="section-sublabel">TOP MOVERS  -  YOUR PORTFOLIO</span>
           </div>
           <div className="movers-grid">
             <div className="movers-col">
-              <div className="movers-col-head" style={{ color: 'var(--profit)' }}>↗ Gainers</div>
+              <div className="movers-col-head" style={{ color: 'var(--profit)' }}>Gainers Gainers</div>
               {gainers.length === 0 ? (
                 <div className="movers-empty">No green names today.</div>
               ) : gainers.map(s => (
@@ -4667,14 +4764,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                     <div className="mover-name">{s.name}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div className="mover-price">₹{s.price}</div>
+                    <div className="mover-price">Rs {s.price}</div>
                     <div className="mover-pct" style={{ color: 'var(--profit)' }}>+{(s.changePct ?? 0).toFixed(2)}%</div>
                   </div>
                 </div>
               ))}
             </div>
             <div className="movers-col">
-              <div className="movers-col-head" style={{ color: 'var(--loss)' }}>↘ Losers</div>
+              <div className="movers-col-head" style={{ color: 'var(--loss)' }}>Losers Losers</div>
               {losersList.length === 0 ? (
                 <div className="movers-empty">All green. Enjoy it while it lasts.</div>
               ) : losersList.map(s => (
@@ -4684,14 +4781,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                     <div className="mover-name">{s.name}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div className="mover-price">₹{s.price}</div>
+                    <div className="mover-price">Rs {s.price}</div>
                     <div className="mover-pct" style={{ color: 'var(--loss)' }}>{(s.changePct ?? 0).toFixed(2)}%</div>
                   </div>
                 </div>
               ))}
             </div>
             <div className="movers-col">
-              <div className="movers-col-head">⚡ Most active</div>
+              <div className="movers-col-head">Active Most active</div>
               {mostActive.length === 0 ? (
                 <div className="movers-empty">Waiting for live NSE/BSE movement.</div>
               ) : mostActive.map(s => (
@@ -4701,7 +4798,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                     <div className="mover-name">{s.name}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div className="mover-price">₹{s.price}</div>
+                    <div className="mover-price">Rs {s.price}</div>
                     <div className="mover-pct" style={{ color: (s.changePct ?? 0) >= 0 ? 'var(--profit)' : 'var(--loss)' }}>
                       {(s.changePct ?? 0) >= 0 ? '+' : ''}{(s.changePct ?? 0).toFixed(2)}%
                     </div>
@@ -4714,7 +4811,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
           {/* AI Market summary */}
           <div className="section-head">
             <div className="section-title">India market summary</div>
-            <span className="section-sublabel">ARTHIK'S BRIEF • {marketSummary.sourcesCount} sources</span>
+            <span className="section-sublabel">ARTHIK'S BRIEF - {marketSummary.sourcesCount} sources</span>
           </div>
 
           <div className="summary-card">
@@ -4722,7 +4819,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
             <div className="summary-card-body">{marketSummary.body}</div>
             <button
               className="summary-cta"
-              onClick={() => handleSuggestQuery('Dive deeper on today\'s market moves — what should I actually do about my portfolio?', 'deep')}
+              onClick={() => handleSuggestQuery('Dive deeper on today\'s market moves  -  what should I actually do about my portfolio?', 'deep')}
             >
               <Sparkles size={13} /> Have Arthik dig into it
             </button>
@@ -4801,7 +4898,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
           {/* News Feed */}
           <div className="section-head" style={{ marginTop: 24 }}>
             <div className="section-title">{portfolioSymbols.length > 0 ? 'News on your holdings' : "What's moving the tape"}</div>
-            <span className="section-sublabel">{portfolioSymbols.length > 0 ? `HOLDING NEWS · ${portfolioSymbols.length} TRACKED` : 'LIVE NEWS · ARTHIK\'S SENTIMENT'}</span>
+            <span className="section-sublabel">{portfolioSymbols.length > 0 ? `HOLDING NEWS  -  ${portfolioSymbols.length} TRACKED` : 'LIVE NEWS  -  ARTHIK\'S SENTIMENT'}</span>
           </div>
           <div className="news-grid">
             {newsLoading && (
@@ -4880,7 +4977,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                 <div className="news-card-meta">
                   <div className="news-card-meta-copy">
                   <span className="news-source">{n.source}</span>
-                  <span className="news-time">· {n.time}</span>
+                  <span className="news-time"> -  {n.time}</span>
                   </div>
                   <span className="news-sentiment" style={{ color: sentimentColor(n.sentiment), borderColor: sentimentColor(n.sentiment) + '40' }}>
                     {sentimentLabel(n.sentiment)}
@@ -4935,7 +5032,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
           transition: isDraggingChat ? 'none' : 'box-shadow 0.4s ease',
           boxShadow: isChatHighlighted ? '0 0 0 2px rgba(56, 189, 248, 0.45), -4px 0 24px rgba(56, 189, 248, 0.08)' : undefined
         }}>
-          {/* Boundary toggle removed — use header close button + floating restore ball */}
+          {/* Boundary toggle removed  -  use header close button + floating restore ball */}
 
           {/* Inner Content that hides when collapsed */}
           <div style={{
@@ -5053,7 +5150,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                             justifyContent: 'center',
                             fontSize: '18px',
                             fontWeight: 'bold'
-                          }}>{isDeepPremium ? '🔒' : '⚠'}</div>
+                          }}>{isDeepPremium ? '🔒' : '!'}</div>
                           <div>
                             <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: isDeepPremium ? '#38BDF8' : '#F87171' }}>
                               {isDeepPremium ? 'Deep Mode beta limit' : 'Research Limit Reached'}
@@ -5141,7 +5238,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
         </div>
       </div>
 
-      {/* Mobile chat backdrop — tap to close */}
+      {/* Mobile chat backdrop  -  tap to close */}
       {!isChatHidden && (
         <div
           className="chat-mobile-backdrop"
@@ -5178,6 +5275,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 };
 
 export default Dashboard;
+
+
+
 
 
 

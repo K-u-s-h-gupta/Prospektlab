@@ -51,7 +51,7 @@
   },
   {
     "source": "/insights/<*>",
-    "target": "/insights/<*>",
+    "target": "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/insights/<*>",
     "status": "200"
   },
   {

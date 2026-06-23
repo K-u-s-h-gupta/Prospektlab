@@ -286,7 +286,7 @@ const DEFAULT_MB_CARDS: MarketCard[] = [
   { name: 'Nifty IT', symbol: 'NIFTYIT', price: null, changePct: null, dir: 'up', history: [100, 101, 102, 101.5, 103, 104, 103.6, 105, 106, 107] },
   { name: 'Nifty Auto', symbol: 'NIFTYAUTO', price: null, changePct: null, dir: 'up', history: [100, 100.4, 101, 100.8, 101.6, 102, 101.4, 102.2, 102.8, 103] },
   { name: 'Nifty FMCG', symbol: 'NIFTYFMCG', price: null, changePct: null, dir: 'down', history: [100, 99.8, 100, 99.4, 99, 99.2, 98.6, 98.9, 98.4, 98.7] },
-  { name: 'Gold (10g)', symbol: 'GOLD', price: null, changePct: null, dir: 'up', prefix: '₹', history: [100, 100.6, 101, 101.4, 101, 101.8, 102.2, 102, 102.6, 103] },
+  { name: 'Gold (10g)', symbol: 'GOLD', price: null, changePct: null, dir: 'up', prefix: 'Rs ', history: [100, 100.6, 101, 101.4, 101, 101.8, 102.2, 102, 102.6, 103] },
   { name: 'Crude (WTI)', symbol: 'CRUDEOIL', price: null, changePct: null, dir: 'down', prefix: '$', history: [100, 99.4, 99, 98.6, 99, 98.2, 97.8, 98, 97.4, 97.6] },
   { name: 'India 10Y', symbol: 'IN10Y', price: null, changePct: null, dir: 'up', suffix: '%', history: [100, 100.1, 100, 100.2, 100.3, 100.2, 100.4, 100.5, 100.4, 100.6] },
 ];

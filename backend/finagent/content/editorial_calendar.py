@@ -263,7 +263,7 @@ async def generate_editorial_batch(
             req = FlashGenerationRequest(
                 target=topic["target"],
                 content_type=topic["content_type"],
-                mode="flash",
+                mode="deep",
                 objective=topic["objective"],
                 include_image=True,
                 route_base=route_base,

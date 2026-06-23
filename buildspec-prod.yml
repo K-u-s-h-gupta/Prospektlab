@@ -35,6 +35,9 @@ phases:
           --service $ECS_SERVICE \
           --force-new-deployment \
           --region $AWS_DEFAULT_REGION
+      - echo "Updating scheduler service with new image..."
+      - |
+        aws ecs update-service           --cluster $ECS_CLUSTER           --service finagent-backend-ikg-scheduler           --force-new-deployment           --region $AWS_DEFAULT_REGION
       - echo "✅ Deployment initiated. Monitor progress in ECS console."
 
 artifacts:
