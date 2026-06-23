@@ -43,6 +43,7 @@ import {
 import { Search, Sparkles, MessageSquare, ChevronRight, ChevronDown, ChevronLeft, Activity, TrendingDown, ExternalLink } from 'lucide-react';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
 import { buildProspektCover } from '../utils/coverArt';
+import { APP_BETA_ACCESS_NOTE, APP_BETA_BADGE, APP_BETA_CHAT_FOOTER, APP_BETA_DEEP_NOTE } from '../constants/beta';
 
 type DashboardFeatureTab = 'overview' | 'portfolio' | 'watchlist' | 'screener' | 'earnings' | 'governance';
 
@@ -52,6 +53,7 @@ const DEFAULT_CHAT_WIDTH = 360;
 const MAX_CHAT_WIDTH = 440;
 
 const getViewportWidth = () => (typeof window === 'undefined' ? 1440 : window.innerWidth);
+const isMobileViewport = () => getViewportWidth() <= 768;
 
 const getMaxChatWidth = () => {
   const viewport = getViewportWidth();
@@ -595,7 +597,12 @@ const DISCOVER_MARKET_QUERIES = [
   'RBI policy and macro signals India market',
 ] as const;
 const DISCOVER_MARKET_LIMIT_PER_QUERY = 8;
-const DISCOVER_CARDS_PER_SLIDE = 3;
+const getCardsPerSlide = () => {
+  const w = window.innerWidth;
+  if (w < 640) return 1;
+  if (w < 1024) return 2;
+  return 3;
+};
 const DISCOVER_MAX_CARDS = 15;
 const DISCOVER_FEED_CAP = 45;
 const OVERVIEW_MOVER_LIMIT = 5;
@@ -1074,6 +1081,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   const [isDraggingChat, setIsDraggingChat] = useState(false);
   const [isChatHidden, setIsChatHidden] = useState(() => {
     const savedWidth = localStorage.getItem(CHAT_WIDTH_STORAGE_KEY);
+    if (isMobileViewport()) return true;
     return savedWidth ? parseInt(savedWidth, 10) <= 0 : false;
   });
 
@@ -1201,6 +1209,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   const [newsLoading, setNewsLoading] = useState(() => readCachedTapeNews().length === 0);
   const [newsError, setNewsError] = useState<string | null>(null);
   const [discoverIndex, setDiscoverIndex] = useState(0);
+  const [cardsPerSlide, setCardsPerSlide] = useState(() => getCardsPerSlide());
+  const discoverBodyRef = useRef<HTMLDivElement>(null);
+  const isDiscoverDraggingRef = useRef(false);
+  const discoverDragStartRef = useRef<{ x: number; y: number; pointerId: number; pointerType: string; axis?: 'x' | 'y' } | null>(null);
+  const discoverDragOffsetRef = useRef(0);
+  const [discoverDragOffset, setDiscoverDragOffset] = useState(0);
+  const discoverDragMovedRef = useRef(false);
+  const prevCardsPerSlideRef = useRef(cardsPerSlide);
   const [marketMovers, setMarketMovers] = useState<MarketMoverItem[]>(() => readCachedMarketMovers());
   const [marketMoversLoading, setMarketMoversLoading] = useState(() => readCachedMarketMovers().length === 0);
   const [marketMoversError, setMarketMoversError] = useState<string | null>(null);
@@ -1213,6 +1229,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   useEffect(() => {
     liveIndiaIndexCountRef.current = liveIndexData.india.length;
   }, [liveIndexData.india.length]);
+
+  useEffect(() => {
+    const onResize = () => setCardsPerSlide(getCardsPerSlide());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -3196,95 +3218,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
   const hasEngaged = messages.some((msg, index) => msg.sender === 'user' || index > 0);
 
-  /* ─────────────────────────────────────────────
-     ARTHIK PERSONALIZED GREETING
-  ───────────────────────────────────────────── */
-  const getArthikGreeting = (): string => {
-    const hour = new Date().getHours();
-    const name = (user?.name || localStorage.getItem('prospektlab_username') || 'there').split(/\s+/)[0];
-    const portfolioSize = portfolio.length;
-    const marketOpen = hour >= 9 && hour < 16;
-    const isWeekend = [0, 6].includes(new Date().getDay());
-
-    const timeOfDay =
-      hour < 5 ? 'night' :
-      hour < 12 ? 'morning' :
-      hour < 17 ? 'afternoon' :
-      hour < 21 ? 'evening' : 'night';
-
-    const greetings: string[] = [];
-
-    if (timeOfDay === 'night') {
-      greetings.push(
-        `Still up, ${name}? Markets are closed, but the best moves are planned in silence. What's on your mind?`,
-        `Late night research session, ${name}? I like that. What are you digging into?`,
-        `The markets sleep, but the sharp money never does. What's keeping you up, ${name}?`
-      );
-    } else if (timeOfDay === 'morning') {
-      if (marketOpen && !isWeekend) {
-        greetings.push(
-          `Markets are live, ${name}. Nifty opened a few minutes ago. What's the first thing you want to check?`,
-          `Good morning, ${name}. The opening bell just rang. Want a quick scan of your watchlist?`,
-          `Morning, ${name}. Fresh tape, fresh numbers. What should we look at first?`
-        );
-      } else {
-        greetings.push(
-          `Good morning, ${name}. Markets are closed today, but there's always something to read. What's on your mind?`,
-          `Morning, ${name}. No market action today, but we can still prep for tomorrow. What are you thinking about?`,
-          `Hey ${name}. Quiet morning with no market noise — perfect time to dig deep into something. What do you want to explore?`
-        );
-      }
-    } else if (timeOfDay === 'afternoon') {
-      if (marketOpen && !isWeekend) {
-        greetings.push(
-          `Afternoon, ${name}. Mid-session often reveals the real trend. What do you want to analyze?`,
-          `Hey ${name}. The market's been running for a few hours now. Want to check how your positions are holding up?`,
-          `Good afternoon, ${name}. Want me to run a quick risk check on your book while the tape is active?`
-        );
-      } else {
-        greetings.push(
-          `Afternoon, ${name}. No live tape right now, but we can still build conviction. What are you researching?`,
-          `Hey ${name}. Quiet afternoon — perfect for deep research. What company do you want to understand better?`
-        );
-      }
-    } else { // evening
-      if (marketOpen && !isWeekend) {
-        greetings.push(
-          `Evening, ${name}. Markets are closing soon. Want a summary of what moved today?`,
-          `Hey ${name}. The closing bell is coming up. Should we review how your positions performed today?`,
-          `Good evening, ${name}. Last hour of trading — want me to flag anything unusual in your watchlist?`
-        );
-      } else {
-        greetings.push(
-          `Evening, ${name}. Markets are closed. Want me to run a DCF on something you've been watching?`,
-          `Hey ${name}. The market's done for the day. Perfect time to research without the noise. What do you want to explore?`,
-          `Good evening, ${name}. Want me to audit a stock you've been thinking about buying?`
-        );
-      }
-    }
-
-    // Portfolio-aware additions
-    if (portfolioSize > 0) {
-      greetings.push(
-        `Hey ${name}. You've got ${portfolioSize} positions in your book. Want me to check what's changed since yesterday?`,
-        `Hi ${name}. Your portfolio has ${portfolioSize} holdings. Should I run a quick risk scan?`,
-        `Welcome back, ${name}. I see ${portfolioSize} positions in your portfolio. Anything specific you want me to dig into?`
-      );
-    } else {
-      greetings.push(
-        `Hey ${name}. Your portfolio is empty right now — want me to help you build a watchlist?`,
-        `Hi ${name}. No holdings synced yet. Want me to find a few solid names to start tracking?`,
-        `Welcome, ${name}. Let's start building your research dashboard. What sector interests you?`
-      );
-    }
-
-    // Pick one based on a rotating hash of the current hour
-    const index = (hour + new Date().getDate()) % greetings.length;
-    return greetings[index];
-  };
-
-  const arthikGreeting = getArthikGreeting();
-
   const activeIndices = useMemo(() =>
     [...liveIndexData.india].sort((a, b) => b.changePct - a.changePct),
     [liveIndexData.india]
@@ -3337,23 +3270,34 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   const discoverSlides = useMemo(() => {
     if (discoverItems.length === 0) return [] as NewsFeedItem[][];
     const slides: NewsFeedItem[][] = [];
-    for (let i = 0; i < discoverItems.length; i += DISCOVER_CARDS_PER_SLIDE) {
-      slides.push(discoverItems.slice(i, i + DISCOVER_CARDS_PER_SLIDE));
+    for (let i = 0; i < discoverItems.length; i += cardsPerSlide) {
+      slides.push(discoverItems.slice(i, i + cardsPerSlide));
     }
     return slides;
-  }, [discoverItems]);
+  }, [discoverItems, cardsPerSlide]);
 
   useEffect(() => {
-    if (discoverSlides.length === 0) {
-      setDiscoverIndex(0);
-      return;
+    const max = Math.max(0, discoverSlides.length - 1);
+    let nextIndex: number;
+    if (cardsPerSlide !== prevCardsPerSlideRef.current) {
+      const oldPerSlide = prevCardsPerSlideRef.current;
+      const firstVisible = discoverIndex * oldPerSlide;
+      nextIndex = Math.min(Math.floor(firstVisible / cardsPerSlide), max);
+      prevCardsPerSlideRef.current = cardsPerSlide;
+    } else {
+      nextIndex = Math.min(discoverIndex, max);
     }
-    setDiscoverIndex((prev) => Math.min(prev, discoverSlides.length - 1));
-  }, [discoverSlides]);
+    if (nextIndex !== discoverIndex) {
+      setDiscoverIndex(nextIndex);
+    }
+    discoverDragOffsetRef.current = 0;
+    setDiscoverDragOffset(0);
+  }, [discoverSlides.length, cardsPerSlide]);
 
   useEffect(() => {
     if (activeFeatureTab !== 'overview' || discoverSlides.length <= 1) return;
     const timer = window.setInterval(() => {
+      if (isDiscoverDraggingRef.current) return;
       setDiscoverIndex((prev) => (prev + 1) % discoverSlides.length);
     }, 7000);
     return () => window.clearInterval(timer);
@@ -3378,14 +3322,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
   const suggestions = portfolio.length > 0
     ? [
-        `What is the pros and cons of my equities?`,
-        `Why is ${portfolio[0]?.symbol || 'my top holding'} moving against me?`,
-        `Where's the hidden risk in my portfolio?`,
+        `Pros and cons of my equities`,
+        `Why is ${portfolio[0]?.symbol || 'my top holding'} moving?`,
+        `Find hidden portfolio risk`,
       ]
     : [
-        `What's moving the Nifty right now?`,
-        `Is this a dip or a trap?`,
-        `Give me the bull case on Tata Motors.`,
+        `What's moving Nifty now?`,
+        `Is this dip a trap?`,
+        `Bull case on Tata Motors`,
       ];
 
   const portfolioExposure = useMemo(() => {
@@ -3434,6 +3378,88 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     }
     setShowPortfolioSetupModal(true);
   }, [activeFeatureTab, portfolioSetupDismissed, isPortfolioSyncing, hasPortfolioHoldings, manualOverridePrompt]);
+
+  const setDiscoverOffset = (value: number) => {
+    discoverDragOffsetRef.current = value;
+    setDiscoverDragOffset(value);
+  };
+
+  const resetDiscoverDrag = () => {
+    isDiscoverDraggingRef.current = false;
+    discoverDragStartRef.current = null;
+    discoverBodyRef.current?.style.removeProperty('cursor');
+    document.body.style.removeProperty('user-select');
+    setDiscoverOffset(0);
+  };
+
+  const handleDiscoverPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.pointerType === 'mouse' && e.button !== 0) || !discoverBodyRef.current) return;
+    const el = discoverBodyRef.current;
+    isDiscoverDraggingRef.current = true;
+    discoverDragMovedRef.current = false;
+    discoverDragStartRef.current = { x: e.clientX, y: e.clientY, pointerId: e.pointerId, pointerType: e.pointerType };
+    setDiscoverOffset(0);
+    el.style.cursor = 'grabbing';
+    if (e.pointerType === 'mouse') {
+      document.body.style.userSelect = 'none';
+      try { el.setPointerCapture(e.pointerId); } catch {}
+    }
+  };
+
+  const handleDiscoverPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDiscoverDraggingRef.current || !discoverDragStartRef.current || !discoverBodyRef.current) return;
+    const start = discoverDragStartRef.current;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+
+    if (start.pointerType !== 'mouse' && !start.axis) {
+      if (Math.max(absX, absY) < 6) return;
+      start.axis = absX > absY ? 'x' : 'y';
+      if (start.axis === 'y') {
+        resetDiscoverDrag();
+        return;
+      }
+      try { discoverBodyRef.current.setPointerCapture(start.pointerId); } catch {}
+    }
+
+    if (start.axis === 'y') return;
+    if (absX > 4) discoverDragMovedRef.current = true;
+    const maxOffset = discoverBodyRef.current ? discoverBodyRef.current.clientWidth * 0.24 : 120;
+    setDiscoverOffset(Math.max(Math.min(dx, maxOffset), -maxOffset));
+  };
+
+  const handleDiscoverPointerUp = () => {
+    const start = discoverDragStartRef.current;
+    const el = discoverBodyRef.current;
+    if (!start || !el) {
+      resetDiscoverDrag();
+      return;
+    }
+
+    if (start.axis === 'x' && discoverSlides.length > 1) {
+      const threshold = Math.min(120, Math.max(48, el.clientWidth * 0.14));
+      const offset = discoverDragOffsetRef.current;
+      if (offset <= -threshold) {
+        setDiscoverIndex((prev) => (prev + 1) % discoverSlides.length);
+      } else if (offset >= threshold) {
+        setDiscoverIndex((prev) => (prev - 1 + discoverSlides.length) % discoverSlides.length);
+      }
+    }
+
+    try { el.releasePointerCapture(start.pointerId); } catch {}
+    resetDiscoverDrag();
+  };
+
+  const handleDiscoverCardClick = (e: React.MouseEvent, url?: string) => {
+    if (discoverDragMovedRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <AppShell
@@ -3711,39 +3737,64 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                     <button
                       type="button"
                       className="discover-nav-btn"
-                      onClick={() => setDiscoverIndex((prev) => (discoverSlides.length <= 1 ? 0 : (prev - 1 + discoverSlides.length) % discoverSlides.length))}
+                      onClick={() => {
+                        if (discoverSlides.length <= 1) return;
+                        setDiscoverIndex((prev) => (prev - 1 + discoverSlides.length) % discoverSlides.length);
+                      }}
                       disabled={discoverSlides.length <= 1}
                       aria-label="Previous discover slide"
                     >
                       <ChevronLeft size={18} />
                     </button>
-                    <div className="discover-carousel-body">
-                      {(discoverSlides[discoverIndex] || []).map((item) => (
-                        <article
-                          key={item.id}
-                          className="discover-card"
-                          onClick={() => item.url && window.open(item.url, '_blank', 'noopener,noreferrer')}
-                          style={{ cursor: item.url ? 'pointer' : 'default' }}
+                    <div
+                      className={`discover-carousel-body${discoverDragOffset !== 0 ? ' is-dragging' : ''}`}
+                      ref={discoverBodyRef}
+                      onPointerDown={handleDiscoverPointerDown}
+                      onPointerMove={handleDiscoverPointerMove}
+                      onPointerUp={handleDiscoverPointerUp}
+                      onPointerCancel={handleDiscoverPointerUp}
+                      onPointerLeave={handleDiscoverPointerUp}
+                    >
+                      {discoverSlides.length > 0 ? (
+                        <div
+                          className="discover-carousel-track"
+                          style={{ transform: `translateX(calc(${-discoverIndex * 100}% + ${discoverDragOffset}px))` }}
                         >
-                          <img
-                            src={item.image || buildNewsFallbackCover(item.headline, item.headline, item.source)}
-                            alt={`${item.headline} cover`}
-                            className="discover-card-image"
-                            loading="lazy"
-                            onError={(event) => {
-                              event.currentTarget.src = buildNewsFallbackCover(item.headline, item.headline, item.source);
-                            }}
-                          />
-                          <div className="discover-card-content">
-                            <div className="discover-card-headline">{item.headline}</div>
-                            <div className="discover-card-meta">
-                              <span>{item.sourceCount > 0 ? `${item.sourceCount} sources` : item.source}</span>
-                              {item.url && <ExternalLink size={12} />}
+                          {discoverSlides.map((slide, slideIdx) => (
+                            <div
+                              key={slideIdx}
+                              className="discover-slide"
+                            >
+                              {slide.map((item) => (
+                                <article
+                                  key={item.id}
+                                  className="discover-card"
+                                  onClick={(e) => handleDiscoverCardClick(e, item.url)}
+                                  style={{ cursor: item.url ? 'pointer' : 'default' }}
+                                >
+                                  <img
+                                    src={item.image || buildNewsFallbackCover(item.headline, item.headline, item.source)}
+                                    alt={`${item.headline} cover`}
+                                    className="discover-card-image"
+                                    loading="lazy"
+                                    draggable={false}
+                                    onError={(event) => {
+                                      event.currentTarget.src = buildNewsFallbackCover(item.headline, item.headline, item.source);
+                                    }}
+                                  />
+                                  <div className="discover-card-content">
+                                    <div className="discover-card-headline">{item.headline}</div>
+                                    <div className="discover-card-meta">
+                                      <span>{item.sourceCount > 0 ? `${item.sourceCount} sources` : item.source}</span>
+                                      {item.url && <ExternalLink size={12} />}
+                                    </div>
+                                  </div>
+                                </article>
+                              ))}
                             </div>
-                          </div>
-                        </article>
-                      ))}
-                      {discoverSlides.length === 0 && (
+                          ))}
+                        </div>
+                      ) : (
                         <div className="discover-empty">
                           {newsLoading ? 'Loading discover feed...' : 'No discover cards available right now.'}
                         </div>
@@ -3752,7 +3803,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                     <button
                       type="button"
                       className="discover-nav-btn"
-                      onClick={() => setDiscoverIndex((prev) => (discoverSlides.length <= 1 ? 0 : (prev + 1) % discoverSlides.length))}
+                      onClick={() => {
+                        if (discoverSlides.length <= 1) return;
+                        setDiscoverIndex((prev) => (prev + 1) % discoverSlides.length);
+                      }}
                       disabled={discoverSlides.length <= 1}
                       aria-label="Next discover slide"
                     >
@@ -4928,7 +4982,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
             {!hasEngaged ? (
               <>
                 <div className="chat-rail-greeting">
-                  {arthikGreeting}
+                  What should Arthik analyze?
                 </div>
 
                 {suggestions.map((s, i) => (
@@ -4943,12 +4997,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                   <button
                     className="mode-chip"
                     onClick={() => handleSuggestQuery('Deep research: build a complete investment thesis on RELIANCE.', 'deep')}
-                    style={{ position: 'relative' }}
                   >
                     <Sparkles size={12} /> Full thesis
                     {!isPro && (
-                      <span style={{ position: 'absolute', top: -6, right: -6, background: 'var(--gradient-brand)', color: '#0f172a', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 999 }}>
-                        PRO
+                      <span className="mode-chip-beta">
+                        {APP_BETA_BADGE}
                       </span>
                     )}
                   </button>
@@ -5003,10 +5056,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                           }}>{isDeepPremium ? '🔒' : '⚠'}</div>
                           <div>
                             <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: isDeepPremium ? '#38BDF8' : '#F87171' }}>
-                              {isDeepPremium ? 'Deep Mode is Pro' : 'Research Limit Reached'}
+                              {isDeepPremium ? 'Deep Mode beta limit' : 'Research Limit Reached'}
                             </h4>
                             <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                              {isDeepPremium ? 'Free tier includes 1 deep run per week' : 'Weekly allocation exhausted'}
+                              {isDeepPremium ? APP_BETA_DEEP_NOTE : 'Weekly allocation exhausted for this beta seat'}
                             </span>
                           </div>
                         </div>
@@ -5026,22 +5079,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                         </div>
 
                         {detail.upgrade_available && !isPro && (
-                          <button
-                            onClick={() => navigate('/pricing')}
-                            style={{
-                              width: '100%',
-                              padding: '10px',
-                              borderRadius: 8,
-                              border: 'none',
-                              background: 'var(--gradient-brand)',
-                              color: '#0f172a',
-                              fontSize: 13,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Subscribe to Pro — Unlock Deep Mode
-                          </button>
+                          <div style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            borderRadius: 8,
+                            border: '1px solid rgba(56, 189, 248, 0.14)',
+                            background: 'rgba(56, 189, 248, 0.07)',
+                            color: 'var(--text-secondary)',
+                            fontSize: 12,
+                            lineHeight: 1.45,
+                          }}>
+                            {APP_BETA_ACCESS_NOTE}
+                          </div>
                         )}
 
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px', marginTop: '4px' }}>
@@ -5085,9 +5134,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
               onPendingConsumed={() => setPendingChatQuery(null)}
             />
             <div className="chat-rail-footer">
-              {isPro
-                ? 'Arthik • Pro • Unlimited Deep • Esc to stop'
-                : 'Arthik • Free • 1 Deep run/week • Esc to stop'}
+              {APP_BETA_CHAT_FOOTER}
             </div>
           </div>
           </div>

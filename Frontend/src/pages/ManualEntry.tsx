@@ -5,6 +5,7 @@ import { ArrowLeft, Plus, Trash2, ArrowRight, Search, X } from 'lucide-react';
 import { INDIAN_STOCKS } from '../data/indianStocks';
 import { trackEvent } from '../telemetry';
 import { MANUAL_PORTFOLIO_KEY } from '../context/AuthContext';
+import { APP_BETA_ACCESS_NOTE, APP_BETA_BADGE, APP_BETA_LABEL } from '../constants/beta';
 
 interface ManualRow {
   id: string;
@@ -189,10 +190,15 @@ export const ManualEntry: React.FC = () => {
           <span style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.5px' }} className="text-gradient">ProspektLab</span>
         </div>
 
+        <div className="beta-inline-group" style={{ justifyContent: 'center' }}>
+          <span className="beta-pill">{APP_BETA_BADGE}</span>
+          <span className="beta-note">{APP_BETA_LABEL} • {APP_BETA_ACCESS_NOTE}</span>
+        </div>
+
         <div style={{ textAlign: 'center' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Enter your holdings</h2>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Type the stocks or mutual funds you own. Date of purchase is optional. No account setup is required.
+            Type the stocks or mutual funds you own. Date of purchase is optional. Invite-only beta access is enough.
           </p>
         </div>
 

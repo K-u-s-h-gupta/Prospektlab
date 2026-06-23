@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
 import { trackEvent } from '../telemetry';
 import { useAuth } from '../context/AuthContext';
+import { APP_BETA_ACCESS_NOTE, APP_BETA_BADGE, APP_BETA_LABEL } from '../constants/beta';
 
 const LEGACY_DEFAULT_WATCHLIST = ['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'TATAMOTORS', 'ASIANPAINT', 'ZOMATO', 'ITC'];
 
@@ -123,10 +124,15 @@ export const WatchlistStep: React.FC = () => {
           <span style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.5px' }} className="text-gradient">ProspektLab</span>
         </div>
 
+        <div className="beta-inline-group" style={{ justifyContent: 'center' }}>
+          <span className="beta-pill">{APP_BETA_BADGE}</span>
+          <span className="beta-note">{APP_BETA_LABEL} • {APP_BETA_ACCESS_NOTE}</span>
+        </div>
+
         <div style={{ textAlign: 'center' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)' }}>Build Your Opportunity Radar</h2>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Add the stocks you are watching. You can always change this later in the dashboard.
+            Add the stocks you are watching. You can always change this later in the dashboard during the beta.
           </p>
         </div>
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { Sidebar } from './Sidebar';
 import { Logo } from './Logo';
 import { Menu } from 'lucide-react';
+import { APP_BETA_BADGE } from '../../constants/beta';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -73,6 +74,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           <div className="mobile-logo-container">
             <Logo size={20} />
             <span className="mobile-header-title text-gradient" style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}>Prospekt Lab</span>
+            <span className="beta-pill" style={{ fontSize: 8, padding: '2px 6px' }}>{APP_BETA_BADGE}</span>
           </div>
           <div style={{ width: 36 }} /> {/* Balance space */}
         </header>
