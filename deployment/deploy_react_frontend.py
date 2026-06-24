@@ -15,7 +15,7 @@ API_GATEWAY_URL = os.getenv(
     "API_GATEWAY_URL",
     "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com",
 )
-DIST_DIR = os.path.join("Frontend", "app", "dist")
+DIST_DIR = os.path.join("Frontend", "dist")
 APPINSIGHTS_CONNECTION_STRING = os.getenv(
     "APPINSIGHTS_CONNECTION_STRING",
     "InstrumentationKey=b4797745-6b7f-4d72-894f-768bdc808d3d;IngestionEndpoint=https://centralindia-0.in.applicationinsights.azure.com/;LiveEndpoint=https://centralindia.livediagnostics.monitor.azure.com/;ApplicationId=980e7ddb-6ef5-46e2-b7ae-bb833f3fc8c8",
@@ -55,13 +55,13 @@ CUSTOM_RULES = [
     },
     {
         "source": "/insights/research",
-        "target": "/insights/research/index.html",
-        "status": "200"
+        "target": "/research/",
+        "status": "301"
     },
     {
         "source": "/insights/research/",
-        "target": "/insights/research/index.html",
-        "status": "200"
+        "target": "/research/",
+        "status": "301"
     },
     {
         "source": "/insights/strategy",
@@ -71,6 +71,16 @@ CUSTOM_RULES = [
     {
         "source": "/insights/strategy/",
         "target": "/insights/strategy/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/indian-stock-research-workspace",
+        "target": "/indian-stock-research-workspace/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/indian-stock-research-workspace/",
+        "target": "/indian-stock-research-workspace/index.html",
         "status": "200"
     },
     {
@@ -144,8 +154,43 @@ CUSTOM_RULES = [
         "status": "200"
     },
     {
+        "source": "/research/start",
+        "target": f"{API_GATEWAY_URL}/research/start",
+        "status": "200"
+    },
+    {
+        "source": "/research/deep",
+        "target": f"{API_GATEWAY_URL}/research/deep",
+        "status": "200"
+    },
+    {
+        "source": "/research/export-all",
+        "target": f"{API_GATEWAY_URL}/research/export-all",
+        "status": "200"
+    },
+    {
+        "source": "/research/export/<*>",
+        "target": f"{API_GATEWAY_URL}/research/export/<*>",
+        "status": "200"
+    },
+    {
+        "source": "/research/export",
+        "target": f"{API_GATEWAY_URL}/research/export",
+        "status": "200"
+    },
+    {
+        "source": "/research",
+        "target": "/insights/research/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/research/",
+        "target": "/insights/research/index.html",
+        "status": "200"
+    },
+    {
         "source": "/research/<*>",
-        "target": f"{API_GATEWAY_URL}/research/<*>",
+        "target": "/insights/<*>",
         "status": "200"
     },
     {
@@ -156,6 +201,11 @@ CUSTOM_RULES = [
     {
         "source": "/portfolio/<*>",
         "target": f"{API_GATEWAY_URL}/portfolio/<*>",
+        "status": "200"
+    },
+    {
+        "source": "/ipo/<*>",
+        "target": f"{API_GATEWAY_URL}/ipo/<*>",
         "status": "200"
     },
     {
