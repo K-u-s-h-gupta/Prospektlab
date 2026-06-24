@@ -235,20 +235,41 @@ def _default_platform_intro(row: dict[str, str]) -> str:
     company = str(row.get("company", "")).strip()
     if role and company:
         return (
-            "We are building ProspektLab as a research workspace that brings filings, news, portfolio context, "
-            "and market data into one place so the work feels less scattered."
+            "ProspektLab is a research workspace for Indian markets: filings, news, portfolio context, and market data "
+            "in one place so a real research note can move faster from question to conviction."
         )
     return (
-        "We are building ProspektLab as a research workspace that brings filings, news, portfolio context, "
-        "and market data into one place instead of across scattered tabs and notes."
+        "ProspektLab is a research workspace for Indian markets: filings, news, portfolio context, and market data "
+        "in one place instead of scattered tabs and notes."
     )
 
 
 def _default_cta_line() -> str:
     return (
-        "If you are open to it, I would love to get your honest reaction after a quick 10-minute look. "
-        "Even a short reply on what feels useful, missing, or unnecessary would help us shape it."
+        "If it is relevant, try one live research task on a company you already track. If ProspektLab does not save "
+        "you time in the first few minutes, a blunt reply telling us why would still be useful."
     )
+
+
+def _tracked_signup_url(campaign: dict[str, Any], sender: Sender) -> str:
+    signup_url = str(campaign.get("signup_url", "")).strip()
+    if not signup_url:
+        return ""
+
+    parsed = urllib.parse.urlsplit(signup_url)
+    params = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    existing = {key.lower() for key, _ in params}
+    defaults = {
+        "utm_source": str(campaign.get("utm_source", "outreach")).strip() or "outreach",
+        "utm_medium": str(campaign.get("utm_medium", "email")).strip() or "email",
+        "utm_campaign": str(campaign.get("utm_campaign", "research_workflow_outreach")).strip()
+        or "research_workflow_outreach",
+        "utm_content": sender.key or "sender",
+    }
+    for key, value in defaults.items():
+        if key not in existing:
+            params.append((key, value))
+    return urllib.parse.urlunsplit(parsed._replace(query=urllib.parse.urlencode(params)))
 
 
 def build_message(
@@ -297,7 +318,7 @@ def build_message(
         "platform_intro": str(row.get("platform_intro", "")).strip() or _default_platform_intro(row),
         "cta_line": str(row.get("cta_line", "")).strip() or _default_cta_line(),
         "signature_block": signature_block,
-        "signup_url": str(campaign.get("signup_url", "")).strip(),
+        "signup_url": _tracked_signup_url(campaign, sender),
         "whatsapp_group_url": whatsapp_group_url,
         "feedback_group_line": feedback_group_line,
         "unsubscribe_url": unsubscribe_url or "reply unsubscribe",

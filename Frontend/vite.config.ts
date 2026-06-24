@@ -19,6 +19,7 @@ export default defineConfig({
       '/research': 'http://localhost:8000',
       '/sessions': 'http://localhost:8000',
       '/portfolio': 'http://localhost:8000',
+      '/ipo': 'http://localhost:8000',
       '/api': 'http://localhost:8000',
       '/chat': 'http://localhost:8000',
       '/health': 'http://localhost:8000',

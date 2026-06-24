@@ -117,6 +117,9 @@ if ($WriteConfig) {
         }
         campaign = [ordered]@{
             signup_url = "https://prospektlab.com/signup"
+            utm_source = "outreach"
+            utm_medium = "email"
+            utm_campaign = "research_workflow_outreach"
             whatsapp_group_url = "https://chat.whatsapp.com/Bpo5Bt5tVveGYGEVawkcUu"
             unsubscribe_url = "https://prospektlab.com/unsubscribe"
             physical_address = ""

@@ -135,6 +135,11 @@
     "status": "200"
   },
   {
+    "source": "/ipo/<*>",
+    "target": "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/ipo/<*>",
+    "status": "200"
+  },
+  {
     "source": "/api/portfolio/<*>",
     "target": "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/api/portfolio/<*>",
     "status": "200"
@@ -186,6 +191,31 @@
   },
   {
     "source": "/landing",
+    "target": "/index.html",
+    "status": "200"
+  },
+  {
+    "source": "/dashboard",
+    "target": "/index.html",
+    "status": "200"
+  },
+  {
+    "source": "/dashboard/<*>",
+    "target": "/index.html",
+    "status": "200"
+  },
+  {
+    "source": "/get-started",
+    "target": "/index.html",
+    "status": "200"
+  },
+  {
+    "source": "/onboarding/<*>",
+    "target": "/index.html",
+    "status": "200"
+  },
+  {
+    "source": "/insights-studio",
     "target": "/index.html",
     "status": "200"
   },

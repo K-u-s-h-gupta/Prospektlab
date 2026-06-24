@@ -744,6 +744,31 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
             />
           )}
         </div>
+
+        {/* Skip to Dashboard - not mandatory to sign up */}
+        <div style={{ marginTop: '20px', textAlign: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '16px' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard/overview')}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              fontSize: '13px',
+              cursor: 'pointer',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; }}
+          >
+            Skip for now — explore the dashboard directly
+          </button>
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px', lineHeight: 1.4 }}>
+            Sign up only if you want to save your portfolio data and preferences.
+          </p>
+        </div>
       </div>
     </div>
   );

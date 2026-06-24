@@ -15,6 +15,7 @@ import { AgentThinking } from '../components/chat/AgentThinking';
 import ExportPanel from '../components/chat/ExportPanel';
 import FeatureTabs, { FeatureTabId } from '../components/layout/FeatureTabs';
 import { GatewaySetupCard } from './GatewayPage';
+import { IpoDashboardContent } from './IpoDashboard';
 import { useAuth } from '../context/AuthContext';
 import { 
   startResearch, 
@@ -40,12 +41,12 @@ import {
   getUserTokenUsage,
   listContentArticles,
 } from '../api/client';
-import { Search, Sparkles, MessageSquare, ChevronRight, ChevronDown, ChevronLeft, Activity, TrendingDown, ExternalLink } from 'lucide-react';
+import { Search, Sparkles, ChevronRight, ChevronDown, ChevronLeft, Activity, TrendingDown, ExternalLink, MessageSquarePlus, History, Trash2, ArrowLeft } from 'lucide-react';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
 import { buildProspektCover } from '../utils/coverArt';
 import { APP_BETA_ACCESS_NOTE, APP_BETA_BADGE, APP_BETA_CHAT_FOOTER, APP_BETA_DEEP_NOTE } from '../constants/beta';
 
-type DashboardFeatureTab = 'overview' | 'portfolio' | 'watchlist' | 'screener' | 'earnings' | 'governance';
+type DashboardFeatureTab = 'overview' | 'portfolio' | 'watchlist' | 'screener' | 'ipo' | 'earnings' | 'governance';
 
 const CHAT_WIDTH_STORAGE_KEY = 'prospektlab_chat_width';
 const MIN_CHAT_WIDTH = 320;
@@ -53,7 +54,6 @@ const DEFAULT_CHAT_WIDTH = 360;
 const MAX_CHAT_WIDTH = 440;
 
 const getViewportWidth = () => (typeof window === 'undefined' ? 1440 : window.innerWidth);
-const isMobileViewport = () => getViewportWidth() <= 768;
 
 const getMaxChatWidth = () => {
   const viewport = getViewportWidth();
@@ -130,6 +130,9 @@ interface MarketMoverItem {
 const TAPE_NEWS_CACHE_KEY = 'prospektlab_tape_news_cache_v2';
 const MARKET_MOVERS_CACHE_KEY = 'prospektlab_market_movers_cache_v1';
 const MARKET_MOVERS_CACHE_TTL_MS = 3 * 60 * 1000;
+const INDICES_CACHE_KEY = 'prospektlab_market_indices_cache_v1';
+const INDICES_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const OVERVIEW_INDEX_SYMBOLS = ['NIFTY 50', 'SENSEX', 'NIFTY BANK', 'NIFTY IT'] as const;
 
 const normalizeNewsUrl = (raw: string) => {
   const value = String(raw || '').trim();
@@ -619,29 +622,76 @@ const MARKET_MOVER_UNIVERSE_SYMBOLS = [
   'SUNPHARMA', 'TCS', 'TATACONSUM', 'TATAMOTORS', 'TATASTEEL',
   'TECHM', 'TITAN', 'TRENT', 'ULTRACEMCO', 'WIPRO',
 ];
+const buildResearchArticleUrl = (slug: string, publicUrl?: string) => {
+  const trimmed = String(publicUrl || '').trim();
+  if (trimmed) {
+    if (/\/insights\/research\/?$/i.test(trimmed) || trimmed === '/research' || trimmed === '/research/') {
+      return '/research';
+    }
+    const insightsMatch = trimmed.match(/\/insights\/([^/?#]+)\/?$/i);
+    if (insightsMatch?.[1]) {
+      return `/research/${insightsMatch[1]}/`;
+    }
+    if (trimmed.startsWith('/research/')) {
+      return trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
+    }
+    return trimmed;
+  }
+  const normalizedSlug = String(slug || '').replace(/^\/+|\/+$/g, '');
+  return normalizedSlug ? `/research/${normalizedSlug}/` : '/research';
+};
+
 const FALLBACK_RESEARCH_TITLES: ResearchTitleItem[] = [
   {
-    slug: 'research-fallback-markets',
-    title: 'Nifty breadth and sector rotation snapshot',
-    content_type: 'Research',
-    ago: 'Today',
-    public_url: '',
+    slug: 'maruti-suzuki-q4-fy25-results-domestic-pv-share-suv-mix-export-growth',
+    title: 'Maruti Suzuki Q4 FY25: market share, SUV mix and exports shape outlook',
+    content_type: 'Earnings',
+    ago: 'Recent',
+    public_url: '/research/maruti-suzuki-q4-fy25-results-domestic-pv-share-suv-mix-export-growth/',
+    image_path: '/insights/maruti-suzuki-q4-fy25-results-domestic-pv-share-suv-mix-export-growth/cover.png',
   },
   {
-    slug: 'research-fallback-banks',
-    title: 'Private banks: credit growth vs margin risk tracker',
-    content_type: 'Research',
-    ago: 'Today',
-    public_url: '',
+    slug: 'tcs-q4-fy25-results-revenue-margin-dividend-fy26-outlook',
+    title: 'TCS Q4 FY25: revenue, margins and dividend keep investor focus on FY26 demand',
+    content_type: 'Earnings',
+    ago: 'Recent',
+    public_url: '/research/tcs-q4-fy25-results-revenue-margin-dividend-fy26-outlook/',
+    image_path: '/insights/tcs-q4-fy25-results-revenue-margin-dividend-fy26-outlook/cover.png',
   },
   {
-    slug: 'research-fallback-it',
-    title: 'Large-cap IT: deal pipeline watchlist and valuation bands',
-    content_type: 'Research',
-    ago: 'Today',
-    public_url: '',
+    slug: 'hdfc-bank-q4-fy25-results-margin-deposits-asset-quality',
+    title: 'HDFC Bank Q4 FY25: margins, deposits and asset quality stay in focus',
+    content_type: 'Earnings',
+    ago: 'Recent',
+    public_url: '/research/hdfc-bank-q4-fy25-results-margin-deposits-asset-quality/',
+    image_path: '/insights/hdfc-bank-q4-fy25-results-margin-deposits-asset-quality/cover.png',
+  },
+  {
+    slug: 'reliance-industries-q4-fy25-results-retail-jio-new-energy-capex',
+    title: 'Reliance Industries Q4 FY25: retail, Jio and new-energy capex stay in focus',
+    content_type: 'Earnings',
+    ago: 'Recent',
+    public_url: '/research/reliance-industries-q4-fy25-results-retail-jio-new-energy-capex/',
+    image_path: '/insights/reliance-industries-q4-fy25-results-retail-jio-new-energy-capex/cover.png',
+  },
+  {
+    slug: 'bharti-airtel-q4-fy25-results-arpu-5g-capex-leverage-tower-portfolio',
+    title: 'Bharti Airtel Q4 FY25: ARPU, 5G capex and leverage stay in focus',
+    content_type: 'Earnings',
+    ago: 'Recent',
+    public_url: '/research/bharti-airtel-q4-fy25-results-arpu-5g-capex-leverage-tower-portfolio/',
+    image_path: '/insights/bharti-airtel-q4-fy25-results-arpu-5g-capex-leverage-tower-portfolio/cover.png',
+  },
+  {
+    slug: 'infosys-q4-fy25-results-guidance-margin-deal-pipeline',
+    title: 'Infosys holds near-21% margin as FY26 growth guidance stays at 0-3%',
+    content_type: 'Earnings',
+    ago: 'Recent',
+    public_url: '/research/infosys-q4-fy25-results-guidance-margin-deal-pipeline/',
+    image_path: '/insights/infosys-q4-fy25-results-guidance-margin-deal-pipeline/cover.png',
   },
 ];
+const OVERVIEW_INDEX_LIMIT = 4;
 const FALLBACK_INDIA_INDICES: IndexTickerData[] = [
   {
     symbol: 'NIFTY 50',
@@ -769,6 +819,61 @@ const normalizeIndicesPayload = (payload: any): MarketIndexBuckets => {
   }
 
   return buckets;
+};
+
+const indexSymbolKey = (symbol: string) => String(symbol || '').trim().toUpperCase();
+
+const mergeIndiaIndexRows = (
+  incoming: IndexTickerData[],
+  previous: IndexTickerData[],
+): IndexTickerData[] => {
+  const incomingMap = new Map(incoming.map((row) => [indexSymbolKey(row.symbol), row]));
+  const previousMap = new Map(previous.map((row) => [indexSymbolKey(row.symbol), row]));
+  const fallbackMap = new Map(FALLBACK_INDIA_INDICES.map((row) => [indexSymbolKey(row.symbol), row]));
+
+  const mergedOverview = OVERVIEW_INDEX_SYMBOLS.map((symbol) => {
+    const key = indexSymbolKey(symbol);
+    return incomingMap.get(key) || previousMap.get(key) || fallbackMap.get(key);
+  }).filter((row): row is IndexTickerData => Boolean(row));
+
+  const seen = new Set(mergedOverview.map((row) => indexSymbolKey(row.symbol)));
+  incoming.forEach((row) => {
+    const key = indexSymbolKey(row.symbol);
+    if (!seen.has(key)) {
+      mergedOverview.push(row);
+      seen.add(key);
+    }
+  });
+
+  return mergedOverview.length > 0 ? mergedOverview : FALLBACK_INDIA_INDICES;
+};
+
+const readCachedIndices = (): IndexTickerData[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(INDICES_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    const asOf = Number(parsed?.as_of || 0);
+    if (!asOf || (Date.now() - asOf) > INDICES_CACHE_TTL_MS) return [];
+    const items = Array.isArray(parsed?.items) ? parsed.items : [];
+    return items
+      .map((row: any) => normalizeIndexRow(row))
+      .filter((row: IndexTickerData | null): row is IndexTickerData => Boolean(row));
+  } catch (_) {
+    return [];
+  }
+};
+
+const writeCachedIndices = (items: IndexTickerData[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(INDICES_CACHE_KEY, JSON.stringify({
+      as_of: Date.now(),
+      items: mergeIndiaIndexRows(items, FALLBACK_INDIA_INDICES).slice(0, OVERVIEW_INDEX_LIMIT),
+    }));
+  } catch (_) {
+    // no-op for quota/storage errors
+  }
 };
 const readCachedTapeNews = (): NewsFeedItem[] => {
   if (typeof window === 'undefined') return [];
@@ -1002,6 +1107,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   // Pre-filled chat query state (set by external dashboard buttons instead of auto-executing)
   const [pendingChatQuery, setPendingChatQuery] = useState<{ id: string; text: string; depth: 'standard' | 'deep' } | null>(null);
   const [isChatHighlighted, setIsChatHighlighted] = useState(false);
+  const [showChatHistory, setShowChatHistory] = useState(false);
   const [assetHistoryTarget, setAssetHistoryTarget] = useState<AssetHistoryTarget | null>(null);
   const [activeTab, setActiveTab] = useState<'portfolio' | 'watchlist'>(() => (
     initialFeatureTab === 'watchlist' ? 'watchlist' : 'portfolio'
@@ -1025,6 +1131,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       ? 'watchlist'
       : initialFeatureTab === 'screener'
         ? 'screener'
+        : initialFeatureTab === 'ipo'
+          ? 'ipo'
         : initialFeatureTab === 'earnings'
           ? 'earnings'
           : initialFeatureTab === 'governance'
@@ -1037,7 +1145,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       ? 'Portfolio'
       : activeFeatureTab === 'screener'
         ? 'Screener'
-      : 'Overview';
+        : activeFeatureTab === 'ipo'
+          ? 'IPO Intelligence'
+          : 'Overview';
   const isPortfolioFeature = activeFeatureTab === 'portfolio';
   const isMarketTapeFeature = activeFeatureTab === 'overview' || activeFeatureTab === 'portfolio';
 
@@ -1055,6 +1165,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
         break;
       case 'screener':
         navigate('/dashboard/screener');
+        break;
+      case 'ipo':
+        navigate('/dashboard/ipo');
         break;
       case 'earnings':
         navigate('/dashboard/earnings');
@@ -1076,14 +1189,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   // Resizable chat rail state
   const [chatWidth, setChatWidth] = useState<number>(() => {
     const saved = localStorage.getItem(CHAT_WIDTH_STORAGE_KEY);
-    return saved ? normalizeChatWidth(parseInt(saved, 10)) : getDefaultChatWidth();
+    const parsed = saved ? normalizeChatWidth(parseInt(saved, 10)) : getDefaultChatWidth();
+    return parsed <= 0 ? getDefaultChatWidth() : parsed;
   });
   const [isDraggingChat, setIsDraggingChat] = useState(false);
-  const [isChatHidden, setIsChatHidden] = useState(() => {
-    const savedWidth = localStorage.getItem(CHAT_WIDTH_STORAGE_KEY);
-    if (isMobileViewport()) return true;
-    return savedWidth ? parseInt(savedWidth, 10) <= 0 : false;
-  });
 
   // Analytics tab state
   const [analyticsTab, setAnalyticsTab] = useState<'mf' | 'risk' | 'stress' | 'corr' | 'tax'>('risk');
@@ -1091,8 +1200,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   const [actionQueue, setActionQueue] = useState<any[]>([]);
 
   // Research titles from content engine
-  const [researchTitles, setResearchTitles] = useState<ResearchTitleItem[]>([]);
+  const [researchTitles, setResearchTitles] = useState<ResearchTitleItem[]>(FALLBACK_RESEARCH_TITLES);
   const [researchTitlesLoadedAt, setResearchTitlesLoadedAt] = useState(0);
+  const [researchTitlesLoading, setResearchTitlesLoading] = useState(false);
 
   const getMessageStorageKey = (conversationId: string) =>
     `prospektlab_messages:${chatStorageScope}:${conversationId}`;
@@ -1149,10 +1259,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     if (!needsResearchFeed) return;
 
     const now = Date.now();
-    const cacheFresh = researchTitles.length > 0 && (now - researchTitlesLoadedAt) < (5 * 60 * 1000);
+    const cacheFresh = researchTitlesLoadedAt > 0 && (now - researchTitlesLoadedAt) < (5 * 60 * 1000);
     if (cacheFresh) return;
 
     let cancelled = false;
+    setResearchTitlesLoading(true);
     (async () => {
       try {
         const data = await listContentArticles('insights', 10);
@@ -1166,15 +1277,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
           })
           .slice(0, 6)
           .map((a: any) => {
+            const slug = String(a.slug || '').trim();
             const ago = a.generated_at
               ? (() => { try { const diff = Date.now() - new Date(a.generated_at).getTime(); const days = Math.floor(diff / 86400000); return days > 0 ? `${days}d ago` : 'Today'; } catch { return ''; } })()
               : '';
             return {
-              slug: a.slug || '',
+              slug,
               title: a.title || 'Latest Research',
               content_type: String(a.content_type || 'Research'),
               ago,
-              public_url: a.public_url || '',
+              public_url: buildResearchArticleUrl(slug, a.public_url),
               image_path: a.image_path || '',
               generated_at: a.generated_at || '',
             };
@@ -1182,11 +1294,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
         setResearchTitles(items.length > 0 ? items : FALLBACK_RESEARCH_TITLES);
         setResearchTitlesLoadedAt(Date.now());
       } catch {
-        // Keep any previously loaded cards to avoid empty flashes on transient failures.
-        if (researchTitles.length === 0) {
-          setResearchTitles(FALLBACK_RESEARCH_TITLES);
-          setResearchTitlesLoadedAt(Date.now());
-        }
+        setResearchTitles((prev) => (prev.length > 0 ? prev : FALLBACK_RESEARCH_TITLES));
+        setResearchTitlesLoadedAt(Date.now());
+      } finally {
+        if (!cancelled) setResearchTitlesLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -1197,12 +1308,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Live index data (simulated real-time like Google Finance)
-  const [liveIndexData, setLiveIndexData] = useState<MarketIndexBuckets>({
-    ...EMPTY_INDEX_BUCKETS,
-    india: FALLBACK_INDIA_INDICES,
+  const [liveIndexData, setLiveIndexData] = useState<MarketIndexBuckets>(() => {
+    const cached = readCachedIndices();
+    const india = mergeIndiaIndexRows(cached, FALLBACK_INDIA_INDICES);
+    return { ...EMPTY_INDEX_BUCKETS, india };
   });
   const [indicesLoading, setIndicesLoading] = useState(true);
-  const [indicesError, setIndicesError] = useState<string | null>(null);
+  const [indicesStale, setIndicesStale] = useState(false);
 
   const [tokenUsage, setTokenUsage] = useState<any>(null);
   const [newsFeed, setNewsFeed] = useState<NewsFeedItem[]>(() => readCachedTapeNews());
@@ -1485,12 +1597,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
   const applyIndicesPayload = (payload: any) => {
     const normalized = normalizeIndicesPayload(payload);
-    const indiaRows = normalized.india.length > 0 ? normalized.india : FALLBACK_INDIA_INDICES;
-    setLiveIndexData({
-      ...EMPTY_INDEX_BUCKETS,
-      ...normalized,
-      india: indiaRows,
+    let mergedIndia = FALLBACK_INDIA_INDICES;
+    setLiveIndexData((prev) => {
+      const base = prev.india?.length ? prev.india : FALLBACK_INDIA_INDICES;
+      mergedIndia = normalized.india.length > 0
+        ? mergeIndiaIndexRows(normalized.india, base)
+        : mergeIndiaIndexRows(base, FALLBACK_INDIA_INDICES);
+      return {
+        ...EMPTY_INDEX_BUCKETS,
+        ...normalized,
+        india: mergedIndia,
+      };
     });
+    if (mergedIndia.length > 0) {
+      writeCachedIndices(mergedIndia);
+    }
+    setIndicesStale(false);
     return normalized.india.length > 0;
   };
   // Fetch indices on mount and periodically
@@ -1499,26 +1621,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     let cancelled = false;
     const fetchIndices = async () => {
       try {
-        setIndicesError(null);
         const data = await getMarketIndices();
         if (!cancelled) {
-          const hasLiveIndiaRows = applyIndicesPayload(data);
-          if (!hasLiveIndiaRows) {
-            setIndicesError('Live index feed returned no rows. Showing fallback snapshot.');
-          }
+          applyIndicesPayload(data);
           setIndicesLoading(false);
         }
       } catch (e: any) {
         if (!cancelled) {
-          console.error('Failed to fetch market indices', e);
-          setLiveIndexData((prev) => (prev.india?.length ? prev : { ...EMPTY_INDEX_BUCKETS, ...prev, india: FALLBACK_INDIA_INDICES }));
-          setIndicesError('Live refresh delayed. Showing latest available indices.');
+          console.warn('Failed to refresh market indices', e);
+          setLiveIndexData((prev) => ({
+            ...prev,
+            india: mergeIndiaIndexRows(prev.india || [], FALLBACK_INDIA_INDICES),
+          }));
+          setIndicesStale(true);
           setIndicesLoading(false);
         }
       }
     };
     fetchIndices();
-    const interval = setInterval(fetchIndices, 60000);
+    const interval = setInterval(fetchIndices, 120000);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -1683,11 +1804,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       if (!isDraggingChat) return;
       let newWidth = window.innerWidth - e.clientX;
 
-      if (newWidth < 60) {
-        newWidth = 0;
-        setIsChatHidden(true);
+      if (newWidth < MIN_CHAT_WIDTH) {
+        newWidth = MIN_CHAT_WIDTH;
       } else {
-        setIsChatHidden(false);
         newWidth = normalizeChatWidth(newWidth);
       }
       setChatWidth(newWidth);
@@ -3109,13 +3228,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
   /** Pre-fills the chat input with a query (shows query for user review instead of auto-executing) */
   const handleSuggestQuery = (query: string, depth: 'standard' | 'deep' = 'standard') => {
-    // Auto-open chat if it's hidden
-    if (isChatHidden) {
-      setIsChatHidden(false);
-      const w = getDefaultChatWidth();
-      setChatWidth(w);
-      localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, w.toString());
-    }
     // Set pending query — ChatInput will pick this up and auto-populate
     setPendingChatQuery({ id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, text: query, depth });
     // Pulse the chat rail border
@@ -3156,17 +3268,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   // showToast is now provided by AuthContext — visible toast notifications
   const retryIndices = async () => {
     setIndicesLoading(true);
-    setIndicesError(null);
+    setIndicesStale(false);
     try {
       const data = await getMarketIndices();
-      const hasLiveIndiaRows = applyIndicesPayload(data);
-      if (!hasLiveIndiaRows) {
-        setIndicesError('Live index feed returned no rows. Showing fallback snapshot.');
-      }
+      applyIndicesPayload(data);
     } catch (e: any) {
-      console.error('Failed to fetch market indices', e);
-      setLiveIndexData((prev) => (prev.india?.length ? prev : { ...EMPTY_INDEX_BUCKETS, ...prev, india: FALLBACK_INDIA_INDICES }));
-      setIndicesError('Live refresh delayed. Showing latest available indices.');
+      console.warn('Failed to fetch market indices', e);
+      setLiveIndexData((prev) => ({
+        ...prev,
+        india: mergeIndiaIndexRows(prev.india || [], FALLBACK_INDIA_INDICES),
+      }));
+      setIndicesStale(true);
     } finally {
       setIndicesLoading(false);
     }
@@ -3224,16 +3336,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   );
 
   const overviewIndices = useMemo(() => {
-    const preferredOrder = ['NIFTY 50', 'SENSEX', 'NIFTY BANK', 'NIFTY IT', 'NIFTY MIDCAP 50', 'NIFTY 100', 'NIFTY 500'];
-    const bySymbol = new Map(
-      (liveIndexData.india || []).map((item: IndexTickerData) => [String(item.symbol || '').toUpperCase(), item]),
-    );
-    const ordered = preferredOrder
-      .map((key) => bySymbol.get(key))
-      .filter((item): item is IndexTickerData => Boolean(item));
-    if (ordered.length > 0) return ordered;
-    return activeIndices.slice(0, 7);
-  }, [liveIndexData.india, activeIndices]);
+    return mergeIndiaIndexRows(liveIndexData.india || [], FALLBACK_INDIA_INDICES).slice(0, OVERVIEW_INDEX_LIMIT);
+  }, [liveIndexData.india]);
 
   const marketSummary = useMemo(() => {
     if (activeIndices.length === 0) {
@@ -3386,10 +3490,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
   const resetDiscoverDrag = () => {
     isDiscoverDraggingRef.current = false;
+    discoverDragMovedRef.current = false;
     discoverDragStartRef.current = null;
     discoverBodyRef.current?.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
     setDiscoverOffset(0);
+  };
+
+  const buildDiscoverItemUrl = (item: NewsFeedItem) => {
+    const direct = normalizeNewsUrl(String(item.url || '').trim());
+    if (direct) return direct;
+    const query = encodeURIComponent(`${item.headline} ${item.source}`.trim());
+    return `https://news.google.com/search?q=${query}&hl=en-IN&gl=IN&ceid=IN:en`;
   };
 
   const handleDiscoverPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -3425,7 +3537,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     }
 
     if (start.axis === 'y') return;
-    if (absX > 4) discoverDragMovedRef.current = true;
+    if (absX > 12) discoverDragMovedRef.current = true;
     const maxOffset = discoverBodyRef.current ? discoverBodyRef.current.clientWidth * 0.24 : 120;
     setDiscoverOffset(Math.max(Math.min(dx, maxOffset), -maxOffset));
   };
@@ -3450,15 +3562,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
     try { el.releasePointerCapture(start.pointerId); } catch {}
     resetDiscoverDrag();
-  };
-
-  const handleDiscoverCardClick = (e: React.MouseEvent, url?: string) => {
-    if (discoverDragMovedRef.current) {
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -3575,9 +3678,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
         <FeatureTabs active={activeFeatureTab} onChange={handleFeatureTabChange} />
       </div>
 
-      <div className={`workbench ${isChatHidden ? 'chat-closed' : 'chat-open'}`} style={
+      <div className={`workbench chat-open`} style={
         (typeof window !== 'undefined' && window.innerWidth > 768) ? {
-          gridTemplateColumns: `minmax(0, 1fr) ${isChatHidden ? '0px' : `${chatWidth}px`}`,
+          gridTemplateColumns: `minmax(0, 1fr) ${chatWidth}px`,
           transition: isDraggingChat ? 'none' : undefined
         } : undefined
       }>
@@ -3611,6 +3714,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
           {activeFeatureTab === 'screener' ? (
             <ScreenerWorkspace embedded />
+          ) : activeFeatureTab === 'ipo' ? (
+            <IpoDashboardContent embedded originPath="/dashboard/ipo" />
           ) : activeFeatureTab === 'watchlist' ? (
             <>
               <div className="section-head">
@@ -3638,21 +3743,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                       Research articles loading...
                     </div>
                   ) : researchTitles.map((article) => (
-                    <div
+                    <a
                       key={article.slug}
+                      href={buildResearchArticleUrl(article.slug, article.public_url)}
                       className="insight-row"
-                      onClick={() => {
-                        const url = article.public_url || `/insights/research/${article.slug}`;
-                        window.open(url, '_blank', 'noopener,noreferrer');
-                      }}
-                      style={{ cursor: 'pointer' }}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ cursor: 'pointer', textDecoration: 'none', color: 'inherit', display: 'block' }}
                     >
                       <div className="insight-row-meta" style={{ flexWrap: 'wrap', rowGap: '4px' }}>
                         <span style={{ fontWeight: 600 }}>{article.content_type || 'Research'}</span>
                         <span style={{ marginLeft: 'auto', fontWeight: 500, textTransform: 'none', letterSpacing: 0, color: 'var(--text-muted)', whiteSpace: 'nowrap', fontSize: 10 }}>{article.ago}</span>
                       </div>
                       <div className="insight-row-title">{article.title}</div>
-                    </div>
+                    </a>
                   ))}
                 </div>
               </div>
@@ -3664,6 +3768,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                   <div className="market-header" style={{ display: 'flex', alignItems: 'center', marginBottom: 18, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 10, fontSize: 0 }}>
                     <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.1px' }}>Top India Indices</span>
                     <span className="live-dot" style={{ marginRight: 6 }} /> LIVE - NSE/BSE
+                    {indicesStale && (
+                      <button
+                        type="button"
+                        onClick={retryIndices}
+                        style={{
+                          marginLeft: 'auto',
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          fontSize: 10,
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          padding: 0,
+                        }}
+                      >
+                        Refresh delayed · tap to retry
+                      </button>
+                    )}
                   </div>
 
                   <div className="index-grid">
@@ -3691,33 +3813,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                           </div>
                         ))}
                       </>
-                    )}
-                    {indicesError && (
-                      <div className="index-error-banner" style={{
-                        gridColumn: '1 / -1',
-                        padding: '12px 16px',
-                        background: 'rgba(239, 68, 68, 0.08)',
-                        border: '1px solid rgba(239, 68, 68, 0.2)',
-                        borderRadius: 10,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        fontSize: 12,
-                        color: 'var(--text-muted)',
-                      }}>
-                        <span>{activeIndices.length > 0 ? 'Live refresh delayed, showing cached indices.' : 'Failed to load market indices'}</span>
-                        <button onClick={retryIndices} style={{
-                          background: 'transparent',
-                          border: '1px solid rgba(255, 255, 255, 0.15)',
-                          borderRadius: 6,
-                          padding: '4px 12px',
-                          fontSize: 11,
-                          color: 'var(--text-primary)',
-                          cursor: 'pointer',
-                        }}>
-                          Retry
-                        </button>
-                      </div>
                     )}
                     {overviewIndices.map((idx) => (
                       <IndexTickerCard
@@ -3765,32 +3860,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                               key={slideIdx}
                               className="discover-slide"
                             >
-                              {slide.map((item) => (
-                                <article
-                                  key={item.id}
-                                  className="discover-card"
-                                  onClick={(e) => handleDiscoverCardClick(e, item.url)}
-                                  style={{ cursor: item.url ? 'pointer' : 'default' }}
-                                >
-                                  <img
-                                    src={item.image || buildNewsFallbackCover(item.headline, item.headline, item.source)}
-                                    alt={`${item.headline} cover`}
-                                    className="discover-card-image"
-                                    loading="lazy"
-                                    draggable={false}
-                                    onError={(event) => {
-                                      event.currentTarget.src = buildNewsFallbackCover(item.headline, item.headline, item.source);
-                                    }}
-                                  />
-                                  <div className="discover-card-content">
-                                    <div className="discover-card-headline">{item.headline}</div>
-                                    <div className="discover-card-meta">
-                                      <span>{item.sourceCount > 0 ? `${item.sourceCount} sources` : item.source}</span>
-                                      {item.url && <ExternalLink size={12} />}
+                              {slide.map((item) => {
+                                const discoverHref = buildDiscoverItemUrl(item);
+                                return (
+                                  <a
+                                    key={item.id}
+                                    href={discoverHref}
+                                    className="discover-card"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onPointerDown={(event) => event.stopPropagation()}
+                                  >
+                                    <img
+                                      src={item.image || buildNewsFallbackCover(item.headline, item.headline, item.source)}
+                                      alt={`${item.headline} cover`}
+                                      className="discover-card-image"
+                                      loading="lazy"
+                                      draggable={false}
+                                      onError={(event) => {
+                                        event.currentTarget.src = buildNewsFallbackCover(item.headline, item.headline, item.source);
+                                      }}
+                                    />
+                                    <div className="discover-card-content">
+                                      <div className="discover-card-headline">{item.headline}</div>
+                                      <div className="discover-card-meta">
+                                        <span>{item.sourceCount > 0 ? `${item.sourceCount} sources` : item.source}</span>
+                                        <ExternalLink size={12} />
+                                      </div>
                                     </div>
-                                  </div>
-                                </article>
-                              ))}
+                                  </a>
+                                );
+                              })}
                             </div>
                           ))}
                         </div>
@@ -3832,7 +3932,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                     <span className="section-sublabel">LATEST GENERATED ARTICLES</span>
                   </div>
                   <div className="overview-article-grid">
-                    {researchTitles.length === 0 ? (
+                    {researchTitlesLoading && researchTitles.length === 0 ? (
                       <div className="overview-article-empty">Latest generated articles are loading...</div>
                     ) : researchTitles.map((article) => {
                       const primaryCover = buildNewsFallbackCover(
@@ -3843,19 +3943,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                       );
 
                       return (
-                        <article
+                        <a
                           key={article.slug}
+                          href={buildResearchArticleUrl(article.slug, article.public_url)}
                           className="overview-article-card"
-                          onClick={() => {
-                            const url = article.public_url || `/insights/research/${article.slug}`;
-                            window.open(url, '_blank', 'noopener,noreferrer');
-                          }}
+                          target="_blank"
+                          rel="noopener noreferrer"
                         >
                           <img
-                            src={primaryCover}
+                            src={article.image_path || primaryCover}
                             alt={`${article.title} cover`}
                             className="overview-article-image"
                             loading="lazy"
+                            draggable={false}
                             onError={(event) => {
                               event.currentTarget.src = buildNewsFallbackCover(`research:${article.slug}`, article.title, article.content_type || 'Research', 'research');
                             }}
@@ -3867,7 +3967,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                             </div>
                             <div className="overview-article-title">{article.title}</div>
                           </div>
-                        </article>
+                        </a>
                       );
                     })}
                   </div>
@@ -4926,38 +5026,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
         {/*  RIGHT: CHAT RAIL  */}
         <div className="workbench-chat" style={{
           position: 'relative',
-          width: isChatHidden ? '0px' : `${chatWidth}px`,
+          width: `${chatWidth}px`,
           display: 'flex',
           flexDirection: 'column',
-          borderLeft: isChatHidden ? 'none' : undefined,
           overflow: 'hidden',
           minWidth: 0,
           transition: isDraggingChat ? 'none' : 'box-shadow 0.4s ease',
           boxShadow: isChatHighlighted ? '0 0 0 2px rgba(56, 189, 248, 0.45), -4px 0 24px rgba(56, 189, 248, 0.08)' : undefined
         }}>
-          {/* Boundary toggle removed — use header close button + floating restore ball */}
 
-          {/* Inner Content that hides when collapsed */}
+          {/* Inner Content - always visible */}
           <div style={{
-            display: isChatHidden ? 'none' : 'flex',
+            display: 'flex',
             flexDirection: 'column',
             width: '100%',
             height: '100%',
             overflow: 'hidden'
           }}>
-          {/* Mobile drag handle */}
-          <button
-            className="chat-mobile-handle"
-            onClick={() => {
-              setIsChatHidden(true);
-              setChatWidth(0);
-              localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, '0');
-            }}
-            aria-label="Close chat"
-          >
-            <div className="chat-mobile-handle-bar" />
-          </button>
-
           {/* Desktop drag handle left edge */}
           <div
             className="drag-handle-vertical drag-handle-left"
@@ -4965,24 +5050,160 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
             style={{ width: '6px' }}
           />
 
-          <div className="chat-rail-head">
-            <div className="chat-rail-title">Arthik</div>
-            <div className="chat-rail-actions">
-               <button className="chat-rail-iconbtn" title="Collapse Chat" onClick={() => {
-                 setIsChatHidden(true);
-                 setChatWidth(0);
-                 localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, '0');
-               }}>
-                 <ChevronRight size={16} color="#38BDF8" style={{ minWidth: 16, minHeight: 16, display: 'block' }} />
+          <div className="chat-rail-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #38BDF8, #818CF8)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '13px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)'
+              }}>A</div>
+              <div className="chat-rail-title" style={{ fontSize: '15px', fontWeight: 700, background: 'linear-gradient(90deg, #38BDF8, #818CF8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Arthik</div>
+            </div>
+            <div className="chat-rail-actions" style={{ display: 'flex', gap: '6px' }}>
+               <button className="chat-rail-iconbtn" title="New Chat" onClick={handleNewConversation} style={{ padding: '6px', borderRadius: '6px', background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.15)' }}>
+                 <MessageSquarePlus size={15} color="#38BDF8" style={{ minWidth: 15, minHeight: 15, display: 'block' }} />
+               </button>
+               <button className="chat-rail-iconbtn" title="Chat History" onClick={() => setShowChatHistory(!showChatHistory)} style={{ padding: '6px', borderRadius: '6px', background: showChatHistory ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255, 255, 255, 0.04)', border: showChatHistory ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(255, 255, 255, 0.06)' }}>
+                 <History size={15} color={showChatHistory ? '#38BDF8' : '#94a3b8'} style={{ minWidth: 15, minHeight: 15, display: 'block' }} />
                </button>
             </div>
           </div>
 
+          {/* Chat History Panel (overlay inside chat rail) */}
+          {showChatHistory && (
+            <div style={{
+              position: 'absolute',
+              top: '56px',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 10,
+              background: 'rgba(15, 23, 42, 0.97)',
+              backdropFilter: 'blur(12px)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              borderTop: '1px solid rgba(56, 189, 248, 0.1)'
+            }}>
+              <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.02em' }}>Chat History</div>
+                <button onClick={() => setShowChatHistory(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}>
+                  <ArrowLeft size={16} />
+                </button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+                {conversations.length === 0 ? (
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', padding: '20px', textAlign: 'center' }}>
+                    No past sessions yet
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {conversations.map((chat) => {
+                      const isActive = activeConversationId === chat.id;
+                      return (
+                        <div key={chat.id} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                          <button
+                            onClick={() => { handleSelectConversation(chat.id); setShowChatHistory(false); }}
+                            style={{
+                              flex: 1,
+                              background: isActive ? 'rgba(56, 189, 248, 0.08)' : 'transparent',
+                              border: 'none',
+                              borderLeft: isActive ? '3px solid #38BDF8' : '3px solid transparent',
+                              color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                              padding: '10px 12px',
+                              borderRadius: '0 8px 8px 0',
+                              fontSize: '12px',
+                              textAlign: 'left',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              paddingRight: '32px',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            {chat.title}
+                          </button>
+                          {conversations.length > 1 && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteConversation(chat.id); }}
+                              style={{
+                                position: 'absolute',
+                                right: '8px',
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--loss)',
+                                opacity: 0.5,
+                                padding: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                cursor: 'pointer',
+                              }}
+                              title="Delete session"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              {conversations.length > 0 && (
+                <div style={{ padding: '12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <button
+                    onClick={() => { handleClearHistory(); setShowChatHistory(false); }}
+                    style={{
+                      width: '100%',
+                      background: 'transparent',
+                      border: '1px dashed rgba(251, 113, 133, 0.25)',
+                      color: 'var(--loss)',
+                      fontSize: '11px',
+                      padding: '8px',
+                      borderRadius: '6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Trash2 size={11} /> Clear All History
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="chat-rail-body" ref={chatContainerRef}>
             {!hasEngaged ? (
               <>
-                <div className="chat-rail-greeting">
-                  What should Arthik analyze?
+                <div className="chat-rail-greeting" style={{ textAlign: 'center', padding: '24px 16px 12px' }}>
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #38BDF8, #818CF8, #C084FC)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 14px',
+                    fontSize: '20px',
+                    fontWeight: 800,
+                    color: '#0f172a',
+                    boxShadow: '0 4px 20px rgba(56, 189, 248, 0.25)'
+                  }}>A</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>Hey, I'm Arthik</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>Your AI research analyst. Ask me about any stock, your portfolio, or market trends.</div>
                 </div>
 
                 {suggestions.map((s, i) => (
@@ -5140,34 +5361,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
           </div>
         </div>
       </div>
-
-      {/* Mobile chat backdrop — tap to close */}
-      {!isChatHidden && (
-        <div
-          className="chat-mobile-backdrop"
-          onClick={() => {
-            setIsChatHidden(true);
-            setChatWidth(0);
-            localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, '0');
-          }}
-        />
-      )}
-
-      {/* Floating Chat Restore Button (when chat is snapped/hidden) */}
-      {isChatHidden && (
-        <button
-          className="chat-restore-btn"
-          onClick={() => {
-            setIsChatHidden(false);
-            const w = getDefaultChatWidth();
-            setChatWidth(w);
-            localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, w.toString());
-          }}
-          title="Restore chat workspace"
-        >
-          <MessageSquare size={20} />
-        </button>
-      )}
 
       <AssetHistoryModal
         asset={assetHistoryTarget}

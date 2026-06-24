@@ -6,45 +6,21 @@ import './index.css'
 import './styles/enhancements.css'
 import './components/charts/ThemeProvider'
 
-const DIRECT_ENTRY_HASH_ROUTES = new Set([
-  '/pricing',
-  '/testimonials',
-  '/features',
-  '/contact',
-  '/login',
-  '/signup',
-  '/get-started',
-  '/onboarding',
-  '/onboarding/manual',
-  '/onboarding/upload',
-  '/onboarding/watchlist',
-  '/dashboard',
-  '/dashboard/overview',
-  '/dashboard/portfolio',
-  '/dashboard/watchlist',
-  '/dashboard/screener',
-  '/dashboard/earnings',
-  '/dashboard/governance',
-  '/insights-studio',
-])
-
-function normalizeInitialHashRoute(): void {
-  if (typeof window === 'undefined' || window.location.hash) {
-    return
+/**
+ * Migrate old hash-based URLs (e.g. /#/dashboard/overview) to clean URLs.
+ * This handles backward compatibility for users who bookmarked or shared
+ * the old hash-based routes.
+ */
+function migrateHashRouteToCleanUrl(): void {
+  if (typeof window === 'undefined') return
+  const hash = window.location.hash
+  if (hash && hash.startsWith('#/')) {
+    const cleanPath = hash.slice(1) // Remove the '#' prefix
+    window.history.replaceState(null, '', cleanPath + window.location.search)
   }
-
-  const normalizedPath = window.location.pathname.length > 1
-    ? window.location.pathname.replace(/\/+$/, '')
-    : window.location.pathname
-
-  if (!DIRECT_ENTRY_HASH_ROUTES.has(normalizedPath)) {
-    return
-  }
-
-  window.history.replaceState(null, '', `/#${normalizedPath}${window.location.search}`)
 }
 
-normalizeInitialHashRoute()
+migrateHashRouteToCleanUrl()
 initializeTelemetry()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

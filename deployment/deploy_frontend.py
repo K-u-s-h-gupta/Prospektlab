@@ -65,13 +65,13 @@ CUSTOM_RULES = [
     },
     {
         "source": "/insights/research",
-        "target": "/insights/research/index.html",
-        "status": "200"
+        "target": "/research/",
+        "status": "301"
     },
     {
         "source": "/insights/research/",
-        "target": "/insights/research/index.html",
-        "status": "200"
+        "target": "/research/",
+        "status": "301"
     },
     {
         "source": "/insights/strategy",
@@ -81,6 +81,16 @@ CUSTOM_RULES = [
     {
         "source": "/insights/strategy/",
         "target": "/insights/strategy/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/indian-stock-research-workspace",
+        "target": "/indian-stock-research-workspace/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/indian-stock-research-workspace/",
+        "target": "/indian-stock-research-workspace/index.html",
         "status": "200"
     },
     {
@@ -154,8 +164,43 @@ CUSTOM_RULES = [
         "status": "200"
     },
     {
+        "source": "/research/start",
+        "target": f"{API_GATEWAY_URL}/research/start",
+        "status": "200"
+    },
+    {
+        "source": "/research/deep",
+        "target": f"{API_GATEWAY_URL}/research/deep",
+        "status": "200"
+    },
+    {
+        "source": "/research/export-all",
+        "target": f"{API_GATEWAY_URL}/research/export-all",
+        "status": "200"
+    },
+    {
+        "source": "/research/export/<*>",
+        "target": f"{API_GATEWAY_URL}/research/export/<*>",
+        "status": "200"
+    },
+    {
+        "source": "/research/export",
+        "target": f"{API_GATEWAY_URL}/research/export",
+        "status": "200"
+    },
+    {
+        "source": "/research",
+        "target": "/insights/research/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/research/",
+        "target": "/insights/research/index.html",
+        "status": "200"
+    },
+    {
         "source": "/research/<*>",
-        "target": f"{API_GATEWAY_URL}/research/<*>",
+        "target": "/insights/<*>",
         "status": "200"
     },
     {
@@ -166,6 +211,11 @@ CUSTOM_RULES = [
     {
         "source": "/portfolio/<*>",
         "target": f"{API_GATEWAY_URL}/portfolio/<*>",
+        "status": "200"
+    },
+    {
+        "source": "/ipo/<*>",
+        "target": f"{API_GATEWAY_URL}/ipo/<*>",
         "status": "200"
     },
     {

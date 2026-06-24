@@ -38,6 +38,9 @@ export const DashboardGovernancePage: React.FC = () => {
       case 'screener':
         navigate('/dashboard/screener');
         break;
+      case 'ipo':
+        navigate('/dashboard/ipo');
+        break;
       case 'earnings':
         navigate('/dashboard/earnings');
         break;

@@ -436,7 +436,7 @@ function handleAuthFailure() {
   _cachedUser = null;
   setAuthToken(null);
   if (typeof window !== 'undefined') {
-    window.location.hash = '#/dashboard/overview';
+    window.location.href = '/dashboard/overview';
   }
 }
 
@@ -2226,5 +2226,71 @@ export async function downloadExportAndSave(jobId: string, format: ExportFormat)
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 100);
+}
+
+// ── IPO Intelligence ────────────────────────────────────────────────────────
+
+export interface IpoCard {
+  slug: string;
+  company_name: string;
+  sector?: string;
+  exchange?: string;
+  status: string;
+  issue_size_cr?: number;
+  fresh_issue_cr?: number;
+  ofs_cr?: number;
+  ofs_pct?: number;
+  price_band?: { low?: number; high?: number };
+  composite_score?: number;
+  gmp?: number | null;
+  subscription_status?: string;
+  listing_date?: string | null;
+}
+
+export interface IpoPipelineResponse {
+  as_of: string;
+  buckets: {
+    upcoming: IpoCard[];
+    live: IpoCard[];
+    listed: IpoCard[];
+  };
+  gmp_disclaimer: string;
+}
+
+export interface IpoAnalysisResponse {
+  filing: Record<string, any>;
+  analysis: Record<string, any>;
+  scores: Record<string, any>;
+  peer_valuation?: Record<string, any>;
+}
+
+export interface IpoTrackingResponse {
+  filing: Record<string, any>;
+  tracking: Record<string, any>;
+}
+
+export async function getIpoPipeline(): Promise<IpoPipelineResponse> {
+  const res = await fetchApi(apiUrl('/ipo/pipeline'), { credentials: 'include' });
+  if (!res.ok) throw new Error(`IPO pipeline fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function getIpoAnalysis(slug: string): Promise<IpoAnalysisResponse> {
+  const res = await fetchApi(apiUrl(`/ipo/${encodeURIComponent(slug)}`), { credentials: 'include' });
+  if (!res.ok) throw new Error(`IPO analysis fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function getIpoTracking(slug: string): Promise<IpoTrackingResponse> {
+  const res = await fetchApi(apiUrl(`/ipo/${encodeURIComponent(slug)}/tracking`), { credentials: 'include' });
+  if (!res.ok) throw new Error(`IPO tracking fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function searchIpos(query: string, limit: number = 10): Promise<{ query: string; results: IpoCard[]; total: number }> {
+  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  const res = await fetchApi(apiUrl(`/ipo/search?${params}`), { credentials: 'include' });
+  if (!res.ok) throw new Error(`IPO search failed: ${res.statusText}`);
+  return res.json();
 }
 

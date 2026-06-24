@@ -110,7 +110,13 @@ def build_config() -> dict[str, object]:
             "verified": True,
         },
         "campaign": {
-            "signup_url": os.getenv("OUTREACH_SIGNUP_URL", "https://prospektlab.com/signup").strip(),
+            "signup_url": os.getenv(
+                "OUTREACH_SIGNUP_URL",
+                "https://prospektlab.com/signup?utm_source=outreach&utm_medium=email&utm_campaign=research_workflow_outreach",
+            ).strip(),
+            "utm_source": os.getenv("OUTREACH_UTM_SOURCE", "outreach").strip(),
+            "utm_medium": os.getenv("OUTREACH_UTM_MEDIUM", "email").strip(),
+            "utm_campaign": os.getenv("OUTREACH_UTM_CAMPAIGN", "research_workflow_outreach").strip(),
             "whatsapp_group_url": os.getenv(
                 "OUTREACH_WHATSAPP_GROUP_URL",
                 "https://chat.whatsapp.com/Bpo5Bt5tVveGYGEVawkcUu",
@@ -150,11 +156,19 @@ def main() -> int:
         "--campaign-name",
         os.getenv("OUTREACH_CAMPAIGN_NAME", "IndiaFinanceOutreach").strip(),
         "--max-send",
-        os.getenv("OUTREACH_MAX_SEND", "30").strip(),
+        os.getenv("OUTREACH_MAX_SEND", "300").strip(),
         "--delay-seconds",
         os.getenv("OUTREACH_DELAY_SECONDS", "8").strip(),
         "--min-email-confidence",
         os.getenv("OUTREACH_MIN_EMAIL_CONFIDENCE", "0.85").strip(),
+        "--india-scope",
+        os.getenv("OUTREACH_INDIA_SCOPE", "strict").strip().lower(),
+        "--max-failure-rate",
+        os.getenv("OUTREACH_MAX_FAILURE_RATE", "0.02").strip(),
+        "--failure-rate-sample-floor",
+        os.getenv("OUTREACH_FAILURE_RATE_SAMPLE_FLOOR", "50").strip(),
+        "--send-timeout-seconds",
+        os.getenv("OUTREACH_SEND_TIMEOUT_SECONDS", "120").strip(),
     ]
     if _truthy(os.getenv("OUTREACH_ALLOW_SHARED_INBOXES")):
         command.append("--allow-shared-inboxes")

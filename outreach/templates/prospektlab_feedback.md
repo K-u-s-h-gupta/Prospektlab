@@ -8,9 +8,11 @@ Hi {{first_name}},
 
 {{intro_line}} {{platform_intro}}
 
+The fastest way to judge it is to run one live research task: pick a company you already follow, ask for the latest filings/news/portfolio context, and see whether it gets you to a cleaner note faster.
+
 {{cta_line}}
 
-You can try it here: {{signup_url}}
+Start here: {{signup_url}}
 
 {{feedback_group_line}}
 

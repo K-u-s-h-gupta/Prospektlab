@@ -119,6 +119,7 @@ from finagent.tools.data import fetch_news, fetch_yahoo_quote, fetch_india_snaps
 from finagent.news.sources.nse_announcements import fetch_nse_announcements
 from finagent.news.scorer import VERIFIED_DOMAINS, parse_published_at
 from finagent.screener import get_screener_service
+from finagent.ipo import get_ipo_service
 import time
 
 # â”€â”€ Razorpay payments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -3211,6 +3212,80 @@ async def screener_query(
     service = get_screener_service()
     universe = [sym for sym in payload.universe if (sym or "").strip()]
     return await service.query_screen(payload.query, limit=payload.limit, universe=universe or None)
+
+
+@app.get("/ipo/pipeline")
+async def ipo_pipeline(current_user: dict | None = Depends(get_current_user_optional)):
+    service = get_ipo_service()
+    return await service.pipeline_dashboard()
+
+
+@app.get("/ipo/search")
+async def ipo_search(
+    q: str,
+    limit: int = 10,
+    current_user: dict | None = Depends(get_current_user_optional),
+):
+    service = get_ipo_service()
+    safe_limit = max(1, min(limit, 50))
+    results = await service.search_drhp(q, limit=safe_limit)
+    return {"query": q, "results": results, "total": len(results)}
+
+
+@app.get("/ipo/portfolio-links")
+async def ipo_portfolio_links(
+    symbols: str = "",
+    current_user: dict | None = Depends(get_current_user_optional),
+):
+    service = get_ipo_service()
+    symbol_list = [s.strip() for s in symbols.split(",") if s.strip()]
+    links = await service.portfolio_ipo_links(symbol_list)
+    return {"links": links, "total": len(links)}
+
+
+@app.get("/ipo/{slug}")
+async def ipo_analysis(
+    slug: str,
+    current_user: dict | None = Depends(get_current_user_optional),
+):
+    service = get_ipo_service()
+    payload = await service.get_analysis(slug)
+    if not payload:
+        raise HTTPException(status_code=404, detail=f"IPO not found: {slug}")
+    return payload
+
+
+@app.get("/ipo/{slug}/tracking")
+async def ipo_post_listing_tracking(
+    slug: str,
+    current_user: dict | None = Depends(get_current_user_optional),
+):
+    service = get_ipo_service()
+    payload = await service.get_post_listing(slug)
+    if not payload:
+        raise HTTPException(status_code=404, detail=f"IPO tracking not found: {slug}")
+    return payload
+
+
+@app.post("/ipo/watcher/run")
+async def ipo_watcher_run(
+    download: bool = True,
+    current_user: dict | None = Depends(get_current_user_optional),
+):
+    service = get_ipo_service()
+    return await service.run_watcher(download=download)
+
+
+@app.post("/ipo/{slug}/analyze")
+async def ipo_analyze(
+    slug: str,
+    current_user: dict | None = Depends(get_current_user_optional),
+):
+    service = get_ipo_service()
+    try:
+        return await service.fetch_and_analyze(slug)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/public/market/ticker")
@@ -6426,17 +6501,24 @@ def _render_public_research_hub() -> HTMLResponse:
     return HTMLResponse(hub_html, headers={"Cache-Control": "public, max-age=120"})
 
 
+@app.get("/research/", include_in_schema=False)
+@app.get("/research", include_in_schema=False)
+async def research_hub():
+    """Canonical public research hub at /research/."""
+    return _render_public_research_hub()
+
+
 @app.get("/insights/research/", include_in_schema=False)
 @app.get("/insights/research", include_in_schema=False)
 async def insights_research_hub():
-    """Public research hub â€” declared before /insights/{slug} to avoid slug capture."""
-    return _render_public_research_hub()
+    """Legacy hub path redirects to /research/."""
+    return RedirectResponse(url="/research/", status_code=308)
 
 
 @app.get("/insights/organic-traffic-platform/", include_in_schema=False)
 @app.get("/insights/organic-traffic-platform", include_in_schema=False)
 async def insights_hub_legacy_redirect():
-    return RedirectResponse(url="/insights/research/", status_code=308)
+    return RedirectResponse(url="/research/", status_code=308)
 
 
 async def _serve_generated_insight(slug: str) -> HTMLResponse:
@@ -6462,6 +6544,16 @@ async def _serve_generated_insight_asset(slug: str, asset_name: str) -> FileResp
 @app.get("/insights/{slug}/{asset_name}", include_in_schema=False)
 async def public_generated_insight_asset(slug: str, asset_name: str):
     return await _serve_generated_insight_asset(slug, asset_name)
+
+
+@app.get("/research/{slug}", include_in_schema=False)
+async def public_generated_research_article(slug: str):
+    return await _serve_generated_insight(slug)
+
+
+@app.get("/research/{slug}/", include_in_schema=False)
+async def public_generated_research_article_slash(slug: str):
+    return await _serve_generated_insight(slug)
 
 
 @app.get("/insights/{slug}", include_in_schema=False)

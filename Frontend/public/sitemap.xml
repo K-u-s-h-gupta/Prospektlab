@@ -2,114 +2,114 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://prospektlab.com/</loc>
-    <lastmod>2026-06-20</lastmod>
+    <lastmod>2026-06-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://prospektlab.com/get-started</loc>
-    <lastmod>2026-06-20</lastmod>
+    <lastmod>2026-06-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://prospektlab.com/indian-stock-research-workspace/</loc>
+    <lastmod>2026-06-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
     <loc>https://prospektlab.com/dashboard/overview</loc>
-    <lastmod>2026-06-20</lastmod>
+    <lastmod>2026-06-23</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://prospektlab.com/ipo</loc>
+    <lastmod>2026-06-23</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
     <loc>https://prospektlab.com/insights-studio</loc>
-    <lastmod>2026-06-20</lastmod>
+    <lastmod>2026-06-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://prospektlab.com/insights/adani-enterprises-q4-fy25-results-airports-new-energy-leverage-governance/</loc>
+    <loc>https://prospektlab.com/research/</loc>
+    <lastmod>2026-06-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
+    <loc>https://prospektlab.com/research/adani-enterprises-q4-fy25-results-airports-new-energy-leverage-governance/</loc>
     <lastmod>2026-06-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://prospektlab.com/insights/bharti-airtel-q4-fy25-results-arpu-5g-capex-leverage-tower-portfolio/</loc>
+    <loc>https://prospektlab.com/research/bharti-airtel-q4-fy25-results-arpu-5g-capex-leverage-tower-portfolio/</loc>
     <lastmod>2026-06-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://prospektlab.com/insights/hdfc-bank-q4-fy25-results-margin-deposits-asset-quality/</loc>
+    <loc>https://prospektlab.com/research/hdfc-bank-q4-fy25-results-margin-deposits-asset-quality/</loc>
     <lastmod>2026-06-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://prospektlab.com/insights/icici-bank-q4-fy25-results-nim-deposit-growth-asset-quality-fy26-outlook/</loc>
+    <loc>https://prospektlab.com/research/icici-bank-q4-fy25-results-nim-deposit-growth-asset-quality-fy26-outlook/</loc>
     <lastmod>2026-06-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://prospektlab.com/insights/infosys-q4-fy25-results-guidance-margin-deal-pipeline/</loc>
+    <loc>https://prospektlab.com/research/infosys-q4-fy25-results-guidance-margin-deal-pipeline/</loc>
     <lastmod>2026-06-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://prospektlab.com/insights/larsen-and-toubro-q4-fy25-results-infrastructure-margin-order-pipeline/</loc>
+    <loc>https://prospektlab.com/research/larsen-and-toubro-q4-fy25-results-infrastructure-margin-order-pipeline/</loc>
     <lastmod>2026-06-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://prospektlab.com/insights/maruti-suzuki-q4-fy25-results-domestic-pv-share-suv-mix-export-growth/</loc>
+    <loc>https://prospektlab.com/research/maruti-suzuki-q4-fy25-results-domestic-pv-share-suv-mix-export-growth/</loc>
     <lastmod>2026-06-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://prospektlab.com/insights/organic-traffic-platform/</loc>
+    <loc>https://prospektlab.com/research/rbi-june-2025-monetary-policy-awaits-official-disclosure/</loc>
     <lastmod>2026-06-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://prospektlab.com/insights/rbi-june-2025-monetary-policy-awaits-official-disclosure/</loc>
+    <loc>https://prospektlab.com/research/reliance-industries-q4-fy25-results-retail-jio-new-energy-capex/</loc>
     <lastmod>2026-06-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://prospektlab.com/insights/reliance-industries-q4-fy25-results-retail-jio-new-energy-capex/</loc>
+    <loc>https://prospektlab.com/research/sbi-q4-fy25-results-earnings-capital-asset-quality-dividend/</loc>
     <lastmod>2026-06-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://prospektlab.com/insights/research/</loc>
+    <loc>https://prospektlab.com/research/tata-motors-q4-fy25-results-jlr-margin-fcf-pv-share-cv-cycle/</loc>
     <lastmod>2026-06-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://prospektlab.com/insights/sbi-q4-fy25-results-earnings-capital-asset-quality-dividend/</loc>
-    <lastmod>2026-06-20</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://prospektlab.com/insights/strategy/</loc>
-    <lastmod>2026-06-20</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://prospektlab.com/insights/tata-motors-q4-fy25-results-jlr-margin-fcf-pv-share-cv-cycle/</loc>
-    <lastmod>2026-06-20</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://prospektlab.com/insights/tcs-q4-fy25-results-revenue-margin-dividend-fy26-outlook/</loc>
+    <loc>https://prospektlab.com/research/tcs-q4-fy25-results-revenue-margin-dividend-fy26-outlook/</loc>
     <lastmod>2026-06-20</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
