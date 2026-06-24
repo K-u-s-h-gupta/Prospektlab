@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Unsubscribe | ProspektLab</title>
+    <meta
+      name="description"
+      content="Manage your ProspektLab outreach email preferences."
+    />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#09111f" />
+    <link rel="icon" type="image/svg+xml" href="/prospektlab-favicon-v2.svg" />
+    <link rel="apple-touch-icon" href="/prospektlab-favicon-v2.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07101d;
+        --bg-soft: #0d1828;
+        --panel: rgba(10, 20, 35, 0.84);
+        --panel-strong: rgba(8, 16, 28, 0.96);
+        --line: rgba(132, 158, 196, 0.18);
+        --text: #f7f9fd;
+        --muted: #98a7bc;
+        --accent: #79b8ff;
+        --accent-strong: #4f8df5;
+        --accent-wash: rgba(121, 184, 255, 0.16);
+        --success: #5fd19f;
+        --danger: #ff8f8f;
+        --shadow: 0 36px 90px rgba(0, 0, 0, 0.34);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Inter", Arial, sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(79, 141, 245, 0.24), transparent 28%),
+          radial-gradient(circle at right center, rgba(95, 209, 159, 0.14), transparent 30%),
+          linear-gradient(180deg, #050d18 0%, #09111f 48%, #0c1524 100%);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .shell {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .page {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        padding: 28px 0;
+      }
+
+      .frame {
+        display: grid;
+        grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+        gap: 24px;
+        width: 100%;
+      }
+
+      .panel,
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(22px);
+      }
+
+      .panel {
+        padding: 32px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .panel::after {
+        content: "";
+        position: absolute;
+        inset: auto -12% -18% auto;
+        width: 240px;
+        height: 240px;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(79, 141, 245, 0.18) 0%, transparent 72%);
+        pointer-events: none;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        background: var(--accent-wash);
+        border: 1px solid rgba(121, 184, 255, 0.18);
+      }
+
+      h1 {
+        margin: 18px 0 14px;
+        font-family: "Instrument Serif", Georgia, serif;
+        font-size: clamp(42px, 7vw, 72px);
+        line-height: 0.94;
+        font-weight: 400;
+        letter-spacing: -0.04em;
+      }
+
+      .lede {
+        max-width: 28rem;
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      .pill-grid {
+        display: grid;
+        gap: 10px;
+        margin-top: 26px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        width: fit-content;
+        padding: 10px 14px;
+        border-radius: 999px;
+        color: #d8e7fb;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 13px;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--success), var(--accent));
+      }
+
+      .card {
+        padding: 26px;
+        background: var(--panel-strong);
+      }
+
+      .card h2 {
+        margin: 4px 0 8px;
+        font-size: 24px;
+        letter-spacing: -0.02em;
+      }
+
+      .card p {
+        margin: 0 0 20px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      form {
+        display: grid;
+        gap: 14px;
+      }
+
+      label,
+      legend {
+        display: grid;
+        gap: 8px;
+        font-size: 13px;
+        color: #dbe7f8;
+      }
+
+      input,
+      textarea,
+      button {
+        font: inherit;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        padding: 14px 15px;
+        color: var(--text);
+        border-radius: 16px;
+        border: 1px solid rgba(146, 169, 201, 0.18);
+        background: rgba(255, 255, 255, 0.04);
+        outline: none;
+        transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+      }
+
+      input:focus,
+      textarea:focus {
+        border-color: rgba(121, 184, 255, 0.54);
+        background: rgba(255, 255, 255, 0.06);
+        transform: translateY(-1px);
+      }
+
+      fieldset {
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+
+      legend {
+        margin-bottom: 8px;
+        padding: 0;
+      }
+
+      .choice-grid {
+        display: grid;
+        gap: 10px;
+      }
+
+      .choice-option {
+        position: relative;
+        display: block;
+      }
+
+      .choice-option input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .choice-card {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr);
+        align-items: start;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        border: 1px solid rgba(146, 169, 201, 0.18);
+        background: rgba(255, 255, 255, 0.04);
+        transition:
+          border-color 160ms ease,
+          transform 160ms ease,
+          background 160ms ease,
+          box-shadow 160ms ease;
+      }
+
+      .choice-card::before {
+        content: "";
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        border: 1.5px solid rgba(152, 167, 188, 0.8);
+        background: rgba(6, 15, 28, 0.94);
+        box-shadow: inset 0 0 0 4px rgba(6, 15, 28, 0.94);
+        transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+      }
+
+      .choice-option:hover .choice-card {
+        transform: translateY(-1px);
+        border-color: rgba(121, 184, 255, 0.34);
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .choice-option input:focus-visible + .choice-card {
+        border-color: rgba(121, 184, 255, 0.54);
+        box-shadow: 0 0 0 3px rgba(121, 184, 255, 0.16);
+      }
+
+      .choice-option input:checked + .choice-card {
+        border-color: rgba(121, 184, 255, 0.58);
+        background: linear-gradient(180deg, rgba(121, 184, 255, 0.14), rgba(255, 255, 255, 0.06));
+        box-shadow: inset 0 0 0 1px rgba(121, 184, 255, 0.12);
+      }
+
+      .choice-option input:checked + .choice-card::before {
+        border-color: rgba(121, 184, 255, 0.96);
+        background: var(--accent-strong);
+        box-shadow: inset 0 0 0 4px rgba(245, 250, 255, 0.92);
+      }
+
+      .choice-copy {
+        display: grid;
+        gap: 4px;
+      }
+
+      .choice-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text);
+        letter-spacing: -0.01em;
+      }
+
+      .choice-meta {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+
+      textarea {
+        min-height: 112px;
+        resize: vertical;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-top: 6px;
+      }
+
+      button {
+        border: 0;
+        cursor: pointer;
+        border-radius: 16px;
+        padding: 14px 18px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: #03101c;
+        background: linear-gradient(135deg, #91c8ff 0%, #5fd19f 100%);
+        box-shadow: 0 14px 32px rgba(79, 141, 245, 0.22);
+        transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 18px 36px rgba(79, 141, 245, 0.28);
+      }
+
+      button:disabled {
+        opacity: 0.66;
+        cursor: wait;
+      }
+
+      .secondary {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .status {
+        display: none;
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .status.visible {
+        display: block;
+      }
+
+      .status.success {
+        color: #def7e8;
+        background: rgba(95, 209, 159, 0.12);
+        border: 1px solid rgba(95, 209, 159, 0.24);
+      }
+
+      .status.error {
+        color: #ffe2e2;
+        background: rgba(255, 143, 143, 0.12);
+        border: 1px solid rgba(255, 143, 143, 0.24);
+      }
+
+      .footer {
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      @media (max-width: 920px) {
+        .page {
+          align-items: stretch;
+        }
+
+        .frame {
+          grid-template-columns: 1fr;
+        }
+
+        .panel,
+        .card {
+          padding: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <div class="shell">
+        <div class="frame">
+          <section class="panel">
+            <div class="eyebrow">ProspektLab Preferences</div>
+            <h1>Step out cleanly.</h1>
+            <p class="lede">
+              If our outreach is not useful, we will stop. Submit your email here and we will
+              add it to the suppression list for acquisition emails.
+            </p>
+            <div class="pill-grid">
+              <div class="pill"><span class="dot"></span> Unsubscribe applies to outreach email only.</div>
+              <div class="pill"><span class="dot"></span> Product account and security notifications stay separate.</div>
+              <div class="pill"><span class="dot"></span> You can still sign up for ProspektLab later if you want.</div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="eyebrow">Email Preferences</div>
+            <h2>Unsubscribe from outreach</h2>
+            <p>
+              We only need the email address we contacted. If the link in your email already
+              included it, the field below will be pre-filled for you.
+            </p>
+
+            <form id="unsubscribe-form" novalidate>
+              <label for="email">
+                Email address
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autocomplete="email"
+                  placeholder="you@example.com"
+                  required
+                />
+              </label>
+
+              <fieldset>
+                <legend>Reason</legend>
+                <div class="choice-grid" id="reason">
+                  <label class="choice-option">
+                    <input
+                      type="radio"
+                      name="reason"
+                      value="unsubscribe"
+                      checked
+                    />
+                    <span class="choice-card">
+                      <span class="choice-copy">
+                        <span class="choice-title">Please stop outreach emails</span>
+                        <span class="choice-meta">We will suppress this address from acquisition emails.</span>
+                      </span>
+                    </span>
+                  </label>
+
+                  <label class="choice-option">
+                    <input type="radio" name="reason" value="too_many_emails" />
+                    <span class="choice-card">
+                      <span class="choice-copy">
+                        <span class="choice-title">Too many emails</span>
+                        <span class="choice-meta">The contact frequency felt too high for you.</span>
+                      </span>
+                    </span>
+                  </label>
+
+                  <label class="choice-option">
+                    <input type="radio" name="reason" value="not_relevant" />
+                    <span class="choice-card">
+                      <span class="choice-copy">
+                        <span class="choice-title">Not relevant</span>
+                        <span class="choice-meta">ProspektLab or the outreach was not a fit for your work.</span>
+                      </span>
+                    </span>
+                  </label>
+
+                  <label class="choice-option">
+                    <input type="radio" name="reason" value="other" />
+                    <span class="choice-card">
+                      <span class="choice-copy">
+                        <span class="choice-title">Other</span>
+                        <span class="choice-meta">Choose this if you want to leave a custom note below.</span>
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <label for="note">
+                Optional note
+                <textarea
+                  id="note"
+                  name="note"
+                  maxlength="500"
+                  placeholder="Anything helpful you want us to know"
+                ></textarea>
+              </label>
+
+              <div class="actions">
+                <button id="submit-button" type="submit">Unsubscribe</button>
+                <span class="secondary">This updates our outreach suppression list.</span>
+              </div>
+            </form>
+
+            <div id="status" class="status" aria-live="polite"></div>
+
+            <div class="footer">
+              If you are trying to manage a product account or verification email, reply to the
+              original message or contact the founders directly instead of using this form.
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const OUTREACH_SUPABASE_URL = "https://ndjotwqkwpkzthhnivco.supabase.co";
+      const OUTREACH_SUPABASE_KEY = "sb_publishable_gDe1GN6G_dpVXcpI46OkUQ_rjXRUnru";
+      const form = document.getElementById("unsubscribe-form");
+      const emailInput = document.getElementById("email");
+      const noteInput = document.getElementById("note");
+      const submitButton = document.getElementById("submit-button");
+      const statusBox = document.getElementById("status");
+
+      function selectedReason() {
+        const checked = document.querySelector('input[name="reason"]:checked');
+        return checked ? checked.value : "unsubscribe";
+      }
+
+      function showStatus(kind, message) {
+        statusBox.className = "status visible " + kind;
+        statusBox.textContent = message;
+      }
+
+      function parseInitialEmail() {
+        const params = new URLSearchParams(window.location.search);
+        return (params.get("email") || "").trim();
+      }
+
+      emailInput.value = parseInitialEmail();
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        statusBox.className = "status";
+        statusBox.textContent = "";
+
+        const email = emailInput.value.trim();
+        if (!email) {
+          showStatus("error", "Enter the email address you want removed from outreach.");
+          emailInput.focus();
+          return;
+        }
+
+        submitButton.disabled = true;
+        submitButton.textContent = "Updating...";
+
+        try {
+          const response = await fetch(OUTREACH_SUPABASE_URL + "/rest/v1/rpc/capture_outreach_unsubscribe", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": OUTREACH_SUPABASE_KEY,
+              "Authorization": "Bearer " + OUTREACH_SUPABASE_KEY
+            },
+            body: JSON.stringify({
+              input_email: email,
+              input_reason: selectedReason(),
+              input_source: "public_page",
+              input_note: noteInput.value.trim()
+            })
+          });
+
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            const message =
+              payload && typeof payload.detail === "string"
+                ? payload.detail
+                : "We could not process the unsubscribe request right now.";
+            throw new Error(message);
+          }
+
+          showStatus(
+            "success",
+            "You are unsubscribed from ProspektLab outreach emails. It can take a short moment for every sender list to sync."
+          );
+          noteInput.value = "";
+        } catch (error) {
+          const message =
+            error && typeof error.message === "string"
+              ? error.message
+              : "We could not process the unsubscribe request right now.";
+          showStatus("error", message);
+        } finally {
+          submitButton.disabled = false;
+          submitButton.textContent = "Unsubscribe";
+        }
+      });
+    </script>
+  </body>
+</html>

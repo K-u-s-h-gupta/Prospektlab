@@ -70,8 +70,43 @@
         "status":  "200"
     },
     {
+        "source":  "/research/start",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/research/start",
+        "status":  "200"
+    },
+    {
+        "source":  "/research/deep",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/research/deep",
+        "status":  "200"
+    },
+    {
+        "source":  "/research/export-all",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/research/export-all",
+        "status":  "200"
+    },
+    {
+        "source":  "/research/export/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/research/export/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/research/export",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/research/export",
+        "status":  "200"
+    },
+    {
+        "source":  "/research",
+        "target":  "/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/research/",
+        "target":  "/index.html",
+        "status":  "200"
+    },
+    {
         "source":  "/research/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/research/\u003c*\u003e",
+        "target":  "/insights/\u003c*\u003e",
         "status":  "200"
     },
     {
@@ -82,6 +117,11 @@
     {
         "source":  "/portfolio/\u003c*\u003e",
         "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/portfolio/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/ipo/\u003c*\u003e",
+        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/ipo/\u003c*\u003e",
         "status":  "200"
     },
     {
@@ -152,6 +192,11 @@
     {
         "source":  "/insights/research/index.html",
         "target":  "/insights/research/index.html",
+        "status":  "200"
+    },
+    {
+        "source":  "/insights/<*>",
+        "target":  "/insights/<*>",
         "status":  "200"
     },
     {

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" fill="none">
+  <rect width="1200" height="500" fill="#14233B"></rect>
+  <defs><linearGradient id="gp1" x1="0" y1="0" x2="1200" y2="500"><stop offset="0" stop-color="#167A53" stop-opacity=".15"></stop><stop offset="1" stop-color="#1F56D6" stop-opacity=".08"></stop></linearGradient></defs>
+  <rect width="1200" height="500" fill="url(#gp1)"></rect>
+  <g stroke="rgba(234,227,214,.04)" stroke-width="1"><line x1="300" y1="0" x2="300" y2="500"></line><line x1="600" y1="0" x2="600" y2="500"></line><line x1="900" y1="0" x2="900" y2="500"></line></g>
+  
+  <g transform="translate(340,250)">
+    <circle r="130" fill="none" stroke="rgba(234,227,214,.08)" stroke-width="1.5"></circle>
+    <ellipse rx="130" ry="50" fill="none" stroke="rgba(234,227,214,.06)" stroke-width="1"></ellipse>
+    <ellipse rx="50" ry="130" fill="none" stroke="rgba(234,227,214,.06)" stroke-width="1"></ellipse>
+    <circle r="3" fill="#167A53" opacity=".6" cx="-80" cy="-40"></circle>
+    <circle r="3" fill="#167A53" opacity=".5" cx="60" cy="-90"></circle>
+    <circle r="4" fill="#1F56D6" opacity=".5" cx="100" cy="30"></circle>
+    <circle r="3" fill="#167A53" opacity=".4" cx="-30" cy="80"></circle>
+  </g>
+  
+  <path d="M260,210 Q500,80 800,180" stroke="rgba(22,122,83,.25)" stroke-width="1.5" fill="none" stroke-dasharray="8 5"></path>
+  <path d="M280,290 Q550,420 850,260" stroke="rgba(31,86,214,.2)" stroke-width="1.5" fill="none" stroke-dasharray="8 5"></path>
+  
+  <g transform="translate(820,180)">
+    <rect x="0" y="0" width="50" height="120" rx="25" fill="rgba(22,122,83,.2)" stroke="rgba(22,122,83,.35)" stroke-width="1.5"></rect>
+    <rect x="0" y="60" width="50" height="60" rx="0" fill="rgba(234,227,214,.06)"></rect>
+    <rect x="0" y="60" width="50" height="60" rx="0 0 25 25" fill="rgba(234,227,214,.08)"></rect>
+    <line x1="0" y1="60" x2="50" y2="60" stroke="rgba(234,227,214,.15)" stroke-width="1"></line>
+  </g>
+  
+  <circle cx="950" cy="140" r="8" fill="rgba(22,122,83,.15)" stroke="rgba(22,122,83,.3)"></circle>
+  <circle cx="1000" cy="180" r="6" fill="rgba(22,122,83,.12)" stroke="rgba(22,122,83,.25)"></circle>
+  <line x1="956" y1="146" x2="995" y2="175" stroke="rgba(22,122,83,.2)" stroke-width="1"></line>
+  <circle cx="980" cy="120" r="5" fill="rgba(31,86,214,.12)" stroke="rgba(31,86,214,.25)"></circle>
+  <line x1="956" y1="136" x2="976" y2="124" stroke="rgba(31,86,214,.15)" stroke-width="1"></line>
+  <text x="600" y="460" text-anchor="middle" fill="rgba(234,227,214,.1)" font-family="monospace" font-size="11" letter-spacing="6">PHARMA · EXPORTS · PRICING · USFDA</text>
+</svg>

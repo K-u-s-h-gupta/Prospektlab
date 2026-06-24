@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="h" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(32 32) rotate(90) scale(28)">
+      <stop offset="0" stop-color="#eff6ff"/>
+      <stop offset="0.3" stop-color="#60a5fa"/>
+      <stop offset="0.66" stop-color="#2563eb" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#020617" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="r" x1="14" y1="17" x2="50" y2="47" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#dbeafe"/>
+      <stop offset=".36" stop-color="#60a5fa"/>
+      <stop offset=".7" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#93c5fd"/>
+    </linearGradient>
+    <linearGradient id="d" x1="4" y1="43" x2="60" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1d4ed8" stop-opacity="0"/>
+      <stop offset=".2" stop-color="#2563eb"/>
+      <stop offset=".44" stop-color="#bfdbfe"/>
+      <stop offset=".62" stop-color="#60a5fa"/>
+      <stop offset=".84" stop-color="#1d4ed8"/>
+      <stop offset="1" stop-color="#1d4ed8" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="g" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feComposite in="SourceGraphic" in2="b" operator="over"/>
+    </filter>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="#050b18"/>
+  <rect x="4.75" y="4.75" width="54.5" height="54.5" rx="15.25" fill="none" stroke="#93c5fd" stroke-opacity=".28" stroke-width="1.5"/>
+  <circle cx="32" cy="32" r="25" fill="url(#h)" opacity=".34"/>
+  <circle cx="32" cy="32" r="14.4" fill="none" stroke="url(#r)" stroke-width="5.6" filter="url(#g)"/>
+  <circle cx="32" cy="32" r="10.6" fill="#020617" stroke="#dbeafe" stroke-opacity=".35"/>
+  <path d="M7.5 43.2C18.2 36.2 29.3 31 43.2 26.4C49.5 24.3 54.6 22.3 59 19.8" fill="none" stroke="url(#d)" stroke-width="5.1" stroke-linecap="round" filter="url(#g)"/>
+  <path d="M6.5 44.4C18.7 39.9 31.2 35.2 58.2 18.8" fill="none" stroke="#bfdbfe" stroke-width="1.15" stroke-linecap="round" opacity=".82"/>
+  <path d="M8.5 42.7C20.9 37.9 34 31.1 56.5 22.2" fill="none" stroke="#1d4ed8" stroke-width="1.8" stroke-linecap="round" opacity=".75"/>
+</svg>

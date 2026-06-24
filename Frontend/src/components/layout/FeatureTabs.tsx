@@ -4,6 +4,7 @@ import {
   Briefcase,
   Star,
   SlidersHorizontal,
+  Rocket,
   CalendarClock,
   ShieldCheck,
   LucideIcon,
@@ -14,6 +15,7 @@ export type FeatureTabId =
   | 'portfolio'
   | 'watchlist'
   | 'screener'
+  | 'ipo'
   | 'earnings'
   | 'governance';
 
@@ -29,6 +31,7 @@ const TABS: TabDef[] = [
   { id: 'portfolio', label: 'Portfolio', icon: Briefcase },
   { id: 'watchlist', label: 'Watchlist', icon: Star },
   { id: 'screener', label: 'Screener', icon: SlidersHorizontal },
+  { id: 'ipo', label: 'IPO', icon: Rocket },
   { id: 'earnings', label: 'Earnings', icon: CalendarClock, comingSoon: true },
   { id: 'governance', label: 'Governance', icon: ShieldCheck, comingSoon: true },
 ];

@@ -27,25 +27,18 @@ function getLastmod(dirPath) {
 const staticRoutes = [
   { loc: '/', priority: '1.0', changefreq: 'weekly' },
   { loc: '/get-started', priority: '0.8', changefreq: 'weekly' },
+  { loc: '/indian-stock-research-workspace/', priority: '0.9', changefreq: 'weekly' },
   { loc: '/dashboard/overview', priority: '0.9', changefreq: 'daily' },
-  { loc: '/dashboard/portfolio', priority: '0.8', changefreq: 'daily' },
-  { loc: '/dashboard/watchlist', priority: '0.8', changefreq: 'daily' },
-  { loc: '/dashboard/screener', priority: '0.8', changefreq: 'daily' },
-  { loc: '/dashboard/earnings', priority: '0.7', changefreq: 'weekly' },
-  { loc: '/dashboard/governance', priority: '0.7', changefreq: 'weekly' },
+  { loc: '/ipo', priority: '0.95', changefreq: 'daily' },
   { loc: '/insights-studio', priority: '0.8', changefreq: 'weekly' },
-  { loc: '/insights/research/', priority: '0.9', changefreq: 'daily' },
 ];
 
 function generateSitemap() {
   const urls = [];
-  const seen = new Set();
 
   staticRoutes.forEach(route => {
-    const loc = `${BASE_URL}${route.loc}`;
-    seen.add(loc);
     urls.push({
-      loc,
+      loc: `${BASE_URL}${route.loc}`,
       lastmod: formatDate(new Date()),
       changefreq: route.changefreq,
       priority: route.priority,
@@ -53,19 +46,26 @@ function generateSitemap() {
   });
 
   if (fs.existsSync(INSIGHTS_DIR)) {
+    const hubPath = path.join(INSIGHTS_DIR, 'research');
+    if (fs.existsSync(path.join(hubPath, 'index.html'))) {
+      urls.push({
+        loc: `${BASE_URL}/research/`,
+        lastmod: getLastmod(hubPath),
+        changefreq: 'weekly',
+        priority: '0.95',
+      });
+    }
+
     const entries = fs.readdirSync(INSIGHTS_DIR, { withFileTypes: true });
     entries
-      .filter(entry => entry.isDirectory())
+      .filter(entry => entry.isDirectory() && entry.name !== 'research' && entry.name !== 'strategy' && entry.name !== 'organic-traffic-platform')
       .forEach(entry => {
         const slug = entry.name;
         const dirPath = path.join(INSIGHTS_DIR, slug);
         const indexPath = path.join(dirPath, 'index.html');
         if (fs.existsSync(indexPath)) {
-          const loc = `${BASE_URL}/insights/${slug}/`;
-          if (seen.has(loc)) return;
-          seen.add(loc);
           urls.push({
-            loc,
+            loc: `${BASE_URL}/research/${slug}/`,
             lastmod: getLastmod(dirPath),
             changefreq: 'monthly',
             priority: '0.8',

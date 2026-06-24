@@ -1,0 +1,1 @@
+﻿{"version": "2.86.0", "cloudProfile": "latest", "helpIndex": {"groups": {"ssh": {"summary": "SSH into resources (Azure VMs, Arc servers, etc) using AAD issued openssh certificates.", "tags": ""}}, "commands": {}}}

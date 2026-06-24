@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
+import signal
 import sys
 import time
 import urllib.parse
@@ -101,10 +103,8 @@ INDIA_DOMAIN_SUFFIXES = (
     ".in",
     ".co.in",
     ".org.in",
-    ".ac.in",
-    ".gov.in",
-    ".nic.in",
 )
+PUBLIC_OR_ACADEMIC_SUFFIXES = (".ac.in", ".edu.in", ".gov.in", ".nic.in")
 SHARED_TOKENS = {
     "accounts",
     "admin",
@@ -118,12 +118,19 @@ SHARED_TOKENS = {
     "grievance",
     "hello",
     "help",
+    "helpdesk",
+    "ho",
     "hr",
+    "hrd",
+    "hrm",
     "info",
     "investorrelations",
+    "ipo",
     "legal",
     "mail",
     "marketing",
+    "mis",
+    "nodal",
     "noreply",
     "office",
     "ops",
@@ -134,15 +141,21 @@ SHARED_TOKENS = {
     "service",
     "support",
     "team",
+    "zo",
 }
 SHARED_FRAGMENTS = (
+    "branchoffice",
     "compliance",
     "customercare",
     "customerservice",
+    "department",
     "grievance",
+    "helpdesk",
     "investorrelation",
+    "regionaloffice",
     "regulatory",
     "secretarial",
+    "zonaloffice",
 )
 CORP_NAME_TERMS = {
     "advisors",
@@ -292,6 +305,8 @@ def _is_india_contact_broad(contact: dict[str, Any]) -> bool:
     for candidate in candidates:
         if not candidate:
             continue
+        if candidate.endswith(PUBLIC_OR_ACADEMIC_SUFFIXES):
+            continue
         if candidate.endswith(INDIA_DOMAIN_SUFFIXES):
             return True
         if "india" in candidate:
@@ -365,22 +380,22 @@ def _subject_for(contact: dict[str, Any]) -> str:
     source = str(contact.get("primary_source") or "").strip().lower()
     if source.startswith("sebi-"):
         options = [
-            "Would value your take on a better Indian markets research workflow",
-            "Open to a quick look at ProspektLab?",
-            "Could I get your blunt feedback on ProspektLab?",
+            "Try ProspektLab on one Indian markets research task?",
+            "A faster research workflow for Indian markets",
+            "Would ProspektLab save you time on research?",
         ]
         return options[_stable_variant_index(contact, len(options))]
     if source == "bse" or _is_broker_like(contact):
         options = [
-            "Could ProspektLab fit your Indian markets workflow?",
-            "Open to trying ProspektLab for 10 minutes?",
-            "Would value your take on a broker-side research workflow",
+            "Try ProspektLab on one client research task?",
+            "A sharper workflow for broker-side research",
+            "Would ProspektLab fit your market research workflow?",
         ]
         return options[_stable_variant_index(contact, len(options))]
     options = [
-        "Would value your take on ProspektLab",
-        "Open to a quick look at ProspektLab?",
-        "Could I get your blunt feedback on ProspektLab?",
+        "Try ProspektLab on one research task?",
+        "A faster way to pull Indian market context",
+        "Would ProspektLab save you research time?",
     ]
     return options[_stable_variant_index(contact, len(options))]
 
@@ -469,33 +484,33 @@ def _platform_intro_for(contact: dict[str, Any]) -> str:
     source = str(contact.get("primary_source") or "").strip().lower()
     if source.startswith("sebi-"):
         return (
-            "We are building ProspektLab as a research workspace for Indian market professionals who want filings, news, "
-            "portfolio context, and market data in one place instead of across scattered tabs and notes."
+            "ProspektLab is a research workspace for Indian market professionals who want filings, news, portfolio context, "
+            "and market data in one place so a real research note can move faster from question to conviction."
         )
     if source == "bse" or _is_broker_like(contact):
         return (
-            "We are building ProspektLab to make broker and investor research workflows less fragmented by keeping filings, "
-            "market context, and working notes in one place."
+            "ProspektLab is built to make broker and investor research less fragmented by keeping filings, market context, "
+            "portfolio signals, and working notes in one place."
         )
     return (
-        "We are building ProspektLab as a research workspace that brings filings, news, portfolio context, and market data "
-        "into one place so the work feels less scattered."
+        "ProspektLab is a research workspace that brings filings, news, portfolio context, and market data into one place "
+        "so research work feels less scattered."
     )
 
 
 def _cta_for(contact: dict[str, Any]) -> str:
     options = [
         (
-            "If you are open to it, I would love to get your honest reaction after a quick 10-minute look. Even a short "
-            "reply on what feels useful, missing, or unnecessary would help us shape it."
+            "If it is relevant, try one live research task on a company you already track. If ProspektLab does not save "
+            "you time in the first few minutes, a blunt reply telling us why would still be useful."
         ),
         (
-            "If this sounds relevant, would you be open to trying it once and replying with the bluntest feedback you have? "
-            "That kind of signal is exactly what we need right now."
+            "If this sounds useful, run one ticker through it and reply with what felt faster, missing, or unnecessary. "
+            "That signal is exactly what we need right now."
         ),
         (
-            "If you have a few minutes this week, I would really value a quick spin and an honest note on whether this would "
-            "ever deserve a place in your actual workflow."
+            "If you have a few minutes this week, I would value a quick spin and an honest note on whether this could earn "
+            "a place in your actual research workflow."
         ),
     ]
     return options[_stable_variant_index(contact, len(options))]
@@ -625,6 +640,40 @@ def _fetch_contacts(base_url: str, api_key: str) -> list[dict[str, Any]]:
     )
 
 
+def _is_retryable_send_error(message: str) -> bool:
+    lowered = str(message or "").strip().lower()
+    if not lowered:
+        return False
+    return any(
+        token in lowered
+        for token in (
+            "timed out",
+            "timeout",
+            "connection aborted",
+            "remote end closed connection",
+            "temporarily unavailable",
+            "service unavailable",
+            "server busy",
+            "internal server error",
+            "try again",
+            "network",
+            "throttle",
+            "rate limit",
+            "quota",
+            "429",
+        )
+    )
+
+
+def _message_attempt_blocks_retry(status: str, last_error: str) -> bool:
+    normalized = str(status or "").strip().lower()
+    if normalized in {"queued", "sent", "delivered", "opened", "clicked"}:
+        return True
+    if normalized != "failed":
+        return False
+    return not _is_retryable_send_error(last_error)
+
+
 def _fetch_existing_sent(base_url: str, api_key: str, owner_email: str) -> set[str]:
     rows = _paginate_table(
         base_url=base_url,
@@ -632,14 +681,16 @@ def _fetch_existing_sent(base_url: str, api_key: str, owner_email: str) -> set[s
         table="outreach_messages",
         params={
             "owner_email": f"eq.{owner_email}",
-            "select": "to_email,status",
+            "select": "to_email,status,last_error",
         },
     )
-    sent_statuses = {"queued", "sent", "delivered", "opened", "clicked"}
     return {
         _normalized(str(row.get("to_email") or "")).lower()
         for row in rows
-        if str(row.get("status") or "").strip().lower() in sent_statuses
+        if _message_attempt_blocks_retry(
+            str(row.get("status") or ""),
+            str(row.get("last_error") or ""),
+        )
     }
 
 
@@ -827,7 +878,8 @@ def _insert_outreach_message(
     status: str,
     last_error: str,
     sent_at: str | None,
-) -> None:
+    return_id: bool = False,
+) -> int | None:
     payload = {
         "owner_email": owner_email,
         "campaign_id": campaign_id,
@@ -844,13 +896,72 @@ def _insert_outreach_message(
         "last_error": last_error,
         "sent_at": sent_at,
     }
-    _supabase_request(
+    rows, _headers = _supabase_request(
         base_url=base_url,
         api_key=api_key,
         table="outreach_messages",
         method="POST",
         payload=payload,
+        prefer="return=representation" if return_id else "return=minimal",
+    )
+    if return_id and isinstance(rows, list) and rows:
+        return int(rows[0]["id"])
+    return None
+
+
+def _update_outreach_message_status(
+    *,
+    base_url: str,
+    api_key: str,
+    message_id: int,
+    provider_message_id: str,
+    status: str,
+    last_error: str,
+    sent_at: str | None,
+) -> None:
+    _supabase_request(
+        base_url=base_url,
+        api_key=api_key,
+        table="outreach_messages",
+        method="PATCH",
+        params={"id": f"eq.{message_id}"},
+        payload={
+            "provider_message_id": provider_message_id,
+            "status": status,
+            "last_error": last_error,
+            "sent_at": sent_at,
+        },
         prefer="return=minimal",
+    )
+
+
+def _email_already_queued_or_sent(
+    *,
+    base_url: str,
+    api_key: str,
+    owner_email: str,
+    email: str,
+) -> bool:
+    rows, _headers = _supabase_request(
+        base_url=base_url,
+        api_key=api_key,
+        table="outreach_messages",
+        params={
+            "owner_email": f"eq.{owner_email}",
+            "to_email": f"eq.{email}",
+            "status": "in.(queued,sent,delivered,opened,clicked,failed)",
+            "select": "status,last_error",
+            "limit": 5,
+        },
+    )
+    if not isinstance(rows, list):
+        return False
+    return any(
+        _message_attempt_blocks_retry(
+            str(row.get("status") or ""),
+            str(row.get("last_error") or ""),
+        )
+        for row in rows
     )
 
 
@@ -867,6 +978,44 @@ def _is_domain_not_linked_error(message: str) -> bool:
     return "domainnotlinked" in lowered or "sender domain has not been linked" in lowered
 
 
+class SendTimeoutError(TimeoutError):
+    pass
+
+
+def _send_with_timeout(timeout_seconds: int, send_fn: Any) -> str:
+    if timeout_seconds <= 0 or not hasattr(signal, "SIGALRM"):
+        return str(send_fn())
+
+    def _handle_timeout(_signum: int, _frame: Any) -> None:
+        raise SendTimeoutError(f"send timed out after {timeout_seconds}s")
+
+    previous_handler = signal.signal(signal.SIGALRM, _handle_timeout)
+    signal.alarm(timeout_seconds)
+    try:
+        return str(send_fn())
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous_handler)
+
+
+def _failure_budget_exceeded(
+    *,
+    failed_send_count: int,
+    attempted_send_count: int,
+    max_send: int,
+    max_failure_rate: float,
+    sample_floor: int,
+) -> bool:
+    if failed_send_count <= 0 or max_failure_rate <= 0:
+        return False
+    max_failures = max(1, math.floor(max(1, max_send) * max_failure_rate))
+    if failed_send_count > max_failures:
+        return True
+    if attempted_send_count >= max(1, sample_floor):
+        return (failed_send_count / attempted_send_count) > max_failure_rate
+    return False
+
+
 def _eligible_contacts(
     contacts: list[dict[str, Any]],
     *,
@@ -874,15 +1023,20 @@ def _eligible_contacts(
     allow_shared_inboxes: bool,
     sent_emails: set[str],
     suppressed_emails: set[str],
+    india_scope: str = "strict",
 ) -> list[dict[str, Any]]:
     deduped: dict[str, dict[str, Any]] = {}
+    use_broad_india = india_scope == "broad"
     for contact in contacts:
         email = _normalized(str(contact.get("email") or "")).lower()
         if not email or email in deduped or email in sent_emails or email in suppressed_emails:
             continue
         if not _is_high_confidence(contact, min_confidence):
             continue
-        if not _is_india_contact(contact):
+        if use_broad_india:
+            if not _is_india_contact_broad(contact):
+                continue
+        elif not _is_india_contact(contact):
             continue
         if not _is_role_fit(contact):
             continue
@@ -904,6 +1058,10 @@ def main() -> int:
     parser.add_argument("--max-send", type=int, default=25)
     parser.add_argument("--delay-seconds", type=float, default=42.0)
     parser.add_argument("--min-email-confidence", type=float, default=0.85)
+    parser.add_argument("--india-scope", choices=("strict", "broad"), default="strict")
+    parser.add_argument("--max-failure-rate", type=float, default=0.02)
+    parser.add_argument("--failure-rate-sample-floor", type=int, default=50)
+    parser.add_argument("--send-timeout-seconds", type=int, default=45)
     parser.add_argument("--allow-shared-inboxes", action="store_true")
     parser.add_argument("--send", action="store_true")
     args = parser.parse_args()
@@ -925,17 +1083,28 @@ def main() -> int:
     suppressed_emails = _fetch_suppressed(base_url, api_key, args.owner_email)
     strict_india_contacts = sum(1 for contact in contacts if _is_india_contact(contact))
     broad_india_contacts = sum(1 for contact in contacts if _is_india_contact_broad(contact))
-    eligible = _eligible_contacts(
+    eligible_strict = _eligible_contacts(
         contacts,
         min_confidence=args.min_email_confidence,
         allow_shared_inboxes=args.allow_shared_inboxes,
         sent_emails=sent_emails,
         suppressed_emails=suppressed_emails,
+        india_scope="strict",
     )
+    eligible_broad = _eligible_contacts(
+        contacts,
+        min_confidence=args.min_email_confidence,
+        allow_shared_inboxes=args.allow_shared_inboxes,
+        sent_emails=sent_emails,
+        suppressed_emails=suppressed_emails,
+        india_scope="broad",
+    )
+    eligible = eligible_broad if args.india_scope == "broad" else eligible_strict
 
     print(
         f"Supabase contacts={len(contacts)} india_strict={strict_india_contacts} "
-        f"india_broad={broad_india_contacts} eligible={len(eligible)} "
+        f"india_broad={broad_india_contacts} eligible_strict={len(eligible_strict)} "
+        f"eligible_broad={len(eligible_broad)} scope={args.india_scope} eligible={len(eligible)} "
         f"already_sent={len(sent_emails)} suppressed={len(suppressed_emails)}"
     )
     if not eligible:
@@ -957,10 +1126,12 @@ def main() -> int:
     print(f"Campaign id={campaign_id}")
 
     sent_count = 0
+    failed_send_count = 0
     processed_count = 0
     consecutive_failures = 0
     skipped = 0
     hard_failure = False
+    provider_guard_stop = False
     for index, contact in enumerate(eligible):
         if processed_count >= args.max_send:
             break
@@ -999,14 +1170,55 @@ def main() -> int:
             processed_count += 1
             continue
 
+        if _email_already_queued_or_sent(
+            base_url=base_url,
+            api_key=api_key,
+            owner_email=args.owner_email,
+            email=lead["email"],
+        ):
+            skipped += 1
+            print(f"SKIP already queued/sent: {lead['email']}")
+            continue
+
+        queued_message_id: int | None = None
         try:
-            message_id = send_acs_email(
-                connection_string=str(config.get("azure", {}).get("connection_string", "")).strip(),
-                sender=sender,
+            queued_message_id = _insert_outreach_message(
+                base_url=base_url,
+                api_key=api_key,
+                owner_email=args.owner_email,
+                campaign_id=campaign_id,
+                lead_id=lead_id,
+                sender_profile=sender.key,
+                sender_address=sender.email,
+                reply_to_email=sender.reply_to,
                 to_email=lead["email"],
-                subject=message["subject"],
-                text=message["text"],
-                html_body=message["html"],
+                subject_rendered=message["subject"],
+                body_rendered=message["text"],
+                provider_message_id="",
+                status="queued",
+                last_error="",
+                sent_at=None,
+                return_id=True,
+            )
+            _update_outreach_lead_status(
+                base_url=base_url,
+                api_key=api_key,
+                owner_email=args.owner_email,
+                email=lead["email"],
+                sender_key=sender.key,
+                status="queued",
+                contacted_at=None,
+            )
+            message_id = _send_with_timeout(
+                args.send_timeout_seconds,
+                lambda: send_acs_email(
+                    connection_string=str(config.get("azure", {}).get("connection_string", "")).strip(),
+                    sender=sender,
+                    to_email=lead["email"],
+                    subject=message["subject"],
+                    text=message["text"],
+                    html_body=message["html"],
+                ),
             )
             sent_at = datetime.now(timezone.utc).isoformat()
             append_sent_log(
@@ -1020,23 +1232,34 @@ def main() -> int:
                     "source_url": lead.get("source_url", ""),
                 },
             )
-            _insert_outreach_message(
-                base_url=base_url,
-                api_key=api_key,
-                owner_email=args.owner_email,
-                campaign_id=campaign_id,
-                lead_id=lead_id,
-                sender_profile=sender.key,
-                sender_address=sender.email,
-                reply_to_email=sender.reply_to,
-                to_email=lead["email"],
-                subject_rendered=message["subject"],
-                body_rendered=message["text"],
-                provider_message_id=message_id,
-                status="sent",
-                last_error="",
-                sent_at=sent_at,
-            )
+            if queued_message_id is not None:
+                _update_outreach_message_status(
+                    base_url=base_url,
+                    api_key=api_key,
+                    message_id=queued_message_id,
+                    provider_message_id=message_id,
+                    status="sent",
+                    last_error="",
+                    sent_at=sent_at,
+                )
+            else:
+                _insert_outreach_message(
+                    base_url=base_url,
+                    api_key=api_key,
+                    owner_email=args.owner_email,
+                    campaign_id=campaign_id,
+                    lead_id=lead_id,
+                    sender_profile=sender.key,
+                    sender_address=sender.email,
+                    reply_to_email=sender.reply_to,
+                    to_email=lead["email"],
+                    subject_rendered=message["subject"],
+                    body_rendered=message["text"],
+                    provider_message_id=message_id,
+                    status="sent",
+                    last_error="",
+                    sent_at=sent_at,
+                )
             _update_outreach_lead_status(
                 base_url=base_url,
                 api_key=api_key,
@@ -1054,23 +1277,34 @@ def main() -> int:
                 time.sleep(max(0.0, args.delay_seconds))
         except Exception as exc:
             error_text = str(exc)
-            _insert_outreach_message(
-                base_url=base_url,
-                api_key=api_key,
-                owner_email=args.owner_email,
-                campaign_id=campaign_id,
-                lead_id=lead_id,
-                sender_profile=sender.key,
-                sender_address=sender.email,
-                reply_to_email=sender.reply_to,
-                to_email=lead["email"],
-                subject_rendered=message["subject"],
-                body_rendered=message["text"],
-                provider_message_id="",
-                status="failed",
-                last_error=error_text[:1000],
-                sent_at=None,
-            )
+            if queued_message_id is not None:
+                _update_outreach_message_status(
+                    base_url=base_url,
+                    api_key=api_key,
+                    message_id=queued_message_id,
+                    provider_message_id="",
+                    status="failed",
+                    last_error=error_text[:1000],
+                    sent_at=None,
+                )
+            else:
+                _insert_outreach_message(
+                    base_url=base_url,
+                    api_key=api_key,
+                    owner_email=args.owner_email,
+                    campaign_id=campaign_id,
+                    lead_id=lead_id,
+                    sender_profile=sender.key,
+                    sender_address=sender.email,
+                    reply_to_email=sender.reply_to,
+                    to_email=lead["email"],
+                    subject_rendered=message["subject"],
+                    body_rendered=message["text"],
+                    provider_message_id="",
+                    status="failed",
+                    last_error=error_text[:1000],
+                    sent_at=None,
+                )
             _update_outreach_lead_status(
                 base_url=base_url,
                 api_key=api_key,
@@ -1081,21 +1315,48 @@ def main() -> int:
                 contacted_at=None,
             )
             processed_count += 1
+            failed_send_count += 1
             consecutive_failures += 1
             skipped += 1
             print(f"FAIL send: {lead['email']} -> {error_text}")
             if _is_domain_not_linked_error(error_text):
-                hard_failure = True
+                provider_guard_stop = True
                 print("Stopping batch because ACS sender domain is not linked. Fix the ACS job secret or domain linkage before retrying.")
+                break
+            if isinstance(exc, SendTimeoutError):
+                provider_guard_stop = True
+                print("Stopping batch because ACS did not return a send acceptance before the timeout.")
                 break
             if _should_throttle_stop(error_text) or consecutive_failures >= 3:
                 print("Stopping batch because provider throttling or quota was hit.")
-                hard_failure = True
+                provider_guard_stop = True
+                break
+            if _failure_budget_exceeded(
+                failed_send_count=failed_send_count,
+                attempted_send_count=sent_count + failed_send_count,
+                max_send=args.max_send,
+                max_failure_rate=args.max_failure_rate,
+                sample_floor=args.failure_rate_sample_floor,
+            ):
+                provider_guard_stop = True
+                failure_rate = failed_send_count / max(1, sent_count + failed_send_count)
+                print(
+                    "Stopping batch because send failure rate exceeded guardrail: "
+                    f"{failed_send_count}/{sent_count + failed_send_count} "
+                    f"({failure_rate:.2%}) > {args.max_failure_rate:.2%}."
+                )
                 break
 
     mode = "sent" if args.send else "previewed"
     print("")
-    print(f"Done: {sent_count} {mode}, {skipped} skipped.")
+    attempted_send_count = sent_count + failed_send_count
+    failure_rate = failed_send_count / max(1, attempted_send_count)
+    print(
+        f"Done: {sent_count} {mode}, {failed_send_count} failed sends "
+        f"({failure_rate:.2%}), {skipped} skipped."
+    )
+    if provider_guard_stop:
+        print("Provider guard stopped the batch cleanly; not retrying this execution automatically.")
     if hard_failure:
         return 3
     return 0

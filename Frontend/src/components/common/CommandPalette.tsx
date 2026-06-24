@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, LayoutDashboard, ShieldAlert, TrendingUp, ArrowRight, CornerDownLeft } from 'lucide-react';
+import { Search, LayoutDashboard, ShieldAlert, TrendingUp, Rocket, ArrowRight, CornerDownLeft } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /**
@@ -21,6 +21,9 @@ interface Command {
 const BASE_COMMANDS: Command[] = [
   { id: 'go-dashboard', label: 'Go to Dashboard', icon: LayoutDashboard, keywords: 'dashboard home portfolio overview',
     run: (nav) => nav('/dashboard/overview') },
+  { id: 'go-ipo', label: 'IPO Pipeline', hint: 'primary market', icon: Rocket,
+    keywords: 'ipo primary market drhp rhp gmp listing issue pipeline',
+    run: (nav) => nav('/dashboard/ipo') },
   { id: 'go-governance', label: 'Portfolio Governance X-Ray', hint: 'forensic risk', icon: ShieldAlert,
     keywords: 'governance risk forensic pledge enforcement xray',
     run: (nav) => nav('/dashboard/governance') },

@@ -23,6 +23,10 @@ Exposes MCP tools:
   - doc_ingest_url       : extract URL content, chunk, and index in Qdrant
   - doc_fetch_annual_report : auto-fetch annual report from NSE and index
   - doc_compare_offer_documents : retrieve and compare DRHP / RHP / prospectus docs
+  - fetch_and_index_drhp       : discover, download, parse, and index a DRHP
+  - search_drhp                : search indexed IPO / DRHP filings
+  - get_ipo_score              : retrieve ProspektLab IPO Score for a company
+  - get_peer_valuation_comparison : IPO vs peer valuation multiples
   - doc_list_collections : list available document collections
 """
 
@@ -833,6 +837,178 @@ def doc_list_collections() -> dict:
 
     except Exception as exc:
         logger.error("doc_list_collections failed: %s", exc)
+        return {"error": True, "message": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# IPO / DRHP tools
+# ---------------------------------------------------------------------------
+@mcp.tool
+def fetch_and_index_drhp(company_name: str, slug: str | None = None) -> dict:
+    """
+    Discover, download, parse, and index a company's DRHP/RHP.
+
+    Runs the Tier-1 IPO pipeline: regulatory discovery, PDF cache, MinerU
+    markdown transform, section extraction, and Qdrant indexing.
+
+    Args:
+        company_name: Company name as filed with SEBI.
+        slug: Optional URL slug override (defaults to slugified company name).
+
+    Returns:
+        dict with download status, analysis summary, and indexing stats.
+    """
+    import asyncio
+
+    from finagent.tools.data.ipo_fetcher import IpoFilingRecord, discover_new_filings, download_drhp, slugify_company
+    from finagent.ipo.service import get_ipo_service
+
+    logger.info("fetch_and_index_drhp: %s", company_name)
+    try:
+        service = get_ipo_service()
+        target_slug = slug or slugify_company(company_name)
+
+        async def _run() -> dict[str, Any]:
+            records = await discover_new_filings(limit_per_source=30)
+            match = next(
+                (r for r in records if target_slug in r.slug or company_name.lower() in r.company_name.lower()),
+                None,
+            )
+            if not match:
+                match = IpoFilingRecord(
+                    company_name=company_name,
+                    slug=target_slug,
+                    doc_type="drhp",
+                    filing_date=datetime.now().strftime("%Y-%m-%d"),
+                    pdf_url="",
+                    source="manual",
+                )
+            if match.pdf_url:
+                match = await download_drhp(match)
+            await service.store.upsert_filing(
+                {
+                    "slug": match.slug,
+                    "company_name": match.company_name,
+                    "doc_type": match.doc_type,
+                    "filing_date": match.filing_date,
+                    "pdf_url": match.pdf_url,
+                    "status": "upcoming",
+                }
+            )
+            analysis_result = await service.fetch_and_analyze(match.slug, pdf_path=match.local_path)
+            pdf_path = match.local_path
+            index_result = None
+            if pdf_path:
+                index_result = doc_ingest_pdf(pdf_path=pdf_path, symbol=match.slug.upper(), doc_type="drhp")
+            return {
+                "slug": match.slug,
+                "company_name": match.company_name,
+                "pdf_path": pdf_path,
+                "analysis": analysis_result.get("analysis"),
+                "scores": analysis_result.get("scores"),
+                "index_result": index_result,
+            }
+
+        payload = asyncio.run(_run())
+        return {"error": False, "data": payload}
+    except Exception as exc:
+        logger.error("fetch_and_index_drhp failed: %s", exc)
+        return {"error": True, "message": str(exc)}
+
+
+@mcp.tool
+def search_drhp(query: str, top_k: int = 5) -> dict:
+    """
+    Search IPO / DRHP filings by company name, sector, or slug.
+
+    Args:
+        query: Search text.
+        top_k: Maximum results.
+
+    Returns:
+        Matching IPO filing records.
+    """
+    import asyncio
+
+    from finagent.ipo.service import get_ipo_service
+
+    logger.info("search_drhp: query='%s'", query)
+    try:
+        service = get_ipo_service()
+        results = asyncio.run(service.search_drhp(query, limit=top_k))
+        return {"error": False, "data": {"query": query, "results": results, "total": len(results)}}
+    except Exception as exc:
+        logger.error("search_drhp failed: %s", exc)
+        return {"error": True, "message": str(exc)}
+
+
+@mcp.tool
+def get_ipo_score(slug: str) -> dict:
+    """
+    Retrieve the ProspektLab IPO Score (five dimensions + composite) for an IPO.
+
+    Args:
+        slug: IPO URL slug (e.g. "swiggy").
+
+    Returns:
+        Composite and sub-scores with SEBI-compliant disclaimer.
+    """
+    import asyncio
+
+    from finagent.ipo.service import get_ipo_service
+
+    logger.info("get_ipo_score: %s", slug)
+    try:
+        service = get_ipo_service()
+        payload = asyncio.run(service.get_analysis(slug))
+        if not payload:
+            return {"error": True, "message": f"No IPO analysis found for '{slug}'."}
+        return {
+            "error": False,
+            "data": {
+                "slug": slug,
+                "company_name": payload["filing"].get("company_name"),
+                "scores": payload.get("scores"),
+                "fraud_signals": (payload.get("analysis") or {}).get("fraud_signals", []),
+            },
+        }
+    except Exception as exc:
+        logger.error("get_ipo_score failed: %s", exc)
+        return {"error": True, "message": str(exc)}
+
+
+@mcp.tool
+def get_peer_valuation_comparison(slug: str) -> dict:
+    """
+    Compare IPO valuation multiples against listed peer averages.
+
+    Args:
+        slug: IPO URL slug.
+
+    Returns:
+        IPO PE / EV-EBITDA vs peer group with premium/discount analysis.
+    """
+    import asyncio
+
+    from finagent.ipo.service import get_ipo_service
+
+    logger.info("get_peer_valuation_comparison: %s", slug)
+    try:
+        service = get_ipo_service()
+        payload = asyncio.run(service.get_analysis(slug))
+        if not payload:
+            return {"error": True, "message": f"No IPO analysis found for '{slug}'."}
+        peer_valuation = (payload.get("analysis") or {}).get("peer_valuation") or payload.get("peer_valuation") or {}
+        return {
+            "error": False,
+            "data": {
+                "slug": slug,
+                "company_name": payload["filing"].get("company_name"),
+                "peer_valuation": peer_valuation,
+            },
+        }
+    except Exception as exc:
+        logger.error("get_peer_valuation_comparison failed: %s", exc)
         return {"error": True, "message": str(exc)}
 
 

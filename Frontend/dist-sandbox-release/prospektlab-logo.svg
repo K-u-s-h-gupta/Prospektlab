@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 110" role="img" aria-labelledby="title">
+  <title id="title">Prospekt Lab</title>
+  <defs>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(57 55) rotate(90) scale(42)">
+      <stop offset="0" stop-color="#eff6ff"/>
+      <stop offset=".29" stop-color="#60a5fa"/>
+      <stop offset=".68" stop-color="#2563eb" stop-opacity=".5"/>
+      <stop offset="1" stop-color="#020617" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="28" y1="30" x2="86" y2="83" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#dbeafe"/>
+      <stop offset=".38" stop-color="#60a5fa"/>
+      <stop offset=".7" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#93c5fd"/>
+    </linearGradient>
+    <linearGradient id="disk" x1="0" y1="75" x2="118" y2="32" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1d4ed8" stop-opacity="0"/>
+      <stop offset=".2" stop-color="#2563eb"/>
+      <stop offset=".44" stop-color="#bfdbfe"/>
+      <stop offset=".65" stop-color="#60a5fa"/>
+      <stop offset=".85" stop-color="#1d4ed8"/>
+      <stop offset="1" stop-color="#1d4ed8" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feComposite in="SourceGraphic" in2="b" operator="over"/>
+    </filter>
+  </defs>
+  <rect width="420" height="110" rx="22" fill="#030712"/>
+  <circle cx="57" cy="55" r="42" fill="url(#halo)" opacity=".34"/>
+  <circle cx="57" cy="55" r="22" fill="none" stroke="url(#ring)" stroke-width="7" filter="url(#glow)"/>
+  <circle cx="57" cy="55" r="16.2" fill="#020617" stroke="#dbeafe" stroke-opacity=".35"/>
+  <path d="M7 75C29 62 52 52 83 43C95 39.5 105 35.7 115 30" fill="none" stroke="url(#disk)" stroke-width="7" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M8 76C31 67 55 58 114 29" fill="none" stroke="#bfdbfe" stroke-width="1.4" stroke-linecap="round" opacity=".82"/>
+  <text x="142" y="52" fill="#f8fbff" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="500" letter-spacing="12">PROSPEKT</text>
+  <path d="M145 72H225" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="245" y="80" fill="#60a5fa" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="500" letter-spacing="12">LAB</text>
+  <path d="M325 72H394" stroke="#2563eb" stroke-width="1.5"/>
+</svg>
