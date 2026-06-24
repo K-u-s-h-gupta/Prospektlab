@@ -274,6 +274,41 @@ CUSTOM_RULES = [
         "status": "200"
     },
     {
+        "source": "/dashboard",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/dashboard/<*>",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/get-started",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/onboarding/<*>",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/insights-studio",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/ipo",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
+        "source": "/ipo/<*>",
+        "target": "/index.html",
+        "status": "200"
+    },
+    {
         "source": "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp|xml)$)([^.]+$)/>",
         "target": "/index.html",
         "status": "200"
