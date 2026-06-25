@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
+import LandingPage from './pages/LandingPage';
 import GatewayPage from './pages/GatewayPage';
 import ManualEntry from './pages/ManualEntry';
 import UploadPage from './pages/UploadPage';
@@ -162,7 +163,7 @@ export const AppContent: React.FC = () => {
       <TelemetryRouteTracker />
       <CommandPalette />
       <Routes>
-        <Route path="/" element={<Navigate to="/dashboard/overview" replace />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/pricing" element={<Navigate to="/dashboard/overview" replace />} />
         <Route path="/testimonials" element={<Navigate to="/dashboard/overview" replace />} />
         <Route path="/features" element={<Navigate to="/dashboard/overview" replace />} />
