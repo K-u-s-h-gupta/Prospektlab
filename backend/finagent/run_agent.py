@@ -1712,13 +1712,13 @@ async def run_research_session(
     if cfg.auto_depth:
         cfg.max_steps = _auto_max_steps(objective, cfg.max_steps)
     session_id = cfg.session_id or str(uuid.uuid4())
-    loop = asyncio.get_running_loop()
+    asyncio_loop = asyncio.get_running_loop()
 
     def _cleanup_on_task_done(_task: asyncio.Task) -> None:
         if cfg.close_bus_on_finish:
             BUS.close(session_id)
         try:
-            loop.create_task(aclose_shared_client())
+            asyncio_loop.create_task(aclose_shared_client())
         except RuntimeError:
             pass
 

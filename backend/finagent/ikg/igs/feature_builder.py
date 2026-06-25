@@ -13,6 +13,7 @@ Enforcement proximity uses the edges the Phase-0 fix populated:
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from finagent.ikg.db import connect_postgres, get_database_url
@@ -106,8 +107,19 @@ alter table company_features add column if not exists enforcement_2hop_count int
 def _target_cins(cur: Any, cins: set[str] | None) -> list[str]:
     if cins:
         return [c for c in cins if c]
+    # Target only companies actually traded on BSE or NSE — not the 3.1M private MCA shells
+    # that also have listing_status='Listed' in the registry.  Using exchange presence
+    # (bse_scrip_code / nse_symbol) as the canonical "exchange-listed" filter gives ~3,686
+    # companies instead of 9,348, eliminating private-shell noise from training.
     cur.execute(
-        "select cin from ikg_company_master where listing_status ilike 'listed' and cin is not null"
+        """
+        select cin from ikg_company_master
+        where cin is not null
+          and (
+            (bse_scrip_code is not null and bse_scrip_code != '')
+            or (nse_symbol is not null and nse_symbol != '')
+          )
+        """
     )
     return [r["cin"] for r in cur.fetchall()]
 
@@ -266,9 +278,13 @@ def build_company_features(
                     select cd.cin,
                            count(distinct dou.other_cin) filter (where dou.other_cin <> cd.cin) as other_boards,
                            count(distinct cd.din) filter (
-                               where exists (select 1 from failure_events fe
-                                             where fe.cin = dou.other_cin and fe.is_failure)
-                           ) as shared_failure_directors,
+                                where exists (select 1 from failure_events fe
+                                              where fe.cin = dou.other_cin and fe.is_failure
+                                                and fe.event_type in (
+                                                    'exchange_delisting', 'exchange_suspension',
+                                                    'ibc_cirp', 'sebi_debarment', 'under_liquidation'
+                                                ))
+                            ) as shared_failure_directors,
                            count(distinct cd.din) filter (
                                where exists (select 1 from ikg_edges en
                                              where en.label = 'ENFORCEMENT_ACTION_AGAINST'
@@ -386,7 +402,7 @@ def build_historical_features(
                 cur.execute(
                     f"""
                     select cin,
-                           coalesce((raw_json->>'qtrid')::int, null) as qtrid,
+                           coalesce((raw_json->>'qtrid')::int, quarter::int) as qtrid,
                            quarter, total_pledge_pct, total_promoter_holding_pct
                     from shp_raw
                     {where}

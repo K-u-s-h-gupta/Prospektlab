@@ -82,8 +82,9 @@ export const IpoCardView: React.FC<IpoCardViewProps> = ({ card, originPath = '/i
   const isListed = card.status === 'listed';
 
   // Parse subscription ratio from status string e.g. "Day 2 — 1.8x subscribed"
+  // Or use subscription_times directly from NSE API
   const subMatch = card.subscription_status?.match(/([\d.]+)x/);
-  const subRatio = subMatch ? parseFloat(subMatch[1]) : null;
+  const subRatio = card.subscription_times ?? (subMatch ? parseFloat(subMatch[1]) : null);
   const subPct = subRatio ? Math.min(subRatio * 100 / 3, 100) : 0; // cap bar at 3x
 
   return (
@@ -99,6 +100,8 @@ export const IpoCardView: React.FC<IpoCardViewProps> = ({ card, originPath = '/i
           <div className="ipo-card-company">{card.company_name}</div>
           <div className="ipo-card-meta">
             {card.exchange && <span className="ipo-exchange-tag">{card.exchange}</span>}
+            {card.is_sme && <span className="ipo-sme-tag">SME</span>}
+            {card.nse_symbol && <span className="ipo-symbol-tag">{card.nse_symbol}</span>}
             {card.sector && <span>{card.sector}</span>}
           </div>
         </div>
@@ -134,7 +137,7 @@ export const IpoCardView: React.FC<IpoCardViewProps> = ({ card, originPath = '/i
             )}
           </div>
           <div className="ipo-stat-value">
-            {card.fresh_issue_cr ?? '—'} / {card.ofs_cr ?? '—'} cr
+            {card.fresh_issue_cr ? `₹${card.fresh_issue_cr}` : '—'} / {card.ofs_cr ? `₹${card.ofs_cr} cr` : '—'}
           </div>
         </div>
         <div className="ipo-stat-cell">
@@ -146,6 +149,14 @@ export const IpoCardView: React.FC<IpoCardViewProps> = ({ card, originPath = '/i
             <div className="ipo-stat-label">Listed on</div>
             <div className="ipo-stat-value">{new Date(card.listing_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
           </div>
+        ) : isLive && card.subscription_open ? (
+          <div className="ipo-stat-cell">
+            <div className="ipo-stat-label">Sub opens</div>
+            <div className="ipo-stat-value">
+              {new Date(card.subscription_open).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              {card.subscription_close && ` – ${new Date(card.subscription_close).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+            </div>
+          </div>
         ) : (
           <div className="ipo-stat-cell">
             <div className="ipo-stat-label">GMP</div>
@@ -156,8 +167,27 @@ export const IpoCardView: React.FC<IpoCardViewProps> = ({ card, originPath = '/i
         )}
       </div>
 
+      {/* Live: allotment + listing timeline row */}
+      {isLive && (card.allotment_date || card.listing_date) && (
+        <div className="ipo-card-dates-row">
+          {card.allotment_date && (
+            <span className="ipo-date-chip">
+              Allotment: {new Date(card.allotment_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+            </span>
+          )}
+          {card.listing_date && (
+            <span className="ipo-date-chip">
+              Listing: {new Date(card.listing_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+            </span>
+          )}
+          {card.lot_size && (
+            <span className="ipo-date-chip">Lot: {card.lot_size} shares</span>
+          )}
+        </div>
+      )}
+
       {/* Subscription bar (live IPOs) */}
-      {isLive && card.subscription_status && (
+      {isLive && (card.subscription_status || card.subscription_times != null) && (
         <div className="ipo-card-sub-section">
           {subRatio != null ? (
             <>
@@ -165,8 +195,8 @@ export const IpoCardView: React.FC<IpoCardViewProps> = ({ card, originPath = '/i
                 <div className="ipo-sub-bar-fill" style={{ width: `${subPct}%` }} />
               </div>
               <div className="ipo-sub-label">
-                <span>{card.subscription_status}</span>
-                <span className={subRatio >= 1 ? 'text-up' : 'text-down'}>{subRatio}x</span>
+                <span>{card.subscription_status || 'Subscribed'}</span>
+                <span className={subRatio >= 1 ? 'text-up' : 'text-down'}>{subRatio.toFixed(2)}x</span>
               </div>
             </>
           ) : (

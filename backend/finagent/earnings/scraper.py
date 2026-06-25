@@ -42,87 +42,180 @@ _BSE_ATTACH_ROOT = "https://www.bseindia.com/xml-data/corpfiling/AttachLive"
 _SUPABASE_BUCKET = os.getenv("FINAGENT_EARNINGS_STORAGE_BUCKET", "earnings-documents").strip() or "earnings-documents"
 _PARSER_VERSION = "earnings_scraper_v1"
 
-# Keywords to identify outcome (post-meeting result) vs intimation (pre-meeting notice) docs.
-# Used to score board-meeting attachments so outcome PDFs are prioritised.
-_OUTCOME_BM_KEYWORDS: tuple[str, ...] = (
-    "outcome of board meeting",
-    "outcome",
-    "approved the financial results",
-    "audited financial results",
-    "unaudited financial results",
-    "financial results for the quarter",
-    "financial results for quarter",
-    "consolidated financial results",
-    "standalone and consolidated",
-    "press release",
-    "investor presentation",
+# ---------------------------------------------------------------------------
+# Document scoring — based on direct API field analysis across 5+ companies
+# ---------------------------------------------------------------------------
+# NSE corporate-announcements API fields we care about:
+#   desc          – category string (e.g. "Outcome of Board Meeting")
+#   attchmntText  – long description written by the filer (THE most reliable field)
+#   attchmntFile  – URL to the PDF
+#   hasXbrl       – "true" ONLY on formal financial-results filings (SEBI mandate)
+#
+# BSE AnnSubCategoryGetData API fields we care about:
+#   CATEGORYNAME  – e.g. "Result", "Company Update", "Corp. Action"
+#   SUBCATNAME    – e.g. "Financial Results", "Earnings Call Transcript"
+#   NEWSSUB       – title / headline
+#   ATTACHMENTNAME – filename (we build the URL via _normalize_bse_attachment)
+# ---------------------------------------------------------------------------
+
+# attchmntText phrases that definitively identify the financial-results PDF
+_NSE_RESULT_TEXT_PATTERNS: tuple[str, ...] = (
+    "submitted to the exchange, the audited financial results",
+    "submitted to the exchange, the unaudited financial results",
+    "submitted to the exchange, the financial results",
+    "audited standalone and consolidated financial results",
+    "unaudited standalone and consolidated financial results",
+    "audited financial results for the quarter",
+    "unaudited financial results for the quarter",
+    "financial results for the quarter and",
+    "financial results for the period ended",
+    "financial results and recommendation of dividend",
+    "quarterly financial results",
 )
-_INTIMATION_BM_KEYWORDS: tuple[str, ...] = (
-    "intimation",
-    "to consider",
-    "prior intimation",
-    "notice of board meeting",
-    "meeting of the board",
+
+# desc values that are never the financial results document — skip immediately
+_NSE_DESC_SKIP: frozenset[str] = frozenset({
+    "analysts/institutional investor meet/con. call updates",
+    "copy of newspaper publication",
+    "record date",
+    "appointment",
+    "change in management",
+    "cessation",
+    "pendency of litigation",
+    "general updates",         # overridden if attchmntText has result patterns
+})
+
+# attchmntText substrings that confirm a non-results document
+_NSE_TEXT_SKIP_PATTERNS: tuple[str, ...] = (
+    "transcript",
+    "link of recording",
+    "audio-video recording",
+    "schedule of meet",
+    "schedule of analyst",
+    "newspaper publication",
+    "tax deduction on dividend",
+    "record date for",
+    "cessation",
+    "reclassification",
+    "investor education",
 )
 
+# BSE subcategories that are never financial-results documents
+_BSE_SUBCAT_SKIP: frozenset[str] = frozenset({
+    "earnings call transcript",
+    "analyst / investor meet",
+    "newspaper publication",
+    "dividend",
+    "record date",
+    "date of payment of dividend",
+    "dividend updates",
+    "reg.24(a)-annual secretarial compli",
+    "change in directorate",
+    "change in management",
+    "general",
+})
 
-def _score_bm_record(purpose: str, url: str) -> int:
-    """Score a board-meeting/announcement record for outcome likelihood. Higher = more result-like.
 
-    NSE outcome files often have "intimation" in their URL path (a naming convention — not
-    an intimation document). So URL penalty is intentionally weaker than title/desc signals.
+def _score_nse_announcement_item(item: dict[str, Any]) -> int:
+    """Score an NSE corporate-announcements row. Returns > 0 only for results PDFs.
+
+    Priority hierarchy (confirmed from 5-company live API research):
+      100 – attchmntText confirms "submitted to Exchange, the financial results"
+       90 – attchmntText confirms audited/unaudited financial results
+       70 – hasXbrl=true + desc is Outcome of Board Meeting
+       50 – desc = Outcome of Board Meeting (no XBRL but text is plausible)
+       20 – Press Release with financial content
+       15 – Investor Presentation
+      -100 – explicit skip conditions
     """
-    title_hay = purpose.lower()
-    url_hay = url.lower()
+    desc  = str(item.get("desc") or "").strip().lower()
+    text  = str(item.get("attchmntText") or "").lower()
+    has_xbrl = str(item.get("hasXbrl") or "").lower() in ("true", "1", "yes")
+
+    # Hard skip: category is definitely not results
+    if desc in _NSE_DESC_SKIP:
+        # Allow "general updates" through if attchmntText has results
+        if desc != "general updates":
+            return -100
+
+    # Hard skip: attchmntText describes a non-results document
+    if any(pat in text for pat in _NSE_TEXT_SKIP_PATTERNS):
+        return -100
 
     score = 0
-    # Strong positive: "outcome" in title/desc (very reliable)
-    if "outcome" in title_hay:
-        score += 30
-    # Positive: audited/unaudited results explicitly stated
-    if any(kw in title_hay for kw in ("approved the financial", "audited financial", "unaudited financial")):
-        score += 20
-    # Positive: press release, investor presentation, financial results
-    if "press release" in title_hay:
-        score += 15
-    if "investor presentation" in title_hay:
-        score += 12
-    if "financial results for" in title_hay or "standalone and consolidated" in title_hay:
-        score += 15
-    if "quarterly results" in title_hay or "financial results" in title_hay:
-        score += 10
 
-    # Positive from URL: "outcome" present in path (but only if not overridden)
-    if "outcome" in url_hay and "outcome" not in title_hay:
-        score += 10
+    # Tier 1: attchmntText definitively says "submitted to Exchange, financial results"
+    if any(pat in text for pat in _NSE_RESULT_TEXT_PATTERNS):
+        score = 100
+        if has_xbrl:
+            score += 5   # small bonus; confirms XBRL-tagged results
 
-    # Negative: clear intimation signals in TITLE only (not URL — NSE URL naming is unreliable)
-    if any(kw in title_hay for kw in ("prior intimation", "intimation of board meeting", "notice of board meeting")):
-        score -= 25
-    if "to consider" in title_hay or "meeting of the board" in title_hay:
-        score -= 15
-    # Only penalise URL for intimation if title gives no positive signal
-    if score == 0 and "intimat" in url_hay:
-        score -= 5
+    # Tier 2: desc = Outcome of Board Meeting
+    elif "outcome of board meeting" in desc:
+        score = 70 if has_xbrl else 50
+
+    # Tier 3: attchmntText has partial results reference (but not the definitive phrase)
+    elif "financial results" in text:
+        score = 45 if has_xbrl else 35
+
+    # Tier 4: press release / investor presentation (may have summary numbers)
+    elif desc == "press release":
+        score = 20
+    elif "investor presentation" in desc:
+        score = 15
+
+    return score
+
+
+def _score_bse_announcement_item(item: dict[str, Any]) -> int:
+    """Score a BSE AnnSubCategoryGetData row. Returns > 0 only for results PDFs.
+
+    BSE provides explicit category taxonomy — far easier to classify:
+      100 – CATEGORYNAME contains "result" AND SUBCATNAME is "Financial Results"
+       90 – SUBCATNAME is "Financial Results" (any category)
+       80 – Title contains "Financial Results" in a Result category
+       20 – Investor Presentation
+       15 – Press Release / Media Release
+      -100 – explicit skip subcategories
+    """
+    cat    = str(item.get("CATEGORYNAME") or "").strip().lower()
+    subcat = str(item.get("SUBCATNAME") or "").strip().lower()
+    title  = str(item.get("NEWSSUB") or item.get("HEADLINE") or "").strip().lower()
+
+    # Hard skip
+    if subcat in _BSE_SUBCAT_SKIP:
+        return -100
+
+    score = 0
+
+    if "result" in cat and "financial results" in subcat:
+        score = 100
+    elif "financial results" in subcat:
+        score = 90
+    elif "financial results" in title and ("result" in cat or "company update" in cat):
+        score = 80
+    elif "investor presentation" in subcat:
+        score = 20
+    elif "press release" in subcat:
+        score = 15
 
     return score
 
 
 def _fetch_outcome_urls_from_nse(symbol: str, meeting_date: date) -> list[str]:
-    """Query NSE corporate-announcements for post-meeting outcome PDFs for a symbol+date.
+    """Return ranked outcome-PDF URLs from NSE corporate-announcements for symbol+date.
 
-    The corporate-board-meetings API only stores pre-meeting intimation notices.
-    Outcome/results PDFs are filed as separate corporate announcements with
-    desc = "Outcome of Board Meeting", "Press Release", "Financial Results", etc.
-    Called as fallback when stored attachment_urls contain only intimation docs.
+    The corporate-board-meetings API only stores pre-meeting intimation PDFs.
+    The actual financial-results PDFs are filed as separate corporate announcements
+    and identified via attchmntText / hasXbrl / desc fields.
     """
     from_dt = meeting_date - timedelta(days=1)
-    to_dt = meeting_date + timedelta(days=7)  # 7 days post-meeting window
+    to_dt   = meeting_date + timedelta(days=7)   # 7-day post-meeting window
     params = {
         "symbol": symbol.upper(),
-        "index": "equities",
+        "index":  "equities",
         "from_date": from_dt.strftime("%d-%m-%Y"),
-        "to_date": to_dt.strftime("%d-%m-%Y"),
+        "to_date":   to_dt.strftime("%d-%m-%Y"),
     }
     try:
         payload = fetch_nse_json(_NSE_ANNOUNCEMENTS, params=params, referer_path=_NSE_REFERER)
@@ -131,47 +224,41 @@ def _fetch_outcome_urls_from_nse(symbol: str, meeting_date: date) -> list[str]:
             payload if isinstance(payload, list) else []
         ) or []
     except Exception as exc:
-        logger.debug("NSE announcements re-fetch failed for %s: %s", symbol, exc)
+        logger.debug("NSE outcome re-fetch failed for %s: %s", symbol, exc)
         return []
 
     scored: list[tuple[int, str]] = []
     for item in rows:
         if not isinstance(item, dict):
             continue
-        # NSE corporate-announcements uses 'desc' for the title
-        subject = str(
-            item.get("desc") or item.get("subject") or item.get("NEWSSUB") or
-            item.get("HEADLINE") or item.get("Subject") or ""
-        )
-        category = str(item.get("category") or item.get("CATEGORY") or item.get("SUBCATNAME") or "")
-        attachment = _normalize_nse_attachment(str(
-            item.get("attchmntFile") or item.get("attachment") or
-            item.get("ATTACHMENTNAME") or item.get("NSURL") or ""
-        ))
-        if not attachment:
+        url = _normalize_nse_attachment(str(item.get("attchmntFile") or ""))
+        if not url:
             continue
-        score = _score_bm_record(f"{subject} {category}", attachment)
+        score = _score_nse_announcement_item(item)
         if score > 0:
-            scored.append((score, attachment))
+            scored.append((score, url))
 
     scored.sort(key=lambda x: x[0], reverse=True)
-    urls = list(dict.fromkeys(url for _, url in scored))  # dedupe, preserve score order
-    logger.debug("NSE outcome re-fetch for %s %s: %d outcome URL(s)", symbol, meeting_date, len(urls))
+    urls = list(dict.fromkeys(u for _, u in scored))
+    logger.info(
+        "NSE outcome re-fetch for %s %s: %d/%d announcements are results docs",
+        symbol, meeting_date, len(urls), len(rows),
+    )
     return urls
 
 
 def _fetch_outcome_urls_from_bse(symbol: str, meeting_date: date) -> list[str]:
-    """BSE fallback: query corporate announcements for outcome PDFs."""
+    """Return ranked outcome-PDF URLs from BSE AnnSubCategoryGetData for symbol+date."""
     from_dt = meeting_date - timedelta(days=1)
-    to_dt = meeting_date + timedelta(days=7)
+    to_dt   = meeting_date + timedelta(days=7)
     params = {
-        "pageno": "1",
-        "strCat": "-1",
+        "pageno":      "1",
+        "strCat":      "-1",
         "strPrevDate": from_dt.strftime("%Y%m%d"),
-        "strScrip": symbol.upper(),
-        "strSearch": "P",
-        "strToDate": to_dt.strftime("%Y%m%d"),
-        "strType": "C",
+        "strScrip":    symbol.upper(),
+        "strSearch":   "P",
+        "strToDate":   to_dt.strftime("%Y%m%d"),
+        "strType":     "C",
         "subcategory": "-1",
     }
     try:
@@ -187,17 +274,87 @@ def _fetch_outcome_urls_from_bse(symbol: str, meeting_date: date) -> list[str]:
     for item in rows:
         if not isinstance(item, dict):
             continue
-        title = str(item.get("NEWSSUB") or item.get("HEADLINE") or item.get("Subject") or "")
-        category = str(item.get("CATEGORYNAME") or item.get("SUBCATNAME") or "")
-        attachment = _normalize_bse_attachment(str(item.get("ATTACHMENTNAME") or item.get("NSURL") or ""))
-        if not attachment:
+        url = _normalize_bse_attachment(str(item.get("ATTACHMENTNAME") or item.get("NSURL") or ""))
+        if not url:
             continue
-        score = _score_bm_record(f"{title} {category}", attachment)
+        score = _score_bse_announcement_item(item)
         if score > 0:
-            scored.append((score, attachment))
+            scored.append((score, url))
 
     scored.sort(key=lambda x: x[0], reverse=True)
-    return list(dict.fromkeys(url for _, url in scored))
+    urls = list(dict.fromkeys(u for _, u in scored))
+    logger.info(
+        "BSE outcome re-fetch for %s %s: %d/%d announcements are results docs",
+        symbol, meeting_date, len(urls), len(rows),
+    )
+    return urls
+
+
+def _enrich_past_records_with_outcome_pdfs(records):
+    """For records whose meeting date is in the past, replace attachment URLs with outcome PDFs.
+
+    The event-calendar / corporate-board-meetings APIs store pre-meeting intimations.
+    Actual results are filed later as corporate announcements. We re-fetch the latter for
+    past meetings so the stored record (and detail page) points to the real results PDF.
+    """
+    today = date.today()
+    past_records = [r for r in records if isinstance(r.get("meeting_date"), date) and r["meeting_date"] < today]
+    if not past_records:
+        return records
+
+    logger.info("Enriching %d past records with outcome PDFs from corporate-announcements", len(past_records))
+    enriched_count = 0
+    for record in past_records:
+        symbol = str(record.get("symbol") or "").strip().upper()
+        meeting_date = record.get("meeting_date")
+        if not symbol or not meeting_date:
+            continue
+        try:
+            outcome_urls = _fetch_outcome_urls_from_nse(symbol, meeting_date)
+            if not outcome_urls:
+                outcome_urls = _fetch_outcome_urls_from_bse(symbol, meeting_date)
+            if outcome_urls:
+                record["attachment_urls"] = outcome_urls
+                # If the board-meetings title is an intimation, rewrite it to a result title
+                title = str(record.get("title") or "").strip()
+                summary = str(record.get("summary") or "").strip()
+                if "intimation" in summary.lower() or "to consider" in summary.lower():
+                    record["summary"] = f"Outcome of board meeting - financial results for {symbol}"
+                if title.startswith("Financial Results -") and "intimation" not in title.lower():
+                    record["title"] = f"Outcome of board meeting - {symbol}"
+                enriched_count += 1
+        except Exception as exc:
+            logger.debug("Outcome enrichment failed for %s %s: %s", symbol, meeting_date, exc)
+            continue
+
+    logger.info("Outcome PDF enrichment completed: %d/%d records updated", enriched_count, len(past_records))
+    return records
+
+
+# legacy function kept for _enrich_from_corporate_board_meetings_batch
+def _score_bm_record(purpose: str, url: str) -> int:  # noqa: D401
+    """Score a corporate-board-meetings record (pre-meeting API). Higher = more result-like."""
+    title_hay = purpose.lower()
+    score = 0
+    if "outcome" in title_hay:
+        score += 30
+    if any(kw in title_hay for kw in ("approved the financial", "audited financial", "unaudited financial")):
+        score += 20
+    if "press release" in title_hay:
+        score += 15
+    if "investor presentation" in title_hay:
+        score += 12
+    if "financial results for" in title_hay or "standalone and consolidated" in title_hay:
+        score += 15
+    if "quarterly results" in title_hay or "financial results" in title_hay:
+        score += 10
+    if any(kw in title_hay for kw in ("prior intimation", "intimation of board meeting", "notice of board meeting")):
+        score -= 25
+    if "to consider" in title_hay or "meeting of the board" in title_hay:
+        score -= 15
+    return score
+
+
 
 # IST = UTC+5:30
 _IST_OFFSET = timedelta(hours=5, minutes=30)
@@ -231,10 +388,13 @@ def run_earnings_ingestion(
     backfill_quarters: int = 0,
     max_announcements: int | None = None,
     parse_documents: bool = False,
+    enrich_past_outcomes: bool = True,
 ) -> dict[str, Any]:
     """Fetch, dedupe, store, and enrich earnings announcements.
     
     parse_documents defaults to False to avoid slow PDF parsing during backfill.
+    enrich_past_outcomes controls whether past meeting records are re-resolved to
+    outcome PDFs from corporate-announcements (slow but gives real results).
     """
     today = date.today()
     start = parse_date(start_date) or today - timedelta(days=1)
@@ -246,7 +406,7 @@ def run_earnings_ingestion(
         start, end = end, start
 
     ensure_earnings_tables()
-    nse_rows = fetch_nse_earnings_announcements(start, end)
+    nse_rows = fetch_nse_earnings_announcements(start, end, enrich_past_outcomes=enrich_past_outcomes)
     bse_rows = fetch_bse_earnings_announcements(start, end)
     merged = dedupe_announcements([*nse_rows, *bse_rows])
     merged_before_universe = len(merged)
@@ -305,16 +465,18 @@ def backfill_historical_earnings(quarters: int = 4, *, max_announcements: int | 
         backfill_quarters=max(4, quarters),
         max_announcements=max_announcements,
         parse_documents=False,  # Skip PDF during backfill for speed
+        enrich_past_outcomes=False,  # Calendar-only for old dates; detail page fetches outcome on demand
     )
 
 
-def fetch_nse_earnings_announcements(start: date, end: date) -> list[dict[str, Any]]:
+def fetch_nse_earnings_announcements(start: date, end: date, enrich_past_outcomes: bool = True) -> list[dict[str, Any]]:
     """Fetch earnings announcements from NSE event calendar (primary source, no session required).
 
     NSE /api/event-calendar returns both historical and future board meetings with structured dates.
     Covers both NSE and BSE-listed companies. No browser warm-up or cookies needed.
 
     Then enriches each record with metadata from /api/corporate-board-meetings (single batch call).
+    For past meeting dates, optionally re-resolves attachment URLs to actual outcome PDFs.
     """
     _NSE_EVENT_CALENDAR = "/api/event-calendar"
     _NSE_EC_REFERER = "/companies-listing/corporate-filings-announcements"
@@ -395,6 +557,11 @@ def fetch_nse_earnings_announcements(start: date, end: date) -> list[dict[str, A
     if all_records:
         all_records = _enrich_from_corporate_board_meetings_batch(all_records, start, end)
         all_records = _hydrate_symbols_from_company_master_nse(all_records)
+        # For past dates, replace intimation attachments with actual outcome PDFs
+        # from the corporate-announcements API. This ensures the stored record points
+        # to the real results filing, not the prior board-meeting notice.
+        if enrich_past_outcomes:
+            all_records = _enrich_past_records_with_outcome_pdfs(all_records)
 
     return all_records
 

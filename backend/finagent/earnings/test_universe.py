@@ -2,6 +2,7 @@ from finagent.earnings import universe
 
 
 def test_earnings_universe_filters_indexed_companies(monkeypatch):
+    monkeypatch.setenv("FINAGENT_EARNINGS_FILTER_UNIVERSE", "true")
     monkeypatch.setenv("FINAGENT_EARNINGS_UNIVERSE_LIMIT", "2")
     monkeypatch.setattr(
         universe,

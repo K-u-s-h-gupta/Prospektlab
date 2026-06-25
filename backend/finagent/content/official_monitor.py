@@ -42,7 +42,7 @@ from finagent.content.editorial_calendar import get_daily_plan, pick_topic_for_a
 from finagent.news.sources.mca_updates import fetch_mca_updates
 from finagent.news.sources.rbi_press import fetch_rbi_press_releases
 from finagent.news.sources.sebi_rss import fetch_sebi_news
-from finagent.paths import finagent_data_path, repo_root
+from finagent.paths import finagent_data_path
 from finagent.seo.google_search_console import get_search_console_status
 from finagent.tools.data import fetch_news
 
@@ -1414,7 +1414,11 @@ async def _run_fallback_publication(
 
 
 def _load_fallback_universe(limit: int = 120) -> list[dict[str, Any]]:
-    fallback_path = repo_root() / "finagent" / "data" / "isin_master.json"
+    fallback_path = finagent_data_path("isin_master.json")
+    if not fallback_path.is_file():
+        package_bundle_path = Path(__file__).resolve().parent.parent / "data" / "isin_master.json"
+        if package_bundle_path.is_file():
+            fallback_path = package_bundle_path
     if not fallback_path.is_file():
         return []
     try:

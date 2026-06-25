@@ -26,6 +26,19 @@ def _reset_cross_source_seen():
     _om._CROSS_SOURCE_SEEN.clear()
 
 
+def test_load_watch_universe_uses_bundled_isin_master_when_db_unavailable(monkeypatch, tmp_path: Path):
+    missing_bundle = tmp_path / "isin_master.json"
+    monkeypatch.setattr("finagent.content.official_monitor.get_listed_companies", lambda *args, **kwargs: [])
+    monkeypatch.setattr("finagent.content.official_monitor.finagent_data_path", lambda *parts: missing_bundle)
+
+    universe = _om._load_watch_universe()
+
+    assert len(universe) > 0
+    first = universe[0]
+    assert first.get("company_name")
+    assert first.get("nse_symbol") or first.get("isin")
+
+
 def test_triage_event_skips_low_value_notice():
     result = _triage_event(
         "nse",

@@ -73,6 +73,7 @@ from finagent.content_automation import (
 )
 from finagent.runtime_provider import (
     is_content_filter_error,
+    is_provider_unavailable_error,
     is_rate_limit_error,
     resolve_openai_config,
     resolve_openai_fallback_config,
@@ -137,19 +138,21 @@ async def chat_with_fallback(
     try:
         return await _call(client, model)
     except Exception as primary_exc:
-        if is_content_filter_error(primary_exc) and fb_client is not None and fb_model is not None:
+        primary_unavailable = is_provider_unavailable_error(primary_exc)
+        should_try_fallback = is_content_filter_error(primary_exc) or primary_unavailable
+        if should_try_fallback and fb_client is not None and fb_model is not None:
             try:
                 return await _call(fb_client, fb_model)
             except Exception as fb_exc:
-                if is_rate_limit_error(fb_exc):
-                    # OpenAI burst budget exhausted — bounce back to Azure with
+                if not primary_unavailable and is_rate_limit_error(fb_exc):
+                    # OpenAI burst budget exhausted - bounce back to Azure with
                     # a softened message envelope so RAI is less likely to fire.
                     await asyncio.sleep(2.0)
                     softened = _soften_for_retry(messages)
                     return await _call(client, model) if not softened else await _call_with_messages(client, model, softened, temperature, max_tokens, timeout, response_format)
                 raise
         if is_rate_limit_error(primary_exc) and fb_client is not None and fb_model is not None:
-            # Primary (Azure) ran out — try the OpenAI fallback once.
+            # Primary (Azure) ran out - try the OpenAI fallback once.
             try:
                 return await _call(fb_client, fb_model)
             except Exception as fb_exc:

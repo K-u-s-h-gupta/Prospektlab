@@ -73,6 +73,7 @@ from finagent.seo.google_search_console import submit_sitemap
 from finagent.events import BUS
 from finagent.run_agent import AgentLoopConfig, run_research_session
 from finagent.runtime_provider import resolve_openai_config
+from finagent.earnings.analysis import EARNINGS_MARKERS, build_earnings_article_structure_brief
 
 logger = logging.getLogger("finagent.content.flash_engine")
 
@@ -880,10 +881,7 @@ class FlashIngestResult(BaseModel):
 
 # ── IKG context builder ───────────────────────────────────────────────────────
 
-_MANUAL_EARNINGS_MARKERS = (
-    "earnings", "results", "result", "quarter", "q1", "q2", "q3", "q4",
-    "fy", "concall", "conference call", "fact sheet", "investor release",
-)
+_MANUAL_EARNINGS_MARKERS = EARNINGS_MARKERS
 _MANUAL_SEBI_MARKERS = (
     "sebi", "adjudication", "show cause", "settlement", "order", "penalty",
     "interim order", "enforcement",
@@ -957,15 +955,7 @@ def _article_structure_brief(content_type: str, target: str, has_ikg: bool) -> s
         "- Distinguish reported numbers, management commentary, and ProspektLab inference.\n"
     )
     if content_type == "earnings":
-        base += (
-            "For earnings-like topics, structure the article around:\n"
-            "1. The quarter in one paragraph.\n"
-            "2. The metrics that actually moved (revenue, margin, profit, cash, deal wins, dividend if declared).\n"
-            "3. Demand by geography, vertical, product line, or client segment.\n"
-            "4. Margin quality, hiring, productivity, attrition, and cash conversion.\n"
-            "5. Management commentary, order book, discretionary-spend signals, and what to monitor next.\n"
-            "6. Include at least one earnings table with YoY/QoQ deltas and one visual block based on those metrics.\n"
-        )
+        base += build_earnings_article_structure_brief()
     elif content_type == "company":
         base += (
             "For company intelligence topics, structure the article around business model, financial trajectory, governance, risks, catalysts, and peer context.\n"

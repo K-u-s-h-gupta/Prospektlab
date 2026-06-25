@@ -7,12 +7,10 @@ Sources its target list in priority order:
      follow-ups, sector trends.
 
 Quality bars stay at production strength (gate >=85, livemint >=70, no
-critical issues) when an editorial revision loop is available. When the
-revision loop is rate-limited, the runner still publishes any article that
-clears word-count, substantive-section, and per-paragraph attribution
-floors — the synthesis prompt is strong enough to land Livemint-grade copy
-on a clean first pass for ~70% of targets.
-
+critical issues) when an editorial revision loop is available. Publication
+remains evidence-gated by default, so articles stay in draft until the
+editorial and evidence checks pass. Operators can still opt into an
+explicit override for ad hoc debugging by setting DAILY_FORCE_PUBLISH=1.
 Run manually:
     python scripts/daily_publisher.py
 
@@ -49,7 +47,8 @@ from publish_pipeline import build_clients, publish_target  # noqa: E402
 DAILY_TARGET = int(os.environ.get("DAILY_TARGET_COUNT", "18"))
 MAX_PER_RUN = int(os.environ.get("DAILY_MAX_PER_RUN", "24"))
 CONCURRENCY = int(os.environ.get("DAILY_CONCURRENCY", "2"))
-FORCE_PUBLISH = os.environ.get("DAILY_FORCE_PUBLISH", "1").strip().lower() in {"1", "true", "yes"}
+FORCE_PUBLISH = os.environ.get("DAILY_FORCE_PUBLISH", "0").strip().lower() in {"1", "true", "yes"}
+DAILY_MIN_SUCCESS_COUNT = int(os.environ.get("DAILY_MIN_SUCCESS_COUNT", "1"))
 
 LOG_DIR = ROOT / ".finagent" / "daily_runs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -166,7 +165,7 @@ async def main() -> int:
     targets = (official + pool_picks)[:MAX_PER_RUN]
 
     print(f"== Daily publisher | {datetime.now(timezone.utc).isoformat()} ==")
-    print(f"Daily target: {DAILY_TARGET} | Max per run: {MAX_PER_RUN}")
+    print(f"Daily target: {DAILY_TARGET} | Max per run: {MAX_PER_RUN} | Success floor: {DAILY_MIN_SUCCESS_COUNT}")
     print(f"Official events queued: {len(official)} | Rotation picks: {len(pool_picks)} | Total: {len(targets)}")
     if not targets:
         print("No targets to publish.")
@@ -216,7 +215,8 @@ async def main() -> int:
     log_path.write_text(json.dumps(results, indent=2, default=str), encoding="utf-8")
     print(f"Run log: {log_path}")
 
-    return 0 if pub >= DAILY_TARGET else 2
+    success_floor = max(1, min(DAILY_TARGET, DAILY_MIN_SUCCESS_COUNT))
+    return 0 if pub >= success_floor else 2
 
 
 if __name__ == "__main__":

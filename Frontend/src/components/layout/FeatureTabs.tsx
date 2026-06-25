@@ -31,8 +31,8 @@ const TABS: TabDef[] = [
   { id: 'portfolio', label: 'Portfolio', icon: Briefcase },
   { id: 'watchlist', label: 'Watchlist', icon: Star },
   { id: 'screener', label: 'Screener', icon: SlidersHorizontal },
-  { id: 'ipo', label: 'IPO', icon: Rocket },
-  { id: 'earnings', label: 'Earnings', icon: CalendarClock, comingSoon: true },
+  { id: 'earnings', label: 'Earnings', icon: CalendarClock },
+  { id: 'ipo', label: 'IPO', icon: Rocket, comingSoon: true },
   { id: 'governance', label: 'Governance', icon: ShieldCheck, comingSoon: true },
 ];
 

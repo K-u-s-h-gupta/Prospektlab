@@ -6,15 +6,21 @@ failure signals for the listed universe than MCA strike-off (which is dominated 
 tiny private shells). These map to a CIN via ISIN/scrip and become high-quality
 positive labels in ``failure_events``.
 
-The API carries no delisting date, so the event is dated by a proxy: the company's
-last shareholding-pattern filing (a delisted company stops filing — its last SHP
-quarter ≈ when it went dark). That makes the label usable for point-in-time training.
+The BSE ListofScripData API carries no delisting date.  ``backfill_delisting_dates``
+fetches per-scrip announcement history from the BSE announcements API
+(AnnSubCategoryGetData) and extracts the earliest filing whose subject line contains
+a delisting keyword — that date is written back to ``failure_events.event_date``.
+This replaces the shp_raw.fetched_at proxy with a real-event date (~20 day precision).
+
 Reachable from ikg-vm (api.bseindia.com is not IP-blocked, unlike NSE).
 """
 
 from __future__ import annotations
 
 import logging
+import re
+import time
+from datetime import date
 from typing import Any
 
 import httpx
@@ -24,6 +30,7 @@ from finagent.ikg.db import connect_postgres, get_database_url
 logger = logging.getLogger("finagent.ikg.scrapers.bse_delisting")
 
 _BSE_LIST_URL = "https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w"
+_BSE_ANN_URL  = "https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w"
 _BSE_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -39,7 +46,145 @@ _STATUS_MAP: tuple[tuple[str, str, float], ...] = (
 )
 
 
-def fetch_status_list(status: str, *, timeout_s: float = 60.0) -> list[dict[str, Any]]:
+_DELIST_KW_RE = re.compile(
+    r"\b(delist|delisted|delisting|compulsory\s+delist|voluntary\s+delist|"
+    r"exit\s+from\s+trading|suspend|suspens|trading\s+halt)\b",
+    flags=re.I,
+)
+
+
+def _delist_date_from_announcements(scrip_code: str, *, timeout_s: float = 15.0) -> date | None:
+    """Fetch BSE announcement history for a scrip and return the earliest date
+    whose subject line matches a delisting/suspension keyword.
+
+    Uses the BSE AnnSubCategoryGetData endpoint which returns all corporate
+    filings for a scrip in reverse-chronological order.  We walk pages until
+    we find a delisting keyword or exhaust the history.
+    """
+    for page in range(1, 6):  # max 5 pages (~100 filings)
+        try:
+            with httpx.Client(timeout=timeout_s, follow_redirects=True, trust_env=False) as c:
+                r = c.get(
+                    _BSE_ANN_URL,
+                    headers=_BSE_HEADERS,
+                    params={
+                        "pageno": page,
+                        "strCat": -1,
+                        "strPrevDate": "19900101",
+                        "strScrip": scrip_code,
+                        "strSearch": "P",
+                        "strToDate": "20301231",
+                        "strType": "C",
+                        "subcategory": -1,
+                    },
+                )
+            if r.status_code != 200:
+                break
+            payload = r.json()
+            rows = payload.get("Table") or payload.get("Table1") or []
+            if not rows:
+                break
+            for row in rows:
+                subject = str(row.get("NEWSSUB") or "")
+                if _DELIST_KW_RE.search(subject):
+                    raw_dt = str(row.get("NEWS_DT") or row.get("DT_TM") or "")
+                    # Formats: "2016-02-16T16:52:53" or "2016-02-16"
+                    try:
+                        return date.fromisoformat(raw_dt[:10])
+                    except ValueError:
+                        continue
+        except Exception:
+            break
+        time.sleep(0.2)
+    return None
+
+
+def backfill_delisting_dates(
+    database_url: str | None = None,
+    *,
+    batch_size: int = 500,
+    delay_s: float = 0.25,
+) -> dict[str, Any]:
+    """Backfill real delisting/suspension dates from BSE announcement history.
+
+    Fetches undated ``exchange_delisting`` / ``exchange_suspension`` rows from
+    ``failure_events``, resolves the BSE scrip code via ``ikg_company_master``,
+    calls the announcements API per scrip, and updates ``failure_events.event_date``
+    with the earliest matching filing date.
+
+    Replaces the ``shp_raw.fetched_at`` proxy with a real event date so the
+    temporal backtest can measure lead-time between governance flags and the
+    actual delisting event.
+    """
+    from finagent.ikg.db import connect_postgres, get_database_url
+    db_url = get_database_url(database_url)
+    if not db_url:
+        return {"success": False, "error": "no database_url", "updated": 0}
+
+    from psycopg.rows import dict_row
+
+    stats: dict[str, Any] = {"success": False, "updated": 0, "skipped": 0, "errors": 0,
+                              "already_dated": 0}
+    try:
+        with connect_postgres(db_url, row_factory=dict_row, connect_timeout=30) as conn:
+            with conn.cursor() as cur:
+                # Fetch undated delisting / suspension rows with their BSE scrip code
+                cur.execute(
+                    """
+                    select fe.id, fe.cin, fe.event_type,
+                           m.bse_scrip_code
+                    from failure_events fe
+                    join ikg_company_master m using (cin)
+                    where fe.event_type in ('exchange_delisting', 'exchange_suspension')
+                      and fe.event_date is null
+                      and m.bse_scrip_code is not null
+                      and m.bse_scrip_code <> ''
+                    order by fe.id
+                    limit %s
+                    """,
+                    (batch_size,),
+                )
+                rows = cur.fetchall()
+                logger.info("backfill_delisting_dates: %d undated rows to process", len(rows))
+
+                for row in rows:
+                    scrip = str(row["bse_scrip_code"]).strip()
+                    if not scrip:
+                        stats["skipped"] += 1
+                        continue
+                    try:
+                        event_date = _delist_date_from_announcements(scrip)
+                    except Exception as exc:
+                        logger.debug("scrip %s announcement fetch failed: %s", scrip, exc)
+                        stats["errors"] += 1
+                        continue
+                    if event_date is None:
+                        stats["skipped"] += 1
+                        continue
+                    cur.execute(
+                        "UPDATE failure_events SET event_date = %s, updated_at = now() WHERE id = %s",
+                        (event_date, row["id"]),
+                    )
+                    stats["updated"] += 1
+                    time.sleep(delay_s)
+
+                conn.commit()
+
+                # Count remaining undated after this run
+                cur.execute(
+                    "SELECT count(1) FROM failure_events "
+                    "WHERE event_type IN ('exchange_delisting','exchange_suspension') AND event_date IS NULL"
+                )
+                stats["remaining_undated"] = cur.fetchone()[0]
+
+        stats["success"] = True
+    except Exception as exc:
+        logger.error("backfill_delisting_dates failed: %s", exc)
+        stats["error"] = str(exc)
+    return stats
+
+
+
     """Fetch the BSE equity list for a given status (Delisted / Suspended)."""
     for _ in range(3):
         try:

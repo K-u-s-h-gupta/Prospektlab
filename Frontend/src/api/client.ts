@@ -184,7 +184,7 @@ const AUTH_TOKEN_KEY = 'prospektlab_auth_token';
 const AUTH_TOKEN_SESSION_KEY = 'prospektlab_auth_token_session';
 const GUEST_ID_KEY = 'prospektlab_guest_id';
 
-// ── Runtime Backend URL Support (for Amplify + separate ECS backend) ─────
+// â”€â”€ Runtime Backend URL Support (for Amplify + separate ECS backend) â”€â”€â”€â”€â”€
 function getApiBase(): string {
   if (typeof window !== 'undefined') {
     const w = window as any;
@@ -323,7 +323,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-// ── Auth state (in-memory only; httpOnly cookie is the source of truth) ──
+// â”€â”€ Auth state (in-memory only; httpOnly cookie is the source of truth) â”€â”€
 let _cachedUser: AuthUser | null = null;
 let _cachedUserPromise: Promise<AuthUser | null> | null = null;
 let _authToken: string | null = null;
@@ -456,7 +456,7 @@ async function fetchApi(url: string, options?: RequestInit): Promise<Response> {
   return res;
 }
 
-// ── Auth Endpoints ──────────────────────────────────────────────────────
+// â”€â”€ Auth Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function parseJsonSanitized<T = any>(res: Response): Promise<T> {
   const payload = await res.json();
@@ -665,7 +665,7 @@ export async function apiLogout(): Promise<void> {
   setAuthToken(null);
 }
 
-// ── Portfolio Endpoints ──────────────────────────────────────────────────
+// â”€â”€ Portfolio Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getPortfolioMirror(): Promise<any> {
   const res = await fetchWithTimeout(
@@ -951,7 +951,7 @@ export async function getPortfolioSectors(): Promise<any> {
   return parseJsonSanitized(res);
 }
 
-// ── Governance & Network intelligence ──────────────────────────────────────
+// â”€â”€ Governance & Network intelligence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface GovernanceFlag {
   code: string;
@@ -1194,7 +1194,7 @@ export async function getPortfolioCommentary(): Promise<any> {
   return res.json();
 }
 
-// ── Research and Chat SSE Endpoints ────────────────────────────────────────
+// â”€â”€ Research and Chat SSE Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function startResearch(message: string, mode: 'standard' | 'deep', portfolioContext?: string): Promise<any> {
   const rewrittenMessage = portfolioContext ? `${portfolioContext} ${message}` : message;
@@ -1558,7 +1558,7 @@ export function streamSession(
         phase: 'http_error',
         status_code: resp.status,
       });
-      console.warn("SSE HTTP error status:", resp.status, "— retrying in 3s");
+      console.warn("SSE HTTP error status:", resp.status, "â€” retrying in 3s");
       clearTimeout(sseReconnectTimer);
       sseReconnectTimer = setTimeout(connectSSE, 3000);
       return;
@@ -1664,7 +1664,7 @@ export function streamSession(
 }
 
 
-// ── Market Data & Token Usage API Endpoints ──────────────────────────────
+// â”€â”€ Market Data & Token Usage API Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getUserTokenUsage(): Promise<any> {
   const res = await fetchApi(apiUrl('/user/token-usage'), {
@@ -1808,7 +1808,7 @@ export async function getWatchlistSnapshot(
   return parseJsonSanitized(res);
 }
 
-// ── Flash Content Engine API ──────────────────────────────────────────────────
+// â”€â”€ Flash Content Engine API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function screenerSearch(query: string, limit = 8): Promise<ScreenerSearchResponse> {
   const params = new URLSearchParams({
@@ -2169,7 +2169,7 @@ export function flashJobStatusUrl(jobId: string): string {
 }
 
 
-// ── Document export (deep mode only) ─────────────────────────────────
+// â”€â”€ Document export (deep mode only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type ExportFormat = 'pdf' | 'docx' | 'xlsx';
 
@@ -2228,7 +2228,7 @@ export async function downloadExportAndSave(jobId: string, format: ExportFormat)
   }, 100);
 }
 
-// ── IPO Intelligence ────────────────────────────────────────────────────────
+// â”€â”€ IPO Intelligence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface IpoCard {
   slug: string;
@@ -2236,6 +2236,14 @@ export interface IpoCard {
   sector?: string;
   exchange?: string;
   status: string;
+  doc_type?: string;
+  filing_date?: string | null;
+  rhp_filing_date?: string | null;
+  prospectus_filing_date?: string | null;
+  subscription_open?: string | null;
+  subscription_close?: string | null;
+  allotment_date?: string | null;
+  pdf_url?: string | null;
   issue_size_cr?: number;
   fresh_issue_cr?: number;
   ofs_cr?: number;
@@ -2243,8 +2251,21 @@ export interface IpoCard {
   price_band?: { low?: number; high?: number };
   composite_score?: number;
   gmp?: number | null;
+  lot_size?: number | null;
   subscription_status?: string;
+  subscription_times?: number | null;
+  nse_symbol?: string | null;
+  is_sme?: boolean | null;
   listing_date?: string | null;
+  risk_count?: number;
+  fraud_signal_count?: number;
+  kpi_count?: number;
+  peer_count?: number;
+  document_coverage_pct?: number;
+  summary_headline?: string;
+  ai_summary?: string;
+  strengths?: string[];
+  watchouts?: string[];
 }
 
 export interface IpoPipelineResponse {
@@ -2257,10 +2278,29 @@ export interface IpoPipelineResponse {
   gmp_disclaimer: string;
 }
 
+export interface IpoLifecycleStage {
+  key: string;
+  label: string;
+  description?: string;
+  state: 'done' | 'current' | 'pending' | string;
+  date?: string | null;
+  end_date?: string | null;
+  pdf_url?: string | null;
+}
+
+export interface IpoLifecycle {
+  current_doc_type?: string;
+  source?: string;
+  latest_document_url?: string | null;
+  latest_document_date?: string | null;
+  stages: IpoLifecycleStage[];
+}
+
 export interface IpoAnalysisResponse {
   filing: Record<string, any>;
   analysis: Record<string, any>;
   scores: Record<string, any>;
+  lifecycle?: IpoLifecycle;
   peer_valuation?: Record<string, any>;
 }
 
@@ -2293,4 +2333,374 @@ export async function searchIpos(query: string, limit: number = 10): Promise<{ q
   if (!res.ok) throw new Error(`IPO search failed: ${res.statusText}`);
   return res.json();
 }
+
+
+// -- Earnings Analysis API --------------------------------------------------
+
+export interface EarningsCalendarDay {
+  date: string;
+  company_count: number;
+  summary?: string;
+  sectors?: string[];
+  timings?: Record<string, number>;
+}
+
+export interface EarningsCalendarResponse {
+  start_date: string;
+  end_date: string;
+  dates: EarningsCalendarDay[];
+  source?: string;
+}
+
+export interface EarningsHighlight {
+  text: string;
+  url?: string;
+  source_label?: string;
+}
+
+export interface EarningsCompanyItem {
+  event_uid: string;
+  symbol: string;
+  name: string;
+  sector?: string;
+  index?: string;
+  market_cap?: string;
+  date: string;
+  timing: 'Pre-market' | 'During-market' | 'Post-market' | 'TAS' | string;
+  fiscal_quarter: string;
+  highlights: EarningsHighlight[];
+  is_past?: boolean;
+  eps_actual?: number | null;
+  eps_estimated?: number | null;
+  eps_surprise_pct?: number | null;
+  post_earnings_move_1d?: number | null;
+  // Revenue & PAT metrics for the Earnings Pulse overview section
+  revenue_actual?: number | null;
+  revenue_surprise_pct?: number | null;
+  revenue_yoy_pct?: number | null;
+  pat_yoy_pct?: number | null;
+}
+
+export interface EarningsCompaniesResponse {
+  date?: string;
+  start_date?: string;
+  end_date?: string;
+  mode?: 'single' | 'range';
+  page: number;
+  page_size: number;
+  total: number;
+  items: EarningsCompanyItem[];
+}
+
+export interface EarningsDocumentLink {
+  type: string;
+  title: string;
+  url: string;
+  storage_path?: string;
+}
+
+export interface EarningsTranscriptBlock {
+  speaker?: string;
+  text: string;
+  order?: number;
+}
+
+export interface EarningsFinancialRow {
+  key: string;
+  label: string;
+  unit: string;
+  current?: number | null;
+  previous_quarter?: number | null;
+  same_quarter_last_year?: number | null;
+  qoq_pct?: number | null;
+  yoy_pct?: number | null;
+  higher_is_good?: boolean;
+}
+
+export interface EarningsExtractedTable {
+  page_number?: number;
+  confidence?: number;
+  rows: string[][];
+}
+
+export interface EarningsQuarterTab {
+  label: string;
+  fiscal_year?: number;
+  fiscal_period?: string;
+  move_1d_pct?: number | null;
+  is_current?: boolean;
+  is_future?: boolean;
+  earnings_date?: string;
+}
+
+export interface EarningsAISummary {
+  performance_narrative?: string;
+  pov_analysis?: string;
+  key_highlights?: {
+    revenue_drivers?: string;
+    margin_quality?: string;
+    demand_geography?: string;
+    management_guidance?: string;
+    order_book?: string;
+  };
+  risks_outlook?: string;
+  verdict?: string;
+  /** "Positive" | "Neutral" | "Negative" */
+  rating?: string;
+}
+
+export interface EarningsResultResponse {
+  symbol: string;
+  name: string;
+  sector?: string;
+  fiscal_quarter: string;
+  timing: string;
+  meeting_date: string;
+  current_price?: number | null;
+  quarter_tabs: EarningsQuarterTab[];
+  revenue?: {
+    actual?: number | null;
+    estimated?: number | null;
+    beat_miss_pct?: number | null;
+  };
+  eps?: {
+    actual?: number | null;
+    estimated?: number | null;
+    beat_miss_pct?: number | null;
+  };
+  move_1d?: {
+    pct?: number | null;
+    pre_close?: number | null;
+    post_close?: number | null;
+  };
+  highlights: EarningsHighlight[];
+  ai_summary?: EarningsAISummary | null;
+  transcript: {
+    prepared_remarks: EarningsTranscriptBlock[];
+    qa: EarningsTranscriptBlock[];
+  };
+  documents: EarningsDocumentLink[];
+  financials: {
+    unit_note?: string;
+    source?: string;
+    rows: EarningsFinancialRow[];
+    consolidated_tables?: EarningsExtractedTable[];
+    standalone_tables?: EarningsExtractedTable[];
+  };
+}
+
+// Legacy detail interface (kept for backward compatibility if needed elsewhere)
+export interface EarningsDetailResponse {
+  event_uid: string;
+  symbol: string;
+  name: string;
+  sector?: string;
+  date: string;
+  timing: string;
+  fiscal_quarter: string;
+  headline_highlights: EarningsHighlight[];
+  management_commentary: EarningsHighlight[];
+  transcript: {
+    prepared_remarks: EarningsTranscriptBlock[];
+    qa: EarningsTranscriptBlock[];
+  };
+  documents: EarningsDocumentLink[];
+  financials: {
+    unit_note?: string;
+    source?: string;
+    rows: EarningsFinancialRow[];
+    consolidated_tables?: EarningsExtractedTable[];
+    standalone_tables?: EarningsExtractedTable[];
+  };
+  summary?: string;
+  updated_at?: string;
+}
+
+export interface EarningsStatsResponse {
+  date: string;
+  total: number;
+  timing: Array<{ label: string; count: number }>;
+  sector: Array<{ label: string; count: number }>;
+}
+
+export async function getEarningsCalendar(startDate: string, endDate: string): Promise<EarningsCalendarResponse> {
+  const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      apiUrl(`/earnings/calendar?${params.toString()}`),
+      { credentials: 'include' },
+      25000,
+      'Earnings calendar timed out. Please retry.',
+    );
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw err;
+    const msg: string = err?.message || '';
+    if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('network')) {
+      throw new Error('Could not connect to the earnings service. Please check your connection and retry.');
+    }
+    throw err;
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to load earnings calendar: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
+}
+
+export interface EarningsOverviewResponse {
+  calendar: EarningsCalendarResponse;
+  companies: EarningsCompaniesResponse;
+}
+
+/**
+ * Combined endpoint: fetches both calendar + companies in a single request
+ * to avoid multiple slow DB connections for the overview Earnings Pulse.
+ */
+export async function getEarningsOverview(startDate: string, endDate: string, pageSize = 50): Promise<EarningsOverviewResponse> {
+  const params = new URLSearchParams({ start_date: startDate, end_date: endDate, page_size: String(pageSize) });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      apiUrl(`/earnings/overview?${params.toString()}`),
+      { credentials: 'include' },
+      25000,
+      'Earnings calendar timed out. Please retry.',
+    );
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw err;
+    const msg: string = err?.message || '';
+    if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('network')) {
+      throw new Error('Could not connect to the earnings service. Please check your connection and retry.');
+    }
+    throw err;
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to load earnings overview: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
+}
+
+export async function getEarningsCompanies(options: {
+  date?: string;
+  startDate?: string;
+  endDate?: string;
+  index?: string;
+  marketCap?: string;
+  sector?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<EarningsCompaniesResponse> {
+  const params = new URLSearchParams({
+    index: options.index || 'All',
+    market_cap: options.marketCap || 'All',
+    sector: options.sector || 'All',
+    page: String(options.page || 1),
+    page_size: String(options.pageSize || 25),
+  });
+  if (options.startDate && options.endDate) {
+    params.set('start_date', options.startDate);
+    params.set('end_date', options.endDate);
+  } else if (options.date) {
+    params.set('date', options.date);
+  }
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      apiUrl(`/earnings/companies?${params.toString()}`),
+      { credentials: 'include' },
+      25000,
+      'Earnings companies request timed out. Please retry.',
+    );
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw err;
+    const msg: string = err?.message || '';
+    if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('network')) {
+      throw new Error('Could not connect to the earnings service. Please check your connection and retry.');
+    }
+    throw err;
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to load earnings companies: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
+}
+
+export async function getEarningsResult(symbol: string, date: string): Promise<EarningsResultResponse> {
+  const params = new URLSearchParams({ date });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      apiUrl(`/earnings/result/${encodeURIComponent(symbol)}?${params.toString()}`),
+      { credentials: 'include' },
+      60000,
+      'Earnings result request timed out. Please retry.',
+    );
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw err;
+    const msg: string = err?.message || '';
+    if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('network')) {
+      throw new Error('Could not connect to the earnings service. Please check your connection and retry.');
+    }
+    throw err;
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to load earnings result: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
+}
+
+// Legacy getEarningsDetail kept for backward compatibility (calls /result endpoint internally)
+export async function getEarningsDetail(symbol: string, date?: string): Promise<EarningsDetailResponse> {
+  if (!date) {
+    throw new Error('Date is required for getEarningsDetail');
+  }
+  const result = await getEarningsResult(symbol, date);
+  // Map new response structure to old one
+  return {
+    event_uid: '',
+    symbol: result.symbol,
+    name: result.name,
+    sector: result.sector,
+    date: result.meeting_date,
+    timing: result.timing,
+    fiscal_quarter: result.fiscal_quarter,
+    headline_highlights: result.highlights,
+    management_commentary: [],
+    transcript: result.transcript,
+    documents: result.documents,
+    financials: result.financials,
+    summary: '',
+    updated_at: new Date().toISOString(),
+  };
+}
+
+export async function getEarningsStats(date: string): Promise<EarningsStatsResponse> {
+  const params = new URLSearchParams({ date });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      apiUrl(`/earnings/stats?${params.toString()}`),
+      { credentials: 'include' },
+      25000,
+      'Earnings stats request timed out. Please retry.',
+    );
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw err;
+    const msg: string = err?.message || '';
+    if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('network')) {
+      throw new Error('Could not connect to the earnings service. Please check your connection and retry.');
+    }
+    throw err;
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to load earnings stats: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
+}
+
 

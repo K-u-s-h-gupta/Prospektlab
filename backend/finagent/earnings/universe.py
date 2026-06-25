@@ -95,8 +95,16 @@ def get_earnings_universe() -> EarningsUniverse:
 
 
 def record_in_earnings_universe(record: dict[str, Any]) -> bool:
+    # When FINAGENT_EARNINGS_FILTER_UNIVERSE is false, allow all NSE/BSE
+    # earnings announcements through so the calendar shows every company.
+    if os.getenv("FINAGENT_EARNINGS_FILTER_UNIVERSE", "").lower() in {"0", "false", "off", "no"}:
+        return True
     universe = get_earnings_universe()
     if not universe.symbols and not universe.isins and not universe.bse_codes:
+        return True
+    # If the universe only contains the fallback SENSEX symbols (no company master data),
+    # allow all records through so we don't filter out companies when master is empty.
+    if universe.symbols == _SENSEX_SYMBOLS and not universe.isins and not universe.bse_codes:
         return True
     symbol = _norm_symbol(record.get("symbol") or record.get("nse_symbol"))
     isin = _norm_symbol(record.get("isin"))
@@ -113,7 +121,16 @@ def filter_earnings_universe_records(records: list[dict[str, Any]]) -> list[dict
 
 
 def earnings_universe_sql_filter(alias: str = "a") -> tuple[str, list[Any]]:
+    # Respect the same kill-switch as record_in_earnings_universe so the calendar
+    # and companies list show all NSE/BSE announcing companies when requested.
+    if os.getenv("FINAGENT_EARNINGS_FILTER_UNIVERSE", "").lower() in {"0", "false", "off", "no"}:
+        return "", []
     universe = get_earnings_universe()
+    # If the universe only contains the fallback SENSEX symbols (no company master data),
+    # disable filtering so all earnings announcements are shown. This prevents empty
+    # results when the ikg_company_master table is not populated.
+    if universe.symbols == _SENSEX_SYMBOLS and not universe.isins and not universe.bse_codes:
+        return "", []
     clauses: list[str] = []
     params: list[Any] = []
     prefix = f"{alias}." if alias else ""

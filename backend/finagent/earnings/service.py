@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -83,7 +84,18 @@ create index if not exists idx_earnings_details_symbol_date
 
 _BOOTSTRAPPED: set[str] = set()
 _DB_DOWN_UNTIL = 0.0
-_DB_COOLDOWN_S = 60.0
+_DB_COOLDOWN_S = 15.0
+_READ_LOCK_TIMEOUT_MS = "2000"
+_READ_STATEMENT_TIMEOUT_MS = "12000"
+_READ_CONNECT_TIMEOUT_S = 8
+
+# Simple in-memory cache for calendar queries to reduce DB pressure
+_CALENDAR_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_CALENDAR_CACHE_TTL_S = 60.0  # Cache calendar results for 1 minute
+
+# Simple in-memory cache for company range queries (overview pulse)
+_COMPANIES_CACHE: dict[str, tuple[float, tuple[list[dict[str, Any]], int]]] = {}
+_COMPANIES_CACHE_TTL_S = 60.0  # Cache company results for 1 minute
 
 
 def _db_circuit_open() -> bool:
@@ -98,6 +110,49 @@ def _trip_db_circuit() -> None:
 def _reset_db_circuit() -> None:
     global _DB_DOWN_UNTIL
     _DB_DOWN_UNTIL = 0.0
+
+
+def _enable_local_earnings_fallback() -> bool:
+    return os.getenv("PROSPEKTLAB_ENV") != "production"
+
+
+def _configure_read_timeouts(cur: Any) -> None:
+    try:
+        # Use SET LOCAL so settings apply to the current transaction only.
+        # This is compatible with PgBouncer transaction-mode pooling where
+        # session-level set_config() values can bleed across pooled connections.
+        cur.execute(f"SET LOCAL lock_timeout = '{_READ_LOCK_TIMEOUT_MS}ms'")
+        cur.execute(f"SET LOCAL statement_timeout = '{_READ_STATEMENT_TIMEOUT_MS}ms'")
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("earnings read timeout configuration skipped: %s", exc)
+
+
+def _probe_earnings_tables(db_url: str) -> bool:
+    if _db_circuit_open():
+        return False
+    if db_url in _BOOTSTRAPPED:
+        return True
+    try:
+        with connect_postgres(db_url, connect_timeout=_READ_CONNECT_TIMEOUT_S) as conn:
+            with conn.cursor() as cur:
+                _configure_read_timeouts(cur)
+                cur.execute(
+                    """
+                    select
+                      to_regclass('public.earnings_announcements') is not null
+                      and to_regclass('public.earnings_details') is not null
+                    """
+                )
+                row = cur.fetchone()
+        ready = bool(row[0]) if row else False
+        if ready:
+            _BOOTSTRAPPED.add(db_url)
+            _reset_db_circuit()
+        return ready
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("earnings table probe failed: %s", exc)
+        _trip_db_circuit()
+        return False
 
 
 def ensure_earnings_tables(database_url: str | None = None) -> bool:
@@ -116,7 +171,7 @@ def ensure_earnings_tables(database_url: str | None = None) -> bool:
         _BOOTSTRAPPED.add(db_url)
         _reset_db_circuit()
         # Also run extended schema migrations right after base tables succeed
-        # (idempotent â€” uses IF NOT EXISTS / ADD COLUMN IF NOT EXISTS)
+        # (idempotent - uses IF NOT EXISTS / ADD COLUMN IF NOT EXISTS)
         try:
             with connect_postgres(db_url, connect_timeout=5) as conn:
                 with conn.cursor() as cur:
@@ -146,6 +201,232 @@ def ensure_earnings_tables(database_url: str | None = None) -> bool:
         return False
 
 
+def get_earnings_overview(start_date: str, end_date: str, page_size: int = 50) -> dict[str, Any]:
+    """Combined calendar + companies fetch using a single DB connection.
+    
+    This avoids the overhead of opening 2 separate connections to the remote
+    database, which was causing timeouts on the overview Earnings Pulse section.
+    """
+    start = parse_date(start_date) or date.today() - timedelta(days=7)
+    end = parse_date(end_date) or start + timedelta(days=30)
+    if end < start:
+        start, end = end, start
+
+    # Check both caches first
+    cal_cache_key = f"{start.isoformat()}:{end.isoformat()}"
+    comp_cache_key = f"{start.isoformat()}:{end.isoformat()}:1:{page_size}"
+    
+    cal_cached = _CALENDAR_CACHE.get(cal_cache_key)
+    comp_cached = _COMPANIES_CACHE.get(comp_cache_key)
+    
+    cal_rows = None
+    comp_result = None
+    
+    if cal_cached:
+        cached_at, cached_rows = cal_cached
+        if time.monotonic() - cached_at < _CALENDAR_CACHE_TTL_S:
+            cal_rows = cached_rows
+    
+    if comp_cached:
+        cached_at, cached_result = comp_cached
+        if time.monotonic() - cached_at < _COMPANIES_CACHE_TTL_S:
+            comp_result = cached_result
+    
+    # If both are cached, return immediately
+    if cal_rows is not None and comp_result is not None:
+        cal_response = _build_calendar_response(start, end, cal_rows)
+        comp_rows, comp_total = comp_result
+        return {
+            "calendar": cal_response,
+            "companies": {
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "mode": "range",
+                "page": 1,
+                "page_size": page_size,
+                "total": comp_total,
+                "items": comp_rows,
+            },
+        }
+    
+    # Fetch both in a single DB connection
+    if not _query_available():
+        # Fallback to demo data
+        cal_rows_raw = _demo_calendar_rows(start, end) if _enable_local_earnings_fallback() else []
+        cal_response = _build_calendar_response(start, end, cal_rows_raw)
+        return {
+            "calendar": cal_response,
+            "companies": {
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "mode": "range",
+                "page": 1,
+                "page_size": page_size,
+                "total": 0,
+                "items": [],
+            },
+        }
+    
+    universe_sql, universe_params = earnings_universe_sql_filter("a")
+    where_sql = "a.meeting_date between %s and %s"
+    params: list[Any] = [start, end]
+    if universe_sql:
+        where_sql += f" and {universe_sql}"
+        params.extend(universe_params)
+    
+    try:
+        from psycopg.rows import dict_row
+
+        with connect_postgres(row_factory=dict_row, connect_timeout=_READ_CONNECT_TIMEOUT_S) as conn:
+            with conn.cursor() as cur:
+                _configure_read_timeouts(cur)
+                
+                # Calendar query
+                cur.execute(
+                    f"""
+                    with base as (
+                      select a.meeting_date, a.sector, coalesce(a.timing, 'TAS') as timing
+                      from earnings_announcements a
+                      where {where_sql}
+                    ), timing_counts as (
+                      select meeting_date, timing, count(*)::int as company_count
+                      from base
+                      group by meeting_date, timing
+                    ), timing_json as (
+                      select meeting_date, jsonb_object_agg(timing, company_count) as timings
+                      from timing_counts
+                      group by meeting_date
+                    ), day_rows as (
+                      select
+                        meeting_date,
+                        meeting_date::text as date,
+                        count(*)::int as company_count,
+                        array_remove(array_agg(distinct sector), null) as sectors
+                      from base
+                      group by meeting_date
+                    )
+                    select d.date, d.company_count, d.sectors, coalesce(t.timings, '{{}}'::jsonb) as timings
+                    from day_rows d
+                    left join timing_json t on t.meeting_date = d.meeting_date
+                    order by d.meeting_date
+                    """,
+                    params,
+                )
+                cal_rows_raw = [dict(row) for row in cur.fetchall()]
+                
+                # Companies query (same connection)
+                cur.execute(
+                    f"select count(*) as total from earnings_announcements a where {where_sql}",
+                    params,
+                )
+                comp_total = int((cur.fetchone() or {}).get("total") or 0)
+                
+                cur.execute(
+                    f"""
+                    select
+                      a.event_uid,
+                      a.symbol,
+                      a.company_name as name,
+                      a.sector,
+                      a.index_bucket,
+                      a.market_cap_bucket,
+                      a.meeting_date::text as date,
+                      coalesce(d.timing, a.timing, 'TAS') as timing,
+                      coalesce(d.fiscal_quarter, a.quarter_ref, '') as fiscal_quarter,
+                      coalesce(d.highlights_json, '[]'::jsonb) as highlights,
+                      a.attachment_urls,
+                      a.summary,
+                      h.actual_eps,
+                      h.estimated_eps,
+                      h.surprise_eps_pct,
+                      h.post_earnings_move_1d,
+                      h.actual_revenue,
+                      h.surprise_revenue_pct,
+                      (select (fin->>'yoy_pct')::numeric
+                         from jsonb_array_elements(coalesce(d.financials_json->'rows', '[]'::jsonb)) fin
+                         where fin->>'key' = 'revenue' limit 1) as revenue_yoy_pct,
+                      (select (fin->>'yoy_pct')::numeric
+                         from jsonb_array_elements(coalesce(d.financials_json->'rows', '[]'::jsonb)) fin
+                         where fin->>'key' = 'pat' limit 1) as pat_yoy_pct
+                    from earnings_announcements a
+                    left join earnings_details d on d.event_uid = a.event_uid
+                    left join earnings_history h on
+                      h.symbol = a.symbol
+                      and h.earnings_date >= a.meeting_date::timestamptz
+                      and h.earnings_date < (a.meeting_date + interval '1 day')::timestamptz
+                    where {where_sql}
+                    order by a.meeting_date desc, a.company_name
+                    limit %s offset %s
+                    """,
+                    [*params, page_size, 0],
+                )
+                comp_rows = [_company_row_from_db(dict(row)) for row in cur.fetchall()]
+        
+        # Process calendar rows
+        for row in cal_rows_raw:
+            row["summary"] = f"{row.get('company_count', 0)} earnings call(s)"
+            row["sectors"] = list(row.get("sectors") or [])
+            row["timings"] = dict(row.get("timings") or {})
+        
+        # Cache both results
+        _CALENDAR_CACHE[cal_cache_key] = (time.monotonic(), cal_rows_raw)
+        _COMPANIES_CACHE[comp_cache_key] = (time.monotonic(), (comp_rows, comp_total))
+        
+        cal_response = _build_calendar_response(start, end, cal_rows_raw)
+        return {
+            "calendar": cal_response,
+            "companies": {
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "mode": "range",
+                "page": 1,
+                "page_size": page_size,
+                "total": comp_total,
+                "items": comp_rows,
+            },
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("earnings overview query failed: %s", exc)
+        _trip_db_circuit()
+        # Return empty but valid response
+        cal_response = _build_calendar_response(start, end, [])
+        return {
+            "calendar": cal_response,
+            "companies": {
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "mode": "range",
+                "page": 1,
+                "page_size": page_size,
+                "total": 0,
+                "items": [],
+            },
+        }
+
+
+def _build_calendar_response(start: date, end: date, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build the standard calendar response dict from processed rows."""
+    by_date = {str(row["date"]): row for row in rows}
+    return {
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "dates": [
+            by_date.get(
+                (start + timedelta(days=offset)).isoformat(),
+                {
+                    "date": (start + timedelta(days=offset)).isoformat(),
+                    "company_count": 0,
+                    "summary": "",
+                    "sectors": [],
+                    "timings": {},
+                },
+            )
+            for offset in range((end - start).days + 1)
+        ],
+        "source": "postgres" if rows else "empty",
+    }
+
+
 def get_earnings_calendar(start_date: str, end_date: str) -> dict[str, Any]:
     start = parse_date(start_date) or date.today() - timedelta(days=7)
     end = parse_date(end_date) or start + timedelta(days=30)
@@ -153,6 +434,10 @@ def get_earnings_calendar(start_date: str, end_date: str) -> dict[str, Any]:
         start, end = end, start
 
     rows = _query_calendar_rows(start, end)
+    source = "postgres"
+    if rows is None:
+        rows = _demo_calendar_rows(start, end) if _enable_local_earnings_fallback() else []
+        source = "demo" if rows else "empty"
 
     by_date = {
         str(row["date"]): row
@@ -174,23 +459,65 @@ def get_earnings_calendar(start_date: str, end_date: str) -> dict[str, Any]:
             )
             for offset in range((end - start).days + 1)
         ],
-        "source": "postgres" if _query_available() else "empty",
+        "source": source,
     }
 
 
 def get_earnings_companies(
     *,
-    target_date: str,
+    target_date: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     index: str = "All",
     market_cap: str = "All",
     sector: str = "All",
     page: int = 1,
     page_size: int = 25,
 ) -> dict[str, Any]:
+    """Return companies for a single date, or across a date range if start_date+end_date are provided."""
     selected = parse_date(target_date) or date.today()
+    range_start = parse_date(start_date)
+    range_end = parse_date(end_date)
+
     page = max(1, int(page or 1))
     page_size = max(1, min(100, int(page_size or 25)))
-    rows, total = _query_company_rows(
+
+    if range_start and range_end:
+        if range_end < range_start:
+            range_start, range_end = range_end, range_start
+        range_result = _query_company_rows_range(
+            range_start,
+            range_end,
+            index_filter=index,
+            market_cap_filter=market_cap,
+            sector_filter=sector,
+            page=page,
+            page_size=page_size,
+        )
+        if range_result is None:
+            demo_rows = _demo_company_rows_range(
+                range_start,
+                range_end,
+                index_filter=index,
+                market_cap_filter=market_cap,
+                sector_filter=sector,
+            ) if _enable_local_earnings_fallback() else []
+            total = len(demo_rows)
+            start_idx = (page - 1) * page_size
+            rows = demo_rows[start_idx:start_idx + page_size]
+        else:
+            rows, total = range_result
+        return {
+            "start_date": range_start.isoformat(),
+            "end_date": range_end.isoformat(),
+            "mode": "range",
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "items": rows,
+        }
+
+    single_result = _query_company_rows(
         selected,
         index_filter=index,
         market_cap_filter=market_cap,
@@ -198,6 +525,13 @@ def get_earnings_companies(
         page=page,
         page_size=page_size,
     )
+    if single_result is None:
+        demo_rows = _filter_company_rows(_demo_companies_for_date(selected), index, market_cap, sector) if _enable_local_earnings_fallback() else []
+        total = len(demo_rows)
+        start_idx = (page - 1) * page_size
+        rows = demo_rows[start_idx:start_idx + page_size]
+    else:
+        rows, total = single_result
 
     return {
         "date": selected.isoformat(),
@@ -245,7 +579,25 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
     detail_row = _query_result_detail_row(clean_symbol, selected)
     if not detail_row:
         return None  # No announcement or parsed detail available
-    
+
+    # If only the announcement fallback exists (no parsed PDF detail), trigger a
+    # synchronous parse of the outcome PDF so the first click returns real data.
+    if detail_row.get("source") == "announcement_fallback":
+        try:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(ensure_earnings_detail_for_result, clean_symbol, target_date)
+                # Wait up to 45 seconds for the parse. Azure DI can be slow for
+                # complex results PDFs, but most complete within 10-30s.
+                parse_result = future.result(timeout=45)
+                if parse_result.get("stored"):
+                    # Re-query so the rest of this function uses the parsed detail
+                    refreshed = _query_result_detail_row(clean_symbol, selected)
+                    if refreshed:
+                        detail_row = refreshed
+        except Exception as sync_exc:
+            logger.debug("Synchronous detail parse failed/timed out for %s %s: %s", clean_symbol, selected, sync_exc)
+
     current_price = None
     
     # Build metrics rows: revenue, EPS, margins from earnings_details + Yahoo
@@ -278,6 +630,11 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
     
     # Fetch financial comparison rows from stored parser payload
     financials_payload = _financials_payload(detail_row.get("financials") or detail_row.get("financials_json") or {})
+
+    # NOTE: XBRL unit correction and historical-QoQ/YoY lookups are intentionally
+    # performed once at parse/storage time (ensure_earnings_detail_for_result),
+    # not on every GET. This keeps the earnings result endpoint fast and avoids
+    # NSE network timeouts in the hot path.
 
     # Enrich QoQ/YoY: if rows exist but have no QoQ/YoY, query historical quarters and rebuild
     try:
@@ -391,12 +748,15 @@ def _is_recent_processing(record: dict[str, Any], *, max_age_minutes: int = 15) 
     return age < timedelta(minutes=max_age_minutes)
 
 
-def ensure_earnings_detail_for_result(symbol: str, target_date: str) -> dict[str, Any]:
+def ensure_earnings_detail_for_result(symbol: str, target_date: str, *, generate_ai_summary: bool = True) -> dict[str, Any]:
     """Parse and store missing earnings detail for an announced result.
 
     This is intended for background execution after the result endpoint returns.
     It keeps the UI fast while still filling earnings_details from the official
     filing when an announcement exists but parsed detail does not.
+
+    ``generate_ai_summary`` defaults to True so detail pages are complete. Bulk
+    pre-parse jobs can set it to False to save time because summaries are optional.
     """
     clean_symbol = str(symbol or "").strip().upper()
     selected = parse_date(target_date)
@@ -437,25 +797,41 @@ def ensure_earnings_detail_for_result(symbol: str, target_date: str) -> dict[str
                 logger.debug("Outcome URL pre-fetch failed for %s: %s", clean_symbol, re_exc)
 
         detail = build_detail_from_announcement(record)
+        if detail:
+            # Apply XBRL unit correction once at parse time so stored metrics are
+            # already scaled correctly. This removes the expensive NSE call from the
+            # GET /result hot path.
+            try:
+                financials = detail.get("financials") or {}
+                corrected = _apply_xbrl_unit_correction(
+                    clean_symbol,
+                    _financials_payload(financials),
+                )
+                if corrected:
+                    detail["financials"] = corrected
+            except Exception as uc_exc:
+                logger.debug("XBRL unit correction at parse time failed for %s: %s", clean_symbol, uc_exc)
+
         if detail and upsert_detail(detail):
             _set_announcement_processing_status(event_uid, "parsed")
             # Generate and store AI summary (non-fatal if LLM unavailable)
-            try:
-                text_excerpt = detail.get("text_excerpt") or ""
-                if text_excerpt and len(text_excerpt) > 200:
-                    fin = detail.get("financials") or {}
-                    ai_summary = _generate_ai_summary(
-                        text_excerpt=text_excerpt,
-                        metrics=fin.get("metrics") or {},
-                        company_name=str(record.get("company_name") or clean_symbol),
-                        symbol=clean_symbol,
-                        fiscal_quarter=str(detail.get("fiscal_quarter") or record.get("quarter_ref") or ""),
-                        meeting_date=str(record.get("meeting_date") or ""),
-                    )
-                    if ai_summary:
-                        _store_ai_summary(event_uid, ai_summary)
-            except Exception as ai_exc:
-                logger.debug("AI summary generation skipped for %s: %s", clean_symbol, ai_exc)
+            if generate_ai_summary:
+                try:
+                    text_excerpt = detail.get("text_excerpt") or ""
+                    if text_excerpt and len(text_excerpt) > 200:
+                        fin = detail.get("financials") or {}
+                        ai_summary = _generate_ai_summary(
+                            text_excerpt=text_excerpt,
+                            metrics=fin.get("metrics") or {},
+                            company_name=str(record.get("company_name") or clean_symbol),
+                            symbol=clean_symbol,
+                            fiscal_quarter=str(detail.get("fiscal_quarter") or record.get("quarter_ref") or ""),
+                            meeting_date=str(record.get("meeting_date") or ""),
+                        )
+                        if ai_summary:
+                            _store_ai_summary(event_uid, ai_summary)
+                except Exception as ai_exc:
+                    logger.debug("AI summary generation skipped for %s: %s", clean_symbol, ai_exc)
             return {"stored": True, "event_uid": event_uid}
         _set_announcement_processing_status(event_uid, "parse_empty")
         return {"stored": False, "reason": "parse_empty", "event_uid": event_uid}
@@ -464,9 +840,114 @@ def ensure_earnings_detail_for_result(symbol: str, target_date: str) -> dict[str
         _set_announcement_processing_status(event_uid, "parse_failed")
         return {"stored": False, "reason": "parse_failed", "event_uid": event_uid, "error": str(exc)}
 
+def preparse_earnings_last_30_days() -> dict[str, Any]:
+    """Pre-parse earnings details for all companies in the last 30 days.
+
+    Called once on server startup in a background thread. This warms the cache
+    so users don't have to wait for the first PDF parse when opening a detail page.
+    """
+    return preparse_earnings_range(start_date=date.today() - timedelta(days=30))
+
+
+def preparse_earnings_current_year() -> dict[str, Any]:
+    """Pre-parse earnings details for all past companies in the current year.
+
+    Called once on server startup in a background thread. This warms the cache
+    for every company that has already announced in the current year, so detail pages
+    resolve instantly with complete data.
+    """
+    today = date.today()
+    return preparse_earnings_range(start_date=date(today.year, 1, 1))
+
+
+def preparse_earnings_range(
+    start_date: date | None = None,
+    limit: int | None = None,
+    max_workers: int = 1,
+) -> dict[str, Any]:
+    """Pre-parse earnings details for all companies in the given range.
+
+    Defaults to the current year. It skips records that already have a detail row
+    and only processes past dates so we don't block on future board meetings.
+    When ``limit`` is provided, only that many records are processed in one call
+    so the function can be scheduled repeatedly to drain the backlog.
+    """
+    from datetime import date
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    today = date.today()
+    start = start_date or date(today.year, 1, 1)
+    url = get_database_url()
+    if not url:
+        return {"success": False, "reason": "no_database_url"}
+    try:
+        with connect_postgres(connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT a.symbol, a.meeting_date
+                    FROM earnings_announcements a
+                    WHERE a.meeting_date >= %s AND a.meeting_date < CURRENT_DATE
+                      AND NOT EXISTS (
+                          SELECT 1 FROM earnings_details d
+                          WHERE d.event_uid = a.event_uid
+                      )
+                      AND COALESCE(a.processing_status, 'pending') NOT IN ('parsing', 'parse_failed')
+                    ORDER BY a.meeting_date DESC, a.symbol
+                    LIMIT %s
+                    """,
+                    (start, limit or 1000000),
+                )
+                rows = cur.fetchall()
+        if not rows:
+            return {"success": True, "parsed": 0, "reason": "no_records"}
+
+        logger.info("Pre-parsing earnings details for %d companies (%s onwards)", len(rows), start)
+        parsed = 0
+        failed = 0
+
+        def _process(symbol: str, meeting_date: Any) -> bool:
+            try:
+                result = ensure_earnings_detail_for_result(
+                    symbol, str(meeting_date), generate_ai_summary=False
+                )
+                if result.get("stored") or result.get("reason") == "detail_exists":
+                    return True
+                return False
+            except Exception as exc:
+                logger.debug("Pre-parse failed for %s %s: %s", symbol, meeting_date, exc)
+                return False
+
+        if max_workers <= 1:
+            for symbol, meeting_date in rows:
+                if _process(symbol, meeting_date):
+                    parsed += 1
+                else:
+                    failed += 1
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(_process, symbol, meeting_date): (symbol, meeting_date)
+                    for symbol, meeting_date in rows
+                }
+                for future in as_completed(futures):
+                    if future.result():
+                        parsed += 1
+                    else:
+                        failed += 1
+
+        logger.info("Pre-parsing completed: parsed=%s, failed=%s", parsed, failed)
+        return {"success": True, "parsed": parsed, "failed": failed, "total": len(rows)}
+    except Exception as exc:
+        logger.warning("Pre-parse earnings range failed: %s", exc)
+        return {"success": False, "reason": str(exc)}
+
+
 def get_earnings_stats(target_date: str) -> dict[str, Any]:
     selected = parse_date(target_date) or date.today()
     rows = _query_stats_rows(selected)
+    if rows is None:
+        rows = _demo_stats_rows(selected) if _enable_local_earnings_fallback() else []
 
     by_timing: dict[str, int] = {label: 0 for label in TIMING_LABELS}
     by_sector: dict[str, int] = {}
@@ -627,9 +1108,11 @@ def batch_upsert_announcements(records: list[dict[str, Any]], database_url: str 
     try:
         with connect_postgres(db_url, connect_timeout=30) as conn:
             with conn.cursor() as cur:
-                # Process in chunks of 500 to avoid huge transactions
-                for i in range(0, len(rows_to_insert), 500):
-                    chunk = rows_to_insert[i: i + 500]
+                # Process in small chunks and commit per chunk to avoid Supabase
+                # statement timeouts during large backfills.
+                CHUNK_SIZE = 100
+                for i in range(0, len(rows_to_insert), CHUNK_SIZE):
+                    chunk = rows_to_insert[i: i + CHUNK_SIZE]
                     cur.executemany(
                         """
                         INSERT INTO earnings_announcements (
@@ -667,7 +1150,7 @@ def batch_upsert_announcements(records: list[dict[str, Any]], database_url: str 
                         chunk,
                     )
                     processed += len(chunk)
-            conn.commit()
+                    conn.commit()
     except Exception as exc:  # noqa: BLE001
         logger.warning("batch_upsert_announcements failed: %s", exc)
 
@@ -737,12 +1220,25 @@ def upsert_detail(record: dict[str, Any], database_url: str | None = None) -> bo
 
 def _query_available() -> bool:
     db_url = get_database_url()
-    return bool(db_url and ensure_earnings_tables(db_url))
+    if not db_url:
+        return False
+    if db_url in _BOOTSTRAPPED:
+        return True
+    return _probe_earnings_tables(db_url)
 
 
-def _query_calendar_rows(start: date, end: date) -> list[dict[str, Any]]:
+def _query_calendar_rows(start: date, end: date) -> list[dict[str, Any]] | None:
     if not _query_available():
-        return []
+        return None
+    
+    # Check cache first
+    cache_key = f"{start.isoformat()}:{end.isoformat()}"
+    cached = _CALENDAR_CACHE.get(cache_key)
+    if cached:
+        cached_at, cached_rows = cached
+        if time.monotonic() - cached_at < _CALENDAR_CACHE_TTL_S:
+            return cached_rows
+    
     universe_sql, universe_params = earnings_universe_sql_filter("a")
     where_sql = "a.meeting_date between %s and %s"
     params: list[Any] = [start, end]
@@ -752,8 +1248,9 @@ def _query_calendar_rows(start: date, end: date) -> list[dict[str, Any]]:
     try:
         from psycopg.rows import dict_row
 
-        with connect_postgres(row_factory=dict_row, connect_timeout=8) as conn:
+        with connect_postgres(row_factory=dict_row, connect_timeout=_READ_CONNECT_TIMEOUT_S) as conn:
             with conn.cursor() as cur:
+                _configure_read_timeouts(cur)
                 cur.execute(
                     f"""
                     with base as (
@@ -789,11 +1286,14 @@ def _query_calendar_rows(start: date, end: date) -> list[dict[str, Any]]:
             row["summary"] = f"{row.get('company_count', 0)} earnings call(s)"
             row["sectors"] = list(row.get("sectors") or [])
             row["timings"] = dict(row.get("timings") or {})
+        # Cache the result
+        _CALENDAR_CACHE[cache_key] = (time.monotonic(), rows)
         return rows
     except Exception as exc:  # noqa: BLE001
         logger.debug("calendar query failed: %s", exc)
         _trip_db_circuit()
-        return []
+        return None
+
 
 def _query_company_rows(
     selected: date,
@@ -803,9 +1303,9 @@ def _query_company_rows(
     sector_filter: str,
     page: int,
     page_size: int,
-) -> tuple[list[dict[str, Any]], int]:
+) -> tuple[list[dict[str, Any]], int] | None:
     if not _query_available():
-        return [], 0
+        return None
     clauses = ["a.meeting_date = %s"]
     params: list[Any] = [selected]
     if _active_filter(index_filter):
@@ -825,8 +1325,9 @@ def _query_company_rows(
     try:
         from psycopg.rows import dict_row
 
-        with connect_postgres(row_factory=dict_row, connect_timeout=8) as conn:
+        with connect_postgres(row_factory=dict_row, connect_timeout=_READ_CONNECT_TIMEOUT_S) as conn:
             with conn.cursor() as cur:
+                _configure_read_timeouts(cur)
                 cur.execute(f"select count(*) as total from earnings_announcements a where {where_sql}", params)
                 total = int((cur.fetchone() or {}).get("total") or 0)
                 cur.execute(
@@ -847,12 +1348,21 @@ def _query_company_rows(
                       h.actual_eps,
                       h.estimated_eps,
                       h.surprise_eps_pct,
-                      h.post_earnings_move_1d
+                      h.post_earnings_move_1d,
+                      h.actual_revenue,
+                      h.surprise_revenue_pct,
+                      (select (fin->>'yoy_pct')::numeric
+                         from jsonb_array_elements(coalesce(d.financials_json->'rows', '[]'::jsonb)) fin
+                         where fin->>'key' = 'revenue' limit 1) as revenue_yoy_pct,
+                      (select (fin->>'yoy_pct')::numeric
+                         from jsonb_array_elements(coalesce(d.financials_json->'rows', '[]'::jsonb)) fin
+                         where fin->>'key' = 'pat' limit 1) as pat_yoy_pct
                     from earnings_announcements a
                     left join earnings_details d on d.event_uid = a.event_uid
-                    left join earnings_history h on 
-                      upper(h.symbol) = upper(a.symbol)
-                      and h.earnings_date::date = a.meeting_date
+                    left join earnings_history h on
+                      h.symbol = a.symbol
+                      and h.earnings_date >= a.meeting_date::timestamptz
+                      and h.earnings_date < (a.meeting_date + interval '1 day')::timestamptz
                     where {where_sql}
                     order by a.company_name
                     limit %s offset %s
@@ -864,7 +1374,109 @@ def _query_company_rows(
     except Exception as exc:  # noqa: BLE001
         logger.debug("company query failed: %s", exc)
         _trip_db_circuit()
-        return [], 0
+        return None
+
+
+def _query_company_rows_range(
+    range_start: date,
+    range_end: date,
+    *,
+    index_filter: str,
+    market_cap_filter: str,
+    sector_filter: str,
+    page: int,
+    page_size: int,
+) -> tuple[list[dict[str, Any]], int] | None:
+    """Return companies across a date range, ordered by date desc, then name."""
+    if not _query_available():
+        return None
+    
+    # Check cache for unfiltered range queries (overview pulse)
+    is_unfiltered = (
+        not _active_filter(index_filter)
+        and not _active_filter(market_cap_filter)
+        and not _active_filter(sector_filter)
+    )
+    cache_key = f"{range_start.isoformat()}:{range_end.isoformat()}:{page}:{page_size}"
+    if is_unfiltered:
+        cached = _COMPANIES_CACHE.get(cache_key)
+        if cached:
+            cached_at, cached_result = cached
+            if time.monotonic() - cached_at < _COMPANIES_CACHE_TTL_S:
+                return cached_result
+    
+    clauses = ["a.meeting_date between %s and %s"]
+    params: list[Any] = [range_start, range_end]
+    if _active_filter(index_filter):
+        clauses.append("coalesce(a.index_bucket, 'All') = %s")
+        params.append(index_filter)
+    if _active_filter(market_cap_filter):
+        clauses.append("coalesce(a.market_cap_bucket, 'All') = %s")
+        params.append(market_cap_filter)
+    if _active_filter(sector_filter):
+        clauses.append("coalesce(a.sector, 'Other') = %s")
+        params.append(sector_filter)
+    universe_sql, universe_params = earnings_universe_sql_filter("a")
+    if universe_sql:
+        clauses.append(universe_sql)
+        params.extend(universe_params)
+    where_sql = " and ".join(clauses)
+    try:
+        from psycopg.rows import dict_row
+
+        with connect_postgres(row_factory=dict_row, connect_timeout=_READ_CONNECT_TIMEOUT_S) as conn:
+            with conn.cursor() as cur:
+                _configure_read_timeouts(cur)
+                cur.execute(f"select count(*) as total from earnings_announcements a where {where_sql}", params)
+                total = int((cur.fetchone() or {}).get("total") or 0)
+                cur.execute(
+                    f"""
+                    select
+                      a.event_uid,
+                      a.symbol,
+                      a.company_name as name,
+                      a.sector,
+                      a.index_bucket,
+                      a.market_cap_bucket,
+                      a.meeting_date::text as date,
+                      coalesce(d.timing, a.timing, 'TAS') as timing,
+                      coalesce(d.fiscal_quarter, a.quarter_ref, '') as fiscal_quarter,
+                      coalesce(d.highlights_json, '[]'::jsonb) as highlights,
+                      a.attachment_urls,
+                      a.summary,
+                      h.actual_eps,
+                      h.estimated_eps,
+                      h.surprise_eps_pct,
+                      h.post_earnings_move_1d,
+                      h.actual_revenue,
+                      h.surprise_revenue_pct,
+                      (select (fin->>'yoy_pct')::numeric
+                         from jsonb_array_elements(coalesce(d.financials_json->'rows', '[]'::jsonb)) fin
+                         where fin->>'key' = 'revenue' limit 1) as revenue_yoy_pct,
+                      (select (fin->>'yoy_pct')::numeric
+                         from jsonb_array_elements(coalesce(d.financials_json->'rows', '[]'::jsonb)) fin
+                         where fin->>'key' = 'pat' limit 1) as pat_yoy_pct
+                    from earnings_announcements a
+                    left join earnings_details d on d.event_uid = a.event_uid
+                    left join earnings_history h on
+                      h.symbol = a.symbol
+                      and h.earnings_date >= a.meeting_date::timestamptz
+                      and h.earnings_date < (a.meeting_date + interval '1 day')::timestamptz
+                    where {where_sql}
+                    order by a.meeting_date desc, a.company_name
+                    limit %s offset %s
+                    """,
+                    [*params, page_size, (page - 1) * page_size],
+                )
+                rows = [_company_row_from_db(dict(row)) for row in cur.fetchall()]
+        # Cache unfiltered results for the overview pulse
+        if is_unfiltered:
+            _COMPANIES_CACHE[cache_key] = (time.monotonic(), (rows, total))
+        return rows, total
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("company range query failed: %s", exc)
+        _trip_db_circuit()
+        return None
 
 
 def _query_result_detail_row(symbol: str, selected: date) -> dict[str, Any] | None:
@@ -1105,61 +1717,66 @@ def _query_historical_metrics(
     symbol: str,
     selected: date,
 ) -> tuple[dict[str, float], dict[str, float]]:
-    """Return (prev_quarter_metrics, year_ago_metrics) from stored earnings_details records."""
-    if not _query_available():
-        return {}, {}
-    try:
-        from psycopg.rows import dict_row
-        prev_min = selected - timedelta(days=120)
-        prev_max = selected - timedelta(days=60)
-        yoy_min = selected - timedelta(days=400)
-        yoy_max = selected - timedelta(days=300)
+    """Return (prev_quarter_metrics, year_ago_metrics) from stored earnings_details records.
 
-        with connect_postgres(row_factory=dict_row, connect_timeout=8) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT d.financials_json
-                    FROM earnings_details d
-                    JOIN earnings_announcements a ON a.event_uid = d.event_uid
-                    WHERE upper(a.symbol) = %s AND a.meeting_date BETWEEN %s AND %s
-                    ORDER BY a.meeting_date DESC LIMIT 1
-                    """,
-                    (symbol.upper(), prev_min, prev_max),
-                )
-                prev_row = cur.fetchone()
-                cur.execute(
-                    """
-                    SELECT d.financials_json
-                    FROM earnings_details d
-                    JOIN earnings_announcements a ON a.event_uid = d.event_uid
-                    WHERE upper(a.symbol) = %s AND a.meeting_date BETWEEN %s AND %s
-                    ORDER BY a.meeting_date DESC LIMIT 1
-                    """,
-                    (symbol.upper(), yoy_min, yoy_max),
-                )
-                yoy_row = cur.fetchone()
+    Source: earnings_details (parsed from PDF via Azure DI).
+    XBRL-based QoQ/YoY is now populated at parse time, so the hot path stays DB-only.
+    """
+    if _query_available():
+        try:
+            from psycopg.rows import dict_row
+            prev_min = selected - timedelta(days=120)
+            prev_max = selected - timedelta(days=60)
+            yoy_min = selected - timedelta(days=400)
+            yoy_max = selected - timedelta(days=300)
 
-        def _extract(row: dict[str, Any] | None) -> dict[str, float]:
-            if not row:
-                return {}
-            fin = _financials_payload(row["financials_json"])
-            m = fin.get("metrics")
-            if isinstance(m, dict) and m:
-                return {k: float(v) for k, v in m.items() if v is not None}
-            return {
-                r["key"]: float(r["current"])
-                for r in (fin.get("rows") or [])
-                if r.get("key") and r.get("current") is not None
-            }
+            with connect_postgres(row_factory=dict_row, connect_timeout=8) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT d.financials_json
+                        FROM earnings_details d
+                        JOIN earnings_announcements a ON a.event_uid = d.event_uid
+                        WHERE upper(a.symbol) = %s AND a.meeting_date BETWEEN %s AND %s
+                        ORDER BY a.meeting_date DESC LIMIT 1
+                        """,
+                        (symbol.upper(), prev_min, prev_max),
+                    )
+                    prev_row = cur.fetchone()
+                    cur.execute(
+                        """
+                        SELECT d.financials_json
+                        FROM earnings_details d
+                        JOIN earnings_announcements a ON a.event_uid = d.event_uid
+                        WHERE upper(a.symbol) = %s AND a.meeting_date BETWEEN %s AND %s
+                        ORDER BY a.meeting_date DESC LIMIT 1
+                        """,
+                        (symbol.upper(), yoy_min, yoy_max),
+                    )
+                    yoy_row = cur.fetchone()
 
-        return (
-            _extract(dict(prev_row) if prev_row else None),
-            _extract(dict(yoy_row) if yoy_row else None),
-        )
-    except Exception as exc:
-        logger.debug("_query_historical_metrics failed for %s: %s", symbol, exc)
-        return {}, {}
+            def _extract(row: dict[str, Any] | None) -> dict[str, float]:
+                if not row:
+                    return {}
+                fin = _financials_payload(row["financials_json"])
+                m = fin.get("metrics")
+                if isinstance(m, dict) and m:
+                    return {k: float(v) for k, v in m.items() if v is not None}
+                return {
+                    r["key"]: float(r["current"])
+                    for r in (fin.get("rows") or [])
+                    if r.get("key") and r.get("current") is not None
+                }
+
+            db_prev = _extract(dict(prev_row) if prev_row else None)
+            db_yoy = _extract(dict(yoy_row) if yoy_row else None)
+
+            if db_prev or db_yoy:
+                return db_prev, db_yoy
+        except Exception as exc:
+            logger.debug("DB historical metrics lookup failed for %s: %s", symbol, exc)
+
+    return {}, {}
 
 
 def _tab_label(row: dict[str, Any]) -> str:
@@ -1360,9 +1977,97 @@ def _store_ai_summary(event_uid: str, ai_summary: dict[str, Any]) -> bool:
         return False
 
 
-def _query_stats_rows(selected: date) -> list[dict[str, Any]]:
+def _apply_xbrl_unit_correction(
+    symbol: str,
+    financials_payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Detect unit-scale errors in extracted metrics by comparing against recent XBRL data.
+
+    Some companies report financials in Rs Millions (not Crore) in their PDFs.
+    If the PDF unit declaration wasn't detected, extracted revenue will be ~10x too high.
+    Cross-validate: if extracted_revenue / xbrl_revenue is ~10 → divide by 10.
+    """
+    metrics = _dict_json(financials_payload.get("metrics") or {})
+    extracted_revenue = metrics.get("revenue")
+    if not extracted_revenue or extracted_revenue <= 0:
+        return financials_payload
+
+    try:
+        from finagent.earnings.nse_xbrl_scraper import fetch_nse_quarterly_financials
+        xbrl_quarters = fetch_nse_quarterly_financials(symbol, max_quarters=2)
+    except Exception:
+        return financials_payload
+
+    if not xbrl_quarters:
+        return financials_payload
+
+    xbrl_revenue = xbrl_quarters[0].get("revenue")
+    if not xbrl_revenue or xbrl_revenue <= 0:
+        return financials_payload
+
+    ratio = extracted_revenue / xbrl_revenue
+
+    # Detect unit mismatch: 8–12x = Rs Millions; 80–120x = Rs Lakhs
+    if 8.0 <= ratio <= 12.0:
+        scale = 0.1
+        logger.info(
+            "Unit correction for %s: extracted revenue %.1f Cr is ~10x XBRL %.1f Cr → applying ÷10 (Rs Millions)",
+            symbol, extracted_revenue, xbrl_revenue,
+        )
+    elif 80.0 <= ratio <= 120.0:
+        scale = 0.01
+        logger.info(
+            "Unit correction for %s: extracted revenue %.1f Cr is ~100x XBRL %.1f Cr → applying ÷100 (Rs Lakhs)",
+            symbol, extracted_revenue, xbrl_revenue,
+        )
+    else:
+        return financials_payload  # values look reasonable, no correction
+
+    # Apply correction to all absolute monetary metrics
+    _ABSOLUTE_KEYS = {"revenue", "pat", "ebitda"}
+    corrected_metrics: dict[str, Any] = {}
+    for k, v in metrics.items():
+        if v is None:
+            corrected_metrics[k] = v
+        elif k in _ABSOLUTE_KEYS:
+            corrected_metrics[k] = round(float(v) * scale, 2)
+        else:
+            corrected_metrics[k] = v  # EPS and margins stay as-is
+
+    # Recompute margins with corrected values
+    if corrected_metrics.get("revenue") and corrected_metrics.get("pat"):
+        corrected_metrics["pat_margin"] = round(
+            corrected_metrics["pat"] / corrected_metrics["revenue"] * 100, 2
+        )
+    if corrected_metrics.get("revenue") and corrected_metrics.get("ebitda"):
+        corrected_metrics["ebitda_margin"] = round(
+            corrected_metrics["ebitda"] / corrected_metrics["revenue"] * 100, 2
+        )
+
+    # Apply same correction to financial comparison rows
+    corrected_rows = []
+    for row in (financials_payload.get("rows") or []):
+        if row.get("key") in _ABSOLUTE_KEYS:
+            new_row = dict(row)
+            if new_row.get("current") is not None:
+                new_row["current"] = round(float(new_row["current"]) * scale, 2)
+            if new_row.get("previous_quarter") is not None:
+                new_row["previous_quarter"] = round(float(new_row["previous_quarter"]) * scale, 2)
+            if new_row.get("same_quarter_last_year") is not None:
+                new_row["same_quarter_last_year"] = round(float(new_row["same_quarter_last_year"]) * scale, 2)
+            corrected_rows.append(new_row)
+        else:
+            corrected_rows.append(row)
+
+    result = dict(financials_payload)
+    result["metrics"] = corrected_metrics
+    result["rows"] = corrected_rows
+    return result
+
+
+def _query_stats_rows(selected: date) -> list[dict[str, Any]] | None:
     if not _query_available():
-        return []
+        return None
     universe_sql, universe_params = earnings_universe_sql_filter("a")
     where_sql = "a.meeting_date = %s"
     params: list[Any] = [selected]
@@ -1372,8 +2077,9 @@ def _query_stats_rows(selected: date) -> list[dict[str, Any]]:
     try:
         from psycopg.rows import dict_row
 
-        with connect_postgres(row_factory=dict_row, connect_timeout=8) as conn:
+        with connect_postgres(row_factory=dict_row, connect_timeout=_READ_CONNECT_TIMEOUT_S) as conn:
             with conn.cursor() as cur:
+                _configure_read_timeouts(cur)
                 cur.execute(
                     f"""
                     select coalesce(a.timing, 'TAS') as timing, coalesce(a.sector, 'Other') as sector, count(*)::int as company_count
@@ -1387,7 +2093,8 @@ def _query_stats_rows(selected: date) -> list[dict[str, Any]]:
     except Exception as exc:  # noqa: BLE001
         logger.debug("stats query failed: %s", exc)
         _trip_db_circuit()
-        return []
+        return None
+
 
 def _active_filter(value: str | None) -> bool:
     return bool(value and str(value).strip().lower() != "all")
@@ -1497,6 +2204,11 @@ def _company_row_from_db(row: dict[str, Any]) -> dict[str, Any]:
         "eps_estimated": row.get("estimated_eps"),
         "eps_surprise_pct": row.get("surprise_eps_pct"),
         "post_earnings_move_1d": row.get("post_earnings_move_1d"),
+        # Revenue and PAT metrics for the Earnings Pulse overview card
+        "revenue_actual": row.get("actual_revenue"),
+        "revenue_surprise_pct": row.get("surprise_revenue_pct"),
+        "revenue_yoy_pct": row.get("revenue_yoy_pct"),
+        "pat_yoy_pct": row.get("pat_yoy_pct"),
     }
 
 
@@ -1609,9 +2321,42 @@ def _demo_companies_for_date(selected: date) -> list[dict[str, Any]]:
     return []
 
 
+def _demo_company_rows_range(
+    range_start: date,
+    range_end: date,
+    *,
+    index_filter: str,
+    market_cap_filter: str,
+    sector_filter: str,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    cursor = range_start
+    while cursor <= range_end:
+        rows.extend(_demo_companies_for_date(cursor))
+        cursor += timedelta(days=1)
+    rows = _filter_company_rows(rows, index_filter, market_cap_filter, sector_filter)
+    rows.sort(key=lambda item: str(item.get("name") or ""))
+    rows.sort(key=lambda item: str(item.get("date") or ""), reverse=True)
+    return rows
+
+
+def _demo_stats_rows(selected: date) -> list[dict[str, Any]]:
+    counts: dict[tuple[str, str], int] = {}
+    for item in _demo_companies_for_date(selected):
+        timing = str(item.get("timing") or "TAS")
+        sector = str(item.get("sector") or "Other")
+        key = (timing, sector)
+        counts[key] = counts.get(key, 0) + 1
+    return [
+        {"timing": timing, "sector": sector, "company_count": count}
+        for (timing, sector), count in counts.items()
+    ]
+
+
 def _demo_company(symbol: str, selected: date) -> dict[str, Any]:
     data = _DEMO_DETAILS.get(symbol, _DEMO_DETAILS["NMDC"])
     source_url = data["documents"][0]["url"]
+    reported_now = selected == _demo_base_date() and symbol == "NMDC"
     return {
         "event_uid": stable_event_uid("demo", symbol, selected),
         "symbol": symbol,
@@ -1626,6 +2371,11 @@ def _demo_company(symbol: str, selected: date) -> dict[str, Any]:
             {**highlight, "url": highlight.get("url") or source_url}
             for highlight in data["headline_highlights"][:3]
         ],
+        "is_past": selected < _demo_base_date() or reported_now,
+        "eps_actual": 6.8 if reported_now else None,
+        "eps_estimated": 6.3 if reported_now else None,
+        "eps_surprise_pct": 7.94 if reported_now else None,
+        "post_earnings_move_1d": 1.8 if reported_now else None,
     }
 
 

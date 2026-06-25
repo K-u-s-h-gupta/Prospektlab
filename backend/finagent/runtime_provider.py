@@ -160,6 +160,28 @@ def is_rate_limit_error(exc: BaseException) -> bool:
     )
 
 
+def is_provider_unavailable_error(exc: BaseException) -> bool:
+    """True when the configured model/deployment endpoint is not callable.
+
+    This catches the Azure/OpenAI 404 family separately from content-filter and
+    quota errors so batch content jobs can fall back to the secondary provider
+    instead of aborting the whole article.
+    """
+    text = str(exc) if exc else ""
+    lowered = text.lower()
+    return (
+        "deployment for this resource does not exist" in lowered
+        or "api deployment for this resource does not exist" in lowered
+        or "deploymentnotfound" in lowered
+        or "deployment not found" in lowered
+        or "model_not_found" in lowered
+        or "model not found" in lowered
+        or "does not exist or you do not have access" in lowered
+        or "404 not found" in lowered
+        or lowered.startswith("404")
+    )
+
+
 def resolve_openai_config(complexity: str = "moderate") -> OpenAIConfig | None:
     """Return config for the primary provider (Azure/OpenAI) or xAI as fallback."""
     if (os.getenv("FINAGENT_BYPASS_AZURE") or "").strip().lower() in {"1", "true", "yes"}:

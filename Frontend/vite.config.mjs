@@ -38,6 +38,10 @@ export default defineConfig({
     host: true,
     proxy: {
       '/auth': 'http://localhost:8000',
+      '/earnings': 'http://localhost:8000',
+      '/screener': 'http://localhost:8000',
+      '/watchlist': 'http://localhost:8000',
+      '/filings': 'http://localhost:8000',
       '^/research/(start|deep|export-all|export)': 'http://localhost:8000',
       '^/research/export/': 'http://localhost:8000',
       '/sessions': 'http://localhost:8000',

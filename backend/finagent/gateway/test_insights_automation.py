@@ -46,3 +46,13 @@ def test_publish_route_blocks_unapproved_editorial_draft():
 
     assert response.status_code == 409
     assert "Editorial review" in response.json()["detail"]
+
+
+def test_content_automation_status_allows_guests():
+    """Content automation endpoints should not require login/signup."""
+    with patch("finagent.gateway.run.get_monitor_status") as mock_status:
+        mock_status.return_value = {"status": "ok"}
+        response = client.get("/api/content/automation/status")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"

@@ -17,6 +17,7 @@ DRHP_SECTION_ALIASES: dict[str, tuple[str, ...]] = {
         "industry overview",
         "about the company",
         "business of the company",
+        "description of business",
     ),
     "objects_of_issue": (
         "objects of the issue",
@@ -24,6 +25,7 @@ DRHP_SECTION_ALIASES: dict[str, tuple[str, ...]] = {
         "objects of the offer",
         "use of proceeds",
         "issue proceeds",
+        "utilisation of net proceeds",
     ),
     "risk_factors": ("risk factors", "risk factor"),
     "financial_information": (
@@ -43,6 +45,14 @@ DRHP_SECTION_ALIASES: dict[str, tuple[str, ...]] = {
         "our promoters",
         "promoter and promoter group",
         "promoter group",
+        "details of the promoters",
+    ),
+    "management": (
+        "our management",
+        "board of directors",
+        "key managerial personnel",
+        "directors and key managerial personnel",
+        "our board of directors",
     ),
     "related_party": (
         "related party transactions",
@@ -53,6 +63,7 @@ DRHP_SECTION_ALIASES: dict[str, tuple[str, ...]] = {
         "pending legal proceedings",
         "legal proceedings",
         "litigation",
+        "material litigation",
     ),
     "kpis": (
         "key performance indicators",
@@ -65,11 +76,25 @@ DRHP_SECTION_ALIASES: dict[str, tuple[str, ...]] = {
         "peer comparison",
         "comparison with industry peers",
         "industry comparison",
+        "comparison with listed industry peers",
     ),
     "issue_details": (
         "terms of the issue",
         "details of the issue",
         "issue structure",
+        "the offer",
+    ),
+    "strengths": (
+        "our strengths",
+        "competitive strengths",
+        "our competitive strengths",
+        "key strengths",
+    ),
+    "strategies": (
+        "our strategies",
+        "business strategies",
+        "our business strategies",
+        "growth strategies",
     ),
 }
 
@@ -253,11 +278,28 @@ def extract_promoters(promoters_section: str, legal_section: str = "") -> dict[s
     """Extract promoter names and litigation disclosures."""
     text = promoters_section or ""
     legal_text = legal_section or ""
-    promoters: list[dict[str, str]] = []
+    promoters: list[dict[str, Any]] = []
+    
+    # Extract promoter names with titles
     for match in re.finditer(r"(?:Mr\.|Ms\.|Mrs\.|Dr\.|Shri\.|Smt\.)\s+[A-Z][A-Za-z.\s]{2,40}", text):
         name = _normalize_whitespace(match.group(0))
         if name not in {p["name"] for p in promoters}:
             promoters.append({"name": name})
+    
+    # Try to extract shareholding percentages
+    for promoter in promoters:
+        name = promoter["name"]
+        # Look for "Name ... X.XX%" pattern
+        pattern = re.compile(
+            rf"{re.escape(name)}[^%]{{0,100}}?(\d+(?:\.\d+)?)\s*%",
+            re.IGNORECASE | re.DOTALL
+        )
+        match = pattern.search(text)
+        if match:
+            try:
+                promoter["shareholding_pct"] = float(match.group(1))
+            except ValueError:
+                pass
 
     litigation_snippets: list[str] = []
     for match in re.finditer(r"(?i)(sebi|sat|high court|supreme court|criminal|regulatory).{0,300}", legal_text):
@@ -270,6 +312,70 @@ def extract_promoters(promoters_section: str, legal_section: str = "") -> dict[s
         "litigation_count": len(litigation_snippets),
         "litigation_snippets": litigation_snippets[:10],
     }
+
+
+def extract_management(management_section: str) -> list[dict[str, Any]]:
+    """Extract board of directors and key managerial personnel."""
+    text = management_section or ""
+    management: list[dict[str, Any]] = []
+    
+    # Common designations
+    designations = [
+        "chairman", "managing director", "whole time director", "independent director",
+        "non-executive director", "executive director", "chief executive officer", "ceo",
+        "chief financial officer", "cfo", "company secretary", "director"
+    ]
+    
+    # Pattern: "Name, Designation" or "Name (Designation)"
+    for match in re.finditer(
+        r"(?:Mr\.|Ms\.|Mrs\.|Dr\.|Shri\.|Smt\.)\s+([A-Z][A-Za-z.\s]{2,40})"
+        r"(?:[,\s]+(?:is\s+)?(?:the\s+)?|[\s]*\()?"
+        r"(" + "|".join(designations) + r")",
+        text, re.IGNORECASE
+    ):
+        name = _normalize_whitespace(match.group(1))
+        designation = match.group(2).strip().title()
+        if name not in {m["name"] for m in management}:
+            management.append({
+                "name": name,
+                "designation": designation,
+            })
+    
+    # Fallback: just extract names with titles
+    if not management:
+        for match in re.finditer(r"(?:Mr\.|Ms\.|Mrs\.|Dr\.|Shri\.|Smt\.)\s+[A-Z][A-Za-z.\s]{2,40}", text):
+            name = _normalize_whitespace(match.group(0))
+            if name not in {m["name"] for m in management}:
+                management.append({"name": name, "designation": "Director"})
+    
+    return management[:15]
+
+
+def extract_strengths_and_strategies(strengths_section: str, strategies_section: str) -> dict[str, list[str]]:
+    """Extract company strengths and business strategies."""
+    result: dict[str, list[str]] = {"strengths": [], "strategies": []}
+    
+    def _extract_bullets(text: str) -> list[str]:
+        items: list[str] = []
+        # Try numbered items first
+        for match in re.finditer(r"(?:^|\n)\s*(?:\d{1,2}[\.\)]\s*|•\s*|[–-]\s*)(.+?)(?=\n\s*(?:\d{1,2}[\.\)]|•|[–-])|\Z)", text, re.DOTALL):
+            item = _normalize_whitespace(match.group(1))
+            if 20 < len(item) < 500 and item not in items:
+                items.append(item)
+        # Fallback: split by newlines and filter
+        if not items:
+            for line in text.split("\n"):
+                line = _normalize_whitespace(line)
+                if 30 < len(line) < 500 and not line.lower().startswith(("our ", "the ", "we ")):
+                    items.append(line)
+        return items[:10]
+    
+    if strengths_section:
+        result["strengths"] = _extract_bullets(strengths_section)
+    if strategies_section:
+        result["strategies"] = _extract_bullets(strategies_section)
+    
+    return result
 
 
 def extract_kpis(kpi_section: str) -> list[dict[str, Any]]:
@@ -331,6 +437,51 @@ def _safe_float(value: Any) -> float | None:
         return None
 
 
+def generate_business_synthesis(
+    business_section: str,
+    objects: dict[str, Any],
+    financials: dict[str, Any],
+    strengths: list[str],
+) -> str:
+    """Generate a concise business synthesis from extracted sections."""
+    # Extract first meaningful paragraph from business section
+    paragraphs = [p.strip() for p in (business_section or "").split("\n\n") if len(p.strip()) > 100]
+    intro = ""
+    for p in paragraphs[:3]:
+        # Skip table-like content
+        if "|" not in p and not p.startswith("#"):
+            intro = _normalize_whitespace(p)[:800]
+            break
+    
+    if not intro:
+        # Fallback to first 500 chars
+        intro = _normalize_whitespace(business_section[:500]) if business_section else ""
+    
+    # Add financial context if available
+    trends = financials.get("trends") or {}
+    rev_cagr = trends.get("revenue_cagr_pct")
+    pat_cagr = trends.get("pat_cagr_pct")
+    
+    synthesis_parts = [intro]
+    
+    if rev_cagr is not None or pat_cagr is not None:
+        growth_note = "The company has shown "
+        if rev_cagr is not None:
+            growth_note += f"revenue CAGR of {rev_cagr}%"
+            if pat_cagr is not None:
+                growth_note += f" and PAT CAGR of {pat_cagr}%"
+        elif pat_cagr is not None:
+            growth_note += f"PAT CAGR of {pat_cagr}%"
+        growth_note += " over the reported periods."
+        synthesis_parts.append(growth_note)
+    
+    # Add key strength if available
+    if strengths and len(strengths) > 0:
+        synthesis_parts.append(f"Key strength: {strengths[0]}")
+    
+    return " ".join(synthesis_parts)
+
+
 def parse_drhp_markdown(markdown: str) -> dict[str, Any]:
     """Full DRHP parse pipeline returning structured extraction payload."""
     parsed = extract_sections(markdown)
@@ -339,10 +490,13 @@ def parse_drhp_markdown(markdown: str) -> dict[str, Any]:
     objects_section = sections["objects_of_issue"].text
     financial_section = sections["financial_information"].text
     promoters_section = sections["promoters"].text
+    management_section = sections.get("management", DrhpSection("management", "", -1, -1, False)).text
     legal_section = sections["legal_proceedings"].text
     kpi_section = sections["kpis"].text
     peer_section = sections["peer_comparison"].text
     business_section = sections["business_overview"].text
+    strengths_section = sections.get("strengths", DrhpSection("strengths", "", -1, -1, False)).text
+    strategies_section = sections.get("strategies", DrhpSection("strategies", "", -1, -1, False)).text
 
     from finagent.ingestion.financial_table_extractor import extract_restated_financials
     from finagent.ingestion.ipo_score_engine import classify_risks, detect_sme_fraud_signals
@@ -352,8 +506,10 @@ def parse_drhp_markdown(markdown: str) -> dict[str, Any]:
     classified_risks = classify_risks(risks)
     objects = extract_objects_split(objects_section)
     promoters = extract_promoters(promoters_section, legal_section)
+    management = extract_management(management_section or promoters_section)
     kpis = extract_kpis(kpi_section)
     peers = extract_peer_table(peer_section)
+    strengths_strategies = extract_strengths_and_strategies(strengths_section, strategies_section)
     fraud_signals = detect_sme_fraud_signals(
         promoters=promoters,
         objects=objects,
@@ -361,15 +517,27 @@ def parse_drhp_markdown(markdown: str) -> dict[str, Any]:
         related_party_section=sections["related_party"].text,
         full_text=parsed.full_text,
     )
+    
+    # Generate business synthesis
+    business_synthesis = generate_business_synthesis(
+        business_section,
+        objects,
+        financials,
+        strengths_strategies.get("strengths", []),
+    )
 
     return {
         "sections_present": {name: sec.present for name, sec in sections.items()},
-        "business_overview_excerpt": business_section[:2500],
+        "business_synthesis": business_synthesis,
+        "business_overview_excerpt": business_section[:3000],
         "financials": financials,
         "objects_of_issue": objects,
         "risk_factors": classified_risks,
         "promoters": promoters,
+        "management": management,
         "kpis": kpis,
         "peers": peers,
+        "strengths": strengths_strategies.get("strengths", []),
+        "strategies": strengths_strategies.get("strategies", []),
         "fraud_signals": fraud_signals,
     }

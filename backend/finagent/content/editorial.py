@@ -18,6 +18,7 @@ from finagent.content_automation import ContentArticlePackage
 from finagent.output.compliance import is_ra_licensed, CHAT_DISCLAIMER
 from finagent.runtime_provider import (
     is_content_filter_error,
+    is_provider_unavailable_error,
     resolve_openai_config,
     resolve_openai_fallback_config,
 )
@@ -688,7 +689,7 @@ async def _llm_critique_article(
     try:
         return await _call(llm_cfg)
     except Exception as exc:
-        if is_content_filter_error(exc):
+        if is_content_filter_error(exc) or is_provider_unavailable_error(exc):
             fb = resolve_openai_fallback_config(complexity="moderate")
             if fb is not None:
                 try:
@@ -765,7 +766,7 @@ async def _llm_revise_article(
     try:
         return await _call(llm_cfg)
     except Exception as exc:
-        if is_content_filter_error(exc):
+        if is_content_filter_error(exc) or is_provider_unavailable_error(exc):
             fb = resolve_openai_fallback_config(complexity="moderate")
             if fb is not None:
                 try:

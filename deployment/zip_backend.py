@@ -24,7 +24,7 @@ def zipdir(path, ziph, archive_root=None):
             filePath = os.path.join(root, file)
             rel_path = os.path.relpath(filePath, path)
             archivePath = os.path.join(archive_root, rel_path) if archive_root else os.path.relpath(filePath, ".")
-            ziph.write(filePath, archivePath)
+            ziph.write(filePath, archivePath.replace(os.sep, "/"))
 
 def create_zip():
     source_dir = resolve_source_dir()
@@ -36,16 +36,20 @@ def create_zip():
             pass
             
     with zipfile.ZipFile('backend.zip', 'w', zipfile.ZIP_DEFLATED) as zipf:
-        # Add Dockerfile
-        if os.path.exists('Dockerfile'):
-            zipf.write('Dockerfile', 'Dockerfile')
-        # Add buildspec.yml
-        if os.path.exists('buildspec.yml'):
-            zipf.write('buildspec.yml', 'buildspec.yml')
-        # Preserve the Dockerfile's expected backend/finagent source path.
-        if os.path.exists(source_dir):
-            archive_root = os.path.join("backend", "finagent")
-            zipdir(source_dir, zipf, archive_root=archive_root)
+        TARGETS = [
+            "Dockerfile",
+            "buildspec.yml",
+            "buildspec-prod.yml",
+            "pyproject.toml",
+            "backend",
+            "scripts"
+        ]
+        for target in TARGETS:
+            if os.path.exists(target):
+                if os.path.isdir(target):
+                    zipdir(target, zipf, archive_root=target)
+                else:
+                    zipf.write(target, target)
             
     print("Successfully created backend.zip using Python")
 

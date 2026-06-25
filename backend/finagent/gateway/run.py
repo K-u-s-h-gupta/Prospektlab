@@ -47,14 +47,15 @@ try:
     from dotenv import load_dotenv as _load_dotenv
     # Try backend/finagent/.env first, then project root .env
     _here = Path(__file__).resolve().parent
-    _loaded = (
-        _load_dotenv(_here.parent / ".env", override=True)
-        or _load_dotenv(_here.parent.parent.parent / ".env", override=True)
-    )
+    # Load both env files — package .env takes priority, root .env fills gaps.
+    # NOTE: do NOT use `or` here — that short-circuits and skips the root .env
+    # whenever backend/finagent/.env exists (always on dev and in Docker).
+    _load_dotenv(_here.parent / ".env", override=True)
+    _load_dotenv(_here.parent.parent.parent / ".env", override=False)
 except ImportError:
     pass  # python-dotenv not installed; keys must come from environment
 
-from fastapi import FastAPI, HTTPException, Header, Depends, Request, Response, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Header, Depends, Request, Response, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, field_validator
@@ -116,10 +117,22 @@ from finagent.telemetry import TELEMETRY, TelemetryUserContext, telemetry_reques
 from finagent.cache import app_cache
 from finagent.telemetry_burner import create_telemetry_burner_task, get_telemetry_burner
 from finagent.tools.data import fetch_news, fetch_yahoo_quote, fetch_india_snapshot, fetch_nse_snapshot
+from finagent.tools.data.upstox_feed import market_feed
+from finagent.upstox_token_scheduler import schedule_daily_refresh
 from finagent.news.sources.nse_announcements import fetch_nse_announcements
 from finagent.news.scorer import VERIFIED_DOMAINS, parse_published_at
 from finagent.screener import get_screener_service
 from finagent.ipo import get_ipo_service
+try:
+    from finagent.api_routes.earnings import router as earnings_router
+    _earnings_router_available = True
+except Exception as _earnings_import_err:  # noqa: BLE001
+    import logging as _logging
+    _logging.getLogger("finagent.gateway").warning(
+        "Earnings router failed to load (non-fatal): %s", _earnings_import_err
+    )
+    earnings_router = None  # type: ignore[assignment]
+    _earnings_router_available = False
 import time
 
 # â”€â”€ Razorpay payments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -686,6 +699,182 @@ async def lifespan(app: FastAPI):
             "Long-term memory is handled separately by Prospekt tiered memory. "
             "Set Supabase environment variables for production user workflows."
         )
+
+    # Start APScheduler for daily Upstox token refresh (03:45 IST / 22:15 UTC).
+    # Must start before market_feed so the scheduler is running when the feed
+    # first reads the token on connect.
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    _token_scheduler = AsyncIOScheduler(timezone="UTC")
+    _token_scheduler.start()
+    schedule_daily_refresh(_token_scheduler)
+
+    # Eagerly warm the earnings tables check on startup so the first request doesn't
+    # pay the cost of probing + querying sequentially (which can cause timeouts).
+    try:
+        from finagent.earnings.service import ensure_earnings_tables
+        from finagent.earnings.universe import get_earnings_universe
+        ensure_earnings_tables()
+        # Also warm the universe cache to avoid cold DB call during first calendar request
+        universe = get_earnings_universe()
+        logger.info("Earnings tables warmup complete (universe size: %d)", universe.size)
+    except Exception as warmup_exc:
+        logger.debug("Earnings tables warmup failed (non-fatal): %s", warmup_exc)
+
+    # Pre-warm earnings overview data in background so the first dashboard load is fast.
+    # This makes one calendar + one companies call to populate the in-memory cache.
+    def _warmup_earnings_overview():
+        try:
+            from finagent.earnings.service import get_earnings_calendar, get_earnings_companies
+            from datetime import date as _d, timedelta as _td
+            today = _d.today()
+            start = (today - _td(days=3)).isoformat()
+            end = (today + _td(days=4)).isoformat()
+            get_earnings_calendar(start, end)
+            get_earnings_companies(start_date=start, end_date=end, page_size=50)
+            logger.info("Earnings overview pre-warm complete")
+        except Exception as exc:
+            logger.debug("Earnings overview pre-warm failed (non-fatal): %s", exc)
+
+    import threading
+    threading.Thread(target=_warmup_earnings_overview, daemon=True, name="earnings-overview-warmup").start()
+
+    # Schedule earnings scraper to run every 15 minutes (lightweight, no Celery required).
+    # The calendar covers the full current year (Jan 1 -> present) plus future board meetings.
+    # Past company detail pages are pre-parsed in the background on startup.
+    try:
+        from finagent.earnings.scraper import run_earnings_ingestion
+        from datetime import timedelta as _td
+        from datetime import date as _date
+        import asyncio as _asyncio
+
+        def _earnings_scrape_job():
+            """Run earnings ingestion synchronously in scheduler thread."""
+            try:
+                today = _date.today()
+                year_start = _date(today.year, 1, 1)
+                result = run_earnings_ingestion(
+                    start_date=year_start,
+                    end_date=today + _td(days=30),
+                    enrich_past_outcomes=False,
+                )
+                logger.info("Earnings scrape completed: stored=%s, nse=%s, bse=%s",
+                           result.get("stored"), result.get("nse_fetched"), result.get("bse_fetched"))
+            except Exception as exc:
+                logger.debug("Scheduled earnings scrape failed: %s", exc)
+
+        _token_scheduler.add_job(
+            _earnings_scrape_job,
+            "interval",
+            minutes=15,
+            id="earnings-periodic-scrape",
+            replace_existing=True,
+        )
+        enable_earnings_preparse = (
+            os.getenv("FINAGENT_EARNINGS_ENABLE_PREPARSE", "1" if os.getenv("PROSPEKTLAB_ENV") == "production" else "0")
+            .strip()
+            .lower()
+            not in {"0", "false", "off", "no"}
+        )
+
+        # Warm earnings detail cache by parsing the full current year (Jan 1 -> present) in the background.
+        # This is useful in production, but it is intentionally disabled by default in local/dev to keep the
+        # overview requests responsive right after a restart.
+        def _earnings_preparse_job():
+            """Process a small batch of missing earnings detail rows in the background."""
+            try:
+                from finagent.earnings.service import preparse_earnings_range
+                today = _date.today()
+                year_start = _date(today.year, 1, 1)
+                result = preparse_earnings_range(start_date=year_start, limit=15)
+                logger.info("Earnings preparse batch: parsed=%s, failed=%s, total=%s",
+                           result.get("parsed"), result.get("failed"), result.get("total"))
+            except Exception as exc:
+                logger.debug("Scheduled earnings preparse batch failed: %s", exc)
+
+        if enable_earnings_preparse:
+            try:
+                from finagent.earnings.service import preparse_earnings_current_year
+                import threading
+                threading.Thread(
+                    target=preparse_earnings_current_year,
+                    daemon=True,
+                    name="earnings-preparse-current-year",
+                ).start()
+                logger.info("Earnings current-year preparse started in background")
+            except Exception as pre_exc:
+                logger.debug("Earnings preparse startup failed (non-fatal): %s", pre_exc)
+
+            _token_scheduler.add_job(
+                _earnings_preparse_job,
+                "interval",
+                minutes=10,
+                id="earnings-preparse-batch",
+                replace_existing=True,
+            )
+            logger.info("Earnings scraper scheduled: every 15 minutes (calendar) + preparse batch every 10 minutes")
+        else:
+            logger.info("Earnings scraper scheduled: every 15 minutes (calendar); preparse disabled for local/dev")
+    except Exception as sched_exc:
+        logger.debug("Earnings scheduler setup failed (non-fatal): %s", sched_exc)
+
+    # Attempt an immediate Upstox token refresh on startup.
+    # This ensures the WS feed can connect right away rather than waiting for
+    # the 03:45 IST cron job. Non-fatal: if credentials are missing or TOTP
+    # fails, the existing token in the env/file is used as-is.
+    async def _startup_token_refresh():
+        try:
+            from finagent.upstox_token_scheduler import refresh_token_async
+            logger.info("Attempting startup Upstox token refresh...")
+            await refresh_token_async()
+        except Exception as exc:
+            logger.warning("Startup Upstox token refresh failed (non-fatal): %s", exc)
+    asyncio.create_task(_startup_token_refresh())
+
+    # Start Upstox WebSocket feed — opens persistent WS to Upstox V3 market-data
+    # endpoint, subscribes to NSE universe, and keeps _prices cache populated.
+    # REST endpoints check this cache first (sub-second) before falling back to
+    # NSE/Yahoo HTTP polls.
+    await market_feed.start()
+
+    # Populate IPO pipeline from SEBI on startup (non-blocking, best-effort).
+    # Only runs the fast metadata path (SEBI scrape + ipowatch enrichment).
+    # PDF cover parsing is deferred to the daily watcher to keep startup fast.
+    async def _ipo_startup_refresh():
+        try:
+            from finagent.ipo.service import get_ipo_service
+            svc = get_ipo_service()
+            result = await svc.run_watcher(download=False, cover_parse=False)
+            logger.info(
+                "IPO startup refresh complete: %s filings discovered",
+                result.get("discovered", 0),
+            )
+        except Exception as exc:
+            logger.debug("IPO startup refresh failed (non-fatal): %s", exc)
+
+    asyncio.create_task(_ipo_startup_refresh())
+
+    # Schedule daily IPO watcher (with full cover parsing) at 07:00 IST (01:30 UTC).
+    def _ipo_daily_watcher_job():
+        try:
+            import asyncio as _asyncio
+            from finagent.ipo.service import get_ipo_service
+            loop = _asyncio.new_event_loop()
+            svc = get_ipo_service()
+            result = loop.run_until_complete(svc.run_watcher(download=False))
+            loop.close()
+            logger.info("IPO daily watcher: %s filings refreshed", result.get("discovered", 0))
+        except Exception as exc:
+            logger.debug("IPO daily watcher failed: %s", exc)
+
+    _token_scheduler.add_job(
+        _ipo_daily_watcher_job,
+        "cron",
+        hour=1,
+        minute=30,
+        id="ipo-daily-watcher",
+        replace_existing=True,
+    )
+
     cleanup_task = asyncio.create_task(_periodic_cleanup())
     create_telemetry_burner_task()
     yield
@@ -695,6 +884,8 @@ async def lifespan(app: FastAPI):
         await cleanup_task
     except asyncio.CancelledError:
         pass
+    await market_feed.stop()
+    _token_scheduler.shutdown(wait=False)
     burner = get_telemetry_burner()
     await burner.stop()
     for task in list(_TASKS.values()):
@@ -724,13 +915,25 @@ if not _cors_raw.strip() or _cors_raw.strip() == "*":
         "https://prospektlab.com",
         "https://www.prospektlab.com",
     ]
+    _allow_origin_regex = (
+        r"^http://("
+        r"(localhost|127\.0\.0\.1|::1)"
+        r"|(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3})"
+        r"|(?:192\.168\.\d{1,3}\.\d{1,3})"
+        r"|(?:172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})"
+        r"|(?:[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.local)"
+        r"|(?:[A-Za-z0-9-]+)"
+        r")(?::(?:3000|4173|4174|5173|5174))$"
+    )
     _allow_credentials = True
 else:
     _allow_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+    _allow_origin_regex = None
     _allow_credentials = True
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allow_origins,
+    allow_origin_regex=_allow_origin_regex,
     allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1091,6 +1294,19 @@ async def get_chat_user_or_guest(
     return current_user
 
 
+async def get_content_user_or_guest(
+    request: Request,
+    response: Response,
+    authorization: str = Header(None),
+) -> dict:
+    """Content automation identity: authed users get the weekly token-limit check;
+    guests pass through without requiring login/signup."""
+    current_user = await get_current_user_or_guest(request, response, authorization)
+    if not _is_guest_user(current_user):
+        await _check_weekly_token_limit(current_user)
+    return current_user
+
+
 async def enforce_guest_daily_cap(request: Request, mode: str) -> None:
     """Bound anonymous spend with a per-IP daily cap (deep < standard).
 
@@ -1172,6 +1388,9 @@ def add_cors_headers(request: Request, response: Response) -> Response:
         is_allowed = True
         origin_to_set = "*"
     elif origin in _allow_origins:
+        is_allowed = True
+        origin_to_set = origin
+    elif _allow_origin_regex and origin and re.match(_allow_origin_regex, origin):
         is_allowed = True
         origin_to_set = origin
     else:
@@ -1289,6 +1508,11 @@ async def _verify_google_token(credential: str) -> dict:
                 last_error = e
 
     raise HTTPException(status_code=503, detail="Identity service temporarily unavailable. Please try again.")
+
+# Mount the modular earnings router. The router itself already defines prefix="/earnings",
+# so we must not pass another prefix here (that would double it to /earnings/earnings/*).
+if _earnings_router_available and earnings_router is not None:
+    app.include_router(earnings_router, tags=["earnings"])
 
 @app.post("/auth/google", dependencies=[Depends(auth_rate_limiter)])
 async def google_auth(req: GoogleAuthRequest, request: Request):
@@ -2829,6 +3053,15 @@ async def get_market_quotes(symbols: str, current_user: dict | None = Depends(ge
         quote_timeout = _gateway_float_setting("FINAGENT_MARKET_QUOTE_TIMEOUT_S", 3.0)
         yahoo_timeout = _gateway_float_setting("FINAGENT_MARKET_QUOTE_YAHOO_TIMEOUT_S", 4.0)
 
+        # Upstox WS feed — sub-second latency, first priority.
+        # Only use if tick is fresh (< 5 s) to avoid serving stale pre-close data
+        # after market hours or during feed reconnects.
+        tick = market_feed.get(sym)
+        if tick is not None and tick.age_seconds() < 5:
+            data = tick.to_quote_dict()
+            await app_cache.set(cache_key, data, ttl=2)
+            return sym, data
+
         try:
             snap = await asyncio.wait_for(fetch_nse_snapshot(sym), timeout=quote_timeout)
             if snap and snap.current_price is not None:
@@ -3045,6 +3278,27 @@ async def get_market_indices(current_user: dict | None = Depends(get_current_use
         return f"${amount:,.0f}"
 
     async def fetch_one(cat_name, ticker, name):
+        # For Indian indices: check the Upstox WS cache first (< 1 s latency).
+        if cat_name in ("india", "futures") and ticker.startswith(("^", "NIFTY", "SENSEX", "BSE")):
+            tick = market_feed.get(ticker)
+            if tick is not None and tick.age_seconds() < 10:
+                price = tick.price
+                cp = tick.close or price
+                diff = price - cp if cp else 0.0
+                chg_str = f"({diff:+.2f})" if diff else "—"
+                sparkline = market_feed.get_sparkline(tick.symbol)
+                if not sparkline:
+                    sparkline = [price]
+                return cat_name, {
+                    "symbol": name,
+                    "value": f"{price:,.2f}",
+                    "change": chg_str,
+                    "changePct": tick.change_pct,
+                    "sparkData": sparkline,
+                    "sourceTicker": ticker,
+                    "kind": cat_name,
+                    "liveSource": "upstox_ws",
+                }
         try:
             quote = await fetch_yahoo_quote(ticker, timeout_s=indices_quote_timeout, cache_ttl_s=55.0)
             if quote:
@@ -3053,16 +3307,16 @@ async def get_market_indices(current_user: dict | None = Depends(get_current_use
                     sparkline = [quote.price * (1 + (i - 4) * 0.001) for i in range(9)]
                 
                 diff = quote.price - quote.previous_close if quote.price and quote.previous_close is not None else 0.0
-                chg_str = f"({diff:+.2f})" if diff else "â€”"
+                chg_str = f"({diff:+.2f})" if diff else "—"
                 
-                display_val = f"{quote.price:,.2f}" if quote.price is not None else "â€”"
+                display_val = f"{quote.price:,.2f}" if quote.price is not None else "—"
                 if "USD" in ticker or "BTC" in ticker or "ETH" in ticker or "SOL" in ticker or "XRP" in ticker or ticker in ["CL=F", "GC=F"]:
                     if ticker in ["CL=F", "GC=F"]:
                         display_val = f"${quote.price:,.2f}"
                     elif "USDINR" in ticker or "EURINR" in ticker or "GBPINR" in ticker or "JPYINR" in ticker:
                         display_val = f"{quote.price:,.2f}"
                     else:
-                        display_val = f"${quote.price:,.2f}" if quote.price is not None else "â€”"
+                        display_val = f"${quote.price:,.2f}" if quote.price is not None else "—"
 
                 return cat_name, {
                     "symbol": name,
@@ -3140,8 +3394,86 @@ async def get_market_indices(current_user: dict | None = Depends(get_current_use
     if any(results.get(cat_name) for cat_name in results):
         await app_cache.set("market:indices:last_live", results, ttl=3600)
 
-    await app_cache.set("market:indices", results, ttl=60)
+    # Indian indices are updated by Upstox WS on every tick — keep cache TTL short
+    # so polling clients see fresh data (WebSocket clients get immediate pushes).
+    has_live_india = bool(results.get("india") and not any(r.get("stale") for r in results["india"]))
+    indices_ttl = 3 if has_live_india else 60
+    await app_cache.set("market:indices", results, ttl=indices_ttl)
     return results
+
+
+@app.websocket("/ws/market")
+async def websocket_market(ws: WebSocket):
+    """Real-time market price WebSocket relay.
+
+    On connect: sends a `{"type":"snapshot","data":{symbol: quote_dict}}` burst
+    containing every tick currently in the Upstox feed cache.
+
+    Ongoing: pushes `{"type":"tick","data": quote_dict}` frames for every price
+    update from the Upstox WS feed (< 1 s during market hours).
+
+    The client can send `{"action":"subscribe","symbols":["RELIANCE","^NSEI",...]}` to
+    narrow the interest filter; the backend then only pushes ticks for those symbols.
+
+    Heartbeat: sends `{"type":"heartbeat"}` every FINAGENT_WS_HEARTBEAT_S seconds
+    (default 15 s) so proxies / load balancers don't close the idle connection.
+    """
+    heartbeat_s = float(os.getenv("FINAGENT_WS_HEARTBEAT_S", "15"))
+    await ws.accept()
+    logger.info("WS /ws/market client connected from %s", ws.client)
+
+    # Register a broadcast queue with no initial interest filter (receives all ticks).
+    q = market_feed.subscribe_queue(symbols=None)
+
+    try:
+        # 1. Send initial snapshot of all known prices.
+        all_ticks = market_feed.get_all()
+        if all_ticks:
+            snapshot = {sym: tick.to_quote_dict() for sym, tick in all_ticks.items()}
+            await ws.send_json({"type": "snapshot", "data": snapshot})
+
+        # 2. Stream incoming ticks; also handle client subscribe frames and heartbeat.
+        last_heartbeat = asyncio.get_event_loop().time()
+        while True:
+            now = asyncio.get_event_loop().time()
+            time_to_heartbeat = heartbeat_s - (now - last_heartbeat)
+
+            # Use a short poll timeout so we can send heartbeats and handle
+            # incoming client frames even when there are no ticks.
+            try:
+                tick_msg = await asyncio.wait_for(q.get(), timeout=max(0.1, time_to_heartbeat))
+                await ws.send_json(tick_msg)
+            except asyncio.TimeoutError:
+                pass  # normal — will heartbeat or check for client frames below
+
+            # Heartbeat.
+            now = asyncio.get_event_loop().time()
+            if now - last_heartbeat >= heartbeat_s:
+                await ws.send_json({"type": "heartbeat"})
+                last_heartbeat = now
+
+            # Check for incoming client frames (non-blocking).
+            try:
+                raw = await asyncio.wait_for(ws.receive_text(), timeout=0.001)
+                try:
+                    frame = json.loads(raw)
+                    if frame.get("action") == "subscribe":
+                        syms = frame.get("symbols") or []
+                        market_feed.set_interest(q, syms if isinstance(syms, list) else None)
+                except Exception:
+                    pass
+            except asyncio.TimeoutError:
+                pass
+            except WebSocketDisconnect:
+                break
+
+    except WebSocketDisconnect:
+        logger.info("WS /ws/market client disconnected")
+    except Exception as exc:
+        logger.warning("WS /ws/market error: %s", exc)
+    finally:
+        market_feed.unsubscribe_queue(q)
+        logger.info("WS /ws/market queue cleaned up")
 
 
 @app.get("/screener/search")
@@ -3218,6 +3550,15 @@ async def screener_query(
 async def ipo_pipeline(current_user: dict | None = Depends(get_current_user_optional)):
     service = get_ipo_service()
     return await service.pipeline_dashboard()
+
+
+@app.post("/ipo/refresh-nse")
+async def ipo_refresh_nse(current_user: dict | None = Depends(get_current_user_optional)):
+    """Quick refresh: only NSE + ipowatch enrichment, no SEBI scraping."""
+    service = get_ipo_service()
+    await service._enrich_from_nse()
+    await service._enrich_from_ipowatch()
+    return {"status": "ok", "message": "NSE + ipowatch enrichment complete"}
 
 
 @app.get("/ipo/search")
@@ -6365,7 +6706,7 @@ async def steer_canvas(
 @app.post("/api/content/articles/generate", dependencies=[Depends(default_rate_limiter)])
 async def generate_content_article(
     req: ContentAutomationRequest,
-    current_user: dict = Depends(enforce_token_limit),
+    current_user: dict = Depends(get_content_user_or_guest),
 ):
     result = await generate_article_automation(req, requested_by=current_user["email"])
     TELEMETRY.emit_event(
@@ -6384,7 +6725,7 @@ async def generate_content_article(
 @app.post("/api/content/articles/generate-batch", dependencies=[Depends(default_rate_limiter)])
 async def generate_content_article_batch(
     req: ContentAutomationBatchRequest,
-    current_user: dict = Depends(enforce_token_limit),
+    current_user: dict = Depends(get_content_user_or_guest),
 ):
     result = await generate_article_batch(req, requested_by=current_user["email"])
     TELEMETRY.emit_event(
@@ -6404,7 +6745,7 @@ async def generate_content_article_batch(
 @app.post("/api/content/events/ingest", dependencies=[Depends(default_rate_limiter)])
 async def ingest_content_events(
     req: ContentEventIngestionRequest,
-    current_user: dict = Depends(enforce_token_limit),
+    current_user: dict = Depends(get_content_user_or_guest),
 ):
     result = await ingest_market_event_triggers(req, requested_by=current_user["email"])
     TELEMETRY.emit_event(
@@ -6460,7 +6801,7 @@ async def list_content_articles(
 
 
 @app.get("/api/content/articles/{slug}")
-async def get_content_article(slug: str, route_base: str = "insights", current_user: dict = Depends(get_current_user)):
+async def get_content_article(slug: str, route_base: str = "insights", current_user: dict = Depends(get_content_user_or_guest)):
     article = load_generated_article(slug, route_base=route_base)
     if not article:
         raise HTTPException(status_code=404, detail="Generated article not found")
@@ -6572,7 +6913,7 @@ _FLASH_JOBS: dict[str, asyncio.Task] = {}  # job_id â†’ background task
 
 
 @app.post("/api/content/flash/generate", dependencies=[Depends(default_rate_limiter)])
-async def flash_generate(req: FlashGenerationRequest, current_user: dict = Depends(enforce_token_limit)):
+async def flash_generate(req: FlashGenerationRequest, current_user: dict = Depends(get_content_user_or_guest)):
     """Start an async Flash/Deep content generation job. Returns job_id + stream URL."""
     req = req.model_copy(update={"mode": "research", "force_publish": False})
     job_id = uuid.uuid4().hex[:12]
@@ -6617,7 +6958,7 @@ async def flash_generate(req: FlashGenerationRequest, current_user: dict = Depen
 
 
 @app.post("/api/content/flash/ingest-events", dependencies=[Depends(default_rate_limiter)])
-async def flash_ingest_events(req: FlashIngestRequest, current_user: dict = Depends(enforce_token_limit)):
+async def flash_ingest_events(req: FlashIngestRequest, current_user: dict = Depends(get_content_user_or_guest)):
     """Discover SEBI/BSE/NSE events and generate articles via the flash pipeline."""
     req = req.model_copy(update={"mode": "research"})
     job_id = uuid.uuid4().hex[:12]
@@ -6658,12 +6999,12 @@ async def flash_ingest_events(req: FlashIngestRequest, current_user: dict = Depe
 
 
 @app.get("/api/content/automation/status")
-async def content_automation_status(current_user: dict = Depends(get_current_user)):
+async def content_automation_status(current_user: dict = Depends(get_content_user_or_guest)):
     return JSONResponse(get_monitor_status())
 
 
 @app.post("/api/content/automation/run-now", dependencies=[Depends(default_rate_limiter)])
-async def content_automation_run_now(current_user: dict = Depends(enforce_token_limit)):
+async def content_automation_run_now(current_user: dict = Depends(get_content_user_or_guest)):
     """Run one immediate official-source monitoring sweep in the background."""
     job_id = uuid.uuid4().hex[:12]
     user_email = current_user["email"]
@@ -6700,7 +7041,7 @@ async def content_automation_run_now(current_user: dict = Depends(enforce_token_
 async def publish_content_article(
     slug: str,
     route_base: str = "insights",
-    current_user: dict = Depends(enforce_token_limit),
+    current_user: dict = Depends(get_content_user_or_guest),
 ):
     """Publish a draft article â€” mirrors to public dir and adds to sitemap."""
     manifest = load_generated_article(slug, route_base=route_base)
@@ -6734,7 +7075,7 @@ async def publish_content_article(
 async def unpublish_content_article(
     slug: str,
     route_base: str = "insights",
-    current_user: dict = Depends(enforce_token_limit),
+    current_user: dict = Depends(get_content_user_or_guest),
 ):
     """Retract a published article â€” removes public mirror and sets status to draft."""
     try:

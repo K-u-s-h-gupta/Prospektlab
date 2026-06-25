@@ -15,7 +15,6 @@ import { AgentThinking } from '../components/chat/AgentThinking';
 import ExportPanel from '../components/chat/ExportPanel';
 import FeatureTabs, { FeatureTabId } from '../components/layout/FeatureTabs';
 import { GatewaySetupCard } from './GatewayPage';
-import { IpoDashboardContent } from './IpoDashboard';
 import { useAuth } from '../context/AuthContext';
 import { 
   startResearch, 
@@ -40,13 +39,16 @@ import {
   postStressTest,
   getUserTokenUsage,
   listContentArticles,
+  getEarningsOverview,
+  EarningsCalendarDay,
+  EarningsCompanyItem,
 } from '../api/client';
-import { Search, Sparkles, ChevronRight, ChevronDown, ChevronLeft, Activity, TrendingDown, ExternalLink, MessageSquarePlus, History, Trash2, ArrowLeft } from 'lucide-react';
+import { Search, Sparkles, ChevronRight, ChevronDown, ChevronLeft, Activity, TrendingDown, ExternalLink, MessageSquarePlus, History, Trash2, ArrowLeft, ArrowUpRight, ArrowDownRight, Eye } from 'lucide-react';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../data/indianStocks';
 import { buildProspektCover } from '../utils/coverArt';
 import { APP_BETA_ACCESS_NOTE, APP_BETA_BADGE, APP_BETA_CHAT_FOOTER, APP_BETA_DEEP_NOTE } from '../constants/beta';
 
-type DashboardFeatureTab = 'overview' | 'portfolio' | 'watchlist' | 'screener' | 'ipo' | 'earnings' | 'governance';
+type DashboardFeatureTab = 'overview' | 'portfolio' | 'watchlist' | 'screener';
 
 const CHAT_WIDTH_STORAGE_KEY = 'prospektlab_chat_width';
 const MIN_CHAT_WIDTH = 320;
@@ -135,10 +137,15 @@ const INDICES_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const OVERVIEW_INDEX_SYMBOLS = ['NIFTY 50', 'SENSEX', 'NIFTY BANK', 'NIFTY IT'] as const;
 
 const normalizeNewsUrl = (raw: string) => {
-  const value = String(raw || '').trim();
+  let value = String(raw || '').trim();
   if (!value) return '';
+  if (value.startsWith('//')) {
+    value = `https:${value}`;
+  } else if (!value.startsWith('http://') && !value.startsWith('https://')) {
+    value = `https://${value}`;
+  }
   try {
-    const parsed = new URL(value.startsWith('//') ? `https:${value}` : value);
+    const parsed = new URL(value);
     parsed.hash = '';
     return parsed.toString();
   } catch {
@@ -609,6 +616,9 @@ const getCardsPerSlide = () => {
 const DISCOVER_MAX_CARDS = 15;
 const DISCOVER_FEED_CAP = 45;
 const OVERVIEW_MOVER_LIMIT = 5;
+const OVERVIEW_EARNINGS_DAY_LOOKAHEAD = 4;
+const OVERVIEW_EARNINGS_LOOKBACK_DAYS = 3;
+const OVERVIEW_EARNINGS_ROW_LIMIT = 4;
 const buildDiscoverMarketQuery = (baseQuery: string) => `${baseQuery} latest`.trim();
 const MARKET_MOVER_UNIVERSE_SYMBOLS = [
   'ADANIENT', 'ADANIPORTS', 'APOLLOHOSP', 'ASIANPAINT', 'AXISBANK',
@@ -741,6 +751,79 @@ const parseNumericValue = (raw: any): number | null => {
   const value = Number(cleaned);
   return Number.isFinite(value) ? value : null;
 };
+
+const overviewDayFmt = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' });
+const overviewFullDateFmt = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+const toDateKey = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const addDaysToDate = (value: Date, days: number) => {
+  const next = new Date(value);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const parseDateKey = (value?: string | null) => {
+  if (!value) return null;
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const parsed = new Date(year, month - 1, day);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatOverviewDate = (value?: string | null, withYear = false) => {
+  const parsed = parseDateKey(value);
+  if (!parsed) return 'TBD';
+  return (withYear ? overviewFullDateFmt : overviewDayFmt).format(parsed);
+};
+
+const formatRelativeDateLabel = (value?: string | null) => {
+  const parsed = parseDateKey(value);
+  if (!parsed) return 'Date TBA';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(parsed);
+  target.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Tomorrow';
+  if (diffDays > 1) return `In ${diffDays}d`;
+  return `${Math.abs(diffDays)}d ago`;
+};
+
+const formatEarningsTiming = (timing?: string) => {
+  const clean = String(timing || '').trim();
+  if (!clean) return 'Timing TBD';
+  if (clean === 'Pre-market') return 'Pre-mkt';
+  if (clean === 'During-market') return 'During-mkt';
+  if (clean === 'Post-market') return 'Post-mkt';
+  return clean;
+};
+
+const normalizeUniverseSymbol = (value: string) =>
+  String(value || '').split('.')[0].toUpperCase().trim();
+
+const buildEarningsDetailHref = (item: Pick<EarningsCompanyItem, 'symbol' | 'name' | 'date'>) => {
+  const params = new URLSearchParams({
+    date: item.date,
+    symbol: item.symbol,
+    name: item.name,
+  });
+  return `/dashboard/earnings?${params.toString()}`;
+};
+
+const buildEarningsDateHref = (date: string) => `/dashboard/earnings?date=${encodeURIComponent(date)}`;
 
 const normalizeIndexRow = (raw: any): IndexTickerData | null => {
   if (!raw || typeof raw !== 'object') return null;
@@ -1131,13 +1214,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       ? 'watchlist'
       : initialFeatureTab === 'screener'
         ? 'screener'
-        : initialFeatureTab === 'ipo'
-          ? 'ipo'
-        : initialFeatureTab === 'earnings'
-          ? 'earnings'
-          : initialFeatureTab === 'governance'
-            ? 'governance'
-            : 'overview';
+        : 'overview';
 
   const shellTitle = activeFeatureTab === 'watchlist'
     ? 'Watchlist'
@@ -1145,9 +1222,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       ? 'Portfolio'
       : activeFeatureTab === 'screener'
         ? 'Screener'
-        : activeFeatureTab === 'ipo'
-          ? 'IPO Intelligence'
-          : 'Overview';
+        : 'Overview';
   const isPortfolioFeature = activeFeatureTab === 'portfolio';
   const isMarketTapeFeature = activeFeatureTab === 'overview' || activeFeatureTab === 'portfolio';
 
@@ -1332,6 +1407,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   const [marketMovers, setMarketMovers] = useState<MarketMoverItem[]>(() => readCachedMarketMovers());
   const [marketMoversLoading, setMarketMoversLoading] = useState(() => readCachedMarketMovers().length === 0);
   const [marketMoversError, setMarketMoversError] = useState<string | null>(null);
+  const [overviewEarningsDays, setOverviewEarningsDays] = useState<EarningsCalendarDay[]>([]);
+  const [overviewEarningsUpcoming, setOverviewEarningsUpcoming] = useState<EarningsCompanyItem[]>([]);
+  const [overviewEarningsReportedToday, setOverviewEarningsReportedToday] = useState<EarningsCompanyItem[]>([]);
+  const [overviewEarningsLoading, setOverviewEarningsLoading] = useState(true);
+  const [overviewEarningsError, setOverviewEarningsError] = useState<string | null>(null);
   const marketMoversRef = useRef<MarketMoverItem[]>([]);
   const liveIndiaIndexCountRef = useRef(0);
   useEffect(() => {
@@ -1788,6 +1868,121 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       window.clearInterval(interval);
     };
   }, [activeFeatureTab, userUniverseSymbols]);
+
+  useEffect(() => {
+    if (activeFeatureTab !== 'overview') return;
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const todayDateKey = toDateKey(new Date());
+    // Fetch from 3 days back to show recently announced companies
+    const startDateKey = toDateKey(addDaysToDate(new Date(), -OVERVIEW_EARNINGS_LOOKBACK_DAYS));
+    const endDateKey = toDateKey(addDaysToDate(new Date(), OVERVIEW_EARNINGS_DAY_LOOKAHEAD));
+
+    const loadOverviewEarnings = async (isRetry = false) => {
+      if (!isRetry) {
+        setOverviewEarningsLoading(true);
+      }
+      setOverviewEarningsError(null);
+      try {
+        // Use combined overview endpoint (single API call) to avoid multiple slow
+        // DB connections that cause timeouts on the Earnings Pulse section.
+        const overview = await getEarningsOverview(startDateKey, endDateKey, 50);
+        if (cancelled) return;
+
+        const allDays = overview?.calendar?.dates || [];
+
+        // If the backend returned "pending" source (cache not ready), auto-retry
+        if (overview?.calendar?.source === 'pending' && allDays.length === 0) {
+          if (!isRetry) {
+            // Show loading state and retry after a few seconds
+            retryTimer = setTimeout(() => {
+              if (!cancelled) loadOverviewEarnings(true);
+            }, 5000);
+          }
+          // Don't update state on retry attempts - keep showing loading
+          if (!isRetry) {
+            setOverviewEarningsLoading(true);
+          }
+          return;
+        }
+
+        // Future/today days (for upcoming slate and count pills)
+        const meaningfulDays = allDays
+          .filter((day) => day.company_count > 0 && day.date >= todayDateKey)
+          .sort((left, right) => left.date.localeCompare(right.date));
+
+        // Past days with companies (for recently announced)
+        const recentPastDays = allDays
+          .filter((day) => day.company_count > 0 && day.date < todayDateKey)
+          .sort((a, b) => b.date.localeCompare(a.date)) // most recent first
+          .slice(0, OVERVIEW_EARNINGS_LOOKBACK_DAYS);
+
+        // All dates to fetch companies for
+        const futureDatesToFetch = Array.from(
+          new Set([todayDateKey, ...meaningfulDays.map((day) => day.date)]),
+        ).slice(0, OVERVIEW_EARNINGS_DAY_LOOKAHEAD + 1);
+        const pastDatesToFetch = recentPastDays.map((d) => d.date);
+
+        // Group company items by date from the combined response
+        const companyMap = new Map<string, EarningsCompanyItem[]>();
+        for (const item of (overview?.companies?.items || [])) {
+          const dateKey = item.date || '';
+          if (!companyMap.has(dateKey)) companyMap.set(dateKey, []);
+          companyMap.get(dateKey)!.push(item);
+        }
+
+        // Recently reported: companies from today + last 3 days that have actually reported
+        // Sorted most-recent-date first so the freshest result leads the hero
+        const recentlyReported = [todayDateKey, ...pastDatesToFetch]
+          .flatMap((date) =>
+            (companyMap.get(date) || []).filter((item) =>
+              Boolean(item.is_past || item.eps_actual != null || item.post_earnings_move_1d != null || item.revenue_yoy_pct != null || item.pat_yoy_pct != null),
+            ),
+          )
+          .slice(0, 3);
+
+        // Upcoming: future or unconfirmed-today companies not yet reported
+        const upcomingItems = futureDatesToFetch
+          .flatMap((date) =>
+            (companyMap.get(date) || []).filter((item) => {
+              const alreadyReported = Boolean(
+                item.is_past || item.eps_actual != null || item.post_earnings_move_1d != null,
+              );
+              return !alreadyReported;
+            }),
+          )
+          .slice(0, OVERVIEW_EARNINGS_ROW_LIMIT);
+
+        setOverviewEarningsDays(meaningfulDays.slice(0, OVERVIEW_EARNINGS_DAY_LOOKAHEAD + 1));
+        setOverviewEarningsReportedToday(recentlyReported);
+        setOverviewEarningsUpcoming(upcomingItems);
+      } catch (err: any) {
+        if (cancelled) return;
+        // On network error or timeout, silently retry instead of showing error
+        if (!isRetry) {
+          retryTimer = setTimeout(() => {
+            if (!cancelled) loadOverviewEarnings(true);
+          }, 5000);
+          return;
+        }
+        // Only show error after retry also fails
+        setOverviewEarningsError(err?.message || 'Failed to load earnings pulse.');
+        setOverviewEarningsDays([]);
+        setOverviewEarningsUpcoming([]);
+        setOverviewEarningsReportedToday([]);
+      } finally {
+        if (!cancelled) {
+          setOverviewEarningsLoading(false);
+        }
+      }
+    };
+
+    loadOverviewEarnings();
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [activeFeatureTab]);
 
   // Fetch token usage on mount
   useEffect(() => {
@@ -3424,6 +3619,140 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   );
   const showMarketMoversLoading = marketMoversLoading && marketMovers.length === 0;
 
+  const todayOverviewDateKey = toDateKey(new Date());
+  const ownedUniverseSet = useMemo(
+    () => new Set(userUniverseSymbols.map((symbol) => normalizeUniverseSymbol(symbol))),
+    [userUniverseSymbols],
+  );
+
+  const overviewTodayEarningsDay = useMemo(
+    () => overviewEarningsDays.find((day) => day.date === todayOverviewDateKey) || null,
+    [overviewEarningsDays, todayOverviewDateKey],
+  );
+
+  const overviewEarningsHero = useMemo(() => {
+    const reportedLead = overviewEarningsReportedToday[0] || null;
+    if (reportedLead) {
+      const isToday = reportedLead.date === todayOverviewDateKey;
+
+      // Primary metric: Revenue YoY % change (most meaningful for announced results)
+      const metricA = reportedLead.revenue_yoy_pct != null
+        ? `Rev ${reportedLead.revenue_yoy_pct >= 0 ? '+' : ''}${reportedLead.revenue_yoy_pct.toFixed(1)}% YoY`
+        : reportedLead.revenue_surprise_pct != null
+          ? `Rev ${reportedLead.revenue_surprise_pct >= 0 ? '+' : ''}${reportedLead.revenue_surprise_pct.toFixed(1)}% vs est.`
+          : reportedLead.eps_actual != null
+            ? `EPS ₹${reportedLead.eps_actual.toFixed(2)}`
+            : reportedLead.eps_surprise_pct != null
+              ? `${reportedLead.eps_surprise_pct >= 0 ? '+' : ''}${reportedLead.eps_surprise_pct.toFixed(1)}% EPS vs est.`
+              : formatOverviewDate(reportedLead.date);
+
+      // Secondary metric: PAT YoY % change
+      const metricB = reportedLead.pat_yoy_pct != null
+        ? `PAT ${reportedLead.pat_yoy_pct >= 0 ? '+' : ''}${reportedLead.pat_yoy_pct.toFixed(1)}% YoY`
+        : reportedLead.post_earnings_move_1d != null
+          ? `1D ${reportedLead.post_earnings_move_1d >= 0 ? '+' : ''}${reportedLead.post_earnings_move_1d.toFixed(2)}%`
+          : formatRelativeDateLabel(reportedLead.date);
+
+      return {
+        tone: 'reported',
+        title: isToday
+          ? `${reportedLead.name} reported today`
+          : `${reportedLead.name} recently reported`,
+        subtitle: `${reportedLead.fiscal_quarter || 'Quarter'} · ${formatEarningsTiming(reportedLead.timing)} · ${formatOverviewDate(reportedLead.date)}`,
+        body: reportedLead.highlights?.[0]?.text
+          || 'Result announced — open the snapshot for key numbers and management commentary.',
+        cta: 'Open result snapshot',
+        href: buildEarningsDetailHref(reportedLead),
+        metricA,
+        metricB,
+        symbol: reportedLead.symbol,
+      };
+    }
+
+    const nextLead = overviewEarningsUpcoming[0] || null;
+    if (nextLead) {
+      return {
+        tone: 'upcoming',
+        title: `Next result: ${nextLead.name}`,
+        subtitle: `${formatRelativeDateLabel(nextLead.date)} · ${formatEarningsTiming(nextLead.timing)} · ${nextLead.fiscal_quarter || 'Quarter TBD'}`,
+        body: nextLead.highlights?.[0]?.text
+          || 'Keep the calendar open — this is the next scheduled result on the radar.',
+        cta: nextLead.date === todayOverviewDateKey ? "Open today's calendar" : `Open ${formatOverviewDate(nextLead.date)} slate`,
+        href: buildEarningsDateHref(nextLead.date),
+        metricA: nextLead.sector || 'Sector TBA',
+        metricB: formatOverviewDate(nextLead.date, true),
+        symbol: nextLead.symbol,
+      };
+    }
+
+    if (overviewTodayEarningsDay) {
+      return {
+        tone: 'calendar',
+        title: `${overviewTodayEarningsDay.company_count} companies are on today's slate`,
+        subtitle: overviewTodayEarningsDay.sectors?.slice(0, 2).join(' · ') || 'Watch for exchange updates through the day',
+        body: overviewTodayEarningsDay.summary || 'Open the earnings calendar for the full company slate and detail pages.',
+        cta: 'Open earnings calendar',
+        href: buildEarningsDateHref(todayOverviewDateKey),
+        metricA: 'Today',
+        metricB: `${overviewTodayEarningsDay.company_count} names`,
+        symbol: '',
+      };
+    }
+
+    return null;
+  }, [overviewEarningsReportedToday, overviewEarningsUpcoming, overviewTodayEarningsDay, todayOverviewDateKey]);
+
+  const hasPortfolioDayMoves = useMemo(
+    () => computedPortfolioDetails.some((item) => Number.isFinite(Number(item.dayChangePct))),
+    [computedPortfolioDetails],
+  );
+
+  const overviewPortfolioPulse = useMemo(() => {
+    if (computedPortfolioDetails.length === 0) return null;
+    const totalValue = portfolioSummary.totalValue || computedPortfolioDetails.reduce((sum, item) => sum + item.currentValue, 0);
+    const rows = computedPortfolioDetails
+      .map((item) => {
+        const movePct = hasPortfolioDayMoves ? finiteNumber(item.dayChangePct) : item.pnlPct;
+        const moveValue = hasPortfolioDayMoves
+          ? item.currentValue * (finiteNumber(item.dayChangePct) / 100)
+          : item.pnl;
+        return { ...item, movePct, moveValue };
+      })
+      .filter((item) => Number.isFinite(item.movePct));
+
+    if (rows.length === 0) return null;
+
+    const sorted = [...rows].sort((left, right) => right.movePct - left.movePct);
+    const aggregateValue = hasPortfolioDayMoves
+      ? rows.reduce((sum, item) => sum + item.moveValue, 0)
+      : portfolioSummary.totalPnL;
+    const aggregatePct = hasPortfolioDayMoves
+      ? (totalValue > 0 ? (aggregateValue / totalValue) * 100 : 0)
+      : portfolioTotalReturnPct;
+
+    return {
+      label: hasPortfolioDayMoves ? 'Today' : 'Open P&L',
+      aggregateValue,
+      aggregatePct,
+      best: sorted[0]!,
+      worst: sorted[sorted.length - 1]!,
+    };
+  }, [computedPortfolioDetails, hasPortfolioDayMoves, portfolioSummary.totalPnL, portfolioSummary.totalValue, portfolioTotalReturnPct]);
+
+  const overviewPortfolioFocus = useMemo(() => {
+    if (!hasPortfolioHoldings) return '';
+    const totalValue = portfolioSummary.totalValue || computedPortfolioDetails.reduce((sum, item) => sum + item.currentValue, 0);
+    const largestHolding = [...computedPortfolioDetails].sort((left, right) => right.currentValue - left.currentValue)[0];
+    const details: string[] = [];
+    if (largestHolding && totalValue > 0) {
+      details.push(`${largestHolding.symbol} is ${((largestHolding.currentValue / totalValue) * 100).toFixed(1)}% of the book`);
+    }
+    if (portfolioStats?.topSector?.[0]) {
+      details.push(`${portfolioStats.topSector[0]} leads at ${portfolioStats.topSectorPct.toFixed(1)}%`);
+    }
+    return details.join(' · ');
+  }, [computedPortfolioDetails, hasPortfolioHoldings, portfolioStats?.topSector, portfolioStats?.topSectorPct, portfolioSummary.totalValue]);
+
   const suggestions = portfolio.length > 0
     ? [
         `Pros and cons of my equities`,
@@ -3714,8 +4043,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
           {activeFeatureTab === 'screener' ? (
             <ScreenerWorkspace embedded />
-          ) : activeFeatureTab === 'ipo' ? (
-            <IpoDashboardContent embedded originPath="/dashboard/ipo" />
           ) : activeFeatureTab === 'watchlist' ? (
             <>
               <div className="section-head">
@@ -3823,7 +4150,315 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                     ))}
                   </div>
 
-                  <div className="section-head" style={{ marginTop: 22 }}>
+                  <div className="section-head" style={{ marginTop: 20 }}>
+                    <div className="section-title">Portfolio Snapshot</div>
+                    <span className="section-sublabel">VALUE · BEST MOVER · WORST MOVER</span>
+                  </div>
+                  {hasPortfolioHoldings && overviewPortfolioPulse ? (
+                    <div className="overview-portfolio-grid">
+                      <button
+                        type="button"
+                        className="overview-portfolio-hero"
+                        onClick={() => navigate('/dashboard/portfolio')}
+                      >
+                        <div className="overview-spotlight-kicker">Live portfolio</div>
+                        <div className="overview-portfolio-value">{fmtINRWhole(portfolioSummary.totalValue)}</div>
+                        <div className={'overview-portfolio-change ' + (portfolioSummary.totalPnL >= 0 ? 'up' : 'down')}>
+                          {(portfolioSummary.totalPnL >= 0 ? '+' : '') + fmtINRWhole(portfolioSummary.totalPnL) + ' (' + portfolioTotalReturnPct.toFixed(2) + '%)'}
+                        </div>
+                        <div className="overview-portfolio-copy">{overviewPortfolioFocus || 'Open the portfolio workspace for full allocation, risk, and holdings detail.'}</div>
+                        <div className="overview-portfolio-strip">
+                          <span>{overviewPortfolioPulse.label}</span>
+                          <strong className={overviewPortfolioPulse.aggregateValue >= 0 ? 'up' : 'down'}>
+                            {(overviewPortfolioPulse.aggregateValue >= 0 ? '+' : '') + fmtINRWhole(overviewPortfolioPulse.aggregateValue) + ' (' + overviewPortfolioPulse.aggregatePct.toFixed(2) + '%)'}
+                          </strong>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="overview-portfolio-mover-card"
+                        onClick={() => openAssetHistory(overviewPortfolioPulse.best.symbol, overviewPortfolioPulse.best.name, overviewPortfolioPulse.best.assetClass || 'equity')}
+                      >
+                        <div className="overview-mover-kicker">Best mover</div>
+                        <div className="overview-mover-asset">{overviewPortfolioPulse.best.name}</div>
+                        <div className="overview-mover-symbol-line">{overviewPortfolioPulse.best.symbol}</div>
+                        <div className="overview-mover-stat up">{(overviewPortfolioPulse.best.movePct >= 0 ? '+' : '') + overviewPortfolioPulse.best.movePct.toFixed(2) + '%'}</div>
+                        <div className="overview-mover-copy">Weight {(portfolioSummary.totalValue > 0 ? (overviewPortfolioPulse.best.currentValue / portfolioSummary.totalValue) * 100 : 0).toFixed(1)}% · Open detail</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="overview-portfolio-mover-card"
+                        onClick={() => openAssetHistory(overviewPortfolioPulse.worst.symbol, overviewPortfolioPulse.worst.name, overviewPortfolioPulse.worst.assetClass || 'equity')}
+                      >
+                        <div className="overview-mover-kicker">Worst mover</div>
+                        <div className="overview-mover-asset">{overviewPortfolioPulse.worst.name}</div>
+                        <div className="overview-mover-symbol-line">{overviewPortfolioPulse.worst.symbol}</div>
+                        <div className="overview-mover-stat down">{(overviewPortfolioPulse.worst.movePct >= 0 ? '+' : '') + overviewPortfolioPulse.worst.movePct.toFixed(2) + '%'}</div>
+                        <div className="overview-mover-copy">Weight {(portfolioSummary.totalValue > 0 ? (overviewPortfolioPulse.worst.currentValue / portfolioSummary.totalValue) * 100 : 0).toFixed(1)}% · Open detail</div>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="overview-signal-empty overview-signal-empty--portfolio">
+                      <div>No holdings synced yet. Add your book to unlock value, best mover, worst mover, and portfolio-specific alerts.</div>
+                      <button type="button" className="overview-inline-btn" onClick={() => navigate('/onboarding/upload')}>
+                        Set up portfolio
+                      </button>
+                    </div>
+                  )}
+
+<div className="section-head" style={{ marginTop: 20 }}>
+                    <div className="section-title">Earnings Pulse</div>
+                    <span className="section-sublabel">RECENTLY REPORTED · UPCOMING RESULTS</span>
+                  </div>
+                  <div className="overview-earnings-grid">
+                    <div className="overview-earnings-hero-shell">
+                      {overviewEarningsLoading && !overviewEarningsHero ? (
+                        <div className="overview-signal-empty">Loading the earnings pulse...</div>
+                      ) : overviewEarningsError ? (
+                        <div className="overview-signal-empty">{overviewEarningsError}</div>
+                      ) : overviewEarningsHero ? (
+                        <button
+                          type="button"
+                          className={'overview-spotlight-card overview-spotlight-card--earnings overview-spotlight-card--' + overviewEarningsHero.tone}
+                          onClick={() => navigate(overviewEarningsHero.href)}
+                        >
+                          <div className="overview-spotlight-kicker">
+                            {overviewEarningsHero.tone === 'reported' ? 'Result alert' : overviewEarningsHero.tone === 'upcoming' ? 'Next on deck' : 'Calendar pulse'}
+                          </div>
+                          <div className="overview-spotlight-title">{overviewEarningsHero.title}</div>
+                          <div className="overview-spotlight-subtitle">{overviewEarningsHero.subtitle}</div>
+                          <div className="overview-spotlight-copy">{overviewEarningsHero.body}</div>
+                          <div className="overview-hero-metrics">
+                            <span>{overviewEarningsHero.metricA}</span>
+                            <span>{overviewEarningsHero.metricB}</span>
+                            {overviewEarningsHero.symbol && ownedUniverseSet.has(normalizeUniverseSymbol(overviewEarningsHero.symbol)) ? (
+                              <span className="owned-badge">TRACKED</span>
+                            ) : null}
+                          </div>
+                          <div className="overview-spotlight-footer">
+                            <div className="overview-count-pills">
+                              {overviewTodayEarningsDay ? <span>Today {overviewTodayEarningsDay.company_count}</span> : null}
+                              {overviewEarningsDays[1] ? <span>{formatOverviewDate(overviewEarningsDays[1].date)} {overviewEarningsDays[1].company_count}</span> : null}
+                            </div>
+                            <span className="overview-spotlight-link">{overviewEarningsHero.cta} <ExternalLink size={12} /></span>
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="overview-signal-empty">No scheduled earnings are on the near-term calendar.</div>
+                      )}
+                    </div>
+
+                    <div className="earnings-list overview-earnings-list">
+                      {overviewEarningsLoading && overviewEarningsUpcoming.length === 0 ? (
+                        <div className="overview-movers-empty">Loading upcoming companies...</div>
+                      ) : overviewEarningsError ? (
+                        <div className="overview-movers-empty">{overviewEarningsError}</div>
+                      ) : overviewEarningsUpcoming.length === 0 ? (
+                        <div className="overview-movers-empty">No upcoming companies in the next few sessions.</div>
+                      ) : overviewEarningsUpcoming.map((company) => {
+                        const parsedDate = parseDateKey(company.date);
+                        const dayNumber = parsedDate ? String(parsedDate.getDate()).padStart(2, '0') : '--';
+                        const monthLabel = parsedDate ? parsedDate.toLocaleDateString('en-IN', { month: 'short' }).toUpperCase() : 'TBD';
+                        const tracked = ownedUniverseSet.has(normalizeUniverseSymbol(company.symbol));
+                        const isPastRow = Boolean(company.is_past || company.eps_actual != null || company.post_earnings_move_1d != null);
+                        const route = isPastRow ? buildEarningsDetailHref(company) : buildEarningsDateHref(company.date);
+                        const hasRevPat = company.revenue_yoy_pct != null || company.pat_yoy_pct != null;
+                        return (
+                          <button
+                            key={company.event_uid}
+                            type="button"
+                            className="earnings-row overview-earnings-row"
+                            onClick={() => navigate(route)}
+                          >
+                            <div className="earnings-date">
+                              <div className="earnings-day">{monthLabel}</div>
+                              <div className="earnings-num">{dayNumber}</div>
+                            </div>
+                            <div className="earnings-info">
+                              <div className="earnings-name">
+                                <span>{company.name}</span>
+                                {tracked ? <span className="owned-badge">TRACKED</span> : null}
+                              </div>
+                              <div className="earnings-period">{company.symbol} · {company.fiscal_quarter || 'Quarter TBD'}</div>
+                              <div className="earnings-when">{formatEarningsTiming(company.timing)} · {formatOverviewDate(company.date, true)}</div>
+                            </div>
+                            <div className="earnings-catalyst">
+                              {isPastRow && hasRevPat ? (
+                                <div className="earnings-rev-pat-pills">
+                                  {company.revenue_yoy_pct != null && (
+                                    <span className={'overview-status-pill ' + (company.revenue_yoy_pct >= 0 ? 'positive' : 'negative')}>
+                                      Rev {company.revenue_yoy_pct >= 0 ? '+' : ''}{company.revenue_yoy_pct.toFixed(1)}%
+                                    </span>
+                                  )}
+                                  {company.pat_yoy_pct != null && (
+                                    <span className={'overview-status-pill ' + (company.pat_yoy_pct >= 0 ? 'positive' : 'negative')}>
+                                      PAT {company.pat_yoy_pct >= 0 ? '+' : ''}{company.pat_yoy_pct.toFixed(1)}%
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className={'overview-status-pill ' + (company.date === todayOverviewDateKey ? 'warning' : 'muted')}>{formatRelativeDateLabel(company.date)}</span>
+                              )}
+                              <div className="earnings-catalyst-text">{company.highlights?.[0]?.text || (company.sector ? company.sector + (isPastRow ? ' result announced.' : ' result on the radar.') : (isPastRow ? 'Open the result snapshot for details.' : 'Open the earnings slate for details.'))}</div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+<div className="section-head" style={{ marginTop: 20 }}>
+                    <div className="section-title">Today's Gainers & Losers</div>
+                    <span className="section-sublabel">TOP 5 EACH</span>
+                  </div>
+                  <div className="overview-movers-grid">
+                    <div className="overview-movers-panel">
+                      <div className="overview-movers-head">
+                        <span>Gainers</span>
+                        <span>{overviewGainers.length}</span>
+                      </div>
+                      <div className="overview-movers-list">
+                        {showMarketMoversLoading ? (
+                          <div className="overview-movers-empty">Loading gainers...</div>
+                        ) : marketMoversError ? (
+                          <div className="overview-movers-empty">{marketMoversError}</div>
+                        ) : overviewGainers.length === 0 ? (
+                          <div className="overview-movers-empty">No gainers found right now.</div>
+                        ) : overviewGainers.map((item) => (
+                          <div key={`g-${item.symbol}`} className="overview-mover-row">
+                            <div className="overview-mover-symbol">{item.symbol}</div>
+                            <div className="overview-mover-name">{item.name}</div>
+                            <div className="overview-mover-price">₹{item.price.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}</div>
+                            <div className="overview-mover-change up">+{item.changePct.toFixed(2)}%</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="overview-movers-panel">
+                      <div className="overview-movers-head">
+                        <span>Losers</span>
+                        <span>{overviewLosers.length}</span>
+                      </div>
+                      <div className="overview-movers-list">
+                        {showMarketMoversLoading ? (
+                          <div className="overview-movers-empty">Loading losers...</div>
+                        ) : marketMoversError ? (
+                          <div className="overview-movers-empty">{marketMoversError}</div>
+                        ) : overviewLosers.length === 0 ? (
+                          <div className="overview-movers-empty">No losers found right now.</div>
+                        ) : overviewLosers.map((item) => (
+                          <div key={`l-${item.symbol}`} className="overview-mover-row">
+                            <div className="overview-mover-symbol">{item.symbol}</div>
+                            <div className="overview-mover-name">{item.name}</div>
+                            <div className="overview-mover-price">₹{item.price.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}</div>
+                            <div className="overview-mover-change down">{item.changePct.toFixed(2)}%</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* My Watchlist Section */}
+                  <div className="section-head" style={{ marginTop: 20 }}>
+                    <div className="section-title">My Watchlist</div>
+                    <span className="section-sublabel">{watchlistStocks.length} TRACKED</span>
+                  </div>
+                  {watchlistStocks.length > 0 ? (
+                    <div className="overview-watchlist-grid">
+                      {watchlistStocks.slice(0, 8).map((stock) => {
+                        const isUp = stock.changePct >= 0;
+                        return (
+                          <button
+                            key={stock.symbol}
+                            type="button"
+                            className={`overview-watchlist-card ${isUp ? 'up' : 'down'}`}
+                            onClick={() => openAssetHistory(stock.symbol, stock.name, 'equity')}
+                          >
+                            <div className="overview-watchlist-card-header">
+                              <span className="overview-watchlist-symbol">{stock.symbol}</span>
+                              <span className={`overview-watchlist-badge ${isUp ? 'up' : 'down'}`}>
+                                {isUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                                {isUp ? '+' : ''}{stock.changePct.toFixed(2)}%
+                              </span>
+                            </div>
+                            <div className="overview-watchlist-name" title={stock.name}>{stock.name}</div>
+                            <div className="overview-watchlist-price">₹{stock.price}</div>
+                            <div className={`overview-watchlist-change ${isUp ? 'up' : 'down'}`}>
+                              {stock.change}
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {watchlistStocks.length > 8 && (
+                        <button
+                          type="button"
+                          className="overview-watchlist-card overview-watchlist-more"
+                          onClick={() => navigate('/dashboard/watchlist')}
+                        >
+                          <Eye size={18} />
+                          <span>+{watchlistStocks.length - 8} more</span>
+                          <span className="overview-watchlist-more-cta">View all</span>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="overview-signal-empty overview-signal-empty--watchlist">
+                      <div>No stocks in your watchlist yet. Add companies to track their prices and get quick insights.</div>
+                      <button type="button" className="overview-inline-btn" onClick={() => navigate('/dashboard/watchlist')}>
+                        <Eye size={14} /> Set up watchlist
+                      </button>
+                    </div>
+                  )}
+
+<div className="section-head" style={{ marginTop: 20 }}>
+                    <div className="section-title">ProspektLab Research</div>
+                    <span className="section-sublabel">LATEST GENERATED ARTICLES</span>
+                  </div>
+                  <div className="overview-article-grid">
+                    {researchTitlesLoading && researchTitles.length === 0 ? (
+                      <div className="overview-article-empty">Latest generated articles are loading...</div>
+                    ) : researchTitles.map((article) => {
+                      const primaryCover = buildNewsFallbackCover(
+                        `research:${article.slug}:${article.title}`,
+                        article.title,
+                        article.content_type || 'Research',
+                        'research',
+                      );
+
+                      return (
+                        <a
+                          key={article.slug}
+                          href={buildResearchArticleUrl(article.slug, article.public_url)}
+                          className="overview-article-card"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <img
+                            src={article.image_path || primaryCover}
+                            alt={`${article.title} cover`}
+                            className="overview-article-image"
+                            loading="lazy"
+                            draggable={false}
+                            onError={(event) => {
+                              event.currentTarget.src = buildNewsFallbackCover(`research:${article.slug}`, article.title, article.content_type || 'Research', 'research');
+                            }}
+                          />
+                          <div className="overview-article-body">
+                            <div className="overview-article-meta">
+                              <span>{article.content_type || 'Research'}</span>
+                              <span>{article.ago}</span>
+                            </div>
+                            <div className="overview-article-title">{article.title}</div>
+                          </div>
+                        </a>
+                      );
+                    })}
+                  </div>
+
+<div className="section-head" style={{ marginTop: 22 }}>
                     <div className="section-title">Discover</div>
                     <span className="section-sublabel">MULTI-SOURCE LIVE FEED</span>
                   </div>
@@ -3926,103 +4561,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                       ))}
                     </div>
                   )}
-
-                  <div className="section-head" style={{ marginTop: 20 }}>
-                    <div className="section-title">ProspektLab Research</div>
-                    <span className="section-sublabel">LATEST GENERATED ARTICLES</span>
-                  </div>
-                  <div className="overview-article-grid">
-                    {researchTitlesLoading && researchTitles.length === 0 ? (
-                      <div className="overview-article-empty">Latest generated articles are loading...</div>
-                    ) : researchTitles.map((article) => {
-                      const primaryCover = buildNewsFallbackCover(
-                        `research:${article.slug}:${article.title}`,
-                        article.title,
-                        article.content_type || 'Research',
-                        'research',
-                      );
-
-                      return (
-                        <a
-                          key={article.slug}
-                          href={buildResearchArticleUrl(article.slug, article.public_url)}
-                          className="overview-article-card"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <img
-                            src={article.image_path || primaryCover}
-                            alt={`${article.title} cover`}
-                            className="overview-article-image"
-                            loading="lazy"
-                            draggable={false}
-                            onError={(event) => {
-                              event.currentTarget.src = buildNewsFallbackCover(`research:${article.slug}`, article.title, article.content_type || 'Research', 'research');
-                            }}
-                          />
-                          <div className="overview-article-body">
-                            <div className="overview-article-meta">
-                              <span>{article.content_type || 'Research'}</span>
-                              <span>{article.ago}</span>
-                            </div>
-                            <div className="overview-article-title">{article.title}</div>
-                          </div>
-                        </a>
-                      );
-                    })}
-                  </div>
-
-                  <div className="section-head" style={{ marginTop: 20 }}>
-                    <div className="section-title">Today's Gainers & Losers</div>
-                    <span className="section-sublabel">TOP 5 EACH</span>
-                  </div>
-                  <div className="overview-movers-grid">
-                    <div className="overview-movers-panel">
-                      <div className="overview-movers-head">
-                        <span>Gainers</span>
-                        <span>{overviewGainers.length}</span>
-                      </div>
-                      <div className="overview-movers-list">
-                        {showMarketMoversLoading ? (
-                          <div className="overview-movers-empty">Loading gainers...</div>
-                        ) : marketMoversError ? (
-                          <div className="overview-movers-empty">{marketMoversError}</div>
-                        ) : overviewGainers.length === 0 ? (
-                          <div className="overview-movers-empty">No gainers found right now.</div>
-                        ) : overviewGainers.map((item) => (
-                          <div key={`g-${item.symbol}`} className="overview-mover-row">
-                            <div className="overview-mover-symbol">{item.symbol}</div>
-                            <div className="overview-mover-name">{item.name}</div>
-                            <div className="overview-mover-price">₹{item.price.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}</div>
-                            <div className="overview-mover-change up">+{item.changePct.toFixed(2)}%</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="overview-movers-panel">
-                      <div className="overview-movers-head">
-                        <span>Losers</span>
-                        <span>{overviewLosers.length}</span>
-                      </div>
-                      <div className="overview-movers-list">
-                        {showMarketMoversLoading ? (
-                          <div className="overview-movers-empty">Loading losers...</div>
-                        ) : marketMoversError ? (
-                          <div className="overview-movers-empty">{marketMoversError}</div>
-                        ) : overviewLosers.length === 0 ? (
-                          <div className="overview-movers-empty">No losers found right now.</div>
-                        ) : overviewLosers.map((item) => (
-                          <div key={`l-${item.symbol}`} className="overview-mover-row">
-                            <div className="overview-mover-symbol">{item.symbol}</div>
-                            <div className="overview-mover-name">{item.name}</div>
-                            <div className="overview-mover-price">₹{item.price.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}</div>
-                            <div className="overview-mover-change down">{item.changePct.toFixed(2)}%</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
                 </>
               ) : hasPortfolioHoldings ? (
                 <>

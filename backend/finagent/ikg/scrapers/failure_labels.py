@@ -1,12 +1,15 @@
 """IGS Phase A — failure-event label mining.
 
 Builds the ``failure_events`` positive-class label set that converts the heuristic
-governance score into a trainable predictor. Two free sources, no new scraping:
+governance score into a trainable predictor. Three free sources, no new scraping:
 
   1. MCA master ``status`` column — ~975k struck-off / liquidated / CIRP / dissolved
      companies already in ``ikg_company_master`` (corporate-death outcomes).
   2. SEBI enforcement orders — debarment / restraint actions, linked to companies via
      the (now trigram-resolved) ENFORCEMENT_ACTION_AGAINST edges.
+  3. Date backfill — ``backfill_undated_failure_events`` fills NULL ``event_date``
+     values from: enforcement URL month/year, BSE CIRP announcements for listed
+     companies, and MCA master ``updated_at`` as a last-resort proxy.
 
 Mapping is intentionally conservative: only unambiguous corporate-death / financial-
 failure statuses get ``is_failure = true``. Ambiguous outcomes (amalgamation,
@@ -19,6 +22,8 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
+from datetime import date
 from typing import Any
 
 from finagent.ikg.db import connect_postgres, get_database_url
@@ -205,6 +210,202 @@ def mine_sebi_debarments(database_url: str | None = None) -> dict[str, Any]:
         logger.error("SEBI debarment mining failed: %s", exc)
         stats["error"] = str(exc)
     return stats
+
+
+_CIRP_KW_RE = re.compile(
+    r"\b(cirp|insolvency|nclt|liquidat|ibc\b|insolvency\s+resolution|"
+    r"corporate\s+insolvency|resolution\s+professional|order\s+of\s+admission)\b",
+    flags=re.I,
+)
+
+_BSE_ANN_URL = "https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w"
+_BSE_ANN_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Referer": "https://www.bseindia.com/",
+}
+
+
+def _cirp_date_from_bse_announcements(scrip_code: str, *, timeout_s: float = 12.0) -> date | None:
+    """Return the earliest BSE filing date mentioning CIRP/insolvency for a scrip."""
+    try:
+        import httpx
+    except ImportError:
+        return None
+    for page in range(1, 5):
+        try:
+            with httpx.Client(timeout=timeout_s, follow_redirects=True, trust_env=False) as c:
+                r = c.get(
+                    _BSE_ANN_URL,
+                    headers=_BSE_ANN_HEADERS,
+                    params={
+                        "pageno": page,
+                        "strCat": -1,
+                        "strPrevDate": "19900101",
+                        "strScrip": scrip_code,
+                        "strSearch": "P",
+                        "strToDate": "20301231",
+                        "strType": "C",
+                        "subcategory": -1,
+                    },
+                )
+            if r.status_code != 200:
+                break
+            payload = r.json()
+            rows = payload.get("Table") or payload.get("Table1") or []
+            if not rows:
+                break
+            for row in rows:
+                subject = str(row.get("NEWSSUB") or "")
+                if _CIRP_KW_RE.search(subject):
+                    raw_dt = str(row.get("NEWS_DT") or row.get("DT_TM") or "")
+                    try:
+                        return date.fromisoformat(raw_dt[:10])
+                    except ValueError:
+                        continue
+        except Exception:
+            break
+        time.sleep(0.2)
+    return None
+
+
+def backfill_ibc_cirp_dates(database_url: str | None = None) -> dict[str, Any]:
+    """Backfill ``event_date`` for ``ibc_cirp`` failure events.
+
+    Strategy (in priority order):
+    1. For listed companies: scan BSE announcements for CIRP/insolvency/NCLT
+       keywords — earliest matching filing date.
+    2. For all: fall back to ``ikg_company_master.updated_at::date`` as a proxy
+       (when MCA status last changed — a reliable lower bound since the MCA
+       scrape captures the "Under CIRP" status at point of data pull).
+
+    Proxy dates are noted in ``evidence_text`` so callers can filter them out.
+    """
+    db_url = get_database_url(database_url)
+    if not db_url:
+        return {"success": False, "error": "no database_url", "updated": 0}
+
+    from psycopg.rows import dict_row
+
+    stats: dict[str, Any] = {
+        "success": False, "updated_bse": 0, "updated_proxy": 0, "skipped": 0,
+    }
+    try:
+        with connect_postgres(db_url, row_factory=dict_row, connect_timeout=30) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    select fe.id, fe.cin, m.bse_scrip_code,
+                           m.updated_at::date as master_updated_date
+                    from failure_events fe
+                    join ikg_company_master m using (cin)
+                    where fe.event_type = 'ibc_cirp'
+                      and fe.event_date is null
+                    order by fe.id
+                    """
+                )
+                rows = cur.fetchall()
+                logger.info("backfill_ibc_cirp_dates: %d undated ibc_cirp rows", len(rows))
+
+                for row in rows:
+                    event_date: date | None = None
+                    evidence = ""
+                    scrip = str(row.get("bse_scrip_code") or "").strip()
+
+                    # Strategy 1: BSE announcements (listed companies only)
+                    if scrip:
+                        event_date = _cirp_date_from_bse_announcements(scrip)
+                        if event_date:
+                            evidence = f"bse_announcement_cirp_keyword scrip={scrip}"
+                            stats["updated_bse"] += 1
+
+                    # Strategy 2: MCA master updated_at proxy
+                    if event_date is None:
+                        proxy = row.get("master_updated_date")
+                        if proxy:
+                            event_date = proxy
+                            evidence = "proxy:mca_master_updated_at"
+                            stats["updated_proxy"] += 1
+                        else:
+                            stats["skipped"] += 1
+                            continue
+
+                    cur.execute(
+                        """
+                        UPDATE failure_events
+                        SET event_date = %s,
+                            evidence_text = coalesce(evidence_text, '') || ' | ' || %s,
+                            updated_at = now()
+                        WHERE id = %s
+                        """,
+                        (event_date, evidence, row["id"]),
+                    )
+                conn.commit()
+        stats["success"] = True
+    except Exception as exc:
+        logger.error("backfill_ibc_cirp_dates failed: %s", exc)
+        stats["error"] = str(exc)
+    return stats
+
+
+def backfill_undated_failure_events(database_url: str | None = None) -> dict[str, Any]:
+    """Run all date-backfill passes in sequence.
+
+    1. enforcement_raw URL → order_date (SQL, instant)
+    2. Re-run sebi_debarments to propagate freshly-dated orders
+    3. ibc_cirp BSE + proxy backfill
+    4. BSE delisting date backfill (bse_delisting.backfill_delisting_dates)
+    """
+    import importlib
+
+    db_url = get_database_url(database_url)
+    results: dict[str, Any] = {}
+
+    # Step 1: backfill enforcement_raw.order_date from URL month/year
+    try:
+        from psycopg.rows import dict_row
+        with connect_postgres(db_url, connect_timeout=30) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE enforcement_raw
+                    SET order_date = to_date(
+                        (regexp_match(pdf_url, '/([a-z]+-[0-9]{4})/'))[1],
+                        'Mon-YYYY'
+                    )
+                    WHERE order_date IS NULL
+                      AND pdf_url IS NOT NULL
+                      AND pdf_url ~ '/[a-z]+-[0-9]{4}/';
+                    """
+                )
+                results["enforcement_url_dates_updated"] = cur.rowcount
+            conn.commit()
+    except Exception as exc:
+        results["enforcement_url_dates_error"] = str(exc)
+
+    # Step 2: re-mine sebi debarments (picks up newly dated orders)
+    try:
+        results["sebi_debarments"] = mine_sebi_debarments(db_url)
+    except Exception as exc:
+        results["sebi_debarments_error"] = str(exc)
+
+    # Step 3: CIRP backfill
+    try:
+        results["ibc_cirp"] = backfill_ibc_cirp_dates(db_url)
+    except Exception as exc:
+        results["ibc_cirp_error"] = str(exc)
+
+    # Step 4: BSE delisting date backfill
+    try:
+        bse_del = importlib.import_module("finagent.ikg.scrapers.bse_delisting")
+        results["bse_delisting_dates"] = bse_del.backfill_delisting_dates(db_url)
+    except Exception as exc:
+        results["bse_delisting_dates_error"] = str(exc)
+
+    return results
 
 
 def run_failure_label_refresh(database_url: str | None = None) -> dict[str, Any]:

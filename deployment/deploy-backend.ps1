@@ -1,4 +1,4 @@
-# ============================================================
+    # ============================================================
 # deploy-backend.ps1
 # Deploys ProspektLab backend to ECS (ap-south-1) via CodeBuild
 #
@@ -29,49 +29,15 @@ Write-Host "📦 [1/4] Zipping local backend..." -ForegroundColor Yellow
 
 $ZipPath = Join-Path $RootDir ("backend-{0}.zip" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
 
-# Zip: Dockerfile + backend/ + buildspec.yml + pyproject.toml
-$itemsToZip = @(
-    (Join-Path $RootDir "Dockerfile"),
-    (Join-Path $RootDir "buildspec.yml"),
-    (Join-Path $RootDir "buildspec-prod.yml"),
-    (Join-Path $RootDir "pyproject.toml"),
-    (Join-Path $RootDir "backend")
-)
+# Zip using Python to ensure forward-slashes in the zip file! (CodeBuild Linux needs this)
+Write-Host "   Running zip_backend.py to create POSIX-compliant zip..."
+python .\deployment\zip_backend.py
 
-# Use Compress-Archive; add items one by one to handle directories
-Compress-Archive -Path $itemsToZip -DestinationPath $ZipPath -Force
-
-# Remove local-only environment files from the artifact before upload.
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$blockedEnvFiles = @(
-    ".env",
-    ".env.local",
-    ".env.production",
-    ".env.development",
-    ".env.staging",
-    ".env.test"
-)
-$zip = [System.IO.Compression.ZipFile]::Open($ZipPath, [System.IO.Compression.ZipArchiveMode]::Update)
-try {
-    $entriesToDelete = @()
-    foreach ($entry in $zip.Entries) {
-        $leaf = [System.IO.Path]::GetFileName($entry.FullName).ToLowerInvariant()
-        if ($blockedEnvFiles -contains $leaf) {
-            $entriesToDelete += $entry
-        }
-    }
-
-    foreach ($entry in $entriesToDelete) {
-        $entry.Delete()
-    }
-
-    if ($entriesToDelete.Count -gt 0) {
-        Write-Host "   [security] Removed $($entriesToDelete.Count) local env file(s) from $(Split-Path -Leaf $ZipPath)" -ForegroundColor DarkYellow
-    }
+if (-not (Test-Path "backend.zip")) {
+    throw "❌ Python zip script failed to create backend.zip"
 }
-finally {
-    $zip.Dispose()
-}
+
+Move-Item -Path "backend.zip" -Destination $ZipPath -Force
 
 $ZipSizeMB = [math]::Round((Get-Item $ZipPath).Length / 1MB, 2)
 Write-Host "   ✅ Created $(Split-Path -Leaf $ZipPath) ($ZipSizeMB MB)" -ForegroundColor Green

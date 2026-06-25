@@ -102,8 +102,19 @@ def feature_vector(row: dict[str, Any]) -> list[float]:
 def probability_to_score(probability: float) -> float:
     """Map a calibrated probability in ``[0, 1]`` → a 0–100 risk subscore.
 
-    Linear and monotonic so the higher-is-worse contract of GovernanceResult
-    holds. NaN/invalid inputs clamp to 0.0.
+    Uses a logit-stretch centred on the expected listed-universe failure base
+    rate (~5 %) so the concentrated [0.05, 0.30] probability mass produced by
+    an imbalanced calibrated classifier is spread across the full 0–100 range
+    rather than clustering at 10–20.
+
+    Mapping anchors:
+      p = base_rate (0.05)  →  25  (LOW / MODERATE boundary)
+      p = 4 × base_rate     →  ~74 (MODERATE / ELEVATED boundary)
+      p → 0                 →  0
+      p → 1                 →  100
+
+    The mapping is strictly monotonic, so the higher-is-worse contract of
+    GovernanceResult is preserved.  NaN / invalid inputs clamp to 0.0.
     """
     try:
         p = float(probability)
@@ -111,7 +122,13 @@ def probability_to_score(probability: float) -> float:
         return 0.0
     if math.isnan(p) or math.isinf(p):
         return 0.0
-    return round(max(0.0, min(1.0, p)) * 100.0, 1)
+    p = max(1e-6, min(1.0 - 1e-6, p))
+    # Logit-stretch: base_rate → 25, each doubling of odds adds ~12.5 points.
+    base_rate = 0.05
+    logit_p = math.log(p / (1.0 - p))
+    logit_base = math.log(base_rate / (1.0 - base_rate))
+    stretched = 25.0 + (logit_p - logit_base) * 18.0
+    return round(max(0.0, min(100.0, stretched)), 1)
 
 
 def _impute(vector: list[float], medians: list[float] | None) -> list[float]:

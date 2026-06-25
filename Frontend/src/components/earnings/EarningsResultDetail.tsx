@@ -5,15 +5,11 @@ import {
   FileText,
   Loader2,
   AlertCircle,
-  TrendingUp,
-  TrendingDown,
-  Minus,
 } from 'lucide-react';
 import {
   EarningsResultResponse,
   EarningsAISummary,
   EarningsFinancialRow,
-  EarningsExtractedTable,
   EarningsTranscriptBlock,
   EarningsDocumentLink,
   EarningsHighlight,
@@ -28,41 +24,53 @@ interface EarningsResultDetailProps {
   onBack: () => void;
 }
 
-// Transcript tab removed â€” 'highlights' | 'documents' only
+// Transcript tab removed - 'highlights' | 'documents' only
 type DetailTab = 'highlights' | 'documents';
 
-// â”€â”€ formatting helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const cleanText = (text: string): string => {
+  return text
+    .replace(/\u00e2\u20ac\u00a6/g, '...')
+    .replace(/\u00e2\u20ac\u201c/g, '-')
+    .replace(/\u00e2\u20ac\u201d/g, '-')
+    .replace(/\u00e2\u20ac\u2122/g, "'")
+    .replace(/\u00e2\u20ac\u02dc/g, "'")
+    .replace(/\u00e2\u20ac\u0153/g, '"')
+    .replace(/\u00e2\u20ac\u009d/g, '"')
+    .replace(/\u00c2\u00a0/g, ' ')
+    .replace(/\u00e2\u20ac\u00a2/g, '-')
+    .replace(/\u2026/g, '...')
+    .replace(/\u2013/g, '-')
+    .replace(/\u2014/g, '-')
+    .replace(/\u2019/g, "'")
+    .replace(/\u2018/g, "'")
+    .replace(/\u201c/g, '"')
+    .replace(/\u201d/g, '"')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\u2022/g, '-');
+};
+
+// -- formatting helpers --------------------------------------------------
 
 const fmtINR = (v?: number | null, unit?: string): string => {
-  if (v === null || v === undefined || Number.isNaN(v)) return 'â€”';
+  if (v === null || v === undefined || Number.isNaN(v)) return '—';
   if (unit === '%') return `${v.toFixed(1)}%`;
-  if (unit === 'Rs') return `â‚¹${v.toFixed(2)}`;
+  if (unit === 'Rs') return `₹${v.toFixed(2)}`;
   // Rs Cr
   if (Math.abs(v) >= 1000) {
-    return `â‚¹${(v / 1000).toFixed(2)}K Cr`;
+    return `₹${(v / 1000).toFixed(2)}K Cr`;
   }
-  return `â‚¹${v.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Cr`;
+  return `₹${v.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Cr`;
 };
 
 const fmtPct = (v?: number | null): string => {
-  if (v === null || v === undefined || Number.isNaN(v)) return 'â€”';
+  if (v === null || v === undefined || Number.isNaN(v)) return '—';
   const prefix = v > 0 ? '+' : '';
   return `${prefix}${v.toFixed(2)}%`;
 };
 
 const fmtPrice = (v?: number | null): string => {
-  if (v === null || v === undefined) return 'â€”';
-  return `â‚¹${v.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-};
-
-const beatMissClass = (pct?: number | null): string => {
-  if (pct == null || Number.isNaN(pct)) return '';
-  return pct > 0 ? 'beat' : pct < 0 ? 'miss' : '';
-};
-
-const beatMissLabel = (pct?: number | null): string => {
-  if (pct == null || Number.isNaN(pct)) return '';
-  return pct > 0 ? 'Beat' : pct < 0 ? 'Miss' : 'In-line';
+  if (v === null || v === undefined) return '—';
+  return `₹${v.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 };
 
 const changeClass = (v?: number | null, higherIsGood = true): string => {
@@ -70,213 +78,85 @@ const changeClass = (v?: number | null, higherIsGood = true): string => {
   return (higherIsGood ? v > 0 : v < 0) ? 'positive' : 'negative';
 };
 
-// â”€â”€ sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- sub-components ------------------------------------------------------
 
 /**
- * MetricsGrid â€” shows all six core metrics (Revenue, PAT, EBITDA, EPS, EBITDA Margin, PAT Margin).
- * Pulls current values from financials.rows; estimated / beat-miss from top-level revenue & eps fields.
- * 1D move is shown only on the EPS row.
+ * HighlightsList - shows AI-extracted result highlights as plain text rows.
  */
-const MetricsGrid: React.FC<{ result: EarningsResultResponse }> = ({ result }) => {
-  // Build a lookup from financials.rows for current (actual) values
-  const rowsMap = Object.fromEntries(
-    (result.financials?.rows || []).map((r: EarningsFinancialRow) => [r.key, r])
-  );
-
-  const metrics = [
-    {
-      key: 'revenue',
-      label: 'Revenue',
-      actual: rowsMap['revenue']?.current ?? result.revenue?.actual,
-      estimated: result.revenue?.estimated,
-      beatMiss: result.revenue?.beat_miss_pct,
-      unit: 'Rs Cr',
-    },
-    {
-      key: 'pat',
-      label: 'PAT',
-      actual: rowsMap['pat']?.current,
-      estimated: null as number | null | undefined,
-      beatMiss: null as number | null | undefined,
-      unit: 'Rs Cr',
-    },
-    {
-      key: 'ebitda',
-      label: 'EBITDA',
-      actual: rowsMap['ebitda']?.current,
-      estimated: null as number | null | undefined,
-      beatMiss: null as number | null | undefined,
-      unit: 'Rs Cr',
-    },
-    {
-      key: 'eps',
-      label: 'EPS',
-      actual: rowsMap['eps']?.current ?? result.eps?.actual,
-      estimated: result.eps?.estimated,
-      beatMiss: result.eps?.beat_miss_pct,
-      unit: 'Rs',
-    },
-    {
-      key: 'ebitda_margin',
-      label: 'EBITDA Margin',
-      actual: rowsMap['ebitda_margin']?.current,
-      estimated: null as number | null | undefined,
-      beatMiss: null as number | null | undefined,
-      unit: '%',
-    },
-    {
-      key: 'pat_margin',
-      label: 'PAT Margin',
-      actual: rowsMap['pat_margin']?.current,
-      estimated: null as number | null | undefined,
-      beatMiss: null as number | null | undefined,
-      unit: '%',
-    },
-  ];
-
-  // Only render rows that have at least one value
-  const visibleMetrics = metrics.filter((m) => m.actual != null || m.estimated != null);
-  if (!visibleMetrics.length) return null;
-
+const HighlightsList: React.FC<{ items: EarningsHighlight[] }> = ({ items }) => {
+  if (!items.length) {
+    return <p className="erd-muted">AI highlights will appear once the PDF is processed.</p>;
+  }
   return (
-    <div className="erd-metrics-grid">
-      <div className="erd-metrics-head">
-        <span />
-        <span>Estimated</span>
-        <span>Actual</span>
-        <span>Beat / Miss</span>
-        <span>1D Move</span>
-      </div>
-      {visibleMetrics.map((row) => (
-        <div key={row.key} className="erd-metrics-row">
-          <span className="erd-metrics-label">{row.label}</span>
-          <span className="erd-metrics-value muted">
-            {row.estimated != null ? fmtINR(row.estimated, row.unit) : 'â€”'}
-          </span>
-          <span className="erd-metrics-value">
-            {row.actual != null ? fmtINR(row.actual, row.unit) : 'â€”'}
-          </span>
-          <span className={`erd-metrics-badge ${beatMissClass(row.beatMiss)}`}>
-            {row.beatMiss != null ? (
-              <>
-                {beatMissLabel(row.beatMiss)}
-                {' '}
-                <span className="erd-badge-pct">{fmtPct(row.beatMiss)}</span>
-              </>
-            ) : 'â€”'}
-          </span>
-          <span className="erd-metrics-value">
-            {row.key === 'eps' && result.move_1d?.pct != null ? (
-              <span className={`erd-move-chip ${changeClass(result.move_1d.pct)}`}>
-                {result.move_1d.pct > 0 ? <TrendingUp size={11} /> : result.move_1d.pct < 0 ? <TrendingDown size={11} /> : <Minus size={11} />}
-                {fmtPct(result.move_1d.pct)}
-              </span>
-            ) : row.key === 'revenue' && result.current_price != null ? (
-              <span className="erd-price-chip">{fmtPrice(result.current_price)}</span>
-            ) : 'â€”'}
-          </span>
+    <div className="erd-highlights-list">
+      {items.map((item, i) => (
+        <div key={i} className="erd-highlight-item">
+          <span className="erd-highlight-text">{cleanText(item.text)}</span>
+          {item.url ? (
+            <a href={item.url} target="_blank" rel="noreferrer" className="erd-highlight-source">
+              <ExternalLink size={10} />
+            </a>
+          ) : null}
         </div>
       ))}
     </div>
   );
 };
 
-const FinancialTable: React.FC<{ rows: EarningsFinancialRow[] }> = ({ rows }) => {
-  if (!rows.length) {
-    return <p className="erd-muted">Financial data will appear here once available.</p>;
-  }
+const KeyMetricsSummary: React.FC<{ rows: EarningsFinancialRow[] }> = ({ rows }) => {
+  const rowsMap = Object.fromEntries(rows.map((r) => [r.key, r]));
+  const metrics = [
+    { key: 'revenue', label: 'Revenue', unit: 'Rs Cr' },
+    { key: 'eps', label: 'EPS', unit: 'Rs' },
+    { key: 'pat', label: 'PAT', unit: 'Rs Cr' },
+  ];
+  const visible = metrics.filter((m) => rowsMap[m.key]?.current != null);
+  if (!visible.length) return null;
+
   return (
-    <div className="erd-table-wrap">
-      <table className="erd-fin-table">
-        <thead>
-          <tr>
-            <th>Metric</th>
-            <th>Current</th>
-            <th>QoQ</th>
-            <th>YoY</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.key}>
-              <td>
-                <div className="erd-fin-label">{row.label}</div>
-                <div className="erd-fin-unit">{row.unit}</div>
-              </td>
-              <td>{fmtINR(row.current, row.unit)}</td>
-              <td>
-                <span className={`erd-delta ${changeClass(row.qoq_pct, row.higher_is_good)}`}>
+    <div className="erd-key-metrics">
+      <h4 className="erd-section-title">Key Metrics</h4>
+      <div className="erd-key-metrics-table">
+        <div className="erd-key-metrics-head">
+          <span>Metric</span>
+          <span>Current</span>
+          <span>vs Last Quarter</span>
+          <span>vs Last Year Same Quarter</span>
+        </div>
+        {visible.map((m) => {
+          const row = rowsMap[m.key];
+          return (
+            <div key={m.key} className="erd-key-metrics-row">
+              <span className="erd-key-metrics-label">
+                {m.label}
+                <span className="erd-key-metrics-unit">{m.unit}</span>
+              </span>
+              <span className="erd-key-metrics-value">{fmtINR(row.current, m.unit)}</span>
+              <span className="erd-key-metrics-comparison">
+                <span className="erd-key-metrics-base">
+                  {fmtINR(row.previous_quarter, m.unit)}
+                </span>
+                <span className={`erd-key-metrics-delta ${changeClass(row.qoq_pct, row.higher_is_good)}`}>
                   {fmtPct(row.qoq_pct)}
                 </span>
-              </td>
-              <td>
-                <span className={`erd-delta ${changeClass(row.yoy_pct, row.higher_is_good)}`}>
+              </span>
+              <span className="erd-key-metrics-comparison">
+                <span className="erd-key-metrics-base">
+                  {fmtINR(row.same_quarter_last_year, m.unit)}
+                </span>
+                <span className={`erd-key-metrics-delta ${changeClass(row.yoy_pct, row.higher_is_good)}`}>
                   {fmtPct(row.yoy_pct)}
                 </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
 
-const ConsolidatedTables: React.FC<{ tables: EarningsExtractedTable[] }> = ({ tables }) => {
-  const visibleTables = tables.filter((table) => table.rows?.length).slice(0, 2);
-  if (!visibleTables.length) return null;
-  return (
-    <div className="erd-extracted-tables">
-      {visibleTables.map((table, tableIndex) => {
-        const rows = table.rows.slice(0, 14);
-        const maxCols = Math.min(6, Math.max(...rows.map((row) => row.length)));
-        return (
-          <div key={`${table.page_number || 0}-${tableIndex}`} className="erd-extracted-table-block">
-            <div className="erd-table-caption">
-              Consolidated table{table.page_number ? `, page ${table.page_number}` : ''}
-            </div>
-            <div className="erd-table-wrap">
-              <table className="erd-fin-table erd-raw-table">
-                <tbody>
-                  {rows.map((row, rowIndex) => (
-                    <tr key={rowIndex}>
-                      {Array.from({ length: maxCols }).map((_, colIndex) => (
-                        <td key={colIndex}>{row[colIndex] || ''}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-const HighlightsList: React.FC<{ items: EarningsHighlight[] }> = ({ items }) => {
-  if (!items.length) {
-    return <p className="erd-muted">AI highlights will appear once the PDF is processed.</p>;
-  }
-  return (
-    <ul className="erd-highlights-list">
-      {items.map((item, i) => (
-        <li key={i}>
-          <span className="erd-highlight-bullet" />
-          <span className="erd-highlight-text">{item.text}</span>
-          {item.url ? (
-            <a href={item.url} target="_blank" rel="noreferrer" className="erd-highlight-source">
-              <ExternalLink size={10} />
-            </a>
-          ) : null}
-        </li>
-      ))}
-    </ul>
-  );
-};
-
-/** AISummaryCard â€” renders the LLM-generated structured earnings intelligence. */
+/** AISummaryCard - renders the LLM-generated structured earnings intelligence. */
 const AISummaryCard: React.FC<{ summary: EarningsAISummary }> = ({ summary }) => {
   const rating = (summary.rating || '').toLowerCase();
   const ratingClass =
@@ -399,7 +279,7 @@ const DocumentsList: React.FC<{ documents: EarningsDocumentLink[] }> = ({ docume
   );
 };
 
-// â”€â”€ main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- main component ------------------------------------------------------
 
 const EarningsResultDetail: React.FC<EarningsResultDetailProps> = ({
   symbol,
@@ -412,14 +292,21 @@ const EarningsResultDetail: React.FC<EarningsResultDetailProps> = ({
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<DetailTab>('highlights');
   const [activeQuarterIndex, setActiveQuarterIndex] = useState(0);
+  // Track the currently viewed date so quarter-tab navigation works within the detail view.
+  const [currentDate, setCurrentDate] = useState(date);
   const reqSeq = useRef(0);
+
+  // Re-sync currentDate when the parent prop changes (e.g. coming back from a different company).
+  useEffect(() => {
+    setCurrentDate(date);
+  }, [date]);
 
   const load = useCallback(async () => {
     const seq = ++reqSeq.current;
     setLoading(true);
     setError('');
     try {
-      const data = await getEarningsResult(symbol, date);
+      const data = await getEarningsResult(symbol, currentDate);
       if (reqSeq.current !== seq) return;
       setResult(data);
       // set active quarter to the one matching the requested date
@@ -427,17 +314,56 @@ const EarningsResultDetail: React.FC<EarningsResultDetailProps> = ({
       setActiveQuarterIndex(matchIdx >= 0 ? matchIdx : 0);
     } catch (err: any) {
       if (reqSeq.current !== seq) return;
-      setError(err?.message || `Could not load result for ${symbol}.`);
+      const raw = err?.message || '';
+      const msg =
+        raw === 'Failed to fetch' || raw === 'NetworkError when attempting to fetch resource.'
+          ? 'Could not reach the earnings service. Check your connection and try again.'
+          : raw === 'Not Found' || raw.includes('404')
+            ? `No earnings result found for ${symbol} on ${currentDate}.`
+            : raw || `Could not load result for ${symbol}.`;
+      setError(msg);
     } finally {
       if (reqSeq.current === seq) setLoading(false);
     }
-  }, [symbol, date]);
+  }, [symbol, currentDate]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // â”€â”€ render states â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Handle quarter tab selection: if the tab has an earnings_date, navigate to it.
+  const handleQuarterSelect = useCallback((index: number) => {
+    setActiveQuarterIndex(index);
+    if (!result) return;
+    const tab = result.quarter_tabs[index];
+    if (!tab) return;
+    const tabDate = tab.earnings_date;
+    // Only navigate if: date is set, not a future quarter, and different from current date
+    if (tabDate && !tab.is_future && tabDate !== currentDate) {
+      setCurrentDate(tabDate);
+      setResult(null);
+      setError('');
+    }
+  }, [result, currentDate]);
+
+  // If the result is only a calendar announcement (not yet parsed), poll every 20s
+  // for up to 3 minutes so the complete financial data appears automatically.
+  useEffect(() => {
+    if (!result || result.financials?.source !== 'announcement_fallback') return;
+    let attempts = 0;
+    const maxAttempts = 9;
+    const interval = setInterval(() => {
+      attempts += 1;
+      if (attempts > maxAttempts) {
+        clearInterval(interval);
+        return;
+      }
+      load();
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [result, load]);
+
+  // -- render states ------------------------------------------------------
 
   if (loading) {
     return (
@@ -447,7 +373,7 @@ const EarningsResultDetail: React.FC<EarningsResultDetailProps> = ({
         </button>
         <div className="erd-loading">
           <Loader2 size={22} className="erd-spinner" />
-          <span>Loading {companyName || symbol} resultsâ€¦</span>
+          <span>Loading {companyName || symbol} results...</span>
         </div>
       </div>
     );
@@ -473,11 +399,11 @@ const EarningsResultDetail: React.FC<EarningsResultDetailProps> = ({
   const tabs = result.quarter_tabs || [];
   const highlights = result.highlights || [];
   const financialRows = result.financials?.rows || [];
-  const consolidatedTables = result.financials?.consolidated_tables || [];
   const documents = result.documents || [];
   const hasAiSummary = Boolean(
     result.ai_summary && Object.keys(result.ai_summary).length > 0
   );
+  const isProcessing = result.financials?.source === 'announcement_fallback';
 
   return (
     <div className="erd-root">
@@ -491,7 +417,7 @@ const EarningsResultDetail: React.FC<EarningsResultDetailProps> = ({
         <EarningsQuarterTabs
           tabs={tabs}
           activeIndex={activeQuarterIndex}
-          onSelect={setActiveQuarterIndex}
+          onSelect={handleQuarterSelect}
         />
       )}
 
@@ -512,10 +438,7 @@ const EarningsResultDetail: React.FC<EarningsResultDetailProps> = ({
         </div>
       </div>
 
-      {/* Metrics grid â€” all six core metrics */}
-      <MetricsGrid result={result} />
-
-      {/* Tab bar â€” Highlights and Documents only (transcript removed) */}
+      {/* Tab bar - Highlights and Documents only (transcript removed) */}
       <div className="erd-tab-bar" role="tablist">
         {(['highlights', 'documents'] as DetailTab[]).map((t) => (
           <button
@@ -533,24 +456,27 @@ const EarningsResultDetail: React.FC<EarningsResultDetailProps> = ({
 
       {/* Tab content */}
       <div className="erd-tab-content">
+        {isProcessing && (
+          <div className="erd-processing-banner">
+            <Loader2 size={16} className="erd-spinner" />
+            <span>Processing the official results PDF. This can take up to 60 seconds on the first open.</span>
+          </div>
+        )}
         {activeTab === 'highlights' && (
           <div className="erd-highlights-panel">
-            <HighlightsList items={highlights} />
+            {/* <HighlightsList items={highlights} /> */}
 
-            {/* AI Intelligence summary â€” shown when LLM has processed the filing */}
+            {(financialRows.length > 0) && (
+              <KeyMetricsSummary rows={financialRows} />
+            )}
+
+            {/* AI Intelligence summary - shown when LLM has processed the filing */}
             {hasAiSummary && result.ai_summary && (
               <AISummaryCard summary={result.ai_summary} />
             )}
 
-            {(financialRows.length > 0 || consolidatedTables.length > 0) && (
-              <div className="erd-fin-section">
-                <h4 className="erd-section-title">Financial comparison</h4>
-                <FinancialTable rows={financialRows} />
-                <ConsolidatedTables tables={consolidatedTables} />
-                {result.financials?.unit_note && (
-                  <p className="erd-footnote">{result.financials.unit_note}</p>
-                )}
-              </div>
+            {result.financials?.unit_note && (
+              <p className="erd-footnote">{result.financials.unit_note}</p>
             )}
           </div>
         )}

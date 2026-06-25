@@ -264,16 +264,41 @@ def _fitz_layout_to_markdown(pdf_path_or_bytes: str | bytes) -> str:
 
 
 def _pdf_to_markdown(path: str) -> tuple[str, str]:
-    """Process a PDF using Azure Document Intelligence (primary) or PyMuPDF (fallback).
+    """Process a PDF using PyMuPDF (primary) and Azure Document Intelligence (fallback).
 
     Strategy:
-      1. If AZURE_DI_ENDPOINT + AZURE_DI_KEY are configured → use Azure DI
-         (better table extraction, key-value pair extraction, higher accuracy)
-      2. Otherwise → use PyMuPDF fitz layout extraction
+      1. Try PyMuPDF fitz layout extraction first — fast, no cloud dependency,
+         and preserves the source document layout accurately.
+      2. If fitz extraction is empty, or Azure DI is configured and the quality
+         looks compromised (very little text, missing tables), fall back to Azure DI.
 
     Returns Markdown representation of the PDF content + transformer name.
     """
-    # Try Azure Document Intelligence first
+    # Primary: PyMuPDF layout extraction
+    try:
+        markdown = _fitz_layout_to_markdown(path)
+        text_len = len(markdown.strip())
+        # Quality gate: if PyMuPDF extracted a reasonable amount of text, use it.
+        if text_len > 200:
+            logger.info("[PDF-FITZ] PyMuPDF extracted %d markdown chars", text_len)
+            return markdown, "fitz_layout"
+        logger.warning(
+            "[PDF-FITZ] PyMuPDF output is short (%d chars); checking Azure DI fallback", text_len
+        )
+    except ImportError as exc:
+        if "fitz" in str(exc).lower() or "pymupdf" in str(exc).lower():
+            logger.error("PyMuPDF (fitz) is not installed. PDF extraction requires 'pymupdf' package.")
+            raise DocumentTransformError(
+                "PYMUPDF_NOT_INSTALLED",
+                "PDF extraction requires the 'pymupdf' package (provides the 'fitz' module). "
+                "Install it with: pip install pymupdf>=1.24.0",
+                {"stage": "fitz_import", "error": str(exc)},
+            ) from exc
+        raise
+    except Exception as exc:
+        logger.warning("[PDF-FITZ] PyMuPDF extraction failed, trying Azure DI fallback: %s", exc)
+
+    # Fallback: Azure Document Intelligence when configured and PyMuPDF was empty/low-quality.
     try:
         from finagent.ingestion.azure_doc_intel import is_azure_di_configured, extract_document
         if is_azure_di_configured():
@@ -293,43 +318,31 @@ def _pdf_to_markdown(path: str) -> tuple[str, str]:
             di_result = loop.run_until_complete(extract_document(file_bytes=file_bytes))
 
             if di_result.full_text and len(di_result.full_text.strip()) > 50:
-                # Combine full text with any extracted tables
                 parts = [di_result.full_text]
                 if di_result.tables:
                     parts.append("\n\n## Extracted Tables\n")
                     parts.append(di_result.tables_markdown)
                 logger.info(
-                    "[PDF-DI] Azure DI extracted %d pages, %d tables, %.0fs",
+                    "[PDF-DI] Azure DI fallback extracted %d pages, %d tables, %.0fs",
                     di_result.page_count, len(di_result.tables), di_result.duration_s,
                 )
                 return "\n\n".join(parts), "azure_document_intelligence"
-            else:
-                logger.warning("[PDF-DI] Azure DI returned empty text, falling back to PyMuPDF")
+            logger.warning("[PDF-DI] Azure DI fallback returned empty text")
     except ImportError:
         pass  # azure_doc_intel module not available
     except Exception as exc:
-        logger.warning("[PDF-DI] Azure DI failed, falling back to PyMuPDF: %s", exc)
+        logger.warning("[PDF-DI] Azure DI fallback failed: %s", exc)
 
-    # Fallback: PyMuPDF layout extraction
+    # If PyMuPDF produced some short text and Azure DI is unavailable, still return it.
     try:
         markdown = _fitz_layout_to_markdown(path)
         return markdown, "fitz_layout"
-    except ImportError as exc:
-        if "fitz" in str(exc).lower() or "pymupdf" in str(exc).lower():
-            logger.error("PyMuPDF (fitz) is not installed. PDF extraction requires 'pymupdf' package.")
-            raise DocumentTransformError(
-                "PYMUPDF_NOT_INSTALLED",
-                "PDF extraction requires the 'pymupdf' package (provides the 'fitz' module). "
-                "Install it with: pip install pymupdf>=1.24.0",
-                {"stage": "fitz_import", "error": str(exc)},
-            ) from exc
-        raise
     except Exception as exc:
         logger.error("PDF extraction failed: %s", exc)
         raise DocumentTransformError(
             "PDF_EXTRACTION_FAILED",
             "Failed to extract content from PDF.",
-            {"stage": "fitz_extraction", "error": str(exc)},
+            {"stage": "pdf_extraction", "error": str(exc)},
         ) from exc
 
 

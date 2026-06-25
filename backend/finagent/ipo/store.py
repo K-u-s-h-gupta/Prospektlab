@@ -48,6 +48,21 @@ class IpoStore:
             await self._upsert_supabase("ipo_filings", payload, match={"slug": slug})
         return payload
 
+    async def delete_filing(self, slug: str) -> None:
+        slug = slug.strip().lower()
+        rows = await self._load_all()
+        rows = [r for r in rows if (r.get("slug") or "").lower() != slug]
+        await self._save_all(rows)
+        if _supabase_configured():
+            try:
+                from finagent.gateway.supabase_client import get_headers, _supabase_async_client
+                params = f"slug=eq.{slug}"
+                url = f"{os.environ['SUPABASE_URL'].rstrip('/')}/rest/v1/ipo_filings?{params}"
+                async with _supabase_async_client() as client:
+                    await client.delete(url, headers=get_headers())
+            except Exception as exc:
+                logger.debug("Supabase IPO delete skipped/failed: %s", exc)
+
     async def save_analysis(self, slug: str, analysis: dict[str, Any]) -> None:
         data = {"slug": slug, "parsed_sections": analysis}
         await self._save_sidecar(slug, "analysis", data)
@@ -94,23 +109,20 @@ class IpoStore:
         """Map portfolio symbols to IPO tracking pages for recently listed holdings."""
         sym_set = {s.strip().upper() for s in symbols if s and s.strip()}
         links: list[dict[str, Any]] = []
-        symbol_map = {
-            "SWIGGY": "swiggy",
-            "ETERNAL": "swiggy",
-        }
         for sym in sym_set:
-            slug = symbol_map.get(sym)
-            if not slug:
-                continue
-            filing = await self.get_filing(slug)
-            if filing:
-                links.append({
-                    "symbol": sym,
-                    "slug": slug,
-                    "company_name": filing.get("company_name"),
-                    "tracking_url": f"/ipo/{slug}/tracking",
-                    "analysis_url": f"/ipo/{slug}",
-                })
+            # Search filings by exchange symbol stored in metadata
+            for filing in await self._load_all():
+                if (filing.get("exchange_symbol") or "").upper() == sym:
+                    slug = filing.get("slug")
+                    if slug:
+                        links.append({
+                            "symbol": sym,
+                            "slug": slug,
+                            "company_name": filing.get("company_name"),
+                            "tracking_url": f"/ipo/{slug}/tracking",
+                            "analysis_url": f"/ipo/{slug}",
+                        })
+                    break
         return links
 
     async def _load_all(self) -> list[dict[str, Any]]:

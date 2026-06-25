@@ -1,28 +1,40 @@
 # Register the ProspektLab daily publisher with Windows Task Scheduler.
 # Run as Administrator: powershell -ExecutionPolicy Bypass -File scripts\register_daily_task.ps1
 
-$repo   = "D:\PROSPEKTLAB"
-$python = "$repo\.venv-prospektlab311b\Scripts\python.exe"
-$script = "$repo\scripts\daily_publisher.py"
-$logDir = "$repo\.finagent\daily_runs"
+param(
+    [string]$TaskName = "ProspektLab-Daily-Publisher",
+    [string]$At = "06:30"
+)
 
+$ErrorActionPreference = "Stop"
+
+$repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$runner = Join-Path $repo "scripts\run_daily_publisher.ps1"
+$logDir = Join-Path $repo ".finagent\daily_runs"
+
+if (-not (Test-Path $runner)) {
+    throw "Daily publisher runner not found: $runner"
+}
 if (-not (Test-Path $logDir)) {
     New-Item -ItemType Directory -Path $logDir | Out-Null
 }
 
-$action  = New-ScheduledTaskAction -Execute $python -Argument $script -WorkingDirectory $repo
-$trigger = New-ScheduledTaskTrigger -Daily -At 06:30
+$powerShell = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
+$actionArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$runner`""
+$action = New-ScheduledTaskAction -Execute $powerShell -Argument $actionArgs -WorkingDirectory $repo
+$trigger = New-ScheduledTaskTrigger -Daily -At $At
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailable `
-            -DontStopOnIdleEnd -RestartCount 2 -RestartInterval (New-TimeSpan -Minutes 30) `
-            -ExecutionTimeLimit (New-TimeSpan -Hours 2)
+    -DontStopOnIdleEnd -RestartCount 2 -RestartInterval (New-TimeSpan -Minutes 30) `
+    -ExecutionTimeLimit (New-TimeSpan -Hours 4)
 
 $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
 
-Register-ScheduledTask -TaskName "ProspektLab-Daily-Publisher" `
+Register-ScheduledTask -TaskName $TaskName `
     -Action $action -Trigger $trigger -Settings $settings -Principal $principal `
-    -Description "Run the ProspektLab daily publisher (15-20 strong articles per day)." `
+    -Description "Run the ProspektLab daily publisher and write logs under .finagent\daily_runs." `
     -Force | Out-Null
 
-Write-Host "Registered scheduled task 'ProspektLab-Daily-Publisher'. Runs daily at 06:30 IST-equivalent local time." -ForegroundColor Green
-Write-Host "Logs: $logDir\run-*.json"
-Write-Host "Run on demand: Start-ScheduledTask -TaskName 'ProspektLab-Daily-Publisher'"
+Write-Host "Registered scheduled task '$TaskName'. Runs daily at $At local time." -ForegroundColor Green
+Write-Host "Runner: $runner"
+Write-Host "Logs: $logDir\task-*.log and $logDir\run-*.json"
+Write-Host "Run on demand: Start-ScheduledTask -TaskName '$TaskName'"

@@ -7,6 +7,7 @@ import WatchlistStep from './pages/WatchlistStep';
 import Dashboard from './pages/Dashboard';
 import DashboardEarningsPage from './pages/DashboardEarningsPage';
 import DashboardGovernancePage from './pages/DashboardGovernancePage';
+import DashboardIpoPage from './pages/DashboardIpoPage';
 import InsightsStudio from './pages/InsightsStudio';
 import IpoDashboard from './pages/IpoDashboard';
 import IpoDetailPage from './pages/IpoDetailPage';
@@ -16,13 +17,13 @@ import { AuthProvider } from './context/AuthContext';
 import { trackPageView } from './telemetry';
 import CommandPalette from './components/common/CommandPalette';
 
-type DashboardTabParam = 'overview' | 'portfolio' | 'watchlist' | 'screener' | 'ipo';
+type DashboardTabParam = 'overview' | 'portfolio' | 'watchlist' | 'screener';
 
 const DashboardRoute: React.FC = () => {
   const { featureTab } = useParams<{ featureTab?: string }>();
   const normalized = String(featureTab || '').toLowerCase();
   const tab: DashboardTabParam =
-    normalized === 'portfolio' || normalized === 'watchlist' || normalized === 'screener' || normalized === 'ipo'
+    normalized === 'portfolio' || normalized === 'watchlist' || normalized === 'screener'
       ? (normalized as DashboardTabParam)
       : 'overview';
 
@@ -75,6 +76,7 @@ export const AppContent: React.FC = () => {
         <Route path="/dashboard" element={<Navigate to="/dashboard/overview" replace />} />
         <Route path="/dashboard/earnings" element={<DashboardEarningsPage />} />
         <Route path="/dashboard/governance" element={<DashboardGovernancePage />} />
+        <Route path="/dashboard/ipo" element={<DashboardIpoPage />} />
         <Route path="/dashboard/:featureTab" element={<DashboardRoute />} />
         <Route path="/insights-studio" element={<InsightsStudio />} />
         <Route path="/ipo" element={<IpoDashboard />} />

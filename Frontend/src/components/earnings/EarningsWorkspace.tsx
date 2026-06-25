@@ -95,18 +95,32 @@ const daysFromNow = (dateKey: string): number => {
 
 type Workspace = 'calendar' | 'detail';
 
-const EarningsWorkspace: React.FC = () => {
+interface EarningsWorkspaceProps {
+  initialDate?: string;
+  initialDetailCompany?: { symbol: string; name: string; date: string } | null;
+}
+
+const EarningsWorkspace: React.FC<EarningsWorkspaceProps> = ({
+  initialDate,
+  initialDetailCompany,
+}) => {
   const today = new Date();
   const todayKey = toDateKey(today);
+  const seededDate = /^\d{4}-\d{2}-\d{2}$/.test(String(initialDate || '')) ? String(initialDate) : todayKey;
+  const seededDateObject = parseDateKey(seededDate);
 
   // view state
-  const [workspace, setWorkspace] = useState<Workspace>('calendar');
-  const [selectedDate, setSelectedDate] = useState(todayKey);
-  const [visibleMonth, setVisibleMonth] = useState(startOfMonth(today));
+  const [workspace, setWorkspace] = useState<Workspace>(initialDetailCompany ? 'detail' : 'calendar');
+  const [selectedDate, setSelectedDate] = useState(seededDate);
+  const [visibleMonth, setVisibleMonth] = useState(startOfMonth(seededDateObject || today));
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   // selected company for detail view
-  const [detailCompany, setDetailCompany] = useState<{ symbol: string; name: string; date: string } | null>(null);
+  const [detailCompany, setDetailCompany] = useState<{ symbol: string; name: string; date: string } | null>(
+    initialDetailCompany
+      ? { ...initialDetailCompany, date: initialDetailCompany.date || seededDate }
+      : null,
+  );
 
   // calendar data
   const calSeq = useRef(0);
@@ -148,7 +162,14 @@ const EarningsWorkspace: React.FC = () => {
       setCalDays(payload.dates || []);
     } catch (err: any) {
       if (calSeq.current !== seq) return;
-      setCalError(err?.message || 'Failed to load calendar.');
+      const raw = err?.message || '';
+      const msg =
+        raw === 'Failed to fetch' || raw === 'NetworkError when attempting to fetch resource.'
+          ? 'Could not reach the earnings service. Check your connection and try again.'
+          : raw === 'Not Found' || raw.includes('404')
+          ? 'Earnings service is currently unavailable. Please try again later.'
+          : raw || 'Failed to load calendar.';
+      setCalError(msg);
       setCalDays([]);
     } finally {
       if (calSeq.current === seq) setCalLoading(false);
@@ -165,7 +186,14 @@ const EarningsWorkspace: React.FC = () => {
       setCompanies(payload);
     } catch (err: any) {
       if (coSeq.current !== seq) return;
-      setCoError(err?.message || 'Failed to load companies.');
+      const raw = err?.message || '';
+      const msg =
+        raw === 'Failed to fetch' || raw === 'NetworkError when attempting to fetch resource.'
+          ? 'Could not reach the earnings service. Check your connection and try again.'
+          : raw === 'Not Found' || raw.includes('404')
+          ? 'Earnings service is currently unavailable. Please try again later.'
+          : raw || 'Failed to load companies.';
+      setCoError(msg);
       setCompanies(null);
     } finally {
       if (coSeq.current === seq) setCoLoading(false);
@@ -180,6 +208,25 @@ const EarningsWorkspace: React.FC = () => {
     loadCompanies(selectedDate, currentPage);
   }, [selectedDate, currentPage, loadCompanies]);
 
+  useEffect(() => {
+    const nextDate = /^\d{4}-\d{2}-\d{2}$/.test(String(initialDate || '')) ? String(initialDate) : todayKey;
+    const parsed = parseDateKey(nextDate) || today;
+    setSelectedDate(nextDate);
+    setVisibleMonth(startOfMonth(parsed));
+    setCurrentPage(1);
+    if (initialDetailCompany?.symbol) {
+      setDetailCompany({
+        symbol: initialDetailCompany.symbol,
+        name: initialDetailCompany.name || initialDetailCompany.symbol,
+        date: initialDetailCompany.date || nextDate,
+      });
+      setWorkspace('detail');
+      return;
+    }
+    setDetailCompany(null);
+    setWorkspace('calendar');
+  }, [initialDate, initialDetailCompany?.date, initialDetailCompany?.name, initialDetailCompany?.symbol, todayKey]);
+
   // ── handlers ────────────────────────────────────────────────────────────────
 
   const selectDate = (day: Date) => {
@@ -191,8 +238,9 @@ const EarningsWorkspace: React.FC = () => {
     setWorkspace('calendar');
   };
 
+
   const openDetail = (company: EarningsCompanyItem) => {
-    setDetailCompany({ symbol: company.symbol, name: company.name, date: selectedDate });
+    setDetailCompany({ symbol: company.symbol, name: company.name, date: company.date || selectedDate });
     setWorkspace('detail');
   };
 

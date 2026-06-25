@@ -90,7 +90,7 @@ class MetricSpec:
 METRIC_SPECS: tuple[MetricSpec, ...] = (
     MetricSpec("revenue", "Revenue", "Rs Cr", ("revenue from operations", "revenue", "total income", "income from operations")),
     MetricSpec("pat", "PAT", "Rs Cr", ("profit after tax", "pat", "net profit", "profit for the period")),
-    MetricSpec("ebitda", "EBITDA", "Rs Cr", ("ebitda", "operating ebitda", "operating profit")),
+    MetricSpec("ebitda", "EBITDA", "Rs Cr", ("ebitda", "operating ebitda", "operating profit", "pbdit", "pbida")),
     MetricSpec("eps", "EPS", "Rs", ("basic eps", "diluted eps", "earnings per share", "eps")),
     MetricSpec("ebitda_margin", "EBITDA Margin", "%", ("ebitda margin", "operating margin")),
     MetricSpec("pat_margin", "PAT Margin", "%", ("pat margin", "net profit margin", "net margin")),
@@ -210,8 +210,50 @@ def infer_call_timing(text: str, announced_at: datetime | None = None) -> str:
     return "TAS"
 
 
+# Common Windows-1252/CP1252 to UTF-8 mojibake patterns and their correct replacements.
+# These are raw bytes sequences that appear when UTF-8 text is incorrectly decoded.
+_ENCODING_FIXES: dict[str, str] = {
+    # Mojibake patterns (triple-byte sequences from UTF-8 misinterpretation)
+    "\xc3\xa2\xe2\x82\xac\xc2\xa6": "...",    # ellipsis
+    "\xc3\xa2\xe2\x82\xac\xe2\x80\x9c": "-",  # en dash
+    "\xc3\xa2\xe2\x82\xac\xe2\x80\x9d": "-",  # em dash
+    "\xc3\xa2\xe2\x82\xac\xe2\x84\xa2": "'",  # right single quote
+    "\xc3\xa2\xe2\x82\xac\xcb\x9c": "'",      # left single quote
+    "\xc3\xa2\xe2\x82\xac\xc5\x93": '"',      # left double quote
+    "\xc3\xa2\xe2\x82\xac\xc2\xa2": "-",      # bullet
+    # Simpler patterns
+    "\xc2\xa0": " ",         # non-breaking space
+    "\x00": "",              # null bytes
+    "\ufeff": "",            # BOM
+    # Unicode replacements
+    "\u2019": "'",           # right single quotation mark
+    "\u2018": "'",           # left single quotation mark
+    "\u201c": '"',           # left double quotation mark
+    "\u201d": '"',           # right double quotation mark
+    "\u2013": "-",           # en dash
+    "\u2014": "-",           # em dash
+    "\u2026": "...",         # horizontal ellipsis
+    "\u00a0": " ",           # non-breaking space
+    "\u2022": "-",           # bullet
+}
+
+
+def sanitize_text(text: str) -> str:
+    """Clean encoding artifacts and mojibake from extracted text."""
+    if not text:
+        return ""
+    result = text
+    for bad, good in _ENCODING_FIXES.items():
+        result = result.replace(bad, good)
+    # Normalize multiple spaces
+    result = re.sub(r" {2,}", " ", result)
+    # Normalize multiple newlines
+    result = re.sub(r"\n{3,}", "\n\n", result)
+    return result.strip()
+
+
 def compact_summary(text: str, max_chars: int = 180) -> str:
-    cleaned = re.sub(r"\s+", " ", str(text or "")).strip()
+    cleaned = sanitize_text(re.sub(r"\s+", " ", str(text or "")).strip())
     if len(cleaned) <= max_chars:
         return cleaned
     return cleaned[: max_chars - 1].rstrip(" ,.;") + "."
@@ -226,6 +268,32 @@ def _coerce_number(raw: str) -> float | None:
         return None
 
 
+def _detect_text_unit_scale(text: str) -> float:
+    """Detect currency unit from document text and return Rs Crore scale factor.
+
+    Rs Millions  → 0.1   (1 Crore = 10 Millions)
+    Rs Lakhs     → 0.01  (1 Crore = 100 Lakhs)
+    Rs Crores    → 1.0   (default, no conversion)
+
+    Searches the FULL text for reliability across long financial documents.
+    """
+    sample = text.lower()
+    if any(p in sample for p in (
+        "rs. in millions", "rs in millions", "rupees in millions",
+        "₹ in millions", "in millions", "rs. mn", "rs mn",
+        "inr millions", "amount in millions", "all amounts are in millions",
+        "(millions)", "million rupees",
+    )):
+        return 0.1
+    if any(p in sample for p in (
+        "rs. in lakhs", "rs in lakhs", "rupees in lakhs",
+        "₹ in lakhs", "in lakhs", "rs. lacs", "rs lacs",
+        "in lacs", "amount in lakhs", "(lakhs)", "lakh rupees",
+    )):
+        return 0.01
+    return 1.0
+
+
 def _metric_pattern(alias: str) -> re.Pattern[str]:
     escaped = re.escape(alias)
     return re.compile(
@@ -236,6 +304,7 @@ def _metric_pattern(alias: str) -> re.Pattern[str]:
 
 def extract_financial_metrics(text: str) -> dict[str, float]:
     body = re.sub(r"\s+", " ", str(text or ""))
+    scale = _detect_text_unit_scale(body)
     metrics: dict[str, float] = {}
     for spec in METRIC_SPECS:
         for alias in spec.aliases:
@@ -244,6 +313,9 @@ def extract_financial_metrics(text: str) -> dict[str, float]:
                 continue
             value = _coerce_number(match.group(1))
             if value is not None:
+                # Apply unit scale for absolute values (not %, not EPS)
+                if spec.unit not in ("%",) and spec.key != "eps":
+                    value = round(value * scale, 2)
                 metrics[spec.key] = value
                 break
     if "pat_margin" not in metrics and metrics.get("pat") is not None and metrics.get("revenue"):

@@ -16,7 +16,12 @@ export default defineConfig({
     host: true,
     proxy: {
       '/auth': 'http://localhost:8000',
-      '/research': 'http://localhost:8000',
+      '/earnings': 'http://localhost:8000',
+      '/screener': 'http://localhost:8000',
+      '/watchlist': 'http://localhost:8000',
+      '/filings': 'http://localhost:8000',
+      '^/research/(start|deep|export-all|export)': 'http://localhost:8000',
+      '^/research/export/': 'http://localhost:8000',
       '/sessions': 'http://localhost:8000',
       '/portfolio': 'http://localhost:8000',
       '/ipo': 'http://localhost:8000',
@@ -31,7 +36,7 @@ export default defineConfig({
       // The rewrite strips a trailing slash so the backend receives
       // /insights/slug (no slash) directly — avoiding a 307 redirect
       // that would break the browser out of the Vite proxy.
-      '^/insights': {
+      '^/insights(?:/|$)': {
         target: 'http://localhost:8000',
         changeOrigin: false,
         rewrite: (path) => path.replace(/\/+$/, '') || '/',
