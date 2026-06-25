@@ -452,7 +452,7 @@ const EarningsWorkspace: React.FC<EarningsWorkspaceProps> = ({
                            {company.eps_estimated && (
                              <>
                                <span className="ew-sep">vs est.</span>
-                               <span className="ew-eps-estimated">₹{company.eps_estimated.toFixed(2)}</span>
+                               <span className="ew-eps-estimated">₹{Number(company.eps_estimated).toFixed(2)}</span>
                              </>
                            )}
                            {beatMiss && (
@@ -463,8 +463,8 @@ const EarningsWorkspace: React.FC<EarningsWorkspaceProps> = ({
                              </span>
                            )}
                            {company.post_earnings_move_1d !== null && company.post_earnings_move_1d !== undefined && (
-                             <span className={`ew-move-1d ${company.post_earnings_move_1d > 0 ? 'up' : company.post_earnings_move_1d < 0 ? 'down' : 'flat'}`}>
-                               1D: {company.post_earnings_move_1d > 0 ? '+' : ''}{company.post_earnings_move_1d.toFixed(2)}%
+                             <span className={`ew-move-1d ${Number(company.post_earnings_move_1d) > 0 ? 'up' : Number(company.post_earnings_move_1d) < 0 ? 'down' : 'flat'}`}>
+                               1D: {Number(company.post_earnings_move_1d) > 0 ? '+' : ''}{Number(company.post_earnings_move_1d).toFixed(2)}%
                              </span>
                            )}
                          </div>

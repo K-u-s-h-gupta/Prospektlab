@@ -165,6 +165,26 @@
     "status": "200"
   },
   {
+    "source": "/earnings/<*>",
+    "target": "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/earnings/<*>",
+    "status": "200"
+  },
+  {
+    "source": "/screener/<*>",
+    "target": "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/screener/<*>",
+    "status": "200"
+  },
+  {
+    "source": "/watchlist/<*>",
+    "target": "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/watchlist/<*>",
+    "status": "200"
+  },
+  {
+    "source": "/filings/<*>",
+    "target": "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/filings/<*>",
+    "status": "200"
+  },
+  {
     "source": "/login",
     "target": "/index.html",
     "status": "200"

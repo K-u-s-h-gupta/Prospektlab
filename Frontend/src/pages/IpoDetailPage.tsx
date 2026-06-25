@@ -538,7 +538,7 @@ const GovernanceTab: React.FC<{ promoters: any; management: any[]; fraudSignals:
               <div key={p.name} className="ipo-promoter-card">
                 <div className="ipo-promoter-name">{p.name}</div>
                 {p.shareholding_pct != null && (
-                  <div className="ipo-promoter-stake">{p.shareholding_pct.toFixed(2)}% stake</div>
+                  <div className="ipo-promoter-stake">{Number(p.shareholding_pct).toFixed(2)}% stake</div>
                 )}
               </div>
             ))}

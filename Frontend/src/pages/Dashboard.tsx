@@ -1061,6 +1061,21 @@ const toCanonicalSymbol = (rawSymbol: string) => {
   return SYMBOL_ALIASES[clean] || clean;
 };
 
+// Pure helper utilities (hoisted outside component to avoid temporal dead zone)
+const finiteNumber = (value: any, fallback = 0) => {
+  if (value === null || value === undefined || value === '') return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const positiveNumber = (value: any, fallback = 0) => {
+  const n = finiteNumber(value, Number.NaN);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
+const normalizeMarketSymbol = (symbol: string) =>
+  String(symbol || '').split('.')[0].toUpperCase().trim();
+
 export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overview' }) => {
   const navigate = useNavigate();
   const { setOnboarded, user, showToast, isAuthenticated, syncLocalPortfolio, clearLocalPortfolio, isPro } = useAuth();
@@ -2196,8 +2211,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     syncPortfolio();
 
     // Load watchlist symbols from scoped storage.
-    const savedWatchlistRaw = localStorage.getItem(watchlistStorageKey);
-    const savedWatchlist: string[] = savedWatchlistRaw ? JSON.parse(savedWatchlistRaw) : [];
+    let savedWatchlist: string[] = [];
+    try {
+      const savedWatchlistRaw = localStorage.getItem(watchlistStorageKey);
+      savedWatchlist = savedWatchlistRaw ? JSON.parse(savedWatchlistRaw) : [];
+      if (!Array.isArray(savedWatchlist)) savedWatchlist = [];
+    } catch {
+      savedWatchlist = [];
+    }
     const normalizedWatchlist = savedWatchlist
       .map((s) => String(s || '').split('.')[0].toUpperCase().trim())
       .filter((s) => s.length > 0);
@@ -2293,7 +2314,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
       setStressResult(res);
       setStressScenario(isCustom ? 'custom' : scenario);
     } catch (e) {
-      console.log('Stress test failed', e);
+      console.error('Stress test failed', e);
     } finally {
       setStressLoading(false);
     }
@@ -2344,20 +2365,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   }, [messages.length, isThinking, thinkingEvents.length]);
 
   // Live index simulation removed - data is now loaded live from the backend API
-
-  const finiteNumber = (value: any, fallback = 0) => {
-    if (value === null || value === undefined || value === '') return fallback;
-    const n = Number(value);
-    return Number.isFinite(n) ? n : fallback;
-  };
-
-  const positiveNumber = (value: any, fallback = 0) => {
-    const n = finiteNumber(value, Number.NaN);
-    return Number.isFinite(n) && n > 0 ? n : fallback;
-  };
-
-  const normalizeMarketSymbol = (symbol: string) =>
-    String(symbol || '').split('.')[0].toUpperCase().trim();
 
   const lookupLiveQuote = (symbol: string) => {
     const base = normalizeMarketSymbol(symbol);
@@ -3094,7 +3101,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
           let aiResponse: Message;
           try {
             const finalResult = await getSessionResult(backendSessionId);
-            console.log('[DASHBOARD] getSessionResult success:', finalResult);
             const richPayload =
               finalResult.final?.rich ||
               parsedEvent?.rich ||
@@ -3637,20 +3643,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
 
       // Primary metric: Revenue YoY % change (most meaningful for announced results)
       const metricA = reportedLead.revenue_yoy_pct != null
-        ? `Rev ${reportedLead.revenue_yoy_pct >= 0 ? '+' : ''}${reportedLead.revenue_yoy_pct.toFixed(1)}% YoY`
+        ? `Rev ${Number(reportedLead.revenue_yoy_pct) >= 0 ? '+' : ''}${Number(reportedLead.revenue_yoy_pct).toFixed(1)}% YoY`
         : reportedLead.revenue_surprise_pct != null
-          ? `Rev ${reportedLead.revenue_surprise_pct >= 0 ? '+' : ''}${reportedLead.revenue_surprise_pct.toFixed(1)}% vs est.`
+          ? `Rev ${Number(reportedLead.revenue_surprise_pct) >= 0 ? '+' : ''}${Number(reportedLead.revenue_surprise_pct).toFixed(1)}% vs est.`
           : reportedLead.eps_actual != null
-            ? `EPS ₹${reportedLead.eps_actual.toFixed(2)}`
+            ? `EPS ₹${Number(reportedLead.eps_actual).toFixed(2)}`
             : reportedLead.eps_surprise_pct != null
-              ? `${reportedLead.eps_surprise_pct >= 0 ? '+' : ''}${reportedLead.eps_surprise_pct.toFixed(1)}% EPS vs est.`
+              ? `${Number(reportedLead.eps_surprise_pct) >= 0 ? '+' : ''}${Number(reportedLead.eps_surprise_pct).toFixed(1)}% EPS vs est.`
               : formatOverviewDate(reportedLead.date);
 
       // Secondary metric: PAT YoY % change
       const metricB = reportedLead.pat_yoy_pct != null
-        ? `PAT ${reportedLead.pat_yoy_pct >= 0 ? '+' : ''}${reportedLead.pat_yoy_pct.toFixed(1)}% YoY`
+        ? `PAT ${Number(reportedLead.pat_yoy_pct) >= 0 ? '+' : ''}${Number(reportedLead.pat_yoy_pct).toFixed(1)}% YoY`
         : reportedLead.post_earnings_move_1d != null
-          ? `1D ${reportedLead.post_earnings_move_1d >= 0 ? '+' : ''}${reportedLead.post_earnings_move_1d.toFixed(2)}%`
+          ? `1D ${Number(reportedLead.post_earnings_move_1d) >= 0 ? '+' : ''}${Number(reportedLead.post_earnings_move_1d).toFixed(2)}%`
           : formatRelativeDateLabel(reportedLead.date);
 
       return {
@@ -4288,13 +4294,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
                               {isPastRow && hasRevPat ? (
                                 <div className="earnings-rev-pat-pills">
                                   {company.revenue_yoy_pct != null && (
-                                    <span className={'overview-status-pill ' + (company.revenue_yoy_pct >= 0 ? 'positive' : 'negative')}>
-                                      Rev {company.revenue_yoy_pct >= 0 ? '+' : ''}{company.revenue_yoy_pct.toFixed(1)}%
+                                    <span className={'overview-status-pill ' + (Number(company.revenue_yoy_pct) >= 0 ? 'positive' : 'negative')}>
+                                      Rev {Number(company.revenue_yoy_pct) >= 0 ? '+' : ''}{Number(company.revenue_yoy_pct).toFixed(1)}%
                                     </span>
                                   )}
                                   {company.pat_yoy_pct != null && (
-                                    <span className={'overview-status-pill ' + (company.pat_yoy_pct >= 0 ? 'positive' : 'negative')}>
-                                      PAT {company.pat_yoy_pct >= 0 ? '+' : ''}{company.pat_yoy_pct.toFixed(1)}%
+                                    <span className={'overview-status-pill ' + (Number(company.pat_yoy_pct) >= 0 ? 'positive' : 'negative')}>
+                                      PAT {Number(company.pat_yoy_pct) >= 0 ? '+' : ''}{Number(company.pat_yoy_pct).toFixed(1)}%
                                     </span>
                                   )}
                                 </div>

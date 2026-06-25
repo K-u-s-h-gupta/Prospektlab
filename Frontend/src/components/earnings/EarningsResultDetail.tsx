@@ -12,7 +12,6 @@ import {
   EarningsFinancialRow,
   EarningsTranscriptBlock,
   EarningsDocumentLink,
-  EarningsHighlight,
   getEarningsResult,
 } from '../../api/client';
 import EarningsQuarterTabs from './EarningsQuarterTabs';
@@ -26,28 +25,6 @@ interface EarningsResultDetailProps {
 
 // Transcript tab removed - 'highlights' | 'documents' only
 type DetailTab = 'highlights' | 'documents';
-
-const cleanText = (text: string): string => {
-  return text
-    .replace(/\u00e2\u20ac\u00a6/g, '...')
-    .replace(/\u00e2\u20ac\u201c/g, '-')
-    .replace(/\u00e2\u20ac\u201d/g, '-')
-    .replace(/\u00e2\u20ac\u2122/g, "'")
-    .replace(/\u00e2\u20ac\u02dc/g, "'")
-    .replace(/\u00e2\u20ac\u0153/g, '"')
-    .replace(/\u00e2\u20ac\u009d/g, '"')
-    .replace(/\u00c2\u00a0/g, ' ')
-    .replace(/\u00e2\u20ac\u00a2/g, '-')
-    .replace(/\u2026/g, '...')
-    .replace(/\u2013/g, '-')
-    .replace(/\u2014/g, '-')
-    .replace(/\u2019/g, "'")
-    .replace(/\u2018/g, "'")
-    .replace(/\u201c/g, '"')
-    .replace(/\u201d/g, '"')
-    .replace(/\u00a0/g, ' ')
-    .replace(/\u2022/g, '-');
-};
 
 // -- formatting helpers --------------------------------------------------
 
@@ -79,29 +56,6 @@ const changeClass = (v?: number | null, higherIsGood = true): string => {
 };
 
 // -- sub-components ------------------------------------------------------
-
-/**
- * HighlightsList - shows AI-extracted result highlights as plain text rows.
- */
-const HighlightsList: React.FC<{ items: EarningsHighlight[] }> = ({ items }) => {
-  if (!items.length) {
-    return <p className="erd-muted">AI highlights will appear once the PDF is processed.</p>;
-  }
-  return (
-    <div className="erd-highlights-list">
-      {items.map((item, i) => (
-        <div key={i} className="erd-highlight-item">
-          <span className="erd-highlight-text">{cleanText(item.text)}</span>
-          {item.url ? (
-            <a href={item.url} target="_blank" rel="noreferrer" className="erd-highlight-source">
-              <ExternalLink size={10} />
-            </a>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
-};
 
 const KeyMetricsSummary: React.FC<{ rows: EarningsFinancialRow[] }> = ({ rows }) => {
   const rowsMap = Object.fromEntries(rows.map((r) => [r.key, r]));
@@ -397,7 +351,6 @@ const EarningsResultDetail: React.FC<EarningsResultDetailProps> = ({
   }
 
   const tabs = result.quarter_tabs || [];
-  const highlights = result.highlights || [];
   const financialRows = result.financials?.rows || [];
   const documents = result.documents || [];
   const hasAiSummary = Boolean(
@@ -464,8 +417,6 @@ const EarningsResultDetail: React.FC<EarningsResultDetailProps> = ({
         )}
         {activeTab === 'highlights' && (
           <div className="erd-highlights-panel">
-            {/* <HighlightsList items={highlights} /> */}
-
             {(financialRows.length > 0) && (
               <KeyMetricsSummary rows={financialRows} />
             )}

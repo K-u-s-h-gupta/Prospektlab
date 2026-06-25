@@ -96,7 +96,7 @@ export const IndexTickerCard: React.FC<IndexTickerCardProps> = ({ data, active, 
               }}
             >
               {positive ? '+' : ''}
-              {data.changePct.toFixed(2)}%
+              {Number(data.changePct).toFixed(2)}%
             </span>
           </div>
         </div>

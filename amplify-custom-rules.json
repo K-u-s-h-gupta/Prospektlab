@@ -31,67 +31,67 @@
     },
     {
         "source":  "/auth/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/auth/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/auth/\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/insights/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/insights/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/insights/\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/sessions/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/sessions/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/sessions/\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/memos\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/memos\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/memos\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/config\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/config\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/config\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/capabilities\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/capabilities\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/capabilities\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/health\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/health\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/health\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/memory/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/memory/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/memory/\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/research/start",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/research/start",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/research/start",
         "status":  "200"
     },
     {
         "source":  "/research/deep",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/research/deep",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/research/deep",
         "status":  "200"
     },
     {
         "source":  "/research/export-all",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/research/export-all",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/research/export-all",
         "status":  "200"
     },
     {
         "source":  "/research/export/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/research/export/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/research/export/\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/research/export",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/research/export",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/research/export",
         "status":  "200"
     },
     {
@@ -111,42 +111,62 @@
     },
     {
         "source":  "/chat/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/chat/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/chat/\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/portfolio/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/portfolio/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/portfolio/\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/ipo/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/ipo/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/ipo/\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/api/portfolio/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/api/portfolio/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/api/portfolio/\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/api/content/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/api/content/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/api/content/\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/api/outreach/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/api/outreach/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/api/outreach/\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/user/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/user/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/user/\u003c*\u003e",
         "status":  "200"
     },
     {
         "source":  "/market/\u003c*\u003e",
-        "target":  "https://pp2nutjt0l.execute-api.us-east-1.amazonaws.com/market/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/market/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/earnings/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/earnings/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/screener/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/screener/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/watchlist/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/watchlist/\u003c*\u003e",
+        "status":  "200"
+    },
+    {
+        "source":  "/filings/\u003c*\u003e",
+        "target":  "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com/filings/\u003c*\u003e",
         "status":  "200"
     },
     {

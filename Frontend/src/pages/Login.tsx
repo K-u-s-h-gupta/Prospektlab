@@ -201,9 +201,6 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
       const data = await apiForgotPassword(email);
       setResetCodeSent(true);
       showToast(data.message || 'Reset code sent to your email.', 'success');
-      if (data.detail) {
-        console.log('[DEBUG] Reset code hint:', data.detail);
-      }
     } catch (err: any) {
       showToast(err.message || 'Failed to send reset code.', 'error');
     } finally {

@@ -13,6 +13,19 @@ _BOOTSTRAP_LOCK = threading.Lock()
 _BOOTSTRAPPED_URLS: set[str] = set()
 
 
+def _resolve_database_url_candidate(*keys: str) -> str:
+    for key in keys:
+        value = os.getenv(key, "").strip()
+        if not value:
+            continue
+        if os.getenv("PROSPEKTLAB_ENV") == "production" and (
+            "127.0.0.1" in value or "localhost" in value
+        ):
+            continue
+        return value
+    return ""
+
+
 def get_database_url(explicit: str | None = None) -> str:
     """Return the configured Postgres-compatible IKG database URL.
 
@@ -21,9 +34,12 @@ def get_database_url(explicit: str | None = None) -> str:
     """
     return (
         (explicit or "").strip()
-        or os.getenv("IKG_DATABASE_URL", "").strip()
-        or os.getenv("DATABASE_URL", "").strip()
-        or os.getenv("SUPABASE_DB_URL", "").strip()
+        or _resolve_database_url_candidate(
+            "IKG_DATABASE_URL",
+            "DATABASE_URL",
+            "SUPABASE_DB_URL",
+            "MEMORY_DATABASE_URL",
+        )
     )
 
 
