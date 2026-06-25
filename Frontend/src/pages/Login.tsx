@@ -503,7 +503,7 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
         <div className="auth-header">
           <Logo size={48} />
           <h2 className="auth-logo text-gradient" style={{ marginTop: '16px' }}>ProspektLab</h2>
-          <p className="auth-subtitle">Decentralized Intelligence & Quantitative Portfolio Audits</p>
+          <p className="auth-subtitle">India's quantitative research & portfolio intelligence terminal</p>
         </div>
 
         {/* Tab Selector */}
@@ -742,28 +742,31 @@ export const Login: React.FC<{ initialTab?: 'login' | 'signup' }> = ({ initialTa
           )}
         </div>
 
-        {/* Skip to Dashboard - not mandatory to sign up */}
+        {/* Skip to Dashboard - login is optional */}
         <div style={{ marginTop: '20px', textAlign: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '16px' }}>
           <button
             type="button"
             onClick={() => navigate('/dashboard/overview')}
             style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-secondary)',
+              background: 'rgba(56, 189, 248, 0.06)',
+              border: '1px solid rgba(56, 189, 248, 0.18)',
+              color: 'var(--accent-cyan)',
               fontSize: '13px',
+              fontWeight: 600,
               cursor: 'pointer',
-              padding: '8px 16px',
-              borderRadius: '8px',
+              padding: '10px 20px',
+              borderRadius: '10px',
+              width: '100%',
               transition: 'all 0.2s ease',
+              letterSpacing: '0.01em',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)'; e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.35)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(56, 189, 248, 0.06)'; e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.18)'; }}
           >
-            Skip for now — explore the dashboard directly
+            Explore the dashboard — no account needed →
           </button>
-          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px', lineHeight: 1.4 }}>
-            Sign up only if you want to save your portfolio data and preferences.
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '10px', lineHeight: 1.5 }}>
+            Sign in only to <strong style={{ color: 'var(--text-secondary)' }}>sync your portfolio across devices</strong> and unlock saved sessions. Everything else is free, anonymous, and instant.
           </p>
         </div>
       </div>

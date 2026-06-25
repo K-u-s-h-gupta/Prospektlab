@@ -162,7 +162,7 @@ export const AppContent: React.FC = () => {
       <TelemetryRouteTracker />
       <CommandPalette />
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<Navigate to="/dashboard/overview" replace />} />
         <Route path="/pricing" element={<Navigate to="/dashboard/overview" replace />} />
         <Route path="/testimonials" element={<Navigate to="/dashboard/overview" replace />} />
         <Route path="/features" element={<Navigate to="/dashboard/overview" replace />} />
