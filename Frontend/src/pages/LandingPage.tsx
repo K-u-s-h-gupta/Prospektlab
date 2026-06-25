@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Brain, Star, ArrowRight, Zap, Shield, TrendingUp,
@@ -9,39 +9,39 @@ import {
 import { Logo } from '../components/layout/Logo';
 import { useAuth } from '../context/AuthContext';
 
-/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+/* ─────────────────────────────────────────────
    DATA
-ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+───────────────────────────────────────────── */
 const ACTIVITY_FEED = [
   { avatar: 'RK', name: 'Rahul K.', city: 'Mumbai', action: 'flagged a promoter pledge risk on ASIANPAINT', time: '2 min ago', color: '#38BDF8' },
   { avatar: 'PV', name: 'Priya V.', city: 'Bengaluru', action: 'ran DCF on RELIANCE. Found 12.3% upside.', time: '4 min ago', color: '#818CF8' },
-  { avatar: 'AS', name: 'Ankit S.', city: 'Hyderabad', action: 'compared TCS vs INFY. Rebalanced Γé╣8L.', time: '7 min ago', color: '#34D399' },
+  { avatar: 'AS', name: 'Ankit S.', city: 'Hyderabad', action: 'compared TCS vs INFY. Rebalanced ₹8L.', time: '7 min ago', color: '#34D399' },
   { avatar: 'DM', name: 'Deepa M.', city: 'Chennai', action: "avoided a likely default. Altman Z flagged it.", time: '11 min ago', color: '#A78BFA' },
   { avatar: 'VR', name: 'Vikram R.', city: 'Pune', action: 'generated a deep research memo on HDFCBANK', time: '15 min ago', color: '#F59E0B' },
-  { avatar: 'SN', name: 'Sneha N.', city: 'Delhi', action: 'spotted a Γé╣2.3L saving before Asian Paints dropped', time: '18 min ago', color: '#38BDF8' },
+  { avatar: 'SN', name: 'Sneha N.', city: 'Delhi', action: 'spotted a ₹2.3L saving before Asian Paints dropped', time: '18 min ago', color: '#38BDF8' },
 ];
 
 const REVIEWS = [
-  { name: 'CA, Mumbai', location: 'Mumbai', role: 'CA & Part-time Investor', avatar: 'AM', stars: 5, title: 'Caught the Asian Paints drop before it happened', body: "Was about to add Asian Paints at Γé╣2,850. Arthik flagged the promoter pledge increase. I held off. Stock dropped 14% in three weeks. That call saved me Γé╣2.3 Lakhs on a Γé╣16L position.", result: 'Saved Γé╣2.3L in 3 weeks' },
-  { name: 'Tech professional, Bengaluru', location: 'Bengaluru', role: 'Tech Lead, Flipkart', avatar: 'PK', stars: 5, title: 'Replaced my broker research entirely', body: "Broker's PDF said BUY on everything. Arthik gave me a DCF on TCS in eight seconds. I changed the growth rate. Fair value updated in real time. Cancelled my Γé╣18K/yr subscription.", result: 'Cancelled Γé╣18K/yr broker research' },
-  { name: 'Business owner, Delhi', location: 'New Delhi', role: 'Business Owner', avatar: 'VG', stars: 4, title: 'Stopped losing money on Telegram tips', body: "Lost Γé╣4.8L over 18 months chasing tips. Arthik shows me actual numbers. Piotroski. Debt ratios. Cash flows. Portfolio up 22% in eight months. I understand every position I hold.", result: 'Portfolio up 22% in 8 months' },
+  { name: 'CA, Mumbai', location: 'Mumbai', role: 'CA & Part-time Investor', avatar: 'AM', stars: 5, title: 'Caught the Asian Paints drop before it happened', body: "Was about to add Asian Paints at ₹2,850. Arthik flagged the promoter pledge increase. I held off. Stock dropped 14% in three weeks. That call saved me ₹2.3 Lakhs on a ₹16L position.", result: 'Saved ₹2.3L in 3 weeks' },
+  { name: 'Tech professional, Bengaluru', location: 'Bengaluru', role: 'Tech Lead, Flipkart', avatar: 'PK', stars: 5, title: 'Replaced my broker research entirely', body: "Broker's PDF said BUY on everything. Arthik gave me a DCF on TCS in eight seconds. I changed the growth rate. Fair value updated in real time. Cancelled my ₹18K/yr subscription.", result: 'Cancelled ₹18K/yr broker research' },
+  { name: 'Business owner, Delhi', location: 'New Delhi', role: 'Business Owner', avatar: 'VG', stars: 4, title: 'Stopped losing money on Telegram tips', body: "Lost ₹4.8L over 18 months chasing tips. Arthik shows me actual numbers. Piotroski. Debt ratios. Cash flows. Portfolio up 22% in eight months. I understand every position I hold.", result: 'Portfolio up 22% in 8 months' },
   { name: 'Dentist, Chennai', location: 'Chennai', role: 'Dentist & HNI Investor', avatar: 'SI', stars: 5, title: 'Altman Z saved my capital', body: "Arthik's Altman Z-Score flagged concentrated wholesale borrowing plus declining interest coverage. I passed. The company defaulted eleven weeks later. Paid for itself 100x in one decision.", result: 'Avoided a likely default' },
-  { name: 'Engineer, Jaipur', location: 'Jaipur', role: 'Civil Engineer', avatar: 'MT', stars: 5, title: 'Found a 34% margin-of-safety stock', body: "My advisor had me in 12 overlapping mutual funds. Arthik surfaced a small-cap. 0.6x book. Zero debt. 18% ROE. Bought at Γé╣142. It's at Γé╣208 now.", result: 'Γé╣142 ΓåÆ Γé╣208 in 5 months' },
+  { name: 'Engineer, Jaipur', location: 'Jaipur', role: 'Civil Engineer', avatar: 'MT', stars: 5, title: 'Found a 34% margin-of-safety stock', body: "My advisor had me in 12 overlapping mutual funds. Arthik surfaced a small-cap. 0.6x book. Zero debt. 18% ROE. Bought at ₹142. It's at ₹208 now.", result: '₹142 → ₹208 in 5 months' },
   { name: 'Small business owner, Kochi', location: 'Kochi', role: 'Small Business Owner', avatar: 'KN', stars: 4, title: 'It took 20 minutes to trust it. Now I can\'t stop.', body: "First time I asked 'Should I average down on Zomato?' Arthik gave me burn-rate analysis, competitive moat, and Graham valuation in one response. Goldman Sachs in my pocket.", result: 'First good Zomato call in 2 years' },
 ];
 
 const FAQS = [
   { q: "Is this SEBI-registered investment advice?", a: "No. ProspektLab is an analytical tool, not a SEBI-registered advisor. Arthik pulls public data and runs standard models. You make the call. We recommend a SEBI-registered advisor for final decisions." },
-  { q: "How is this different from ChatGPT?", a: "ChatGPT trains on 2023 data. Arthik pulls live NSE feeds. ChatGPT gives opinions. Arthik shows you the math, with editable assumptions. Also: ChatGPT costs Γé╣1,650/month. Arthik's free tier is actually useful." },
-  { q: "What's the catch with the free tier?", a: "No catch. 20 queries per day. Live data. Basic valuations. Portfolio tracking. The free tier saves most users from one bad trade in week one. After that, Γé╣499/month feels cheap." },
+  { q: "How is this different from ChatGPT?", a: "ChatGPT trains on 2023 data. Arthik pulls live NSE feeds. ChatGPT gives opinions. Arthik shows you the math, with editable assumptions. Also: ChatGPT costs ₹1,650/month. Arthik's free tier is actually useful." },
+  { q: "What's the catch with the free tier?", a: "No catch. 20 queries per day. Live data. Basic valuations. Portfolio tracking. The free tier saves most users from one bad trade in week one. After that, ₹499/month feels cheap." },
   { q: "How accurate are the models?", a: "Same models as sell-side research. Two-stage DCF. Altman Z. Piotroski F-Score. Graham formula. The difference: every assumption is visible. Every number is editable. Broker research hides the math. We show it." },
   { q: "Where is my portfolio data stored?", a: "In your browser. Not on our servers. We never see your holdings. Clear your cache, you re-import. That's the trade-off for real privacy." },
   { q: "Which brokers work for import?", a: "Zerodha, Groww, Upstox, ICICI Direct, and anything that exports a standard trade book CSV or PDF. If your broker gives you a statement, Arthik can read it." },
 ];
 
-/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+/* ─────────────────────────────────────────────
    ANIMATED COUNTER
-ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+───────────────────────────────────────────── */
 const AnimatedCounter: React.FC<{ target: number; suffix?: string; prefix?: string }> = ({ target, suffix = '', prefix = '' }) => {
   const [count, setCount] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
@@ -65,9 +65,9 @@ const AnimatedCounter: React.FC<{ target: number; suffix?: string; prefix?: stri
   return <span ref={ref}>{prefix}{count.toLocaleString('en-IN')}{suffix}</span>;
 };
 
-/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+/* ─────────────────────────────────────────────
    AUTO PERSONALIZATION (no user input)
-ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+───────────────────────────────────────────── */
 type Context = {
   greeting: string;
   marketStatus: 'open' | 'pre' | 'post' | 'weekend';
@@ -144,9 +144,9 @@ const getContext = (): Context => {
   return { greeting, marketStatus, marketLine, visitCount, visitorLine, refSource, timeOfDay };
 };
 
-/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+/* ─────────────────────────────────────────────
    MAIN COMPONENT
-ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+───────────────────────────────────────────── */
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -218,7 +218,7 @@ export const LandingPage: React.FC = () => {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', overflowX: 'hidden', position: 'relative' }}>
 
-      {/* ΓöÇΓöÇΓöÇ Global CSS ΓöÇΓöÇΓöÇ */}
+      {/* ─── Global CSS ─── */}
       <style>{`
         @keyframes orbFloat { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(30px,-20px) scale(1.05); } 66% { transform: translate(-20px,15px) scale(0.97); } }
         @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
@@ -255,14 +255,14 @@ export const LandingPage: React.FC = () => {
         }
       `}</style>
 
-      {/* ΓöÇΓöÇΓöÇ AMBIENT ORBS ΓöÇΓöÇΓöÇ */}
+      {/* ─── AMBIENT ORBS ─── */}
       <div style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:0, overflow:'hidden' }}>
         <div style={{ position:'absolute', width:760, height:760, borderRadius:'50%', background:'radial-gradient(circle, rgba(37,99,235,0.14) 0%, transparent 70%)', top:'-18%', left:'-12%', animation:'orbFloat 22s ease-in-out infinite' }} />
         <div style={{ position:'absolute', width:640, height:640, borderRadius:'50%', background:'radial-gradient(circle, rgba(96,165,250,0.10) 0%, transparent 72%)', bottom:'4%', right:'-9%', animation:'orbFloat 26s ease-in-out infinite reverse' }} />
         <div style={{ position:'absolute', width:440, height:440, borderRadius:'50%', background:'radial-gradient(circle, rgba(139,92,246,0.06) 0%, transparent 72%)', top:'38%', left:'46%', animation:'orbFloat 18s ease-in-out infinite 3s' }} />
       </div>
 
-      {/* ΓöÇΓöÇΓöÇ ACTIVITY TOAST ΓöÇΓöÇΓöÇ */}
+      {/* ─── ACTIVITY TOAST ─── */}
       {showToast && (
         <div className="landing-toast" style={{ position:'fixed', top:80, right:20, zIndex:999, maxWidth:320, background:'rgba(15,23,42,0.95)', backdropFilter:'blur(20px)', border:`1px solid ${toast.color}33`, borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'flex-start', gap:10, animation:'toastSlide 0.4s ease forwards', boxShadow:`0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px ${toast.color}22` }}>
           <div style={{ width:32, height:32, borderRadius:'50%', background:`${toast.color}22`, border:`1px solid ${toast.color}44`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:toast.color, flexShrink:0 }}>{toast.avatar}</div>
@@ -278,7 +278,7 @@ export const LandingPage: React.FC = () => {
         </div>
       )}
 
-      {/* ΓöÇΓöÇΓöÇ STICKY CTA BAR ΓöÇΓöÇΓöÇ */}
+      {/* ─── STICKY CTA BAR ─── */}
       {showStickyBar && (
         <div className="sticky-cta-bar" style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:100, background:'rgba(3,7,18,0.95)', backdropFilter:'blur(20px)', borderTop:'1px solid var(--border-subtle)', padding:'14px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, animation:'barUp 0.35s ease forwards', flexWrap:'wrap' }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -289,12 +289,12 @@ export const LandingPage: React.FC = () => {
             </div>
           </div>
           <button onClick={handleCTA} className="cta-shimmer" style={{ color:'#0f172a', border:'none', padding:'10px 24px', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer', flexShrink:0 }}>
-            Claim it ΓåÆ
+            Claim it →
           </button>
         </div>
       )}
 
-      {/* ΓöÇΓöÇΓöÇ NAVBAR ΓöÇΓöÇΓöÇ */}
+      {/* ─── NAVBAR ─── */}
       <nav style={{ position:'sticky', top:0, zIndex:50, background:'rgba(3,7,18,0.88)', backdropFilter:'blur(20px)', borderBottom:'1px solid var(--border-subtle)' }}>
         <div style={{ maxWidth:1200, margin:'0 auto', padding:'13px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:16 }}>
           <div onClick={() => scrollTo('hero')} style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', flexShrink:0 }}>
@@ -336,7 +336,7 @@ export const LandingPage: React.FC = () => {
               Dashboard
             </button>
             <button onClick={handleCTA} className="cta-shimmer" style={{ color:'#0f172a', border:'none', padding:'8px 18px', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer' }}>
-              Start Free ΓåÆ
+              Start Free →
             </button>
             <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(v => !v)} style={{ background:'none', border:'1px solid var(--border-subtle)', color:'var(--text-primary)', padding:'7px', borderRadius:8, cursor:'pointer' }}>
               <ChevronDown size={16} style={{ transform: mobileMenuOpen ? 'rotate(180deg)' : 'rotate(0)', transition:'transform 0.2s' }} />
@@ -353,7 +353,7 @@ export const LandingPage: React.FC = () => {
         )}
       </nav>
 
-      {/* ΓöÇΓöÇΓöÇ HERO ΓöÇΓöÇΓöÇ */}
+      {/* ─── HERO ─── */}
       <section id="hero" style={{ position:'relative', zIndex:1, padding:'clamp(60px,8vw,100px) 24px clamp(60px,6vw,80px)' }}>
         <div style={{ maxWidth:1200, margin:'0 auto', display:'flex', gap:'clamp(32px,5vw,64px)', alignItems:'center' }} className="hero-split">
 
@@ -424,14 +424,14 @@ export const LandingPage: React.FC = () => {
                 </div>
                 <div style={{ flex:1, background:'rgba(255,255,255,0.04)', borderRadius:6, padding:'4px 10px', fontSize:11, color:'var(--text-muted)', fontFamily:'var(--font-mono)', display:'flex', alignItems:'center', gap:6 }}>
                   <span style={{ width:6, height:6, borderRadius:'50%', background:marketDot, animation:'pulse2 2s infinite', display:'inline-block' }} />
-                  Arthik ┬╖ {ctx.marketStatus === 'open' ? 'Live ┬╖ NSE Connected' : 'Standby ┬╖ NSE Cached'}
+                  Arthik · {ctx.marketStatus === 'open' ? 'Live · NSE Connected' : 'Standby · NSE Cached'}
                 </div>
                 <Activity size={13} color="var(--profit)" />
               </div>
               <div style={{ padding:'20px 18px', display:'flex', flexDirection:'column', gap:16 }}>
                 <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
                   <div style={{ background:'rgba(56,189,248,0.1)', border:'1px solid rgba(56,189,248,0.2)', borderRadius:'14px 14px 4px 14px', padding:'10px 14px', fontSize:13, color:'var(--text-primary)', maxWidth:280, lineHeight:1.5 }}>
-                    Should I buy RELIANCE at Γé╣2,931? What's the real intrinsic value?
+                    Should I buy RELIANCE at ₹2,931? What's the real intrinsic value?
                   </div>
                   <div style={{ width:28, height:28, borderRadius:'50%', background:'rgba(255,255,255,0.06)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                     <Users size={12} color="var(--text-muted)" />
@@ -441,11 +441,11 @@ export const LandingPage: React.FC = () => {
                   <div style={{ width:28, height:28, borderRadius:'50%', background:'var(--gradient-brand)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:'0 0 10px rgba(56,189,248,0.3)' }}><Brain size={14} color="#0f172a" /></div>
                   <div style={{ flex:1, background:'rgba(15,23,42,0.6)', border:'1px solid rgba(56,189,248,0.12)', borderRadius:'4px 14px 14px 14px', padding:'14px', fontSize:13, color:'var(--text-primary)', lineHeight:1.6 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:12 }}>
-                      <span style={{ fontSize:11, fontWeight:700, color:'var(--accent-cyan)', letterSpacing:'0.06em' }}>ARTHIK ┬╖ RELIANCE</span>
+                      <span style={{ fontSize:11, fontWeight:700, color:'var(--accent-cyan)', letterSpacing:'0.06em' }}>ARTHIK · RELIANCE</span>
                       <span style={{ fontSize:10, background:'rgba(52,211,153,0.1)', color:'var(--profit)', padding:'2px 6px', borderRadius:4, fontWeight:700 }}>LIVE</span>
                     </div>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:14 }}>
-                      {[['DCF Value','Γé╣3,240','+10.5%','var(--profit)'],['P/E Ratio','22.5x','5yr avg 24x','var(--text-muted)'],['Piotroski','7/9','Strong','var(--accent-cyan)']].map(([l,v,s,c]) => (
+                      {[['DCF Value','₹3,240','+10.5%','var(--profit)'],['P/E Ratio','22.5x','5yr avg 24x','var(--text-muted)'],['Piotroski','7/9','Strong','var(--accent-cyan)']].map(([l,v,s,c]) => (
                         <div key={l} style={{ background:'rgba(3,7,18,0.6)', borderRadius:10, padding:'10px 8px', textAlign:'center', border:'1px solid var(--border-subtle)' }}>
                           <div style={{ fontSize:9, color:'var(--text-muted)', marginBottom:5, letterSpacing:'0.06em', textTransform:'uppercase', fontWeight:600 }}>{l}</div>
                           <div style={{ fontSize:15, fontWeight:800, color:c, fontFamily:'var(--font-mono)' }}>{v}</div>
@@ -454,7 +454,7 @@ export const LandingPage: React.FC = () => {
                       ))}
                     </div>
                     <p style={{ fontSize:12, lineHeight:1.65, color:'var(--text-secondary)', marginBottom:10 }}>
-                      <strong style={{ color:'var(--text-primary)' }}>Verdict:</strong> Reasonable entry. Debt/equity <strong style={{ color:'var(--accent-cyan)' }}>0.42x</strong>. ROE <strong style={{ color:'var(--profit)' }}>11.8%</strong>. For a 15% margin of safety, wait for Γé╣2,700. Otherwise fair value for a quality compounder.
+                      <strong style={{ color:'var(--text-primary)' }}>Verdict:</strong> Reasonable entry. Debt/equity <strong style={{ color:'var(--accent-cyan)' }}>0.42x</strong>. ROE <strong style={{ color:'var(--profit)' }}>11.8%</strong>. For a 15% margin of safety, wait for ₹2,700. Otherwise fair value for a quality compounder.
                     </p>
                     <div style={{ display:'flex', gap:6, fontSize:10, color:'var(--text-muted)' }}>
                       <span style={{ background:'rgba(56,189,248,0.06)', padding:'2px 8px', borderRadius:4 }}>NSE India</span>
@@ -470,7 +470,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ΓöÇΓöÇΓöÇ STATS BANNER ΓöÇΓöÇΓöÇ */}
+      {/* ─── STATS BANNER ─── */}
       <div style={{ borderTop:'1px solid var(--border-subtle)', borderBottom:'1px solid var(--border-subtle)', background:'rgba(15,23,42,0.4)', position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:1100, margin:'0 auto', padding:'32px 24px', display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:24, textAlign:'center' }} className="stats-4col">
           {[
@@ -489,7 +489,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ΓöÇΓöÇΓöÇ QUOTE: MUNGER (Incentives) ΓöÇΓöÇΓöÇ */}
+      {/* ─── QUOTE: MUNGER (Incentives) ─── */}
       <section style={{ padding:'clamp(60px,8vw,100px) 24px', position:'relative', zIndex:1 }}>
         <div className="quote-block" style={{ maxWidth:820, margin:'0 auto', textAlign:'center', position:'relative' }}>
           <Quote size={40} color="var(--accent-cyan)" style={{ opacity:0.3, marginBottom:20 }} />
@@ -507,7 +507,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ΓöÇΓöÇΓöÇ PAIN ΓöÇΓöÇΓöÇ */}
+      {/* ─── PAIN ─── */}
       <section id="pain" style={{ padding:'clamp(20px,4vw,40px) 24px clamp(60px,7vw,90px)', position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:1100, margin:'0 auto' }}>
           <div style={{ textAlign:'center', marginBottom:52 }}>
@@ -524,7 +524,7 @@ export const LandingPage: React.FC = () => {
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:20 }} className="pain-3col">
             {[
               { icon:MessageSquare, title:"Research is a sales brochure.", body:"Every broker report ends with BUY. Every page. Every quarter. Hold doesn't pay brokerage.", stat:"0 SELL ratings in your inbox last year" },
-              { icon:AlertTriangle, title:"Tips are someone else's exit.", body:"The Telegram tip you bought at the top? That's their distribution. You're not the audience. You're the buyer.", stat:"Γé╣4.8L average annual tip loss" },
+              { icon:AlertTriangle, title:"Tips are someone else's exit.", body:"The Telegram tip you bought at the top? That's their distribution. You're not the audience. You're the buyer.", stat:"₹4.8L average annual tip loss" },
               { icon:BarChart3, title:"Data isn't insight.", body:"Screener gives you 47 ratios. You stare at them and buy Reliance because it 'feels safe'. That's branding. Not investing.", stat:"23 stocks owned. 0 understood." },
             ].map((c, i) => (
               <div key={i} className="card-hover" style={{ background:'rgba(15,23,42,0.45)', border:'1px solid rgba(251,113,133,0.12)', borderRadius:18, padding:28, display:'flex', flexDirection:'column', gap:14 }}>
@@ -540,7 +540,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ΓöÇΓöÇΓöÇ QUOTE: BUFFETT (Knowledge gap) ΓöÇΓöÇΓöÇ */}
+      {/* ─── QUOTE: BUFFETT (Knowledge gap) ─── */}
       <section style={{ padding:'clamp(50px,7vw,80px) 24px', position:'relative', zIndex:1, background:'linear-gradient(180deg, transparent, rgba(56,189,248,0.02), transparent)' }}>
         <div className="quote-block" style={{ maxWidth:820, margin:'0 auto', textAlign:'center' }}>
           <Quote size={40} color="var(--accent-indigo)" style={{ opacity:0.3, marginBottom:20 }} />
@@ -553,12 +553,12 @@ export const LandingPage: React.FC = () => {
             <div style={{ width:30, height:1, background:'var(--border-hover)' }} />
           </div>
           <p style={{ fontSize:15, color:'var(--text-secondary)', lineHeight:1.75, maxWidth:620, margin:'0 auto' }}>
-            You don't have a luck problem. You have a knowledge gap. The kind that costs Γé╣2L on Asian Paints because nobody told you the promoter pledged more shares. That gap is the only thing we close.
+            You don't have a luck problem. You have a knowledge gap. The kind that costs ₹2L on Asian Paints because nobody told you the promoter pledged more shares. That gap is the only thing we close.
           </p>
         </div>
       </section>
 
-      {/* ΓöÇΓöÇΓöÇ SOLUTION ΓöÇΓöÇΓöÇ */}
+      {/* ─── SOLUTION ─── */}
       <section id="mechanism" style={{ padding:'clamp(40px,5vw,60px) 24px clamp(60px,7vw,90px)', position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:1100, margin:'0 auto' }}>
           <div style={{ textAlign:'center', marginBottom:52 }}>
@@ -597,7 +597,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ΓöÇΓöÇΓöÇ BEFORE / AFTER ΓöÇΓöÇΓöÇ */}
+      {/* ─── BEFORE / AFTER ─── */}
       <section style={{ padding:'clamp(40px,5vw,60px) 24px', position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:1100, margin:'0 auto' }}>
           <div style={{ background:'linear-gradient(135deg, rgba(15,23,42,0.7) 0%, rgba(3,7,18,0.5) 100%)', border:'1px solid var(--border-subtle)', borderRadius:24, padding:'clamp(28px,4vw,48px)', overflow:'hidden', position:'relative' }}>
@@ -618,7 +618,7 @@ export const LandingPage: React.FC = () => {
                 ].map((item,i) => (
                   <div key={i} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
                     <div style={{ width:18, height:18, borderRadius:'50%', background:'rgba(251,113,133,0.1)', border:'1px solid rgba(251,113,133,0.2)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:1 }}>
-                      <span style={{ color:'var(--loss)', fontSize:10, fontWeight:900, lineHeight:1 }}>Γ£ò</span>
+                      <span style={{ color:'var(--loss)', fontSize:10, fontWeight:900, lineHeight:1 }}>✕</span>
                     </div>
                     <span style={{ fontSize:14, color:'var(--text-secondary)', lineHeight:1.55 }}>{item}</span>
                   </div>
@@ -644,7 +644,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ΓöÇΓöÇΓöÇ QUOTE: LYNCH (Conviction) ΓöÇΓöÇΓöÇ */}
+      {/* ─── QUOTE: LYNCH (Conviction) ─── */}
       <section style={{ padding:'clamp(50px,7vw,80px) 24px', position:'relative', zIndex:1 }}>
         <div className="quote-block" style={{ maxWidth:820, margin:'0 auto', textAlign:'center' }}>
           <Quote size={40} color="var(--profit)" style={{ opacity:0.3, marginBottom:20 }} />
@@ -662,7 +662,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ΓöÇΓöÇΓöÇ REVIEWS ΓöÇΓöÇΓöÇ */}
+      {/* ─── REVIEWS ─── */}
       <section id="reviews" style={{ padding:'clamp(20px,4vw,40px) 24px clamp(60px,7vw,90px)', position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:1100, margin:'0 auto' }}>
           <div style={{ textAlign:'center', marginBottom:48 }}>
@@ -731,7 +731,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ΓöÇΓöÇΓöÇ GUARANTEE ΓöÇΓöÇΓöÇ */}
+      {/* ─── GUARANTEE ─── */}
       <section style={{ padding:'clamp(40px,5vw,60px) 24px', position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:1100, margin:'0 auto' }}>
           <div style={{ background:'rgba(15,23,42,0.5)', border:'1px solid rgba(52,211,153,0.15)', borderRadius:24, padding:'clamp(28px,4vw,48px)', textAlign:'center', position:'relative', overflow:'hidden' }}>
@@ -753,13 +753,13 @@ export const LandingPage: React.FC = () => {
               ))}
             </div>
             <button onClick={handleCTA} className="cta-shimmer" style={{ color:'#0f172a', border:'none', padding:'18px 40px', borderRadius:14, fontSize:17, fontWeight:800, cursor:'pointer', letterSpacing:'-0.2px' }}>
-              Claim it. It's free. ΓåÆ
+              Claim it. It's free. →
             </button>
           </div>
         </div>
       </section>
 
-      {/* ΓöÇΓöÇΓöÇ FAQ ΓöÇΓöÇΓöÇ */}
+      {/* ─── FAQ ─── */}
       <section id="faq" style={{ padding:'clamp(40px,5vw,60px) 24px clamp(60px,8vw,100px)', position:'relative', zIndex:1 }}>
         <div style={{ maxWidth:720, margin:'0 auto' }}>
           <h2 style={{ fontSize:'clamp(24px,3vw,34px)', fontWeight:800, textAlign:'center', marginBottom:40, letterSpacing:'-0.3px' }}>
@@ -781,7 +781,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ΓöÇΓöÇΓöÇ FINAL CTA with closing quote ΓöÇΓöÇΓöÇ */}
+      {/* ─── FINAL CTA with closing quote ─── */}
       <section style={{ padding:'clamp(60px,7vw,80px) 24px', position:'relative', zIndex:1, overflow:'hidden' }}>
         <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 900px 400px at 50% 0%, rgba(56,189,248,0.07), transparent 70%)', pointerEvents:'none' }} />
         <div style={{ maxWidth:780, margin:'0 auto', textAlign:'center', position:'relative' }}>
@@ -808,7 +808,7 @@ export const LandingPage: React.FC = () => {
             Arthik does that part. You take the credit.
           </p>
           <button onClick={handleCTA} className="cta-shimmer" style={{ color:'#0f172a', border:'none', padding:'20px 44px', borderRadius:16, fontSize:18, fontWeight:900, cursor:'pointer', marginBottom:20, letterSpacing:'-0.3px' }}>
-            Claim Your Unfair Advantage ΓåÆ
+            Claim Your Unfair Advantage →
           </button>
           <div style={{ display:'flex', justifyContent:'center', gap:24, flexWrap:'wrap', fontSize:12, color:'var(--text-muted)' }}>
             {['Live NSE data','8 specialist agents','Free forever tier'].map(t => (
@@ -818,7 +818,7 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* ΓöÇΓöÇΓöÇ FOOTER ΓöÇΓöÇΓöÇ */}
+      {/* ─── FOOTER ─── */}
       <footer style={{ borderTop:'1px solid var(--border-subtle)', padding:'clamp(32px,4vw,48px) 24px', background:'rgba(3,7,18,0.7)', position:'relative', zIndex:1, paddingBottom: showStickyBar ? 100 : undefined }}>
         <div style={{ maxWidth:1100, margin:'0 auto', display:'flex', flexDirection:'column', gap:20 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:16 }}>
@@ -839,7 +839,7 @@ export const LandingPage: React.FC = () => {
           <p style={{ fontSize:11.5, color:'var(--text-muted)', maxWidth:760, lineHeight:1.65 }}>
             Disclaimer: ProspektLab is an informational AI intelligence platform. Content is for analytical and educational purposes only. We are not SEBI-registered advisors. Past performance of any model does not guarantee future results. Consult a SEBI-registered advisor before making investment decisions.
           </p>
-          <p style={{ fontSize:11, color:'var(--text-muted)' }}>┬⌐ 2026 ProspektLab. All rights reserved. Made in India. ┬╖ <a href="#" style={{ color:'inherit', textDecoration:'underline' }}>Privacy</a> ┬╖ <a href="#" style={{ color:'inherit', textDecoration:'underline' }}>Terms</a></p>
+          <p style={{ fontSize:11, color:'var(--text-muted)' }}>© 2026 ProspektLab. All rights reserved. Made in India. · <a href="#" style={{ color:'inherit', textDecoration:'underline' }}>Privacy</a> · <a href="#" style={{ color:'inherit', textDecoration:'underline' }}>Terms</a></p>
         </div>
       </footer>
     </div>
