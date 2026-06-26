@@ -278,13 +278,18 @@ def _recalibrate_bands_by_percentile(cur: Any, as_of_date: str) -> int:
     """
     if os.getenv("IGS_PERCENTILE_BANDS", "1").strip().lower() in {"0", "false", "no"}:
         return 0
+    # Data-backed companies (a real model risk) are percentile-ranked among
+    # THEMSELVES. Companies without a model contribution (insufficient_data →
+    # rules-only) are NOT ranked — ranking a large tied block just dumps it into
+    # whatever band its cumulative position lands. They are set LOW explicitly so
+    # only data-backed risk ever occupies MODERATE/ELEVATED/HIGH.
     cur.execute(
         """
         with ranked as (
             select cin,
                    percent_rank() over (order by composite_score desc) as pr
             from company_governance_scores
-            where as_of_date = %(as_of)s
+            where as_of_date = %(as_of)s and model_risk is not null
         )
         update company_governance_scores g set band = case
             when r.pr <= 0.02 then 'HIGH'
@@ -296,7 +301,15 @@ def _recalibrate_bands_by_percentile(cur: Any, as_of_date: str) -> int:
         """,
         {"as_of": as_of_date},
     )
-    return cur.rowcount or 0
+    ranked_rows = cur.rowcount or 0
+    cur.execute(
+        """
+        update company_governance_scores set band = 'LOW'
+        where as_of_date = %(as_of)s and model_risk is null
+        """,
+        {"as_of": as_of_date},
+    )
+    return ranked_rows
 
 
 def _listed_cins(cur: Any, limit: int | None) -> list[str]:
