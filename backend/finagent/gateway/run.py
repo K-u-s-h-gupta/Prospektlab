@@ -3601,6 +3601,26 @@ async def ipo_analysis(
     return payload
 
 
+@app.get("/ipo/{slug}/status")
+async def ipo_analysis_status(
+    slug: str,
+    current_user: dict | None = Depends(get_current_user_optional),
+):
+    service = get_ipo_service()
+    return await service.get_analysis_status(slug)
+
+
+@app.post("/ipo/{slug}/queue")
+async def ipo_queue_analysis(
+    slug: str,
+    priority: bool = False,
+    current_user: dict | None = Depends(get_current_user_optional),
+):
+    service = get_ipo_service()
+    return await service.queue_analysis(slug, priority=priority)
+
+
+
 @app.get("/ipo/{slug}/tracking")
 async def ipo_post_listing_tracking(
     slug: str,
