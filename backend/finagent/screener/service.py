@@ -174,8 +174,8 @@ _QUOTE_TARGET_FRESHNESS_S = 15.0
 _MAX_NEWS_ITEMS = 60
 _MAX_CORPORATE_ITEMS = 250
 _MAX_ENFORCEMENT_ITEMS = 120
-_QUERY_SCREEN_MAX_CANDIDATES = 60
-_QUERY_SCREEN_CONCURRENCY = 8
+_QUERY_SCREEN_MAX_CANDIDATES = 20  # Reduced from 60 for performance
+_QUERY_SCREEN_CONCURRENCY = 6  # Reduced from 8 to match lower candidates
 _QUERY_SCREEN_SYMBOL_TIMEOUT_S = 3.4
 _QUERY_SCREEN_TOTAL_TIMEOUT_S = 14.0
 _QUERY_SCREEN_YAHOO_TIMEOUT_S = 2.5
@@ -1601,6 +1601,56 @@ class ScreenerService:
         self._snapshot_refresh_tasks: dict[str, asyncio.Task[Any]] = {}
         self._identity_cache: dict[str, tuple[float, _ResolvedIdentity]] = {}
         self._financials_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        
+        # In-flight request deduplication
+        self._inflight_india_snapshot: dict[str, asyncio.Task[Any]] = {}
+        
+        # Cache limits for memory control
+        self._snapshot_cache_max = 500
+        self._identity_cache_max = 1000
+        self._financials_cache_max = 300
+
+    async def _fetch_india_snapshot_deduped(self, symbol: str) -> Any:
+        """Deduplicate concurrent fetch_india_snapshot calls for same symbol."""
+        key = symbol.upper()
+        
+        # If already in-flight, wait for existing task
+        if key in self._inflight_india_snapshot:
+            existing_task = self._inflight_india_snapshot[key]
+            if not existing_task.done():
+                try:
+                    return await existing_task
+                except Exception:
+                    pass  # Fall through to retry
+        
+        # Create new task
+        task = asyncio.create_task(fetch_india_snapshot(symbol))
+        self._inflight_india_snapshot[key] = task
+        
+        def _cleanup(_task: asyncio.Task[Any]) -> None:
+            self._inflight_india_snapshot.pop(key, None)
+        
+        task.add_done_callback(_cleanup)
+        
+        try:
+            return await task
+        except Exception:
+            raise
+
+    def _evict_lru_cache(self, cache: dict[str, tuple[float, Any]], max_size: int) -> None:
+        """Evict least recently used entries when cache exceeds max_size."""
+        if len(cache) <= max_size:
+            return
+        # Sort by timestamp (oldest first) and remove 20% of entries
+        to_remove = max(1, len(cache) - max_size + max_size // 5)
+        sorted_keys = sorted(cache.keys(), key=lambda k: cache[k][0])
+        for key in sorted_keys[:to_remove]:
+            cache.pop(key, None)
+            # Also clean up refresh tasks for snapshot cache
+            if key in self._snapshot_refresh_tasks:
+                task = self._snapshot_refresh_tasks.pop(key, None)
+                if task and not task.done():
+                    task.cancel()
 
     async def _safe_async(
         self,
@@ -1936,8 +1986,8 @@ class ScreenerService:
             }
             return self._annotate_cache_freshness(empty_snapshot, cache_age_s=0.0, cache_state="unresolved")
 
-        provider_timeout_s = _SNAPSHOT_PROVIDER_TIMEOUT_S if _allow_supplemental else 3.5
-        india_timeout_s = _SNAPSHOT_PROVIDER_TIMEOUT_S if _allow_supplemental else 8.5
+        provider_timeout_s = _SNAPSHOT_PROVIDER_TIMEOUT_S if _allow_supplemental else 4.5
+        india_timeout_s = 8.5 if _allow_supplemental else _SNAPSHOT_PROVIDER_TIMEOUT_S
         delivery_timeout_s = 3.8 if _allow_supplemental else 2.5
 
         india_task = asyncio.create_task(
@@ -2358,6 +2408,7 @@ class ScreenerService:
             governance=governance,
         )
 
+        self._evict_lru_cache(self._snapshot_cache, self._snapshot_cache_max)
         self._snapshot_cache[cache_key] = (time.time(), snapshot)
 
         out = deepcopy(snapshot)
@@ -2495,6 +2546,7 @@ class ScreenerService:
             "summary": snapshot.get("summary"),
             "freshness": freshness,
         }
+        self._evict_lru_cache(self._financials_cache, self._financials_cache_max)
         self._financials_cache[financials_cache_key] = (time.time(), deepcopy(result))
         return result
 
@@ -2620,13 +2672,14 @@ class ScreenerService:
         except asyncio.TimeoutError:
             logger.debug("query_screen total time budget reached for query=%s", query)
         finally:
-            pending = 0
-            for task in tasks:
+            pending_symbols = []
+            for i, task in enumerate(tasks):
                 if not task.done():
                     task.cancel()
-                    pending += 1
-            if pending:
-                logger.debug("query_screen cancelled %s pending tasks", pending)
+                    if i < len(candidate_symbols):
+                        pending_symbols.append(candidate_symbols[i])
+            if pending_symbols:
+                logger.info("query_screen cancelled %d pending tasks for symbols: %s", len(pending_symbols), ", ".join(pending_symbols[:10]))
 
         matches.sort(key=lambda item: safe_float((item.get("score") or {}).get("prospekt_score")) or -1.0, reverse=True)
         return {
@@ -2750,6 +2803,7 @@ class ScreenerService:
             confidence=confidence,
             source=source,
         )
+        self._evict_lru_cache(self._identity_cache, self._identity_cache_max)
         self._identity_cache[cache_lookup] = (time.time(), resolved)
         return resolved
 

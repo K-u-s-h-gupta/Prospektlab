@@ -80,6 +80,25 @@ create table if not exists earnings_details (
 );
 create index if not exists idx_earnings_details_symbol_date
     on earnings_details(symbol, meeting_date desc);
+
+create table if not exists earnings_history (
+    id                      bigserial primary key,
+    symbol                  varchar(20) not null,
+    earnings_date           timestamptz not null,
+    actual_eps              numeric,
+    estimated_eps           numeric,
+    surprise_eps_pct        numeric,
+    actual_revenue          numeric,
+    estimated_revenue       numeric,
+    surprise_revenue_pct    numeric,
+    post_earnings_move_1d   numeric,
+    pre_close               numeric,
+    post_close              numeric,
+    created_at              timestamptz default now(),
+    updated_at              timestamptz default now()
+);
+create index if not exists idx_earnings_history_symbol_date
+    on earnings_history(symbol, earnings_date);
 """
 
 _BOOTSTRAPPED: set[str] = set()
@@ -96,6 +115,21 @@ _CALENDAR_CACHE_TTL_S = 60.0  # Cache calendar results for 1 minute
 # Simple in-memory cache for company range queries (overview pulse)
 _COMPANIES_CACHE: dict[str, tuple[float, tuple[list[dict[str, Any]], int]]] = {}
 _COMPANIES_CACHE_TTL_S = 60.0  # Cache company results for 1 minute
+
+
+def _get_cache_ttl_for_date(date_str: str | date) -> float:
+    """Return cache TTL based on date: 1 hour for historical, 1 minute for recent.
+    
+    Historical data (past quarters) never changes but was being re-queried every 60s.
+    This dynamic TTL reduces DB load while keeping recent/upcoming data fresh.
+    """
+    try:
+        query_date = datetime.fromisoformat(date_str).date() if isinstance(date_str, str) else date_str
+        if query_date < date.today() - timedelta(days=7):
+            return 3600.0  # 1 hour for data older than 7 days
+        return 60.0  # 1 minute for recent/upcoming data
+    except Exception:  # noqa: BLE001
+        return 60.0
 
 
 def _db_circuit_open() -> bool:
@@ -224,12 +258,16 @@ def get_earnings_overview(start_date: str, end_date: str, page_size: int = 50) -
     
     if cal_cached:
         cached_at, cached_rows = cal_cached
-        if time.monotonic() - cached_at < _CALENDAR_CACHE_TTL_S:
+        # Use tiered TTL: longer cache for historical data
+        ttl = _get_cache_ttl_for_date(start)
+        if time.monotonic() - cached_at < ttl:
             cal_rows = cached_rows
     
     if comp_cached:
         cached_at, cached_result = comp_cached
-        if time.monotonic() - cached_at < _COMPANIES_CACHE_TTL_S:
+        # Use tiered TTL: longer cache for historical data
+        ttl = _get_cache_ttl_for_date(start)
+        if time.monotonic() - cached_at < ttl:
             comp_result = cached_result
     
     # If both are cached, return immediately
@@ -342,12 +380,8 @@ def get_earnings_overview(start_date: str, end_date: str, page_size: int = 50) -
                       h.post_earnings_move_1d,
                       h.actual_revenue,
                       h.surprise_revenue_pct,
-                      (select (fin->>'yoy_pct')::numeric
-                         from jsonb_array_elements(coalesce(d.financials_json->'rows', '[]'::jsonb)) fin
-                         where fin->>'key' = 'revenue' limit 1) as revenue_yoy_pct,
-                      (select (fin->>'yoy_pct')::numeric
-                         from jsonb_array_elements(coalesce(d.financials_json->'rows', '[]'::jsonb)) fin
-                         where fin->>'key' = 'pat' limit 1) as pat_yoy_pct
+                      (jsonb_path_query_first(d.financials_json, '$.rows[*] ? (@.key == "revenue").yoy_pct')#>>'{{}}')::numeric as revenue_yoy_pct,
+                      (jsonb_path_query_first(d.financials_json, '$.rows[*] ? (@.key == "pat").yoy_pct')#>>'{{}}')::numeric as pat_yoy_pct
                     from earnings_announcements a
                     left join earnings_details d on d.event_uid = a.event_uid
                     left join earnings_history h on
@@ -542,17 +576,7 @@ def get_earnings_companies(
     }
 
 
-def get_earnings_detail(symbol: str, target_date: str | None = None) -> dict[str, Any] | None:
-    clean_symbol = str(symbol or "").strip().upper()
-    if not clean_symbol:
-        return None
-    selected = parse_date(target_date) if target_date else None
-    row = _query_detail_row(clean_symbol, selected)
-    if row:
-        return row
-    if selected:
-        return _query_announcement_detail_row(clean_symbol, selected)
-    return None
+
 
 
 def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
@@ -575,10 +599,15 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
     if not clean_symbol or not selected:
         return None
     
-    # Get announcement + detail data from DB in one query for a fast click path.
-    detail_row = _query_result_detail_row(clean_symbol, selected)
-    if not detail_row:
+    # Fetch all data in ONE unified query for maximum performance
+    result = _query_earnings_result_complete(clean_symbol, selected)
+    if not result:
         return None  # No announcement or parsed detail available
+    
+    detail_row = result["detail_row"]
+    history_for_quarter = result["history"]
+    prev_metrics = result["prev_metrics"]
+    yoy_metrics = result["yoy_metrics"]
 
     # If only the announcement fallback exists (no parsed PDF detail), trigger a
     # synchronous parse of the outcome PDF so the first click returns real data.
@@ -592,9 +621,12 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
                 parse_result = future.result(timeout=45)
                 if parse_result.get("stored"):
                     # Re-query so the rest of this function uses the parsed detail
-                    refreshed = _query_result_detail_row(clean_symbol, selected)
-                    if refreshed:
-                        detail_row = refreshed
+                    refreshed = _query_earnings_result_complete(clean_symbol, selected)
+                    if refreshed and refreshed["detail_row"]:
+                        detail_row = refreshed["detail_row"]
+                        history_for_quarter = refreshed["history"]
+                        prev_metrics = refreshed["prev_metrics"]
+                        yoy_metrics = refreshed["yoy_metrics"]
         except Exception as sync_exc:
             logger.debug("Synchronous detail parse failed/timed out for %s %s: %s", clean_symbol, selected, sync_exc)
 
@@ -611,22 +643,18 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
     pre_close = None
     post_close = None
     
-    try:
-        # Query Yahoo-sourced history for this quarter's EPS/revenue estimates + 1D move
-        history_for_quarter = _query_earnings_history_for_date(clean_symbol, selected)
-        if history_for_quarter:
-            h = history_for_quarter
-            eps_actual = h.get("actual_eps")
-            eps_estimated = h.get("estimated_eps")
-            eps_beat_miss = h.get("surprise_eps_pct")
-            revenue_actual = h.get("actual_revenue")
-            revenue_estimated = h.get("estimated_revenue")
-            revenue_beat_miss = h.get("surprise_revenue_pct")
-            move_1d_pct = h.get("post_earnings_move_1d")
-            pre_close = h.get("pre_close")
-            post_close = h.get("post_close")
-    except Exception:
-        pass
+    # Extract Yahoo-sourced history data (already fetched in unified query)
+    if history_for_quarter:
+        h = history_for_quarter
+        eps_actual = h.get("actual_eps")
+        eps_estimated = h.get("estimated_eps")
+        eps_beat_miss = h.get("surprise_eps_pct")
+        revenue_actual = h.get("actual_revenue")
+        revenue_estimated = h.get("estimated_revenue")
+        revenue_beat_miss = h.get("surprise_revenue_pct")
+        move_1d_pct = h.get("post_earnings_move_1d")
+        pre_close = h.get("pre_close")
+        post_close = h.get("post_close")
     
     # Fetch financial comparison rows from stored parser payload
     financials_payload = _financials_payload(detail_row.get("financials") or detail_row.get("financials_json") or {})
@@ -636,13 +664,13 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
     # not on every GET. This keeps the earnings result endpoint fast and avoids
     # NSE network timeouts in the hot path.
 
-    # Enrich QoQ/YoY: if rows exist but have no QoQ/YoY, query historical quarters and rebuild
+    # Enrich QoQ/YoY: if rows exist but have no QoQ/YoY, use already-fetched historical data
     try:
         rows = financials_payload.get("rows") or []
         has_current = any(r.get("current") is not None for r in rows)
         has_qoq = any(r.get("qoq_pct") is not None for r in rows)
         if has_current and not has_qoq:
-            prev_metrics, yoy_metrics = _query_historical_metrics(clean_symbol, selected)
+            # prev_metrics and yoy_metrics already fetched in unified query
             if prev_metrics or yoy_metrics:
                 # Use stored direct metrics when available (more complete than row extraction)
                 stored_metrics = _dict_json(financials_payload.get("metrics") or {})
@@ -840,13 +868,7 @@ def ensure_earnings_detail_for_result(symbol: str, target_date: str, *, generate
         _set_announcement_processing_status(event_uid, "parse_failed")
         return {"stored": False, "reason": "parse_failed", "event_uid": event_uid, "error": str(exc)}
 
-def preparse_earnings_last_30_days() -> dict[str, Any]:
-    """Pre-parse earnings details for all companies in the last 30 days.
 
-    Called once on server startup in a background thread. This warms the cache
-    so users don't have to wait for the first PDF parse when opening a detail page.
-    """
-    return preparse_earnings_range(start_date=date.today() - timedelta(days=30))
 
 
 def preparse_earnings_current_year() -> dict[str, Any]:
@@ -1236,7 +1258,9 @@ def _query_calendar_rows(start: date, end: date) -> list[dict[str, Any]] | None:
     cached = _CALENDAR_CACHE.get(cache_key)
     if cached:
         cached_at, cached_rows = cached
-        if time.monotonic() - cached_at < _CALENDAR_CACHE_TTL_S:
+        # Use tiered TTL: longer cache for historical data
+        ttl = _get_cache_ttl_for_date(start)
+        if time.monotonic() - cached_at < ttl:
             return cached_rows
     
     universe_sql, universe_params = earnings_universe_sql_filter("a")
@@ -1328,8 +1352,6 @@ def _query_company_rows(
         with connect_postgres(row_factory=dict_row, connect_timeout=_READ_CONNECT_TIMEOUT_S) as conn:
             with conn.cursor() as cur:
                 _configure_read_timeouts(cur)
-                cur.execute(f"select count(*) as total from earnings_announcements a where {where_sql}", params)
-                total = int((cur.fetchone() or {}).get("total") or 0)
                 cur.execute(
                     f"""
                     select
@@ -1351,12 +1373,9 @@ def _query_company_rows(
                       h.post_earnings_move_1d,
                       h.actual_revenue,
                       h.surprise_revenue_pct,
-                      (select (fin->>'yoy_pct')::numeric
-                         from jsonb_array_elements(coalesce(d.financials_json->'rows', '[]'::jsonb)) fin
-                         where fin->>'key' = 'revenue' limit 1) as revenue_yoy_pct,
-                      (select (fin->>'yoy_pct')::numeric
-                         from jsonb_array_elements(coalesce(d.financials_json->'rows', '[]'::jsonb)) fin
-                         where fin->>'key' = 'pat' limit 1) as pat_yoy_pct
+                      (jsonb_path_query_first(d.financials_json, '$.rows[*] ? (@.key == "revenue").yoy_pct')#>>'{{}}')::numeric as revenue_yoy_pct,
+                      (jsonb_path_query_first(d.financials_json, '$.rows[*] ? (@.key == "pat").yoy_pct')#>>'{{}}')::numeric as pat_yoy_pct,
+                      count(*) OVER () as _full_count
                     from earnings_announcements a
                     left join earnings_details d on d.event_uid = a.event_uid
                     left join earnings_history h on
@@ -1369,7 +1388,11 @@ def _query_company_rows(
                     """,
                     [*params, page_size, (page - 1) * page_size],
                 )
-                rows = [_company_row_from_db(dict(row)) for row in cur.fetchall()]
+                rows_raw = cur.fetchall()
+        if not rows_raw:
+            return [], 0
+        total = int(rows_raw[0].get("_full_count") or 0)
+        rows = [_company_row_from_db(dict(row)) for row in rows_raw]
         return rows, total
     except Exception as exc:  # noqa: BLE001
         logger.debug("company query failed: %s", exc)
@@ -1402,7 +1425,9 @@ def _query_company_rows_range(
         cached = _COMPANIES_CACHE.get(cache_key)
         if cached:
             cached_at, cached_result = cached
-            if time.monotonic() - cached_at < _COMPANIES_CACHE_TTL_S:
+            # Use tiered TTL: longer cache for historical data
+            ttl = _get_cache_ttl_for_date(range_start)
+            if time.monotonic() - cached_at < ttl:
                 return cached_result
     
     clauses = ["a.meeting_date between %s and %s"]
@@ -1427,8 +1452,6 @@ def _query_company_rows_range(
         with connect_postgres(row_factory=dict_row, connect_timeout=_READ_CONNECT_TIMEOUT_S) as conn:
             with conn.cursor() as cur:
                 _configure_read_timeouts(cur)
-                cur.execute(f"select count(*) as total from earnings_announcements a where {where_sql}", params)
-                total = int((cur.fetchone() or {}).get("total") or 0)
                 cur.execute(
                     f"""
                     select
@@ -1450,12 +1473,9 @@ def _query_company_rows_range(
                       h.post_earnings_move_1d,
                       h.actual_revenue,
                       h.surprise_revenue_pct,
-                      (select (fin->>'yoy_pct')::numeric
-                         from jsonb_array_elements(coalesce(d.financials_json->'rows', '[]'::jsonb)) fin
-                         where fin->>'key' = 'revenue' limit 1) as revenue_yoy_pct,
-                      (select (fin->>'yoy_pct')::numeric
-                         from jsonb_array_elements(coalesce(d.financials_json->'rows', '[]'::jsonb)) fin
-                         where fin->>'key' = 'pat' limit 1) as pat_yoy_pct
+                      (jsonb_path_query_first(d.financials_json, '$.rows[*] ? (@.key == "revenue").yoy_pct')#>>'{{}}')::numeric as revenue_yoy_pct,
+                      (jsonb_path_query_first(d.financials_json, '$.rows[*] ? (@.key == "pat").yoy_pct')#>>'{{}}')::numeric as pat_yoy_pct,
+                      count(*) OVER () as _full_count
                     from earnings_announcements a
                     left join earnings_details d on d.event_uid = a.event_uid
                     left join earnings_history h on
@@ -1468,7 +1488,11 @@ def _query_company_rows_range(
                     """,
                     [*params, page_size, (page - 1) * page_size],
                 )
-                rows = [_company_row_from_db(dict(row)) for row in cur.fetchall()]
+                rows_raw = cur.fetchall()
+        if not rows_raw:
+            return [], 0
+        total = int(rows_raw[0].get("_full_count") or 0)
+        rows = [_company_row_from_db(dict(row)) for row in rows_raw]
         # Cache unfiltered results for the overview pulse
         if is_unfiltered:
             _COMPANIES_CACHE[cache_key] = (time.monotonic(), (rows, total))
@@ -1479,7 +1503,223 @@ def _query_company_rows_range(
         return None
 
 
+def _query_earnings_result_complete(
+    symbol: str, selected: date
+) -> dict[str, Any] | None:
+    """Unified query that fetches all data needed for get_earnings_result() in ONE database call.
+    
+    Returns dict with keys:
+      - detail_row: main announcement + detail data
+      - history: earnings_history row (EPS/revenue estimates, 1D move)
+      - prev_metrics: previous quarter financial metrics
+      - yoy_metrics: year-over-year quarter financial metrics
+    
+    This replaces 3 separate calls:
+      - _query_result_detail_row()
+      - _query_earnings_history_for_date()
+      - _query_historical_metrics()
+    """
+    if not _query_available():
+        return None
+    
+    try:
+        from psycopg.rows import dict_row
+        
+        # Date ranges for lookups
+        history_min = selected - timedelta(days=3)
+        history_max = selected + timedelta(days=3)
+        prev_min = selected - timedelta(days=120)
+        prev_max = selected - timedelta(days=60)
+        yoy_min = selected - timedelta(days=400)
+        yoy_max = selected - timedelta(days=300)
+        
+        with connect_postgres(row_factory=dict_row, connect_timeout=8) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    WITH main AS (
+                        SELECT
+                            d.event_uid as detail_event_uid,
+                            d.symbol as detail_symbol,
+                            d.company_name as detail_company_name,
+                            d.meeting_date as detail_meeting_date,
+                            d.quarter_ref as detail_quarter_ref,
+                            d.timing as detail_timing,
+                            d.financials_json,
+                            d.highlights_json as headline_highlights,
+                            d.highlights_json,
+                            -- d.transcript_json excluded: 10-50KB per result, removed from UI, still stored in DB
+                            d.documents_json as documents,
+                            d.ai_summary_json as ai_summary,
+                            d.updated_at as detail_updated_at,
+                            a.event_uid as announcement_event_uid,
+                            a.symbol as announcement_symbol,
+                            a.company_name as announcement_company_name,
+                            a.meeting_date::text as announcement_date,
+                            a.timing as announcement_timing,
+                            a.quarter_ref as announcement_quarter_ref,
+                            a.title as announcement_title,
+                            a.summary as announcement_summary,
+                            a.attachment_urls,
+                            a.storage_paths,
+                            a.sector,
+                            a.index_bucket,
+                            a.market_cap_bucket,
+                            a.updated_at as announcement_updated_at
+                        FROM earnings_announcements a
+                        LEFT JOIN earnings_details d ON d.event_uid = a.event_uid
+                        WHERE a.symbol = %s AND a.meeting_date = %s
+                        ORDER BY d.updated_at DESC NULLS LAST, a.updated_at DESC
+                        LIMIT 1
+                    ),
+                    history AS (
+                        SELECT 
+                            actual_eps, estimated_eps, surprise_eps_pct,
+                            actual_revenue, estimated_revenue, surprise_revenue_pct,
+                            post_earnings_move_1d, pre_close, post_close
+                        FROM earnings_history
+                        WHERE symbol = %s
+                          AND earnings_date::date BETWEEN %s AND %s
+                        ORDER BY earnings_date DESC NULLS LAST
+                        LIMIT 1
+                    ),
+                    prev_quarter AS (
+                        SELECT d.financials_json
+                        FROM earnings_details d
+                        JOIN earnings_announcements a ON a.event_uid = d.event_uid
+                        WHERE a.symbol = %s AND a.meeting_date BETWEEN %s AND %s
+                        ORDER BY a.meeting_date DESC
+                        LIMIT 1
+                    ),
+                    yoy_quarter AS (
+                        SELECT d.financials_json
+                        FROM earnings_details d
+                        JOIN earnings_announcements a ON a.event_uid = d.event_uid
+                        WHERE a.symbol = %s AND a.meeting_date BETWEEN %s AND %s
+                        ORDER BY a.meeting_date DESC
+                        LIMIT 1
+                    )
+                    SELECT 
+                        main.*,
+                        history.actual_eps,
+                        history.estimated_eps,
+                        history.surprise_eps_pct,
+                        history.actual_revenue,
+                        history.estimated_revenue,
+                        history.surprise_revenue_pct,
+                        history.post_earnings_move_1d,
+                        history.pre_close,
+                        history.post_close,
+                        prev_quarter.financials_json as prev_quarter_financials,
+                        yoy_quarter.financials_json as yoy_quarter_financials
+                    FROM main
+                    LEFT JOIN history ON true
+                    LEFT JOIN prev_quarter ON true
+                    LEFT JOIN yoy_quarter ON true
+                    """,
+                    (
+                        symbol.upper(), selected,  # main
+                        symbol.upper(), history_min, history_max,  # history
+                        symbol.upper(), prev_min, prev_max,  # prev_quarter
+                        symbol.upper(), yoy_min, yoy_max,  # yoy_quarter
+                    ),
+                )
+                row = cur.fetchone()
+        
+        if not row:
+            return None
+        
+        data = dict(row)
+        
+        # Build detail_row (same logic as _query_result_detail_row)
+        detail_row = None
+        if data.get("detail_event_uid"):
+            detail_row = _detail_row_from_db({
+                "event_uid": data["detail_event_uid"],
+                "symbol": data.get("detail_symbol"),
+                "company_name": data.get("detail_company_name"),
+                "meeting_date": data.get("detail_meeting_date"),
+                "quarter_ref": data.get("detail_quarter_ref"),
+                "timing": data.get("detail_timing"),
+                "financials_json": data.get("financials_json"),
+                "headline_highlights": data.get("headline_highlights"),
+                "highlights_json": data.get("highlights_json"),
+                "transcript": data.get("transcript"),
+                "documents": data.get("documents"),
+                "ai_summary": data.get("ai_summary"),
+                "sector": data.get("sector"),
+                "index_bucket": data.get("index_bucket"),
+                "market_cap_bucket": data.get("market_cap_bucket"),
+                "attachment_urls": data.get("attachment_urls"),
+                "storage_paths": data.get("storage_paths"),
+                "title": data.get("announcement_title"),
+                "summary": data.get("announcement_summary"),
+                "updated_at": data.get("detail_updated_at"),
+            })
+        else:
+            detail_row = _announcement_detail_row_from_db({
+                "event_uid": data.get("announcement_event_uid"),
+                "symbol": data.get("announcement_symbol"),
+                "company_name": data.get("announcement_company_name"),
+                "sector": data.get("sector"),
+                "date": data.get("announcement_date"),
+                "timing": data.get("announcement_timing"),
+                "fiscal_quarter": data.get("announcement_quarter_ref"),
+                "attachment_urls": data.get("attachment_urls"),
+                "storage_paths": data.get("storage_paths"),
+                "title": data.get("announcement_title"),
+                "summary": data.get("announcement_summary"),
+                "updated_at": data.get("announcement_updated_at"),
+            })
+        
+        # Build history dict (same as _query_earnings_history_for_date)
+        history = None
+        if any(data.get(k) is not None for k in ["actual_eps", "estimated_eps", "actual_revenue"]):
+            history = {
+                "actual_eps": data.get("actual_eps"),
+                "estimated_eps": data.get("estimated_eps"),
+                "surprise_eps_pct": data.get("surprise_eps_pct"),
+                "actual_revenue": data.get("actual_revenue"),
+                "estimated_revenue": data.get("estimated_revenue"),
+                "surprise_revenue_pct": data.get("surprise_revenue_pct"),
+                "post_earnings_move_1d": data.get("post_earnings_move_1d"),
+                "pre_close": data.get("pre_close"),
+                "post_close": data.get("post_close"),
+            }
+        
+        # Extract historical metrics (same logic as _query_historical_metrics)
+        def _extract_metrics(financials_json: Any) -> dict[str, float]:
+            if not financials_json:
+                return {}
+            fin = _financials_payload(financials_json)
+            m = fin.get("metrics")
+            if isinstance(m, dict) and m:
+                return {k: float(v) for k, v in m.items() if v is not None}
+            return {
+                r["key"]: float(r["current"])
+                for r in (fin.get("rows") or [])
+                if r.get("key") and r.get("current") is not None
+            }
+        
+        prev_metrics = _extract_metrics(data.get("prev_quarter_financials"))
+        yoy_metrics = _extract_metrics(data.get("yoy_quarter_financials"))
+        
+        return {
+            "detail_row": detail_row,
+            "history": history,
+            "prev_metrics": prev_metrics,
+            "yoy_metrics": yoy_metrics,
+        }
+    
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("unified earnings result query failed: %s", exc)
+        _trip_db_circuit()
+        return None
+
+
 def _query_result_detail_row(symbol: str, selected: date) -> dict[str, Any] | None:
+    # DEPRECATED: Use _query_earnings_result_complete() instead for better performance
+    # This function is kept for backward compatibility
     if not _query_available():
         return None
     try:
@@ -1508,7 +1748,7 @@ def _query_result_detail_row(symbol: str, selected: date) -> dict[str, Any] | No
                       a.updated_at as announcement_updated_at
                     from earnings_announcements a
                     left join earnings_details d on d.event_uid = a.event_uid
-                    where upper(a.symbol) = %s
+                    where a.symbol = %s
                       and a.meeting_date = %s
                     order by d.updated_at desc nulls last, a.updated_at desc
                     limit 1
@@ -1544,7 +1784,7 @@ def _query_result_detail_row(symbol: str, selected: date) -> dict[str, Any] | No
 def _query_detail_row(symbol: str, selected: date | None) -> dict[str, Any] | None:
     if not _query_available():
         return None
-    clauses = ["upper(d.symbol) = %s"]
+    clauses = ["d.symbol = %s"]
     params: list[Any] = [symbol.upper()]
     if selected:
         clauses.append("d.meeting_date = %s")
@@ -1608,7 +1848,7 @@ def _query_announcement_detail_row(symbol: str, selected: date) -> dict[str, Any
                       a.summary,
                       a.updated_at
                     from earnings_announcements a
-                    where upper(a.symbol) = %s
+                    where a.symbol = %s
                       and a.meeting_date = %s
                     order by a.updated_at desc
                     limit 1
@@ -1640,7 +1880,7 @@ def _query_announcement_record_for_parse(symbol: str, selected: date) -> dict[st
                       quarter_ref, timing, attachment_urls, storage_paths,
                       raw_json, processing_status, updated_at
                     from earnings_announcements
-                    where upper(symbol) = %s
+                    where symbol = %s
                       and meeting_date = %s
                     order by updated_at desc
                     limit 1
@@ -1684,7 +1924,11 @@ def _set_announcement_processing_status(event_uid: str, status: str) -> bool:
 
 
 def _query_earnings_history_for_date(symbol: str, selected: date) -> dict[str, Any] | None:
-    """Return the Yahoo-sourced history row matching the given earnings date (±3 days)."""
+    """Return the Yahoo-sourced history row matching the given earnings date (±3 days).
+    
+    DEPRECATED: Use _query_earnings_result_complete() instead for better performance.
+    This function is kept for backward compatibility.
+    """
     if not _query_available():
         return None
     try:
@@ -1699,7 +1943,7 @@ def _query_earnings_history_for_date(symbol: str, selected: date) -> dict[str, A
                            actual_revenue, estimated_revenue, surprise_revenue_pct,
                            post_earnings_move_1d, pre_close, post_close
                     FROM earnings_history
-                    WHERE upper(symbol) = %s
+                    WHERE symbol = %s
                       AND earnings_date::date BETWEEN %s AND %s
                     ORDER BY earnings_date DESC NULLS LAST
                     LIMIT 1
@@ -1721,6 +1965,9 @@ def _query_historical_metrics(
 
     Source: earnings_details (parsed from PDF via Azure DI).
     XBRL-based QoQ/YoY is now populated at parse time, so the hot path stays DB-only.
+    
+    DEPRECATED: Use _query_earnings_result_complete() instead for better performance.
+    This function is kept for backward compatibility.
     """
     if _query_available():
         try:
@@ -1737,7 +1984,7 @@ def _query_historical_metrics(
                         SELECT d.financials_json
                         FROM earnings_details d
                         JOIN earnings_announcements a ON a.event_uid = d.event_uid
-                        WHERE upper(a.symbol) = %s AND a.meeting_date BETWEEN %s AND %s
+                        WHERE a.symbol = %s AND a.meeting_date BETWEEN %s AND %s
                         ORDER BY a.meeting_date DESC LIMIT 1
                         """,
                         (symbol.upper(), prev_min, prev_max),
@@ -1748,7 +1995,7 @@ def _query_historical_metrics(
                         SELECT d.financials_json
                         FROM earnings_details d
                         JOIN earnings_announcements a ON a.event_uid = d.event_uid
-                        WHERE upper(a.symbol) = %s AND a.meeting_date BETWEEN %s AND %s
+                        WHERE a.symbol = %s AND a.meeting_date BETWEEN %s AND %s
                         ORDER BY a.meeting_date DESC LIMIT 1
                         """,
                         (symbol.upper(), yoy_min, yoy_max),
@@ -1811,7 +2058,7 @@ def _query_quarter_tabs(symbol: str, current_date: date) -> list[dict[str, Any]]
                            earnings_date::date AS earnings_date,
                            post_earnings_move_1d
                     FROM earnings_history
-                    WHERE upper(symbol) = %s
+                    WHERE symbol = %s
                       AND (earnings_date IS NULL OR earnings_date::date >= %s)
                     ORDER BY earnings_date DESC NULLS LAST
                     LIMIT 8
@@ -1824,7 +2071,7 @@ def _query_quarter_tabs(symbol: str, current_date: date) -> list[dict[str, Any]]
                     """
                     SELECT quarter_ref, meeting_date::date AS earnings_date
                     FROM earnings_announcements
-                    WHERE upper(symbol) = %s AND meeting_date >= %s
+                    WHERE symbol = %s AND meeting_date >= %s
                     ORDER BY meeting_date DESC
                     LIMIT 10
                     """,
@@ -2379,28 +2626,7 @@ def _demo_company(symbol: str, selected: date) -> dict[str, Any]:
     }
 
 
-def _demo_detail(symbol: str, selected: date | None) -> dict[str, Any] | None:
-    data = _DEMO_DETAILS.get(symbol.upper())
-    if not data:
-        return None
-    selected = selected or _demo_base_date()
-    return {
-        "event_uid": stable_event_uid("demo", symbol, selected),
-        "symbol": symbol.upper(),
-        "name": data["name"],
-        "sector": data["sector"],
-        "date": selected.isoformat(),
-        "timing": data["timing"],
-        "fiscal_quarter": data["fiscal_quarter"],
-        "headline_highlights": data["headline_highlights"],
-        "management_commentary": data["management_commentary"],
-        "transcript": data["transcript"],
-        "documents": data["documents"],
-        "financials": data["financials"],
-        "summary": data["summary"],
-        "updated_at": datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
-        "source": "fallback_fixture",
-    }
+
 
 
 def _comparison(current: dict[str, Any], previous: dict[str, Any], year_ago: dict[str, Any]) -> dict[str, Any]:
@@ -2769,157 +2995,23 @@ def upsert_earnings_history(record: dict[str, Any], database_url: str | None = N
         return False
 
 
-def get_earnings_history(symbol: str, *, limit: int = 12, fallback_demo: bool = True) -> list[dict[str, Any]]:
-    """Return quarterly earnings history for a symbol, newest first."""
-    clean = str(symbol or "").strip().upper()
-    if not clean:
-        return []
-    ensure_extended_tables()
-
-    db_url = get_database_url()
-    if not db_url or not _query_available():
-        return _demo_earnings_history(clean) if fallback_demo else []
-
-    try:
-        from psycopg.rows import dict_row
-        with connect_postgres(row_factory=dict_row, connect_timeout=8) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    select symbol, fiscal_year, fiscal_period, quarter_label,
-                           earnings_date, actual_eps, estimated_eps, surprise_eps_pct,
-                           actual_revenue, estimated_revenue, surprise_revenue_pct,
-                           post_earnings_move_1d, pre_close, post_close, source
-                    from earnings_history
-                    where upper(symbol) = %s
-                    order by earnings_date desc nulls last, fiscal_year desc, fiscal_period desc
-                    limit %s
-                    """,
-                    (clean, max(1, min(24, limit))),
-                )
-                rows = [dict(r) for r in cur.fetchall()]
-        return rows if rows else (_demo_earnings_history(clean) if fallback_demo else [])
-    except Exception as exc:
-        logger.debug("earnings_history query failed for %s: %s", clean, exc)
-        _trip_db_circuit()
-        return _demo_earnings_history(clean) if fallback_demo else []
 
 
-def get_next_earnings_date(symbol: str) -> dict[str, Any] | None:
-    """Return the next expected earnings date for a symbol (Yahoo-sourced)."""
-    from finagent.earnings.yahoo_scraper import fetch_next_earnings_date
-    try:
-        result = fetch_next_earnings_date(symbol)
-        if result:
-            # Compute countdown
-            try:
-                dt = datetime.fromisoformat(result["earnings_date"].replace("Z", "+00:00"))
-                days_away = (dt.date() - date.today()).days
-                result["days_away"] = days_away
-            except Exception:
-                result["days_away"] = None
-        return result
-    except Exception as exc:
-        logger.debug("get_next_earnings_date failed for %s: %s", symbol, exc)
-        return None
+
+
 
 
 # ---------------------------------------------------------------------------
 # Analyst reports
 # ---------------------------------------------------------------------------
 
-def upsert_analyst_report(record: dict[str, Any], database_url: str | None = None) -> bool:
-    db_url = get_database_url(database_url)
-    if not db_url or not ensure_extended_tables(db_url):
-        return False
-    symbol = str(record.get("symbol") or "").strip().upper()
-    source_url = str(record.get("source_url") or "").strip()
-    if not symbol or not source_url:
-        return False
-    try:
-        with connect_postgres(db_url, connect_timeout=15) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    insert into analyst_reports (
-                        symbol, title, provider, source_url, report_date,
-                        outlook, summary, target_price, rating,
-                        fiscal_quarter, text_excerpt, updated_at
-                    )
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
-                    on conflict (source_url) do update set
-                        title = excluded.title,
-                        provider = coalesce(excluded.provider, analyst_reports.provider),
-                        report_date = coalesce(excluded.report_date, analyst_reports.report_date),
-                        outlook = coalesce(excluded.outlook, analyst_reports.outlook),
-                        summary = coalesce(excluded.summary, analyst_reports.summary),
-                        target_price = coalesce(excluded.target_price, analyst_reports.target_price),
-                        rating = coalesce(excluded.rating, analyst_reports.rating),
-                        fiscal_quarter = coalesce(excluded.fiscal_quarter, analyst_reports.fiscal_quarter),
-                        updated_at = now()
-                    """,
-                    (
-                        symbol,
-                        str(record.get("title") or "Analyst Report"),
-                        str(record.get("provider") or ""),
-                        source_url,
-                        record.get("report_date"),
-                        str(record.get("outlook") or "neutral"),
-                        str(record.get("summary") or ""),
-                        str(record.get("target_price") or ""),
-                        str(record.get("rating") or ""),
-                        str(record.get("fiscal_quarter") or ""),
-                        str(record.get("text_excerpt") or "")[:4000],
-                    ),
-                )
-            conn.commit()
-        return True
-    except Exception as exc:
-        logger.warning("analyst_report upsert failed for %s: %s", symbol, exc)
-        return False
 
 
-def get_analyst_reports(symbol: str, *, limit: int = 8) -> list[dict[str, Any]]:
-    """Return analyst reports for a symbol, newest first."""
-    clean = str(symbol or "").strip().upper()
-    if not clean:
-        return []
-    ensure_extended_tables()
-
-    db_url = get_database_url()
-    if not db_url or not _query_available():
-        return []
-
-    try:
-        from psycopg.rows import dict_row
-        with connect_postgres(row_factory=dict_row, connect_timeout=8) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    select symbol, title, provider, source_url, report_date,
-                           outlook, summary, target_price, rating, fiscal_quarter
-                    from analyst_reports
-                    where upper(symbol) = %s
-                    order by report_date desc nulls last, created_at desc
-                    limit %s
-                    """,
-                    (clean, max(1, min(20, limit))),
-                )
-                return [dict(r) for r in cur.fetchall()]
-    except Exception as exc:
-        logger.debug("analyst_reports query failed for %s: %s", clean, exc)
-        _trip_db_circuit()
-        return []
 
 
-def get_earnings_forward_estimates(symbol: str) -> dict[str, Any]:
-    """Return forward estimates (current Q, next Q, current year, next year) from Yahoo."""
-    from finagent.earnings.yahoo_scraper import fetch_earnings_trend
-    try:
-        return fetch_earnings_trend(symbol)
-    except Exception as exc:
-        logger.debug("forward estimates failed for %s: %s", symbol, exc)
-        return {}
+
+
+
 
 
 # ---------------------------------------------------------------------------

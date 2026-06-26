@@ -718,3 +718,45 @@ def connect_postgres(
     if row_factory is not None:
         kwargs["row_factory"] = row_factory
     return psycopg.connect(db_url, **kwargs)
+
+
+# ── Connection Pool Manager ───────────────────────────────────────────────────
+
+_CONNECTION_POOL: dict[str, "psycopg_pool.ConnectionPool"] = {}
+_POOL_LOCK = threading.Lock()
+
+
+def get_connection_pool(
+    database_url: str | None = None,
+    *,
+    min_size: int = 2,
+    max_size: int = 20,
+    timeout: float = 30.0,
+):
+    """Get or create a connection pool for the IKG database.
+    
+    Uses psycopg_pool.ConnectionPool with intelligent sizing:
+    - min_size=2: Keep 2 connections warm for instant access
+    - max_size=20: Allow up to 20 concurrent queries (safe for most workloads)
+    - timeout=30s: Wait up to 30s for connection (prevents hang on exhaustion)
+    
+    Connection pool is thread-safe and reused across requests.
+    """
+    from psycopg_pool import ConnectionPool
+    
+    db_url = get_database_url(database_url)
+    if not db_url:
+        raise ValueError("No database URL configured for IKG connection pool")
+    
+    with _POOL_LOCK:
+        if db_url not in _CONNECTION_POOL:
+            _CONNECTION_POOL[db_url] = ConnectionPool(
+                conninfo=db_url,
+                min_size=min_size,
+                max_size=max_size,
+                timeout=timeout,
+                kwargs={
+                    "prepare_threshold": None,  # Compatible with Supabase PgBouncer
+                },
+            )
+        return _CONNECTION_POOL[db_url]

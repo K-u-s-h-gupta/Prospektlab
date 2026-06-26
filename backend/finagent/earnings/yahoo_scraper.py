@@ -203,150 +203,16 @@ def fetch_earnings_history(symbol: str) -> list[dict[str, Any]]:
     return records
 
 
-def fetch_earnings_trend(symbol: str) -> dict[str, Any]:
-    """Return forward earnings estimates (current Q, next Q, current year).
-
-    Returns:
-      {
-        current_quarter: {period, end_date, eps_estimate, revenue_estimate},
-        next_quarter: {...},
-        current_year: {...},
-        next_year: {...},
-      }
-    
-    DEPRECATED: Kept for backwards compatibility but not used in new Earnings Tab.
-    """
-    ticker = _nse_ticker(symbol)
-    if not ticker:
-        return {}
-
-    data = _quote_summary(ticker, ["earningsTrend"])
-    trend = data.get("earningsTrend", {}).get("trend", [])
-
-    result: dict[str, Any] = {}
-    period_map = {
-        "0q": "current_quarter",
-        "+1q": "next_quarter",
-        "0y": "current_year",
-        "+1y": "next_year",
-    }
-    for item in (trend or []):
-        if not isinstance(item, dict):
-            continue
-        period_key = str(item.get("period") or "").lower()
-        out_key = period_map.get(period_key)
-        if not out_key:
-            continue
-        eps_est = _safe_float((item.get("earningsEstimate") or {}).get("avg", {}).get("raw"))
-        rev_est = _safe_float((item.get("revenueEstimate") or {}).get("avg", {}).get("raw"))
-        end_date = str(item.get("endDate") or "")
-        result[out_key] = {
-            "period": period_key,
-            "end_date": end_date,
-            "eps_estimate": eps_est,
-            "revenue_estimate": rev_est,
-        }
-
-    return result
 
 
-def fetch_quarterly_financials(symbol: str) -> list[dict[str, Any]]:
-    """Return quarterly income statement data from Yahoo Finance.
-
-    Each record:
-      {symbol, period_date, fiscal_period_label,
-       revenue, net_income, operating_income, gross_profit,
-       ebitda, eps_basic, eps_diluted}
-    
-    DEPRECATED: Kept for backwards compatibility but not used in new Earnings Tab.
-    """
-    ticker = _nse_ticker(symbol)
-    if not ticker:
-        return []
-
-    data = _quote_summary(ticker, ["incomeStatementHistoryQuarterly", "earningsHistory"])
-    stmts = (
-        data.get("incomeStatementHistoryQuarterly", {})
-        .get("incomeStatementHistory", [])
-    ) or []
-
-    records: list[dict[str, Any]] = []
-    for item in stmts:
-        if not isinstance(item, dict):
-            continue
-
-        def _get(key: str) -> float | None:
-            return _safe_float((item.get(key) or {}).get("raw"))
-
-        period_date = str(item.get("endDate", {}).get("fmt") or "")
-        records.append({
-            "symbol": symbol.upper(),
-            "period_date": period_date,
-            "revenue": _get("totalRevenue"),
-            "cost_of_revenue": _get("costOfRevenue"),
-            "gross_profit": _get("grossProfit"),
-            "operating_income": _get("operatingIncome"),
-            "net_income": _get("netIncome"),
-            "ebitda": _get("ebitda"),
-            "interest_expense": _get("interestExpense"),
-            "total_expenses": _get("totalOperatingExpenses"),
-        })
-
-    return records
 
 
-def fetch_next_earnings_date(symbol: str) -> dict[str, Any] | None:
-    """Return the next expected earnings date for a symbol.
-
-    Returns: {symbol, earnings_date, fiscal_period} or None
-    
-    DEPRECATED: Kept for backwards compatibility but not used in new Earnings Tab.
-    """
-    ticker = _nse_ticker(symbol)
-    if not ticker:
-        return None
-
-    data = _quote_summary(ticker, ["calendarEvents"])
-    cal = data.get("calendarEvents", {})
-    earnings = cal.get("earnings", {})
-    dates = earnings.get("earningsDate", [])
-
-    if not dates:
-        return None
-
-    for date_item in dates:
-        raw = None
-        if isinstance(date_item, dict):
-            raw = date_item.get("raw")
-        elif isinstance(date_item, (int, float)):
-            raw = date_item
-        if raw:
-            try:
-                dt = datetime.fromtimestamp(int(raw), tz=timezone.utc)
-                if dt.date() >= date.today():
-                    return {
-                        "symbol": symbol.upper(),
-                        "earnings_date": dt.isoformat(),
-                        "earnings_date_fmt": dt.strftime("%d %b %Y"),
-                    }
-            except Exception:
-                continue
-    return None
 
 
-def fetch_current_price(symbol: str) -> float | None:
-    """Fetch the current market price for a symbol.
-    
-    Returns: float | None (price in INR, or None if fetch fails)
-    """
-    ticker = _nse_ticker(symbol)
-    if not ticker:
-        return None
-    
-    data = _quote_summary(ticker, ["price"])
-    price_data = data.get("price", {})
-    current_price = _safe_float(price_data.get("regularMarketPrice", {}).get("raw"))
-    return current_price
+
+
+
+
 
 
 def fetch_price_history_around_date(

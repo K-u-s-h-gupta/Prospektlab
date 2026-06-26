@@ -21,7 +21,7 @@ import {
 import { getMarketQuotes, getWatchlistSnapshot, MarketHistoryPeriod } from '../../api/client';
 import { useMarketFeed } from '../../hooks/useMarketFeed';
 import { INDIAN_STOCKS, POPULAR_MUTUAL_FUNDS } from '../../data/indianStocks';
-import type { WatchlistStock } from './WatchlistCard';
+import type { WatchlistStock } from './watchlistTypes';
 import { buildProspektCover } from '../../utils/coverArt';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);

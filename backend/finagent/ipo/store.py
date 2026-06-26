@@ -1,13 +1,26 @@
-"""IPO structured data store (Supabase with local JSON fallback)."""
+"""IPO structured data store (Supabase with local JSON fallback).
+
+Dual storage:
+- Local JSON files (always written)
+- Supabase (when SUPABASE_URL + SUPABASE_KEY configured)
+
+Local paths:
+- finagent_data/ipo/filings.json — all filing records
+- finagent_data/ipo/details/{slug}/analysis.json — DRHP analysis
+- finagent_data/ipo/details/{slug}/scores.json — scoring data
+- finagent_data/ipo/details/{slug}/post_listing.json — tracking data
+"""
 
 from __future__ import annotations
 
 import json
 import logging
 import os
+import shutil
+from datetime import datetime, timezone
 from typing import Any
 
-from finagent.paths import finagent_data_path
+from finagent.paths import finagent_data_path, finagent_home
 
 logger = logging.getLogger("finagent.ipo.store")
 
@@ -36,6 +49,12 @@ class IpoStore:
         rows = await self._load_all()
         slug = (payload.get("slug") or "").lower()
         updated = False
+        # Add timestamps
+        now = datetime.now(timezone.utc).isoformat()
+        if "created_at" not in payload:
+            payload["created_at"] = now
+        payload["updated_at"] = now
+        
         for idx, row in enumerate(rows):
             if (row.get("slug") or "").lower() == slug:
                 rows[idx] = {**row, **payload, "slug": slug}
@@ -124,6 +143,90 @@ class IpoStore:
                         })
                     break
         return links
+
+    async def clear_all(self) -> dict[str, Any]:
+        """Clear ALL IPO data from both local storage and Supabase.
+        
+        This is a destructive operation that:
+        1. Deletes all local filing data
+        2. Removes all sidecar files (analyses, scores, tracking)
+        3. Clears cached PDFs
+        4. Truncates Supabase tables if configured
+        
+        Returns:
+            Summary of deleted items
+        """
+        summary = {
+            "filings_deleted": 0,
+            "sidecars_deleted": 0,
+            "pdfs_deleted": 0,
+            "supabase_cleared": False,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        
+        # 1. Count and clear filings
+        filings = await self._load_all()
+        summary["filings_deleted"] = len(filings)
+        
+        # 2. Clear local JSON
+        if _LOCAL_PATH.exists():
+            _LOCAL_PATH.write_text("[]", encoding="utf-8")
+            logger.info("Cleared local filings.json (%d records)", summary["filings_deleted"])
+        
+        # 3. Remove sidecar directories
+        details_dir = finagent_home() / "ipo" / "details"
+        if details_dir.exists():
+            try:
+                dir_count = sum(1 for _ in details_dir.iterdir() if _.is_dir())
+                shutil.rmtree(details_dir)
+                summary["sidecars_deleted"] = dir_count
+                logger.info("Removed %d sidecar directories", dir_count)
+            except Exception as exc:
+                logger.warning("Failed to remove sidecar directories: %s", exc)
+        
+        # 4. Remove cached PDFs
+        drhp_cache = finagent_home() / "drhp_cache"
+        if drhp_cache.exists():
+            try:
+                pdf_count = sum(1 for _ in drhp_cache.rglob("*.pdf"))
+                shutil.rmtree(drhp_cache)
+                summary["pdfs_deleted"] = pdf_count
+                logger.info("Removed %d cached PDFs", pdf_count)
+            except Exception as exc:
+                logger.warning("Failed to remove PDF cache: %s", exc)
+        
+        # 5. Clear Supabase tables
+        if _supabase_configured():
+            try:
+                await self._clear_supabase_tables()
+                summary["supabase_cleared"] = True
+                logger.info("Cleared Supabase IPO tables")
+            except Exception as exc:
+                logger.warning("Failed to clear Supabase tables: %s", exc)
+        
+        logger.info("IPO data cleared: %s", summary)
+        return summary
+    
+    async def _clear_supabase_tables(self) -> None:
+        """Clear all IPO-related Supabase tables."""
+        try:
+            from finagent.gateway.supabase_client import get_headers, _supabase_async_client
+            
+            headers = get_headers()
+            base_url = os.environ["SUPABASE_URL"].rstrip("/")
+            
+            # Tables to clear (in order due to FK constraints)
+            tables = ["ipo_post_listing", "ipo_scores", "ipo_analyses", "ipo_filings"]
+            
+            async with _supabase_async_client() as client:
+                for table in tables:
+                    # Delete all rows
+                    url = f"{base_url}/rest/v1/{table}?id=gt.00000000-0000-0000-0000-000000000000"
+                    await client.delete(url, headers=headers)
+                    logger.debug("Cleared Supabase table: %s", table)
+        except Exception as exc:
+            logger.warning("Supabase clear failed: %s", exc)
+            raise
 
     async def _load_all(self) -> list[dict[str, Any]]:
         if _LOCAL_PATH.exists():

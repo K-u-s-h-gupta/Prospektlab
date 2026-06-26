@@ -39,28 +39,54 @@ const QUICK_SCREENER_QUERIES = [
   { id: 'value', label: 'Value Picks', query: 'profitable undervalued companies with reasonable pe' },
 ] as const;
 
+const CRORE = 10_000_000;
+const LAKH = 100_000;
+
 const fmtNum = (value: any, digits = 2) => {
   const n = Number(value);
-  if (!Number.isFinite(n)) return 'Unavailable';
+  if (!Number.isFinite(n)) return '—';
   return n.toFixed(digits);
 };
 
 const fmtPct = (value: any, digits = 2) => {
   const n = Number(value);
-  if (!Number.isFinite(n)) return 'Unavailable';
+  if (!Number.isFinite(n)) return '—';
   return `${n.toFixed(digits)}%`;
 };
 
 const fmtInr = (value: any, digits = 2) => {
   const n = Number(value);
-  if (!Number.isFinite(n)) return 'Unavailable';
-  return `Rs ${n.toLocaleString('en-IN', { maximumFractionDigits: digits, minimumFractionDigits: digits })}`;
+  if (!Number.isFinite(n)) return '—';
+  return `₹${n.toLocaleString('en-IN', { maximumFractionDigits: digits, minimumFractionDigits: digits })}`;
 };
 
+// Format value already in crores
 const fmtCrore = (value: any, digits = 2) => {
   const n = Number(value);
-  if (!Number.isFinite(n)) return 'Unavailable';
-  return `Rs ${n.toLocaleString('en-IN', { maximumFractionDigits: digits, minimumFractionDigits: digits })} Cr`;
+  if (!Number.isFinite(n)) return '—';
+  return `₹${n.toLocaleString('en-IN', { maximumFractionDigits: digits, minimumFractionDigits: digits })} cr`;
+};
+
+// Format large volumes/quantities
+const fmtVolume = (value: any) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  const absN = Math.abs(n);
+  if (absN >= CRORE) return `${(absN / CRORE).toFixed(2)} cr`;
+  if (absN >= LAKH) return `${(absN / LAKH).toFixed(2)} L`;
+  if (absN >= 1000) return `${(absN / 1000).toFixed(1)}k`;
+  return n.toLocaleString('en-IN');
+};
+
+// Format market cap (expects value in crores or raw INR)
+const fmtMarketCap = (value: any, isInCrores = false) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  const crores = isInCrores ? n : n / CRORE;
+  if (crores >= 100000) {
+    return `₹${(crores / 100000).toFixed(2)} L cr`;
+  }
+  return `₹${crores.toLocaleString('en-IN', { maximumFractionDigits: 2 })} cr`;
 };
 
 const trendTone = (value: any) => {
@@ -106,24 +132,25 @@ const formatRatioValue = (item: any) => {
   if (item?.display) return String(item.display);
   const unit = String(item?.unit || '').toLowerCase();
   if (unit.includes('%')) return fmtPct(item?.value, 2);
-  if (unit.includes('crore')) return fmtCrore(item?.value, 2);
-  if (unit.includes('inr')) return fmtInr(item?.value, 2);
+  if (unit.includes('crore') || unit.includes('cr')) return fmtCrore(item?.value, 2);
+  if (unit.includes('inr') || unit.includes('rs') || unit.includes('₹')) return fmtInr(item?.value, 2);
+  if (unit.includes('times') || unit.includes('x')) return `${fmtNum(item?.value, 2)}x`;
   return fmtNum(item?.value, 2);
 };
 
 const formatFreshnessStatus = (value: any) => {
   const status = String(value || '').toLowerCase();
-  if (!status) return 'Unavailable';
+  if (!status) return '—';
   if (status === 'live' || status === 'available') return 'Live';
   if (status === 'fresh') return 'Fresh';
   if (status === 'stale') return 'Stale';
   if (status === 'aging') return 'Aging';
   if (status === 'ok') return 'OK';
-  if (status === 'unavailable') return 'Unavailable';
+  if (status === 'unavailable') return '—';
   return status.replace(/_/g, ' ').replace(/\b\w/g, (match) => match.toUpperCase());
 };
 
-const displayText = (value: any, fallback = 'Not disclosed') => {
+const displayText = (value: any, fallback = '—') => {
   const text = String(value ?? '').trim();
   return text || fallback;
 };
@@ -137,12 +164,12 @@ const sentimentTone = (value: any) => {
 
 const formatEventPublished = (value: any) => {
   const text = String(value ?? '').trim();
-  return text || 'time unavailable';
+  return text || '—';
 };
 
 const formatAge = (value: any, unit: 's' | 'h') => {
   const n = Number(value);
-  if (!Number.isFinite(n)) return 'unavailable';
+  if (!Number.isFinite(n)) return '—';
   return `${n.toFixed(unit === 's' ? 0 : 1)}${unit}`;
 };
 
@@ -276,7 +303,7 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
     };
   }, [searchText]);
 
-  const loadCompany = async (symbol: string) => {
+  const loadCompany = useCallback(async (symbol: string) => {
     const clean = (symbol || '').trim().toUpperCase();
     if (!clean) return;
     setActiveSymbol(clean);
@@ -293,14 +320,15 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
       const analysis = await getScreenerAnalysis(clean);
       setAnalysisPayload(analysis);
       setAnalysisError('');
-    } catch (err: any) {
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') return;
       setAnalysisPayload(null);
-      setAnalysisError(err?.message || 'Failed to load screener analysis.');
+      setAnalysisError((err as any)?.message || 'Failed to load screener analysis.');
     }
     setAnalysisBusy(false);
-  };
+  }, []);
 
-  const loadFinancials = async (symbol: string) => {
+  const loadFinancials = useCallback(async (symbol: string) => {
     const clean = (symbol || '').trim().toUpperCase();
     if (!clean) return;
     if (financialsBusy) return;
@@ -311,16 +339,17 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
       setFinancialsPayload(payload);
       setFinancialsSymbol(clean);
       setFinancialsError('');
-    } catch (err: any) {
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') return;
       setFinancialsPayload(null);
       setFinancialsSymbol(clean);
-      setFinancialsError(err?.message || 'Failed to load financial statements.');
+      setFinancialsError((err as any)?.message || 'Failed to load financial statements.');
     } finally {
       setFinancialsBusy(false);
     }
-  };
+  }, [financialsBusy, financialsPayload, financialsSymbol]);
 
-  const runQuickQuery = async (query: string) => {
+  const runQuickQuery = useCallback(async (query: string) => {
     if (!query.trim()) return;
     setQueryBusy(true);
     setQueryError('');
@@ -329,24 +358,24 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
       const rows = getArray(data?.matches);
       setQueryRows(rows);
       setQueryError(rows.length > 0 ? '' : 'No stocks matched this query yet.');
-    } catch (err: any) {
+    } catch (err: unknown) {
       setQueryRows([]);
-      setQueryError(err?.message || 'Failed to run screener query.');
+      setQueryError((err as any)?.message || 'Failed to run screener query.');
     } finally {
       setQueryBusy(false);
     }
-  };
+  }, []);
 
-  const selectSuggestion = (item: ScreenerSearchItem) => {
+  const selectSuggestion = useCallback((item: ScreenerSearchItem) => {
     const symbol = String(item?.symbol || '').trim().toUpperCase();
     if (!symbol) return;
     setSearchText(`${item.name} (${symbol})`);
     setSuggestions([]);
     setSearchOpen(false);
     void loadCompany(symbol);
-  };
+  }, [loadCompany]);
 
-  const onSearchSubmit = (event: React.FormEvent) => {
+  const onSearchSubmit = useCallback((event: React.FormEvent) => {
     event.preventDefault();
     if (suggestions.length > 0) {
       selectSuggestion(suggestions[0]);
@@ -356,18 +385,18 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
     if (!clean) return;
     setSearchOpen(false);
     void loadCompany(clean);
-  };
+  }, [suggestions, searchText, selectSuggestion, loadCompany]);
 
   useEffect(() => {
     if (activeSymbol || analysisBusy) return;
     void loadCompany(DEFAULT_SCREENER_SYMBOL);
-  }, [activeSymbol, analysisBusy]);
+  }, [activeSymbol, analysisBusy, loadCompany]);
 
   useEffect(() => {
     if (activeTab !== 'fundamentals') return;
     if (!activeSymbol) return;
     void loadFinancials(activeSymbol);
-  }, [activeTab, activeSymbol]);
+  }, [activeTab, activeSymbol, loadFinancials]);
 
   const positives = useMemo(() => getArray(summary?.positives), [summary]);
   const negatives = useMemo(() => getArray(summary?.negatives), [summary]);
@@ -509,8 +538,8 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
     return (
       <div className="screener-table-card">
         <div className="screener-table-meta">
-          <span>{sourceLine || 'Source unavailable'}</span>
-          <span>{activeStatement?.unit || 'INR crore'}</span>
+          <span>{sourceLine || '—'}</span>
+          <span>Values in ₹ cr (crores)</span>
         </div>
         <div className="screener-table-wrap">
           <table className="screener-table">
@@ -520,7 +549,7 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
                 {periodColumns.map((period) => (
                   <th key={period.id}>{period.label}</th>
                 ))}
-                <th>YoY</th>
+                <th>YoY %</th>
               </tr>
             </thead>
             <tbody>
@@ -540,15 +569,16 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
                     {periodColumns.map((period) => {
                       const raw = values?.[period.id];
                       const unit = String(row?.unit || activeStatement?.unit || '').toLowerCase();
-                      const display = unit.includes('share')
+                      // EPS and per-share values show as INR, rest show as crores
+                      const isPerShare = unit.includes('share') || unit.includes('eps') || 
+                        String(row?.key || '').toLowerCase().includes('eps');
+                      const display = isPerShare
                         ? fmtInr(raw, 2)
-                        : unit.includes('inr')
-                          ? fmtCrore(raw, 2)
-                          : fmtNum(raw, 2);
+                        : fmtCrore(raw, 2);
                       return <td key={`${row?.key}-${period.id}`}>{display}</td>;
                     })}
                     <td className={Number.isFinite(yoy) ? (Number(yoy) >= 0 ? 'up' : 'down') : ''}>
-                      {Number.isFinite(yoy) ? `${Number(yoy).toFixed(2)}%` : 'Unavailable'}
+                      {Number.isFinite(yoy) ? `${Number(yoy) >= 0 ? '+' : ''}${Number(yoy).toFixed(2)}%` : '—'}
                     </td>
                   </tr>
                 );
@@ -556,7 +586,7 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
               {statementRows.length === 0 && (
                 <tr>
                   <td colSpan={periodColumns.length + 2} className="screener-table-empty">
-                    Financial statement data is unavailable for this company right now.
+                    Financial statement data unavailable.
                   </td>
                 </tr>
               )}
@@ -594,7 +624,7 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
               >
                 <div className="screener-search-option-head">
                   <span className="screener-search-option-symbol">{item.symbol}</span>
-                  <span className="screener-search-option-sector">{item.sector || 'Sector unavailable'}</span>
+                  <span className="screener-search-option-sector">{item.sector || '—'}</span>
                 </div>
                 <div className="screener-search-option-name">{item.name}</div>
                 <div className="screener-search-option-meta">
@@ -638,7 +668,7 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
                   void loadCompany(symbol);
                 }}
               >
-                <div>{symbol || 'Unavailable'}</div>
+                <div>{symbol || '—'}</div>
                 <div>{title}</div>
               </button>
             );
@@ -675,7 +705,7 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
               </div>
               <h2>{resolved?.company_name || activeSymbol}</h2>
               <div className="screener-company-sub">
-                <span>{resolved?.sector || 'Sector unavailable'}</span>
+                <span>{resolved?.sector || '—'}</span>
                 {resolved?.cin && <span>CIN: {resolved.cin}</span>}
                 {resolved?.isin && <span>ISIN: {resolved.isin}</span>}
               </div>
@@ -688,9 +718,9 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
               </div>
               <div className="screener-score-pill">
                 <Gauge size={14} />
-                Score {fmtNum(score?.prospekt_score, 1)} ({score?.grade || 'Unavailable'})
+                Score {fmtNum(score?.prospekt_score, 1)} ({score?.grade || '—'})
               </div>
-              <div className="screener-quote-source">Quote source: {liveSource || 'Unavailable'}</div>
+              <div className="screener-quote-source">Quote: {liveSource || '—'}</div>
               <div className="screener-actions-row">
                 <button type="button" className="screener-action-btn" onClick={exportSnapshotJson} disabled={!snapshot}>
                   <Download size={13} /> Export Snapshot
@@ -729,6 +759,61 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
           <div className="screener-content">
             {activeTab === 'overview' && (
               <div className="screener-section-grid">
+                {/* Key Metrics Summary */}
+                <div className="screener-section screener-section-wide">
+                  <div className="screener-section-head"><Gauge size={14} /> Key Metrics</div>
+                  <div className="screener-key-metrics-grid">
+                    <div className="screener-metric-item">
+                      <span className="screener-metric-label">Market Cap</span>
+                      <span className="screener-metric-value">{fmtMarketCap(fundamentals?.metrics?.market_cap || quote?.market_cap, true)}</span>
+                    </div>
+                    <div className="screener-metric-item">
+                      <span className="screener-metric-label">P/E Ratio</span>
+                      <span className="screener-metric-value">{fmtNum(fundamentals?.metrics?.pe_ratio || quote?.pe_ratio, 2)}</span>
+                    </div>
+                    <div className="screener-metric-item">
+                      <span className="screener-metric-label">P/B Ratio</span>
+                      <span className="screener-metric-value">{fmtNum(fundamentals?.metrics?.pb_ratio || quote?.pb_ratio, 2)}</span>
+                    </div>
+                    <div className="screener-metric-item">
+                      <span className="screener-metric-label">EPS (TTM)</span>
+                      <span className="screener-metric-value">{fmtInr(fundamentals?.metrics?.eps || quote?.eps, 2)}</span>
+                    </div>
+                    <div className="screener-metric-item">
+                      <span className="screener-metric-label">Book Value</span>
+                      <span className="screener-metric-value">{fmtInr(fundamentals?.metrics?.book_value || quote?.book_value, 2)}</span>
+                    </div>
+                    <div className="screener-metric-item">
+                      <span className="screener-metric-label">Dividend Yield</span>
+                      <span className="screener-metric-value">{fmtPct(fundamentals?.metrics?.dividend_yield, 2)}</span>
+                    </div>
+                    <div className="screener-metric-item">
+                      <span className="screener-metric-label">ROE</span>
+                      <span className="screener-metric-value">{fmtPct(fundamentals?.metrics?.roe, 2)}</span>
+                    </div>
+                    <div className="screener-metric-item">
+                      <span className="screener-metric-label">ROCE</span>
+                      <span className="screener-metric-value">{fmtPct(fundamentals?.metrics?.roce, 2)}</span>
+                    </div>
+                    <div className="screener-metric-item">
+                      <span className="screener-metric-label">Debt/Equity</span>
+                      <span className="screener-metric-value">{fmtNum(fundamentals?.metrics?.debt_to_equity, 2)}</span>
+                    </div>
+                    <div className="screener-metric-item">
+                      <span className="screener-metric-label">52W High</span>
+                      <span className="screener-metric-value">{fmtInr(technicals?.high_52w || quote?.high_52w, 2)}</span>
+                    </div>
+                    <div className="screener-metric-item">
+                      <span className="screener-metric-label">52W Low</span>
+                      <span className="screener-metric-value">{fmtInr(technicals?.low_52w || quote?.low_52w, 2)}</span>
+                    </div>
+                    <div className="screener-metric-item">
+                      <span className="screener-metric-label">Avg Volume</span>
+                      <span className="screener-metric-value">{fmtVolume(quote?.avg_volume || technicals?.avg_volume)}</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="screener-section screener-section-wide">
                   <div className="screener-section-head"><Building2 size={14} /> Company Profile</div>
                   <p className="screener-longtext">{fundamentals?.profile?.business_summary || fundamentals?.profile?.overview || 'Business overview is not available from public sources yet.'}</p>
@@ -737,12 +822,12 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
                       {profileFacts.map((fact: any, idx: number) => (
                         <div key={`fact-${idx}`} className="screener-fact">
                           <span className="screener-fact-label">{fact?.label}</span>
-                          <span className="screener-fact-value">{displayText(fact?.value, 'Unavailable')}</span>
+                          <span className="screener-fact-value">{displayText(fact?.value)}</span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="screener-empty-inline">Company facts are unavailable from current public sources.</div>
+                    <div className="screener-empty-inline">Company facts not available.</div>
                   )}
                   {(fundamentals?.profile?.mission || fundamentals?.profile?.vision) && (
                     <div className="screener-overview-points">
@@ -801,9 +886,9 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
                       </table>
                     </div>
                   ) : (
-                    <div className="screener-empty-inline">Peer set is unavailable from current public-source lookup.</div>
+                    <div className="screener-empty-inline">Peer data not available.</div>
                   )}
-                  <div className="screener-section-note">{peers?.source || 'Peer source unavailable'}</div>
+                  <div className="screener-section-note">{peers?.source || '—'}</div>
                 </div>
 
                 <div className="screener-section">
@@ -874,7 +959,7 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
                             <div key={`${group.group}-${item.key || item.label}`} className="screener-metric-card">
                               <div className="screener-metric-label">{item.label || item.key || 'Metric'}</div>
                               <div className="screener-metric-value">{formatRatioValue(item)}</div>
-                              <div className="screener-metric-source">{item.source || 'Source unavailable'}</div>
+                              <div className="screener-metric-source">{item.source || '—'}</div>
                             </div>
                           ))}
                         </div>
@@ -895,7 +980,7 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
                       </div>
                     )}
                     {ratioGroups.length === 0 && (
-                      <div className="screener-empty-inline">Ratio data is currently unavailable.</div>
+                      <div className="screener-empty-inline">Ratio data not available.</div>
                     )}
                   </div>
                 ) : (
@@ -909,14 +994,14 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
                 <div className="screener-section">
                   <div className="screener-section-head"><CandlestickChart size={14} /> Technical Structure</div>
                   <div className="screener-tech-grid">
-                    <div>Trend Bias: <strong>{technicals?.trend_bias || 'Unavailable'}</strong></div>
+                    <div>Trend Bias: <strong>{technicals?.trend_bias || '—'}</strong></div>
                     <div>RSI (14): <strong>{fmtNum(technicals?.rsi14, 2)}</strong></div>
                     <div>MACD: <strong>{fmtNum(technicals?.macd, 4)}</strong></div>
                     <div>MACD Signal: <strong>{fmtNum(technicals?.macd_signal, 4)}</strong></div>
-                    <div>SMA 20/50: <strong>{displayText(technicals?.sma20_50_signal, 'Unavailable')}</strong></div>
-                    <div>SMA 50/200: <strong>{displayText(technicals?.sma50_200_signal, 'Unavailable')}</strong></div>
+                    <div>SMA 20/50: <strong>{displayText(technicals?.sma20_50_signal)}</strong></div>
+                    <div>SMA 50/200: <strong>{displayText(technicals?.sma50_200_signal)}</strong></div>
                     <div>Above 200 DMA: <strong>{technicals?.above_200dma ? 'Yes' : 'No'}</strong></div>
-                    <div>Breakout State: <strong>{technicals?.breakout_state || 'Unavailable'}</strong></div>
+                    <div>Breakout State: <strong>{technicals?.breakout_state || '—'}</strong></div>
                     <div>1M Return: <strong>{fmtPct(technicals?.return_1m_pct, 2)}</strong></div>
                     <div>3M Return: <strong>{fmtPct(technicals?.return_3m_pct, 2)}</strong></div>
                     <div>Volatility (1M ann.): <strong>{fmtPct(technicals?.volatility_1m_annualized_pct, 2)}</strong></div>
@@ -930,7 +1015,7 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
                     <div>20 DMA: <strong>{fmtInr(technicals?.sma20, 2)}</strong></div>
                     <div>50 DMA: <strong>{fmtInr(technicals?.sma50, 2)}</strong></div>
                     <div>200 DMA: <strong>{fmtInr(technicals?.sma200, 2)}</strong></div>
-                    <div>Bollinger: <strong>{displayText(technicals?.bollinger_state, 'Unavailable')}</strong></div>
+                    <div>Bollinger: <strong>{displayText(technicals?.bollinger_state)}</strong></div>
                     <div>Upper Band: <strong>{fmtInr(technicals?.bollinger_upper, 2)}</strong></div>
                     <div>Lower Band: <strong>{fmtInr(technicals?.bollinger_lower, 2)}</strong></div>
                     <div>20D Support: <strong>{fmtInr(technicals?.support_20d, 2)}</strong></div>
@@ -957,13 +1042,13 @@ export const ScreenerWorkspace: React.FC<ScreenerWorkspaceProps> = ({ embedded =
                     <div>Insider Facts: <strong>{snapshot?.insiders?.counts?.insider_facts ?? 0}</strong></div>
                   </div>
                   <div className="screener-section-note">
-                    Shareholding source: {displayText(fundamentals?.sources?.shareholding || fundamentals?.sources?.snapshot || sourceHealth?.shareholding?.status, 'Source unavailable')}
+                    Shareholding source: {displayText(fundamentals?.sources?.shareholding || fundamentals?.sources?.snapshot || sourceHealth?.shareholding?.status)}
                   </div>
                   <div className="screener-flag-list">
                     {getArray(governance?.flags).length > 0 ? getArray(governance?.flags).slice(0, 8).map((flag: any, idx: number) => (
                       <div key={`f-${idx}`} className="screener-flag-row">
                         <span>{flag.code || 'FLAG'}</span>
-                        <span>{displayText(flag.detail, 'Governance signal present')}</span>
+                        <span>{displayText(flag.detail)}</span>
                       </div>
                     )) : (
                       <div className="screener-empty-inline">No governance flags returned by the current public-source pass.</div>

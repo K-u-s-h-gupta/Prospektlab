@@ -32,7 +32,7 @@ const TABS: TabDef[] = [
   { id: 'watchlist', label: 'Watchlist', icon: Star },
   { id: 'screener', label: 'Screener', icon: SlidersHorizontal },
   { id: 'earnings', label: 'Earnings', icon: CalendarClock },
-  { id: 'ipo', label: 'IPO', icon: Rocket, comingSoon: true },
+  { id: 'ipo', label: 'IPO', icon: Rocket },
   { id: 'governance', label: 'Governance', icon: ShieldCheck, comingSoon: true },
 ];
 

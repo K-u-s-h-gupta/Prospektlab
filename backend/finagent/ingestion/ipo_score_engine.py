@@ -145,7 +145,9 @@ def compute_ipo_score(parsed: dict[str, Any], *, peer_valuation: dict[str, Any] 
     risks = parsed.get("risk_factors") or {}
     promoters = parsed.get("promoters") or {}
     fraud_signals = parsed.get("fraud_signals") or []
-    kpis = parsed.get("kpis") or []
+    kpis = parsed.get("kpi_rows") or []
+    if not kpis and isinstance(parsed.get("kpis"), list):
+        kpis = parsed.get("kpis") or []
     peer_valuation = peer_valuation or {}
 
     # Business Quality

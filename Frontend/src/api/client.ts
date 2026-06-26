@@ -2255,6 +2255,7 @@ export interface IpoCard {
   subscription_status?: string;
   subscription_times?: number | null;
   nse_symbol?: string | null;
+  bse_scrip_code?: string | null;
   is_sme?: boolean | null;
   listing_date?: string | null;
   risk_count?: number;
@@ -2275,7 +2276,17 @@ export interface IpoPipelineResponse {
     live: IpoCard[];
     listed: IpoCard[];
   };
+  counts?: {
+    live: number;
+    upcoming: number;
+    listed: number;
+  };
   gmp_disclaimer: string;
+}
+
+export interface IpoLifecycleCountdown {
+  days: number;
+  target_date: string;
 }
 
 export interface IpoLifecycleStage {
@@ -2286,14 +2297,17 @@ export interface IpoLifecycleStage {
   date?: string | null;
   end_date?: string | null;
   pdf_url?: string | null;
+  countdown?: IpoLifecycleCountdown | null;
 }
 
 export interface IpoLifecycle {
   current_doc_type?: string;
+  current_status?: string;
   source?: string;
   latest_document_url?: string | null;
   latest_document_date?: string | null;
   stages: IpoLifecycleStage[];
+  last_updated?: string;
 }
 
 export interface IpoAnalysisResponse {
@@ -2309,6 +2323,20 @@ export interface IpoTrackingResponse {
   tracking: Record<string, any>;
 }
 
+export interface IpoStats {
+  total_filings: number;
+  by_status: {
+    live: number;
+    upcoming: number;
+    listed: number;
+  };
+  extraction_stats: {
+    docling_success: number;
+    azure_fallback: number;
+    extraction_failures: number;
+  };
+}
+
 export async function getIpoPipeline(): Promise<IpoPipelineResponse> {
   const res = await fetchApi(apiUrl('/ipo/pipeline'), { credentials: 'include' });
   if (!res.ok) throw new Error(`IPO pipeline fetch failed: ${res.statusText}`);
@@ -2318,6 +2346,33 @@ export async function getIpoPipeline(): Promise<IpoPipelineResponse> {
 export async function getIpoAnalysis(slug: string): Promise<IpoAnalysisResponse> {
   const res = await fetchApi(apiUrl(`/ipo/${encodeURIComponent(slug)}`), { credentials: 'include' });
   if (!res.ok) throw new Error(`IPO analysis fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export interface IpoAnalysisStatus {
+  exists: boolean;
+  slug?: string;
+  company_name?: string;
+  has_pdf: boolean;
+  has_analysis: boolean;
+  has_scores: boolean;
+  analysis_status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'not_found';
+  error?: string;
+}
+
+export async function getIpoAnalysisStatus(slug: string): Promise<IpoAnalysisStatus> {
+  const res = await fetchApi(apiUrl(`/ipo/${encodeURIComponent(slug)}/status`), { credentials: 'include' });
+  if (!res.ok) throw new Error(`IPO status fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function queueIpoAnalysis(slug: string, priority: boolean = false): Promise<{ status: string; message?: string; error?: string }> {
+  const params = priority ? '?priority=true' : '';
+  const res = await fetchApi(apiUrl(`/ipo/${encodeURIComponent(slug)}/queue${params}`), {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error(`IPO queue failed: ${res.statusText}`);
   return res.json();
 }
 
@@ -2331,6 +2386,44 @@ export async function searchIpos(query: string, limit: number = 10): Promise<{ q
   const params = new URLSearchParams({ q: query, limit: String(limit) });
   const res = await fetchApi(apiUrl(`/ipo/search?${params}`), { credentials: 'include' });
   if (!res.ok) throw new Error(`IPO search failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function getIpoStats(): Promise<IpoStats> {
+  const res = await fetchApi(apiUrl('/ipo/stats'), { credentials: 'include' });
+  if (!res.ok) throw new Error(`IPO stats fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function refreshIpoData(): Promise<{ status: string; message: string }> {
+  const res = await fetchApi(apiUrl('/ipo/refresh-nse'), {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error(`IPO refresh failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function runIpoWatcher(options?: { download?: boolean; includeBse?: boolean; batchProcess?: boolean }): Promise<Record<string, any>> {
+  const params = new URLSearchParams();
+  if (options?.download !== undefined) params.append('download', String(options.download));
+  if (options?.includeBse !== undefined) params.append('include_bse', String(options.includeBse));
+  if (options?.batchProcess !== undefined) params.append('batch_process', String(options.batchProcess));
+  
+  const res = await fetchApi(apiUrl(`/ipo/watcher/run?${params}`), {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error(`IPO watcher failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function analyzeIpo(slug: string): Promise<IpoAnalysisResponse> {
+  const res = await fetchApi(apiUrl(`/ipo/${encodeURIComponent(slug)}/analyze`), {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error(`IPO analysis trigger failed: ${res.statusText}`);
   return res.json();
 }
 
@@ -2350,6 +2443,11 @@ export interface EarningsCalendarResponse {
   end_date: string;
   dates: EarningsCalendarDay[];
   source?: string;
+}
+
+export interface EarningsOverviewResponse {
+  calendar: EarningsCalendarResponse;
+  companies: EarningsCompaniesResponse;
 }
 
 export interface EarningsHighlight {
@@ -2489,40 +2587,6 @@ export interface EarningsResultResponse {
   };
 }
 
-// Legacy detail interface (kept for backward compatibility if needed elsewhere)
-export interface EarningsDetailResponse {
-  event_uid: string;
-  symbol: string;
-  name: string;
-  sector?: string;
-  date: string;
-  timing: string;
-  fiscal_quarter: string;
-  headline_highlights: EarningsHighlight[];
-  management_commentary: EarningsHighlight[];
-  transcript: {
-    prepared_remarks: EarningsTranscriptBlock[];
-    qa: EarningsTranscriptBlock[];
-  };
-  documents: EarningsDocumentLink[];
-  financials: {
-    unit_note?: string;
-    source?: string;
-    rows: EarningsFinancialRow[];
-    consolidated_tables?: EarningsExtractedTable[];
-    standalone_tables?: EarningsExtractedTable[];
-  };
-  summary?: string;
-  updated_at?: string;
-}
-
-export interface EarningsStatsResponse {
-  date: string;
-  total: number;
-  timing: Array<{ label: string; count: number }>;
-  sector: Array<{ label: string; count: number }>;
-}
-
 export async function getEarningsCalendar(startDate: string, endDate: string): Promise<EarningsCalendarResponse> {
   const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
   let res: Response;
@@ -2548,24 +2612,24 @@ export async function getEarningsCalendar(startDate: string, endDate: string): P
   return parseJsonSanitized(res);
 }
 
-export interface EarningsOverviewResponse {
-  calendar: EarningsCalendarResponse;
-  companies: EarningsCompaniesResponse;
-}
-
-/**
- * Combined endpoint: fetches both calendar + companies in a single request
- * to avoid multiple slow DB connections for the overview Earnings Pulse.
- */
-export async function getEarningsOverview(startDate: string, endDate: string, pageSize = 50): Promise<EarningsOverviewResponse> {
-  const params = new URLSearchParams({ start_date: startDate, end_date: endDate, page_size: String(pageSize) });
+/** @deprecated Use getEarningsCalendar. Kept for backward compat. */
+export async function getEarningsOverview(
+  startDate: string,
+  endDate: string,
+  pageSize?: number,
+): Promise<EarningsOverviewResponse> {
+  const params = new URLSearchParams({
+    start_date: startDate,
+    end_date: endDate,
+    page_size: String(pageSize || 50),
+  });
   let res: Response;
   try {
     res = await fetchWithTimeout(
       apiUrl(`/earnings/overview?${params.toString()}`),
       { credentials: 'include' },
       25000,
-      'Earnings calendar timed out. Please retry.',
+      'Earnings overview timed out. Please retry.',
     );
   } catch (err: any) {
     if (err?.name === 'AbortError') throw err;
@@ -2581,6 +2645,8 @@ export async function getEarningsOverview(startDate: string, endDate: string, pa
   }
   return parseJsonSanitized(res);
 }
+
+
 
 export async function getEarningsCompanies(options: {
   date?: string;
@@ -2653,54 +2719,8 @@ export async function getEarningsResult(symbol: string, date: string): Promise<E
   return parseJsonSanitized(res);
 }
 
-// Legacy getEarningsDetail kept for backward compatibility (calls /result endpoint internally)
-export async function getEarningsDetail(symbol: string, date?: string): Promise<EarningsDetailResponse> {
-  if (!date) {
-    throw new Error('Date is required for getEarningsDetail');
-  }
-  const result = await getEarningsResult(symbol, date);
-  // Map new response structure to old one
-  return {
-    event_uid: '',
-    symbol: result.symbol,
-    name: result.name,
-    sector: result.sector,
-    date: result.meeting_date,
-    timing: result.timing,
-    fiscal_quarter: result.fiscal_quarter,
-    headline_highlights: result.highlights,
-    management_commentary: [],
-    transcript: result.transcript,
-    documents: result.documents,
-    financials: result.financials,
-    summary: '',
-    updated_at: new Date().toISOString(),
-  };
-}
 
-export async function getEarningsStats(date: string): Promise<EarningsStatsResponse> {
-  const params = new URLSearchParams({ date });
-  let res: Response;
-  try {
-    res = await fetchWithTimeout(
-      apiUrl(`/earnings/stats?${params.toString()}`),
-      { credentials: 'include' },
-      25000,
-      'Earnings stats request timed out. Please retry.',
-    );
-  } catch (err: any) {
-    if (err?.name === 'AbortError') throw err;
-    const msg: string = err?.message || '';
-    if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('network')) {
-      throw new Error('Could not connect to the earnings service. Please check your connection and retry.');
-    }
-    throw err;
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `Failed to load earnings stats: ${res.statusText}`);
-  }
-  return parseJsonSanitized(res);
-}
+
+
 
 

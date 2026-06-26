@@ -5,22 +5,11 @@ import { APP_BETA_BADGE } from '../../constants/beta';
 interface AppShellProps {
   children: React.ReactNode;
   title: string;
-  conversations?: Array<{ id: string; title: string; date: string }>;
-  onDeleteConversation?: (id: string) => void;
-  onClearHistory?: () => void;
-  onSelectConversation?: (id: string) => void;
-  onNewConversation?: () => void;
-  activeConversationId?: string;
-  portfolioSummary?: {
-    totalValue: number;
-    totalPnL: number;
-    totalReturnPct: number;
-  };
-  tokenUsage?: any;
 }
 
 export const AppShell: React.FC<AppShellProps> = ({
   children,
+  title,
 }) => {
   return (
     <div className="app-container" style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
@@ -43,7 +32,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           </div>
         </header>
 
-        <main style={{
+        <main aria-label={title} style={{
           flex: 1,
           minHeight: 0,
           width: '100%',

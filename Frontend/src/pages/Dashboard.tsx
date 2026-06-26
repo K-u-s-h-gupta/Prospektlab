@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
-import { WatchlistStock } from '../components/dashboard/WatchlistCard';
+import type { WatchlistStock } from '../components/dashboard/watchlistTypes';
 import { PortfolioTable } from '../components/dashboard/PortfolioTable';
 import { WatchlistWorkspace } from '../components/dashboard/WatchlistWorkspace';
 import { ScreenerWorkspace } from '../components/screener/ScreenerWorkspace';
@@ -1416,7 +1416,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   const [indicesLoading, setIndicesLoading] = useState(true);
   const [indicesStale, setIndicesStale] = useState(false);
 
-  const [tokenUsage, setTokenUsage] = useState<any>(null);
+  const [, setTokenUsage] = useState<any>(null);
   const [newsFeed, setNewsFeed] = useState<NewsFeedItem[]>(() => readCachedTapeNews());
   const [newsLoading, setNewsLoading] = useState(() => readCachedTapeNews().length === 0);
   const [newsError, setNewsError] = useState<string | null>(null);
@@ -2549,25 +2549,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
     labels: assetEntries.map(([label]) => label),
     data: assetEntries.map(([, value]) => value)
   };
-  const allocationTotalValue = assetEntries
-    .reduce((acc, [, value]) => acc + finiteNumber(value), 0);
-  const sectorAllocationTotalValue = sectorEntries
-    .reduce((acc, [, value]) => acc + finiteNumber(value), 0);
-  const sidebarTotalValue =
-    allocationTotalValue > 0
-      ? allocationTotalValue
-      : sectorAllocationTotalValue > 0
-      ? sectorAllocationTotalValue
-      : portfolioSummary.totalValue;
-  const sidebarTotalPnL =
-    hasPortfolioHoldings && liveComputedTotalCost > 0 && allocationTotalValue > 0
-      ? allocationTotalValue - liveComputedTotalCost
-      : portfolioSummary.totalPnL;
-  const sidebarTotalReturnPct =
-    liveComputedTotalCost > 0
-      ? (sidebarTotalPnL / liveComputedTotalCost) * 100
-      : portfolioTotalReturnPct;
-
   // --- Portfolio vs Benchmark Comparative Data from backend live analytics ---
   const compareChartData = useMemo(() => {
     const portHist = portfolioAnalytics?.history?.portfolio || {};
@@ -3910,21 +3891,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ initialFeatureTab = 'overv
   };
 
   return (
-    <AppShell
-      title={shellTitle}
-      portfolioSummary={hasPortfolioHoldings ? {
-        totalValue: sidebarTotalValue,
-        totalPnL: sidebarTotalPnL,
-        totalReturnPct: sidebarTotalReturnPct
-      } : undefined}
-      conversations={conversations}
-      onDeleteConversation={handleDeleteConversation}
-      onClearHistory={handleClearHistory}
-      onNewConversation={handleNewConversation}
-      onSelectConversation={handleSelectConversation}
-      activeConversationId={activeConversationId}
-      tokenUsage={tokenUsage}
-    >
+    <AppShell title={shellTitle}>
       {manualOverridePrompt && (
         <div
           style={{

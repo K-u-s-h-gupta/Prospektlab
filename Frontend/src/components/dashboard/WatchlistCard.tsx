@@ -1,13 +1,6 @@
 import React from 'react';
 import { ArrowUpRight, ArrowDownRight, MessageSquare, Plus, X } from 'lucide-react';
-
-export interface WatchlistStock {
-  symbol: string;
-  name: string;
-  price: string;
-  change: string;
-  changePct: number;
-}
+import type { WatchlistStock } from './watchlistTypes';
 
 interface WatchlistCardProps {
   stocks: WatchlistStock[];

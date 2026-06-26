@@ -6,11 +6,19 @@ import { getIpoPipeline, searchIpos, IpoPipelineResponse, IpoCard } from '../api
 
 type FilterTab = 'all' | 'live' | 'upcoming' | 'listed';
 
-const FILTER_TABS: { key: FilterTab; label: string; icon: React.ReactNode }[] = [
-  { key: 'all', label: 'All IPOs', icon: <Activity size={13} /> },
-  { key: 'live', label: 'Live', icon: <span className="ipo-pulse-dot" /> },
-  { key: 'upcoming', label: 'Upcoming', icon: <Clock size={13} /> },
-  { key: 'listed', label: 'Recently Listed', icon: <CheckCircle size={13} /> },
+// Memoized icons to prevent recreation on each render
+const FILTER_ICONS: Record<FilterTab, React.ReactNode> = {
+  all: <Activity size={13} />,
+  live: <span className="ipo-pulse-dot" />,
+  upcoming: <Clock size={13} />,
+  listed: <CheckCircle size={13} />,
+};
+
+const FILTER_TABS: { key: FilterTab; label: string }[] = [
+  { key: 'all', label: 'All IPOs' },
+  { key: 'live', label: 'Live' },
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'listed', label: 'Recently Listed' },
 ];
 
 interface StatsPillProps {
@@ -19,7 +27,7 @@ interface StatsPillProps {
   listed: number;
 }
 
-const StatsPills: React.FC<StatsPillProps> = ({ live, upcoming, listed }) => (
+const StatsPills = React.memo<StatsPillProps>(({ live, upcoming, listed }) => (
   <div className="ipo-stats-row">
     <div className="ipo-stat-pill live">
       <span className="ipo-pulse-dot" />
@@ -37,7 +45,9 @@ const StatsPills: React.FC<StatsPillProps> = ({ live, upcoming, listed }) => (
       <span className="ipo-stat-pill-label">Listed</span>
     </div>
   </div>
-);
+));
+
+StatsPills.displayName = 'StatsPills';
 
 interface IpoSectionProps {
   title: string;
@@ -47,7 +57,7 @@ interface IpoSectionProps {
   variant: 'live' | 'upcoming' | 'listed';
 }
 
-const IpoSection: React.FC<IpoSectionProps> = ({ title, subtitle, cards, originPath, variant }) => (
+const IpoSection = React.memo<IpoSectionProps>(({ title, subtitle, cards, originPath, variant }) => (
   <section className={`ipo-section ipo-section--${variant}`}>
     <div className="ipo-section-head">
       <div className="ipo-section-head-left">
@@ -77,7 +87,9 @@ const IpoSection: React.FC<IpoSectionProps> = ({ title, subtitle, cards, originP
       </div>
     )}
   </section>
-);
+));
+
+IpoSection.displayName = 'IpoSection';
 
 interface IpoDashboardContentProps {
   embedded?: boolean;
@@ -139,17 +151,30 @@ export const IpoDashboardContent: React.FC<IpoDashboardContentProps> = ({
   const upcomingCount = data?.buckets.upcoming.length ?? 0;
   const listedCount = data?.buckets.listed.length ?? 0;
 
-  // Filter cards to show based on active tab
-  const getFilteredBuckets = () => {
+  // Memoized filter computation to avoid recalculating on every render
+  const filtered = React.useMemo(() => {
     if (!data) return { live: [], upcoming: [], listed: [] };
     if (activeFilter === 'all') return data.buckets;
     if (activeFilter === 'live') return { live: data.buckets.live, upcoming: [], listed: [] };
     if (activeFilter === 'upcoming') return { live: [], upcoming: data.buckets.upcoming, listed: [] };
     return { live: [], upcoming: [], listed: data.buckets.listed };
-  };
+  }, [data, activeFilter]);
 
-  const filtered = getFilteredBuckets();
   const isSearchActive = searchQuery.trim().length > 0;
+
+  // Memoized handlers to prevent child re-renders
+  const handleFilterChange = React.useCallback((key: FilterTab) => {
+    setActiveFilter(key);
+    setSearchQuery('');
+  }, []);
+
+  const handleSearchChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  }, []);
+
+  const handleClearSearch = React.useCallback(() => {
+    setSearchQuery('');
+  }, []);
 
   const contentStyle: React.CSSProperties = embedded
     ? { minWidth: 0 }
@@ -186,9 +211,9 @@ export const IpoDashboardContent: React.FC<IpoDashboardContentProps> = ({
               role="tab"
               aria-selected={activeFilter === tab.key}
               className={`ipo-filter-tab${activeFilter === tab.key ? ' active' : ''}`}
-              onClick={() => { setActiveFilter(tab.key); setSearchQuery(''); }}
+              onClick={() => handleFilterChange(tab.key)}
             >
-              {tab.icon}
+              {FILTER_ICONS[tab.key]}
               {tab.label}
               {tab.key === 'live' && liveCount > 0 && <span className="ipo-filter-badge">{liveCount}</span>}
             </button>
@@ -201,11 +226,11 @@ export const IpoDashboardContent: React.FC<IpoDashboardContentProps> = ({
             className="ipo-search-input"
             placeholder="Search IPOs…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={handleSearchChange}
             aria-label="Search IPOs"
           />
           {searchQuery && (
-            <button type="button" className="ipo-search-clear" onClick={() => setSearchQuery('')} aria-label="Clear">
+            <button type="button" className="ipo-search-clear" onClick={handleClearSearch} aria-label="Clear">
               <X size={12} />
             </button>
           )}

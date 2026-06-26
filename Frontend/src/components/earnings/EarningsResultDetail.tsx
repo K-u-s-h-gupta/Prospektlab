@@ -10,7 +10,6 @@ import {
   EarningsResultResponse,
   EarningsAISummary,
   EarningsFinancialRow,
-  EarningsTranscriptBlock,
   EarningsDocumentLink,
   getEarningsResult,
 } from '../../api/client';
@@ -169,44 +168,6 @@ const AISummaryCard: React.FC<{ summary: EarningsAISummary }> = ({ summary }) =>
   );
 };
 
-// TranscriptSection exported so it remains available for future use without triggering
-// noUnusedLocals — the transcript tab was removed from the UI but the component is kept.
-export const TranscriptSection: React.FC<{
-  preparedRemarks: EarningsTranscriptBlock[];
-  qa: EarningsTranscriptBlock[];
-}> = ({ preparedRemarks, qa }) => {
-  const hasAny = preparedRemarks.length > 0 || qa.length > 0;
-  if (!hasAny) {
-    return <p className="erd-muted">Transcript not yet available for this filing.</p>;
-  }
-  return (
-    <div className="erd-transcript">
-      {preparedRemarks.length > 0 && (
-        <div className="erd-transcript-section">
-          <h4 className="erd-transcript-heading">Prepared remarks</h4>
-          {preparedRemarks.map((block, i) => (
-            <div key={i} className="erd-transcript-block">
-              {block.speaker && <span className="erd-transcript-speaker">{block.speaker}</span>}
-              <p>{block.text}</p>
-            </div>
-          ))}
-        </div>
-      )}
-      {qa.length > 0 && (
-        <div className="erd-transcript-section">
-          <h4 className="erd-transcript-heading">Q &amp; A</h4>
-          {qa.map((block, i) => (
-            <div key={i} className={`erd-transcript-block ${(block.speaker || '').toLowerCase().includes('analyst') || (block.speaker || '').toLowerCase().includes('question') ? 'is-question' : ''}`}>
-              {block.speaker && <span className="erd-transcript-speaker">{block.speaker}</span>}
-              <p>{block.text}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
 const DocumentsList: React.FC<{ documents: EarningsDocumentLink[] }> = ({ documents }) => {
   if (!documents.length) {
     return <p className="erd-muted">No official documents linked for this filing.</p>;
@@ -302,8 +263,12 @@ const EarningsResultDetail: React.FC<EarningsResultDetailProps> = ({
 
   // If the result is only a calendar announcement (not yet parsed), poll every 20s
   // for up to 3 minutes so the complete financial data appears automatically.
+  // Skip polling for future scheduled earnings (no PDF available yet).
   useEffect(() => {
     if (!result || result.financials?.source !== 'announcement_fallback') return;
+    // Check if the meeting date is in the future
+    const isFuture = new Date(result.meeting_date) > new Date();
+    if (isFuture) return; // Skip polling for future earnings
     let attempts = 0;
     const maxAttempts = 9;
     const interval = setInterval(() => {

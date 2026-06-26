@@ -13,7 +13,7 @@
  * Usage:
  *   const { prices, indexData, connected, feedSource } = useMarketFeed(symbols);
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { getMarketQuotes, getMarketIndices } from '../api/client';
 import { getRuntimeMarketDataWebSocketUrl } from '../utils/runtimeConfig';
 
@@ -124,8 +124,10 @@ function formatIndexChange(change: number): string {
 export function useMarketFeed(symbols: string[] = [], options: MarketFeedOptions = {}): MarketFeedState {
   const includeIndices = options.includeIndices !== false;
   const pollIndices = options.pollIndices ?? includeIndices;
-  const subscriptionSymbols = buildSubscriptionSymbols(symbols, includeIndices);
-  const subscriptionKey = subscriptionSymbols.join(',');
+  
+  const subscriptionSymbols = useMemo(() => buildSubscriptionSymbols(symbols, includeIndices), [symbols, includeIndices]);
+  const subscriptionKey = useMemo(() => subscriptionSymbols.join(','), [subscriptionSymbols]);
+  
   const [prices, setPrices] = useState<Record<string, PriceSnapshot>>({});
   const [indexData, setIndexData] = useState<Record<string, IndexSnapshot[]>>({});
   const [connected, setConnected] = useState(false);

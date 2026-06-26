@@ -77,7 +77,9 @@ outreach/leads*.csv
 frontend/node_modules/
 frontend/dist/
 frontend/dist-sandbox/
+frontend/dist-sandbox-release/
 frontend/app/dist_unzipped/
+frontend/app/
 frontend/.vite/
 frontend/.env.local
 frontend/.env.*.local

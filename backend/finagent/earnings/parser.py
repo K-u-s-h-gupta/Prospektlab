@@ -413,11 +413,7 @@ def _normalise_tables(raw_tables: list[Any]) -> list[dict[str, Any]]:
     return tables
 
 
-def _select_financial_tables(tables: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Select best financial tables, preferring consolidated first."""
-    result = _select_financial_tables_by_type(tables)
-    # Return consolidated if available, otherwise standalone
-    return result.get("consolidated") or result.get("standalone") or []
+
 
 
 def _select_financial_tables_by_type(tables: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -470,8 +466,7 @@ def _select_financial_tables_by_type(tables: list[dict[str, Any]]) -> dict[str, 
     }
 
 
-def _is_consolidated(table: dict[str, Any]) -> bool:
-    return "consolidated" in _table_to_text(table).lower() or "consolidated" in str(table.get("page_text") or "").lower()
+
 
 
 def _contains_metric_alias(text: str, aliases: tuple[str, ...]) -> bool:

@@ -67,7 +67,7 @@ const GmpBadge: React.FC<{ gmp?: number | null; priceBandHigh?: number }> = ({ g
   );
 };
 
-export const IpoCardView: React.FC<IpoCardViewProps> = ({ card, originPath = '/ipo' }) => {
+export const IpoCardView = React.memo<IpoCardViewProps>(({ card, originPath = '/ipo' }) => {
   const navigate = useNavigate();
   const band = card.price_band;
   const priceLabel =
@@ -91,7 +91,7 @@ export const IpoCardView: React.FC<IpoCardViewProps> = ({ card, originPath = '/i
     <button
       type="button"
       className={`ipo-card ipo-card--${card.status}`}
-      onClick={() => navigate(`/ipo/${card.slug}`, { state: { from: originPath } })}
+      onClick={() => navigate(`/ipo/${card.slug}`, { state: { from: originPath, card } })}
       aria-label={`View analysis for ${card.company_name}`}
     >
       {/* Top: company info + score */}
@@ -215,14 +215,16 @@ export const IpoCardView: React.FC<IpoCardViewProps> = ({ card, originPath = '/i
       </div>
     </button>
   );
-};
+});
+
+IpoCardView.displayName = 'IpoCardView';
 
 interface ScoreBarsProps {
   scores: Record<string, any>;
   composite?: number;
 }
 
-export const IpoScoreBars: React.FC<ScoreBarsProps> = ({ scores, composite }) => {
+export const IpoScoreBars = React.memo<ScoreBarsProps>(({ scores, composite }) => {
   const dims = [
     { key: 'business_quality', label: 'Business Quality', icon: '🏢' },
     { key: 'valuation_fairness', label: 'Valuation Fairness', icon: '⚖️' },
@@ -279,6 +281,8 @@ export const IpoScoreBars: React.FC<ScoreBarsProps> = ({ scores, composite }) =>
       </p>
     </div>
   );
-};
+});
+
+IpoScoreBars.displayName = 'IpoScoreBars';
 
 export default IpoCardView;

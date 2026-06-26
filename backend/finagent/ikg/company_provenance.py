@@ -118,26 +118,28 @@ class CompanyProvenance:
         entity_id = f"company:{cin}"
         try:
             with self._connect() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "select properties->>'name' as name from ikg_vertices where vertex_id = %s",
-                        (entity_id,),
-                    )
-                    vrow = cur.fetchone()
-                    company_name = (vrow or {}).get("name") or cin
+                # Use READ COMMITTED transaction
+                with conn.transaction():
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "select properties->>'name' as name from ikg_vertices where vertex_id = %s",
+                            (entity_id,),
+                        )
+                        vrow = cur.fetchone()
+                        company_name = (vrow or {}).get("name") or cin
 
-                    cur.execute(
-                        """
-                        select predicate, object_value, value_numeric, as_of_date, event_date,
-                               confidence, source_table, source_url, evidence_text
-                        from ikg_facts
-                        where subject_entity_id = %s
-                        order by coalesce(as_of_date, event_date) desc nulls last
-                        limit %s
-                        """,
-                        (entity_id, limit),
-                    )
-                    rows = [dict(r) for r in cur.fetchall()]
+                        cur.execute(
+                            """
+                            select predicate, object_value, value_numeric, as_of_date, event_date,
+                                   confidence, source_table, source_url, evidence_text
+                            from ikg_facts
+                            where subject_entity_id = %s
+                            order by coalesce(as_of_date, event_date) desc nulls last
+                            limit %s
+                            """,
+                            (entity_id, limit),
+                        )
+                        rows = [dict(r) for r in cur.fetchall()]
         except Exception as exc:
             raise ProvenanceLookupError(f"Provenance lookup failed for {cin}: {exc}") from exc
 

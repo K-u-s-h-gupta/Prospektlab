@@ -265,69 +265,71 @@ class GovernanceScorer:
     def _fetch_signals(self, cin: str) -> dict[str, Any]:
         signals: dict[str, Any] = {}
         with self._connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    select quarter, total_pledge_pct, total_promoter_holding_pct, fetched_at
-                    from shp_raw
-                    where cin = %s
-                    order by fetched_at desc nulls last, quarter desc
-                    limit 8
-                    """,
-                    (cin,),
-                )
-                signals["pledge_quarters"] = [dict(r) for r in cur.fetchall()]
+            # Use READ COMMITTED transaction for consistent snapshot
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        select quarter, total_pledge_pct, total_promoter_holding_pct, fetched_at
+                        from shp_raw
+                        where cin = %s
+                        order by fetched_at desc nulls last, quarter desc
+                        limit 8
+                        """,
+                        (cin,),
+                    )
+                    signals["pledge_quarters"] = [dict(r) for r in cur.fetchall()]
 
-                cur.execute(
-                    """
-                    select v.properties as properties
-                    from ikg_edges e
-                    join ikg_vertices v on v.vertex_id = e.from_vertex_id
-                    where e.label = 'ENFORCEMENT_ACTION_AGAINST'
-                      and e.to_vertex_id = %s
-                    """,
-                    (f"company:{cin}",),
-                )
-                enf: list[dict[str, Any]] = []
-                for r in cur.fetchall():
-                    props = r.get("properties") or {}
-                    enf.append({
-                        "violation_type": props.get("violation_type"),
-                        "penalty_amount_inr": props.get("penalty_amount_inr"),
-                        "order_date": props.get("order_date"),
-                        "status": props.get("status", "active"),
-                        "pdf_url": props.get("pdf_url"),
-                    })
-                signals["enforcement"] = enf
+                    cur.execute(
+                        """
+                        select v.properties as properties
+                        from ikg_edges e
+                        join ikg_vertices v on v.vertex_id = e.from_vertex_id
+                        where e.label = 'ENFORCEMENT_ACTION_AGAINST'
+                          and e.to_vertex_id = %s
+                        """,
+                        (f"company:{cin}",),
+                    )
+                    enf: list[dict[str, Any]] = []
+                    for r in cur.fetchall():
+                        props = r.get("properties") or {}
+                        enf.append({
+                            "violation_type": props.get("violation_type"),
+                            "penalty_amount_inr": props.get("penalty_amount_inr"),
+                            "order_date": props.get("order_date"),
+                            "status": props.get("status", "active"),
+                            "pdf_url": props.get("pdf_url"),
+                        })
+                    signals["enforcement"] = enf
 
-                cur.execute(
-                    """
-                    select auditor_name, fiscal_year, source_url
-                    from auditor_history_raw
-                    where cin = %s and role = 'statutory_auditor'
-                    order by fiscal_year desc
-                    limit 8
-                    """,
-                    (cin,),
-                )
-                signals["auditors"] = [dict(r) for r in cur.fetchall()]
+                    cur.execute(
+                        """
+                        select auditor_name, fiscal_year, source_url
+                        from auditor_history_raw
+                        where cin = %s and role = 'statutory_auditor'
+                        order by fiscal_year desc
+                        limit 8
+                        """,
+                        (cin,),
+                    )
+                    signals["auditors"] = [dict(r) for r in cur.fetchall()]
 
-                cur.execute(
-                    """
-                    select
-                      count(*) filter (
-                        where cessation_date is not null
-                          and cessation_date > (now() - interval '12 months')
-                      ) as recent_cessations,
-                      count(*) as total
-                    from directors_raw
-                    where cin = %s
-                    """,
-                    (cin,),
-                )
-                row = cur.fetchone() or {}
-                signals["board"] = {"recent_cessations": row.get("recent_cessations") or 0,
-                                    "total": row.get("total") or 0}
+                    cur.execute(
+                        """
+                        select
+                          count(*) filter (
+                            where cessation_date is not null
+                              and cessation_date > (now() - interval '12 months')
+                          ) as recent_cessations,
+                          count(*) as total
+                        from directors_raw
+                        where cin = %s
+                        """,
+                        (cin,),
+                    )
+                    row = cur.fetchone() or {}
+                    signals["board"] = {"recent_cessations": row.get("recent_cessations") or 0,
+                                        "total": row.get("total") or 0}
         return signals
 
     def score_company(self, cin: str) -> GovernanceResult | None:

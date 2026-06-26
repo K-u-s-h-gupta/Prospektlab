@@ -128,70 +128,66 @@ class DirectorNetworkExplorer:
         seed_id = f"company:{cin}"
         try:
             with self._connect() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "select properties->>'name' as name from ikg_vertices where vertex_id = %s",
-                        (seed_id,),
-                    )
-                    srow = cur.fetchone()
-                    seed_name = (srow or {}).get("name") or cin
-
-                    cur.execute(
-                        """
-                        select
-                          d.from_vertex_id            as person_id,
-                          pv.properties->>'name'      as director_name,
-                          d.properties->>'designation' as seed_designation,
-                          o.to_vertex_id              as company_id,
-                          cv.properties->>'name'      as company_name,
-                          o.properties->>'designation' as designation
-                        from ikg_edges d
-                        join ikg_edges o
-                          on o.from_vertex_id = d.from_vertex_id
-                         and o.label = 'DIRECTOR_OF'
-                         and o.to_vertex_id <> d.to_vertex_id
-                        left join ikg_vertices pv on pv.vertex_id = d.from_vertex_id
-                        left join ikg_vertices cv on cv.vertex_id = o.to_vertex_id
-                        where d.to_vertex_id = %s
-                          and d.label = 'DIRECTOR_OF'
-                        limit %s
-                        """,
-                        (seed_id, limit),
-                    )
-                    rows = [dict(r) for r in cur.fetchall()]
-        except Exception as exc:
-            raise NetworkLookupError(f"Director network traversal failed for {cin}: {exc}") from exc
-
-        # Also need directors with no other companies (so seed still shows its board).
-        if not rows:
-            # check the seed has any directors at all
-            try:
-                with self._connect() as conn:
+                # Use single transaction for consistent snapshot
+                with conn.transaction():
                     with conn.cursor() as cur:
                         cur.execute(
+                            "select properties->>'name' as name from ikg_vertices where vertex_id = %s",
+                            (seed_id,),
+                        )
+                        srow = cur.fetchone()
+                        seed_name = (srow or {}).get("name") or cin
+
+                        cur.execute(
                             """
-                            select d.from_vertex_id as person_id,
-                                   pv.properties->>'name' as director_name,
-                                   d.properties->>'designation' as seed_designation
+                            select
+                              d.from_vertex_id            as person_id,
+                              pv.properties->>'name'      as director_name,
+                              d.properties->>'designation' as seed_designation,
+                              o.to_vertex_id              as company_id,
+                              cv.properties->>'name'      as company_name,
+                              o.properties->>'designation' as designation
                             from ikg_edges d
+                            join ikg_edges o
+                              on o.from_vertex_id = d.from_vertex_id
+                             and o.label = 'DIRECTOR_OF'
+                             and o.to_vertex_id <> d.to_vertex_id
                             left join ikg_vertices pv on pv.vertex_id = d.from_vertex_id
-                            where d.to_vertex_id = %s and d.label = 'DIRECTOR_OF'
+                            left join ikg_vertices cv on cv.vertex_id = o.to_vertex_id
+                            where d.to_vertex_id = %s
+                              and d.label = 'DIRECTOR_OF'
                             limit %s
                             """,
                             (seed_id, limit),
                         )
-                        board = [dict(r) for r in cur.fetchall()]
-            except Exception as exc:
-                raise NetworkLookupError(f"Director network traversal failed for {cin}: {exc}") from exc
-            if not board:
-                return None
-            # board-only rows: company_id empty so assembler links seed→director only
-            board_rows = [
-                {"person_id": b["person_id"], "director_name": b.get("director_name"),
-                 "seed_designation": b.get("seed_designation"), "company_id": "", "company_name": ""}
-                for b in board
-            ]
-            return assemble_director_network(seed_id, seed_name, board_rows)
+                        rows = [dict(r) for r in cur.fetchall()]
+                        
+                        # Fetch board-only fallback in same transaction
+                        if not rows:
+                            cur.execute(
+                                """
+                                select d.from_vertex_id as person_id,
+                                       pv.properties->>'name' as director_name,
+                                       d.properties->>'designation' as seed_designation
+                                from ikg_edges d
+                                left join ikg_vertices pv on pv.vertex_id = d.from_vertex_id
+                                where d.to_vertex_id = %s and d.label = 'DIRECTOR_OF'
+                                limit %s
+                                """,
+                                (seed_id, limit),
+                            )
+                            board = [dict(r) for r in cur.fetchall()]
+                            if not board:
+                                return None
+                            # board-only rows
+                            board_rows = [
+                                {"person_id": b["person_id"], "director_name": b.get("director_name"),
+                                 "seed_designation": b.get("seed_designation"), "company_id": "", "company_name": ""}
+                                for b in board
+                            ]
+                            return assemble_director_network(seed_id, seed_name, board_rows)
+        except Exception as exc:
+            raise NetworkLookupError(f"Director network traversal failed for {cin}: {exc}") from exc
 
         return assemble_director_network(seed_id, seed_name, rows)
 

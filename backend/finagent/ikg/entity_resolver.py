@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from finagent.ikg.db import connect_postgres, get_database_url
+from finagent.ikg.db import get_connection_pool, get_database_url
 
 logger = logging.getLogger("finagent.ikg.entity_resolver")
 
@@ -81,19 +81,22 @@ class IKGEntityResolver:
     def __init__(self, database_url: str | None = None) -> None:
         self.database_url = get_database_url(database_url)
         self._cache = _TTLCache()
+        self._pool = None
 
-    def _connect(self) -> Any:
-        try:
-            from psycopg.rows import dict_row
-        except ImportError as exc:
-            raise RuntimeError("psycopg required for IKG entity resolution") from exc
-        return connect_postgres(self.database_url, row_factory=dict_row, connect_timeout=5)
+    def _get_pool(self):
+        """Lazy-initialize connection pool on first use."""
+        if self._pool is None:
+            self._pool = get_connection_pool(self.database_url, min_size=2, max_size=20)
+        return self._pool
 
     def _fetch_rows(self, sql: str, params: tuple[Any, ...]) -> list[dict[str, Any]]:
         if not self.database_url:
             return []
-        # Let exceptions propagate — callers distinguish DB error from empty result
-        with self._connect() as conn:
+        from psycopg.rows import dict_row
+        # Use connection pool instead of creating new connection each time
+        pool = self._get_pool()
+        with pool.connection() as conn:
+            conn.row_factory = dict_row
             with conn.cursor() as cur:
                 cur.execute(sql, params)
                 return [dict(row) for row in cur.fetchall()]

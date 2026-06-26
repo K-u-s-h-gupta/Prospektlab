@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CalendarDays,
@@ -135,6 +135,10 @@ const EarningsWorkspace: React.FC<EarningsWorkspaceProps> = ({
   const [coError, setCoError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
+  // pagination cache
+  const pageCache = useRef<Map<string, { items: EarningsCompanyItem[]; total: number; page: number; page_size: number; timestamp: number }>>(new Map());
+  const CACHE_TTL_MS = 120000; // 2 minutes
+
   // build strip: STRIP_RADIUS days before+after selected date anchor
   const stripAnchor =
     Math.abs((parseDateKey(selectedDate).getTime() - today.getTime()) / 86400000) <= STRIP_RADIUS * 2
@@ -177,6 +181,15 @@ const EarningsWorkspace: React.FC<EarningsWorkspaceProps> = ({
   }, []);
 
   const loadCompanies = useCallback(async (date: string, page = 1) => {
+    const cacheKey = `${date}-${page}`;
+    const cached = pageCache.current.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      setCompanies({ items: cached.items, total: cached.total, page: cached.page, page_size: cached.page_size });
+      setCoLoading(false);
+      return;
+    }
+
     const seq = ++coSeq.current;
     setCoLoading(true);
     setCoError('');
@@ -184,6 +197,13 @@ const EarningsWorkspace: React.FC<EarningsWorkspaceProps> = ({
       const payload = await getEarningsCompanies({ date, page, pageSize: PAGE_SIZE });
       if (coSeq.current !== seq) return;
       setCompanies(payload);
+      pageCache.current.set(cacheKey, { 
+        items: payload.items, 
+        total: payload.total, 
+        page: payload.page,
+        page_size: payload.page_size,
+        timestamp: Date.now() 
+      });
     } catch (err: any) {
       if (coSeq.current !== seq) return;
       const raw = err?.message || '';
@@ -209,6 +229,10 @@ const EarningsWorkspace: React.FC<EarningsWorkspaceProps> = ({
   }, [selectedDate, currentPage, loadCompanies]);
 
   useEffect(() => {
+    pageCache.current.clear();
+  }, [selectedDate]);
+
+  useEffect(() => {
     const nextDate = /^\d{4}-\d{2}-\d{2}$/.test(String(initialDate || '')) ? String(initialDate) : todayKey;
     const parsed = parseDateKey(nextDate) || today;
     setSelectedDate(nextDate);
@@ -229,14 +253,20 @@ const EarningsWorkspace: React.FC<EarningsWorkspaceProps> = ({
 
   // ── handlers ────────────────────────────────────────────────────────────────
 
-  const selectDate = (day: Date) => {
-    const key = toDateKey(day);
-    setVisibleMonth(startOfMonth(day));
-    setSelectedDate(key);
-    setCurrentPage(1);
-    setCalendarOpen(false);
-    setWorkspace('calendar');
-  };
+  const selectDate = useMemo(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    return (day: Date) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const key = toDateKey(day);
+        setVisibleMonth(startOfMonth(day));
+        setSelectedDate(key);
+        setCurrentPage(1);
+        setCalendarOpen(false);
+        setWorkspace('calendar');
+      }, 200); // 200ms debounce
+    };
+  }, []);
 
 
   const openDetail = (company: EarningsCompanyItem) => {
