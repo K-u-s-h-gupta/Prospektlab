@@ -3287,8 +3287,13 @@ async def get_market_indices(current_user: dict | None = Depends(get_current_use
                 diff = price - cp if cp else 0.0
                 chg_str = f"({diff:+.2f})" if diff else "—"
                 sparkline = market_feed.get_sparkline(tick.symbol)
-                if not sparkline:
-                    sparkline = [price]
+                # If the ring buffer is empty or all values are identical (no intraday movement
+                # yet, e.g. pre-open or slow market), synthesise a trend-based sparkline from
+                # the day's change_pct so the card shows direction rather than a flat bar.
+                if not sparkline or len(set(sparkline)) <= 1:
+                    base = sparkline[0] if sparkline else price
+                    chg = (tick.change_pct or 0.0) / 100.0
+                    sparkline = [round(base * (1 + chg * ((i / 8.0) - 1)), 2) for i in range(9)]
                 return cat_name, {
                     "symbol": name,
                     "value": f"{price:,.2f}",

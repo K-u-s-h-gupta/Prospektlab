@@ -16,6 +16,17 @@ Use this before any campaign larger than a tiny pilot.
 - Remove role accounts unless the message is clearly relevant to that role.
 - Suppress bounced, unsubscribed, complained, replied-negative, and already-contacted addresses.
 
+### Enhanced Filters (v2 - June 2026)
+
+The batch script now enforces these additional filters automatically:
+
+- **MX verification**: Emails to domains without valid MX records are rejected pre-send. Use `--skip-mx-verify` only for testing.
+- **Stricter confidence gate**: "verified" or "valid" status must also have `email_confidence >= 0.7` (previously status alone was enough).
+- **Disposable domain blocklist**: Known temporary/throwaway email services are auto-rejected.
+- **Auto-suppression of failures**: Addresses that previously bounced with permanent errors are automatically excluded from future batches.
+
+Target: **<2% send failure rate** (script halts if exceeded).
+
 ## Copy
 
 - Subject is direct and human, not clickbait.

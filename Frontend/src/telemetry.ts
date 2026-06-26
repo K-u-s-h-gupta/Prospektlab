@@ -37,6 +37,16 @@ type TelemetryEnvelope = {
 
 const SESSION_STORAGE_KEY = 'prospektlab_telemetry_session_id';
 const CLIENT_IDENTITY_KEY = 'prospektlab_telemetry_user';
+const UTM_STORAGE_KEY = 'prospektlab_telemetry_utm';
+
+// UTM parameters captured on first visit for attribution tracking
+type UtmParams = {
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+};
 
 let initialized = false;
 let enabled = false;
@@ -44,6 +54,7 @@ let ingestionUrl = '';
 let instrumentationKey = '';
 let sessionId = '';
 let currentUser: TelemetryUser | null = null;
+let utmParams: UtmParams = {};
 let appRoleName = 'prospektlab-frontend';
 let cloudRoleInstance = 'browser';
 
@@ -132,6 +143,56 @@ function ensureSessionId(): string {
   }
 
   return sessionId;
+}
+
+function captureUtmParams(): UtmParams {
+  const runtimeWindow = getRuntimeWindow();
+  if (!runtimeWindow) {
+    return {};
+  }
+
+  // Check if we already have stored UTM params (first-touch attribution)
+  try {
+    const stored = runtimeWindow.localStorage.getItem(UTM_STORAGE_KEY);
+    if (stored) {
+      utmParams = JSON.parse(stored);
+      return utmParams;
+    }
+  } catch (_) {
+    // Ignore storage access issues.
+  }
+
+  // Capture UTM params from URL query string
+  try {
+    const searchParams = new URLSearchParams(runtimeWindow.location.search);
+    const params: UtmParams = {};
+    const utmKeys: (keyof UtmParams)[] = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+
+    for (const key of utmKeys) {
+      const value = searchParams.get(key);
+      if (value) {
+        params[key] = value;
+      }
+    }
+
+    // Only store if we found at least one UTM param
+    if (Object.keys(params).length > 0) {
+      utmParams = params;
+      try {
+        runtimeWindow.localStorage.setItem(UTM_STORAGE_KEY, JSON.stringify(params));
+      } catch (_) {
+        // Ignore storage access issues.
+      }
+    }
+  } catch (_) {
+    // Ignore URL parsing issues.
+  }
+
+  return utmParams;
+}
+
+function getUtmParams(): UtmParams {
+  return utmParams;
 }
 
 function formatDuration(durationMs?: number): string {
@@ -274,6 +335,14 @@ function buildCommonProperties(properties?: TelemetryProperties): Record<string,
     base.user_name = currentUser.name;
   }
 
+  // Include UTM attribution params for outreach tracking
+  const utm = getUtmParams();
+  if (utm.utm_source) base.utm_source = utm.utm_source;
+  if (utm.utm_medium) base.utm_medium = utm.utm_medium;
+  if (utm.utm_campaign) base.utm_campaign = utm.utm_campaign;
+  if (utm.utm_content) base.utm_content = utm.utm_content;
+  if (utm.utm_term) base.utm_term = utm.utm_term;
+
   return {
     ...base,
     ...sanitizeProperties(properties),
@@ -322,15 +391,21 @@ export function initializeTelemetry(): void {
   cloudRoleInstance = config.cloudRoleInstance || 'browser';
   ensureSessionId();
 
+  // Capture UTM params early for attribution tracking (outreach -> app traffic)
+  captureUtmParams();
+
   const runtimeWindow = getRuntimeWindow();
   if (runtimeWindow) {
     runtimeWindow.addEventListener('error', handleGlobalError);
     runtimeWindow.addEventListener('unhandledrejection', handleUnhandledRejection);
   }
 
+  // Include UTM attribution in app_initialized event
+  const utm = getUtmParams();
   trackEvent('app_initialized', {
     session_id: ensureSessionId(),
     environment: getRuntimeWindow()?.__CONFIG__?.environment || (import.meta as any)?.env?.MODE || 'unknown',
+    has_utm_attribution: Object.keys(utm).length > 0 ? 'true' : 'false',
   });
 }
 
@@ -499,4 +574,8 @@ export function getTelemetryRequestId(headers: HeadersInit): string | null {
 
 export function isTelemetryEnabled(): boolean {
   return enabled;
+}
+
+export function getUtmAttribution(): UtmParams {
+  return { ...getUtmParams() };
 }

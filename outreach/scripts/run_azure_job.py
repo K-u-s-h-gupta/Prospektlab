@@ -172,6 +172,8 @@ def main() -> int:
     ]
     if _truthy(os.getenv("OUTREACH_ALLOW_SHARED_INBOXES")):
         command.append("--allow-shared-inboxes")
+    if _truthy(os.getenv("OUTREACH_SKIP_MX_VERIFY")):
+        command.append("--skip-mx-verify")
     if _truthy(os.getenv("OUTREACH_SEND", "true")):
         command.append("--send")
 

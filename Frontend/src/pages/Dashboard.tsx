@@ -863,11 +863,21 @@ const normalizeIndexRow = (raw: any): IndexTickerData | null => {
     .slice(-24);
 
   const fallbackBase = valueNum ?? 0;
+  const sparkRange = sparkData.length >= 2
+    ? Math.max(...sparkData) - Math.min(...sparkData)
+    : 0;
+
+  // If sparkData has real variation use it directly; otherwise synthesise a
+  // trend-based sparkline from changePct so the card shows direction instead
+  // of a flat bar (happens when the Upstox ring buffer hasn't seen price
+  // movement yet, e.g. pre-open or slow market).
   const normalizedSpark =
-    sparkData.length >= 2
+    sparkData.length >= 2 && sparkRange > 0
       ? sparkData
       : fallbackBase > 0
-        ? [fallbackBase * 0.996, fallbackBase * 0.998, fallbackBase, fallbackBase * 1.0015, fallbackBase * 1.003]
+        ? Array.from({ length: 9 }, (_, i) =>
+            fallbackBase * (1 + (changePct / 100) * ((i / 8) - 1))
+          )
         : [0, 0, 0, 0, 0];
 
   return {

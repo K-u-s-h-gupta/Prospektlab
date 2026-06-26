@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import dns.resolver
 import json
 import math
 import re
@@ -10,6 +11,7 @@ import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -257,7 +259,15 @@ def _is_high_confidence(contact: dict[str, Any], min_confidence: float) -> bool:
         return False
     status = str(contact.get("email_status") or "").strip().lower()
     confidence = float(contact.get("email_confidence") or 0.0)
-    return status.startswith("verified") or status in {"valid", "deliverable"} or confidence >= min_confidence
+    # Stricter: require BOTH a good status AND minimum confidence to reduce bounces.
+    # Previously, status alone ("verified"/"valid") would pass with confidence=0.0.
+    has_good_status = status.startswith("verified") or status in {"valid", "deliverable"}
+    meets_confidence = confidence >= min_confidence
+    # If status is explicitly verified/valid, still require at least a floor confidence of 0.7
+    # to catch stale "verified" records that are no longer valid.
+    if has_good_status:
+        return confidence >= max(0.7, min_confidence * 0.8)
+    return meets_confidence
 
 
 def _is_india_contact(contact: dict[str, Any]) -> bool:
@@ -328,6 +338,90 @@ def _has_person_name(name: str) -> bool:
     if len(tokens) < 2:
         return False
     return not any(token.lower() in CORP_NAME_TERMS for token in tokens)
+
+
+# ---------------------------------------------------------------------------
+# Enhanced email deliverability filters (target: <2% failure rate)
+# ---------------------------------------------------------------------------
+
+# Domains known to bounce, be defunct, or be disposable/temporary email services
+KNOWN_BAD_DOMAINS = frozenset({
+    "mailinator.com", "guerrillamail.com", "tempmail.com", "throwaway.email",
+    "yopmail.com", "sharklasers.com", "guerrillamailblock.com", "grr.la",
+    "dispostable.com", "trashmail.com", "fakeinbox.com", "maildrop.cc",
+    "temp-mail.org", "10minutemail.com", "minutemail.com", "emailondeck.com",
+    "getnada.com", "mohmal.com", "mailnesia.com", "guerrillamail.info",
+    "guerrillamail.de", "spam4.me", "trash-mail.com", "mytemp.email",
+    "tempail.com", "tempr.email", "disposableemailaddresses.emailmiser.com",
+})
+
+# Patterns that suggest defunct or parked domains common in stale SEBI/BSE data
+DEFUNCT_DOMAIN_PATTERNS = (
+    "noreply.", "donotreply.", "no-reply.",
+)
+
+
+@lru_cache(maxsize=4096)
+def _has_valid_mx(domain: str) -> bool:
+    """Check if the email domain has valid MX records (cached to avoid repeated DNS lookups)."""
+    if not domain or "." not in domain:
+        return False
+    try:
+        answers = dns.resolver.resolve(domain, "MX", lifetime=5.0)
+        return len(answers) > 0
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+        return False
+    except dns.resolver.LifetimeTimeout:
+        # On timeout, give benefit of the doubt (might be a slow DNS)
+        return True
+    except Exception:
+        return True
+
+
+def _is_disposable_or_bad_domain(email: str) -> bool:
+    """Check if email uses a known disposable/bad domain."""
+    if "@" not in email:
+        return True
+    domain = email.split("@", 1)[1].lower()
+    if domain in KNOWN_BAD_DOMAINS:
+        return True
+    if any(domain.startswith(prefix) for prefix in DEFUNCT_DOMAIN_PATTERNS):
+        return True
+    return False
+
+
+def _is_email_deliverable(email: str) -> bool:
+    """Pre-send verification: syntax + MX record check."""
+    if "@" not in email:
+        return False
+    domain = email.split("@", 1)[1].lower()
+    if _is_disposable_or_bad_domain(email):
+        return False
+    return _has_valid_mx(domain)
+
+
+def _fetch_previously_failed_emails(base_url: str, api_key: str, owner_email: str) -> set[str]:
+    """Fetch emails that have permanently failed (non-retryable) to auto-suppress them."""
+    rows = _paginate_table(
+        base_url=base_url,
+        api_key=api_key,
+        table="outreach_messages",
+        params={
+            "owner_email": f"eq.{owner_email}",
+            "status": "eq.failed",
+            "select": "to_email,last_error",
+        },
+    )
+    failed: set[str] = set()
+    for row in rows:
+        error = str(row.get("last_error") or "")
+        # Only auto-suppress if the error indicates a permanent delivery failure
+        # (not transient throttle/timeout issues)
+        if not _is_retryable_send_error(error):
+            email = _normalized(str(row.get("to_email") or "")).lower()
+            if email:
+                failed.add(email)
+    return failed
 
 
 def _is_role_fit(contact: dict[str, Any]) -> bool:
@@ -1023,15 +1117,25 @@ def _eligible_contacts(
     allow_shared_inboxes: bool,
     sent_emails: set[str],
     suppressed_emails: set[str],
+    failed_emails: set[str] | None = None,
     india_scope: str = "strict",
+    verify_mx: bool = True,
 ) -> list[dict[str, Any]]:
     deduped: dict[str, dict[str, Any]] = {}
     use_broad_india = india_scope == "broad"
+    _failed = failed_emails or set()
+    mx_rejected = 0
     for contact in contacts:
         email = _normalized(str(contact.get("email") or "")).lower()
         if not email or email in deduped or email in sent_emails or email in suppressed_emails:
             continue
+        # Auto-suppress previously permanently failed addresses
+        if email in _failed:
+            continue
         if not _is_high_confidence(contact, min_confidence):
+            continue
+        # Reject disposable/known-bad domains early
+        if _is_disposable_or_bad_domain(email):
             continue
         if use_broad_india:
             if not _is_india_contact_broad(contact):
@@ -1044,7 +1148,13 @@ def _eligible_contacts(
             continue
         if not _has_person_name(str(contact.get("name") or "")):
             continue
+        # MX record verification — reject emails with no valid mail server
+        if verify_mx and not _is_email_deliverable(email):
+            mx_rejected += 1
+            continue
         deduped[email] = contact
+    if mx_rejected:
+        print(f"  MX verification rejected {mx_rejected} contacts (domain has no mail server)")
     return sorted(deduped.values(), key=_priority_key)
 
 
@@ -1063,6 +1173,7 @@ def main() -> int:
     parser.add_argument("--failure-rate-sample-floor", type=int, default=50)
     parser.add_argument("--send-timeout-seconds", type=int, default=45)
     parser.add_argument("--allow-shared-inboxes", action="store_true")
+    parser.add_argument("--skip-mx-verify", action="store_true", help="Skip MX record verification (faster but higher bounce risk)")
     parser.add_argument("--send", action="store_true")
     args = parser.parse_args()
 
@@ -1081,6 +1192,16 @@ def main() -> int:
     contacts = _fetch_contacts(base_url, api_key)
     sent_emails = _fetch_existing_sent(base_url, api_key, args.owner_email)
     suppressed_emails = _fetch_suppressed(base_url, api_key, args.owner_email)
+
+    # Fetch previously permanently-failed emails for auto-suppression
+    failed_emails = _fetch_previously_failed_emails(base_url, api_key, args.owner_email)
+    if failed_emails:
+        print(f"Auto-suppressing {len(failed_emails)} previously permanently-failed addresses")
+
+    verify_mx = not args.skip_mx_verify
+    if verify_mx:
+        print("MX verification enabled — domains without mail servers will be rejected")
+
     strict_india_contacts = sum(1 for contact in contacts if _is_india_contact(contact))
     broad_india_contacts = sum(1 for contact in contacts if _is_india_contact_broad(contact))
     eligible_strict = _eligible_contacts(
@@ -1089,7 +1210,9 @@ def main() -> int:
         allow_shared_inboxes=args.allow_shared_inboxes,
         sent_emails=sent_emails,
         suppressed_emails=suppressed_emails,
+        failed_emails=failed_emails,
         india_scope="strict",
+        verify_mx=verify_mx,
     )
     eligible_broad = _eligible_contacts(
         contacts,
@@ -1097,7 +1220,9 @@ def main() -> int:
         allow_shared_inboxes=args.allow_shared_inboxes,
         sent_emails=sent_emails,
         suppressed_emails=suppressed_emails,
+        failed_emails=failed_emails,
         india_scope="broad",
+        verify_mx=verify_mx,
     )
     eligible = eligible_broad if args.india_scope == "broad" else eligible_strict
 
@@ -1105,7 +1230,8 @@ def main() -> int:
         f"Supabase contacts={len(contacts)} india_strict={strict_india_contacts} "
         f"india_broad={broad_india_contacts} eligible_strict={len(eligible_strict)} "
         f"eligible_broad={len(eligible_broad)} scope={args.india_scope} eligible={len(eligible)} "
-        f"already_sent={len(sent_emails)} suppressed={len(suppressed_emails)}"
+        f"already_sent={len(sent_emails)} suppressed={len(suppressed_emails)} "
+        f"auto_suppressed_failures={len(failed_emails)}"
     )
     if not eligible:
         print("No eligible India-only outreach leads remain.")

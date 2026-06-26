@@ -12,7 +12,7 @@ $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $stdoutPath = Join-Path $logDir ("batch-" + $stamp + ".out.log")
 $stderrPath = Join-Path $logDir ("batch-" + $stamp + ".err.log")
 
-$pythonExe = Join-Path $repoRoot ".venv-finagent-311\Scripts\python.exe"
+$pythonExe = Join-Path $repoRoot ".venv\Scripts\python.exe"
 $scriptPath = Join-Path $repoRoot "outreach\scripts\run_supabase_outreach_batch.py"
 $configPath = Join-Path $repoRoot "outreach\config.local.json"
 
