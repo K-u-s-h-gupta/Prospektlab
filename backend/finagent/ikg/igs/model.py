@@ -670,6 +670,29 @@ def score_company(
     if features is None:
         return None
 
+    # Insufficient-data gate. A company with none of the core governance signals
+    # has an all-null feature vector; the tree model routes every such row to the
+    # same missing-value leaf and emits one uniform high probability (it learned
+    # "stopped reporting ≈ failed"). That is "we have no data", not "high risk".
+    # Surface it as insufficient_data so the caller degrades to rules-only and the
+    # company is never flagged HIGH purely for lacking data.
+    _signal_cols = (
+        "pledge_pct", "promoter_holding_pct", "director_count",
+        "own_enforcement_count", "director_enforcement_count",
+        "rpt_party_count", "auditor_count_5y",
+    )
+    if not any(features.get(c) is not None for c in _signal_cols):
+        return {
+            "cin": cin,
+            "predicted_risk": None,
+            "probability": None,
+            "reasons": [],
+            "insufficient_data": True,
+            "model_version": MODEL_VERSION,
+            "feature_version": FEATURE_VERSION,
+            "as_of_date": str(features.get("as_of_date")),
+        }
+
     try:
         model = IGSModel.load(model_path)
     except FileNotFoundError as exc:
