@@ -315,6 +315,18 @@ def _build_scheduler() -> Any:
         misfire_grace_time=14400,
         replace_existing=True,
     )
+    # IGS Phase B→D nightly (23:00 IST): rebuild features, retrain model, rescore.
+    # Runs after the daily scrapers and before the 02:30 IST DB backup so the
+    # backup captures fresh scores. Without this, scores go stale and the model
+    # is never auto-retrained (it is lost on every image rebuild).
+    scheduler.add_job(
+        _run_igs_refresh,
+        _cron_trigger(hour=23, minute=0, timezone=_IST_TIMEZONE),
+        id="igs_refresh_daily",
+        name="IGS Refresh (features -> train -> score)",
+        misfire_grace_time=14400,
+        replace_existing=True,
+    )
     scheduler.add_job(
         _run_health_check,
         _cron_trigger(hour="0,6,12,18", minute=30, timezone=_IST_TIMEZONE),
@@ -526,6 +538,28 @@ def _run_corporate_filing_attachment_hydration() -> None:
         logger.info("[SCHEDULER] corporate_filing_attachment_hydration: %s", result.to_dict())
 
     _with_control_and_lock("corporate_filing_attachment_hydration_6h", _run)
+
+
+def _run_igs_refresh() -> None:
+    """IGS Phase B→D nightly: rebuild features, retrain the model, rescore the
+    universe. Keeps company_governance_scores fresh and regenerates the model
+    artifact so it survives image rebuilds (the model is otherwise lost on every
+    rebuild). Phases run in order; each is logged with its run dict."""
+    def _run() -> None:
+        from finagent.ikg.pipeline.orchestrator import (
+            run_company_features_refresh,
+            run_igs_model_train,
+            run_igs_scoring_refresh,
+        )
+
+        feat = run_company_features_refresh()
+        logger.info("[SCHEDULER] igs_features: %s", feat.to_dict())
+        trained = run_igs_model_train()
+        logger.info("[SCHEDULER] igs_train: %s", trained.to_dict())
+        scored = run_igs_scoring_refresh()
+        logger.info("[SCHEDULER] igs_score: %s", scored.to_dict())
+
+    _with_control_and_lock("igs_refresh_daily", _run)
 
 
 def _run_health_check() -> None:
