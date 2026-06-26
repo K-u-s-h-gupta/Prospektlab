@@ -21,6 +21,7 @@ else HIGH. Higher score = more governance risk.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from finagent.ikg.db import connect_postgres, get_database_url
@@ -262,6 +263,42 @@ on conflict (cin, as_of_date) do update set
 """
 
 
+def _recalibrate_bands_by_percentile(cur: Any, as_of_date: str) -> int:
+    """Re-assign ``band`` by percentile of composite_score within an as_of cohort.
+
+    The trained model ranks well (AUC ~0.79) but calibrated probabilities cluster
+    below the listed-universe base rate, so absolute thresholds (25/50/75) push the
+    vast majority into LOW (observed: 97.7% LOW / 6 ELEVATED). Percentile bands turn
+    the model's good *ranking* into a usable distribution that always surfaces the
+    relatively-riskiest names. Gated by IGS_PERCENTILE_BANDS (default on); set to 0
+    to keep absolute-threshold bands.
+
+    Cohort cut points (riskiest first): top 2% HIGH, next 8% ELEVATED, next 20%
+    MODERATE, remainder LOW. Returns the number of rows updated.
+    """
+    if os.getenv("IGS_PERCENTILE_BANDS", "1").strip().lower() in {"0", "false", "no"}:
+        return 0
+    cur.execute(
+        """
+        with ranked as (
+            select cin,
+                   percent_rank() over (order by composite_score desc) as pr
+            from company_governance_scores
+            where as_of_date = %(as_of)s
+        )
+        update company_governance_scores g set band = case
+            when r.pr <= 0.02 then 'HIGH'
+            when r.pr <= 0.10 then 'ELEVATED'
+            when r.pr <= 0.30 then 'MODERATE'
+            else 'LOW' end
+        from ranked r
+        where g.cin = r.cin and g.as_of_date = %(as_of)s
+        """,
+        {"as_of": as_of_date},
+    )
+    return cur.rowcount or 0
+
+
 def _listed_cins(cur: Any, limit: int | None) -> list[str]:
     """Return listed CINs from the company master (optionally capped)."""
     sql = (
@@ -355,6 +392,15 @@ def score_all_listed(
 
                     if i % commit_every == 0:
                         conn.commit()
+                conn.commit()
+                # Turn the model's ranking into a usable band distribution.
+                try:
+                    rebanded = _recalibrate_bands_by_percentile(cur, as_of_date)
+                    if rebanded:
+                        stats["rebanded"] = rebanded
+                    conn.commit()
+                except Exception as exc:
+                    logger.warning("band recalibration skipped: %s", exc)
             conn.commit()
         stats["success"] = True
         stats["companies"] = len(targets)

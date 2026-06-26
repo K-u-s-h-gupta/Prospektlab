@@ -39,6 +39,10 @@ logger = logging.getLogger("finagent.ikg.scrapers._proxy_manager")
 # ─── Public proxy list sources ────────────────────────────────────────────────
 _PROXY_SOURCES: list[tuple[str, str]] = [
     # (url, protocol)
+    # vakhov/fresh-proxy-list — refreshed ~hourly via GitHub Actions; largest HTTP pool.
+    ("https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/http.txt", "http"),
+    ("https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/https.txt", "http"),
+    ("https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/socks5.txt", "socks5"),
     ("https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt", "http"),
     ("https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt", "socks5"),
     ("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt", "http"),
