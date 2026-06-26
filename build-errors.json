@@ -1,0 +1,12 @@
+﻿[
+    "#9 4.265 ERROR: Ignored the following versions that require a different python version: 1.0.0 Requires-Python >=3.12; 1.0.1 Requires-Python >=3.12; 1.0.2 Requires-Python >=3.12; 1.0.3 Requires-Python >=3.12; 1.0.4 Requires-Python >=3.12; 1.0.5 Requires-Python >=3.12; 1.0.6 Requires-Python >=3.12; 1.0.7 Requires-Python >=3.12; 1.0.8 Requires-Python >=3.12\n",
+    "#9 4.265 ERROR: Could not find a version that satisfies the requirement upstox-totp>=1.0.7 (from versions: none)\n",
+    "#9 4.265 ERROR: No matching distribution found for upstox-totp>=1.0.7\n",
+    "#9 ERROR: process \"/bin/sh -c pip install --upgrade pip &&     pip install --no-cache-dir -r requirements-finagent.txt\" did not complete successfully: exit code: 1\n",
+    "4.265 ERROR: Ignored the following versions that require a different python version: 1.0.0 Requires-Python >=3.12; 1.0.1 Requires-Python >=3.12; 1.0.2 Requires-Python >=3.12; 1.0.3 Requires-Python >=3.12; 1.0.4 Requires-Python >=3.12; 1.0.5 Requires-Python >=3.12; 1.0.6 Requires-Python >=3.12; 1.0.7 Requires-Python >=3.12; 1.0.8 Requires-Python >=3.12\n",
+    "4.265 ERROR: Could not find a version that satisfies the requirement upstox-totp>=1.0.7 (from versions: none)\n",
+    "4.265 ERROR: No matching distribution found for upstox-totp>=1.0.7\n",
+    "ERROR: failed to build: failed to solve: process \"/bin/sh -c pip install --upgrade pip &&     pip install --no-cache-dir -r requirements-finagent.txt\" did not complete successfully: exit code: 1\n",
+    "[Container] 2026/06/25 14:32:55.325397 Phase context status code: COMMAND_EXECUTION_ERROR Message: Error while executing command: docker build --no-cache -t \"$REPOSITORY_URI:latest\" .. Reason: exit status 1\n",
+    "[Container] 2026/06/25 14:32:55.367628 Phase context status code: COMMAND_EXECUTION_ERROR Message: Error while executing command: if [ \"$CODEBUILD_BUILD_SUCCEEDING\" -ne 1 ]; then echo \"Build failed; skipping image push and ECS deployment.\"; exit 1; fi. Reason: exit status 1\n"
+]

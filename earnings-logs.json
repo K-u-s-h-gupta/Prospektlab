@@ -1,0 +1,17 @@
+﻿[
+    "2026-06-25 15:04:30 [INFO] finagent.earnings.scraper: NSE outcome re-fetch for GRANULES 2026-04-29: 4/10 announcements are results docs",
+    "2026-06-25 15:04:32 [INFO] finagent.earnings.parser: PyMuPDF extraction accepted (quality ok): 50088 chars, 0 tables",
+    "2026-06-25 15:04:39 [INFO] finagent.earnings.scraper: NSE outcome re-fetch for IOB 2026-04-29: 3/6 announcements are results docs",
+    "2026-06-25 15:04:42 [INFO] finagent.earnings.parser: PyMuPDF extraction accepted (quality ok): 96075 chars, 1 tables",
+    "2026-06-25 15:04:43,334 INFO finagent.news_feed: Returning cached news for query: 'Indian stock market sector rotation earnings outlook'",
+    "2026-06-25 15:04:50 [INFO] finagent.earnings.scraper: NSE outcome re-fetch for KFINTECH 2026-04-29: 3/7 announcements are results docs",
+    "2026-06-25 15:05:07 [INFO] finagent.earnings.parser: PyMuPDF extraction accepted (quality ok): 67915 chars, 18 tables",
+    "2026-06-25 15:05:13,337 INFO finagent.news_feed: Returning cached news for query: 'Indian stock market sector rotation earnings outlook'",
+    "2026-06-25 15:05:14 [INFO] finagent.earnings.scraper: NSE outcome re-fetch for MASFIN 2026-04-29: 4/10 announcements are results docs",
+    "INFO:     10.0.1.249:24234 - \"GET /earnings/calendar?start_date=2026-06-01&end_date=2026-06-30 HTTP/1.1\" 200 OK",
+    "2026-06-25 15:05:18 [INFO] finagent.earnings.parser: PyMuPDF extraction accepted (quality ok): 102175 chars, 8 tables",
+    "2026-06-25 15:05:25 [INFO] finagent.earnings.scraper: NSE outcome re-fetch for MOIL 2026-04-29: 1/3 announcements are results docs",
+    "2026-06-25 15:05:28 [INFO] finagent.earnings.parser: PyMuPDF extraction accepted (quality ok): 29244 chars, 7 tables",
+    "2026-06-25 15:05:35 [INFO] finagent.earnings.scraper: NSE outcome re-fetch for MOTILALOFS 2026-04-29: 5/12 announcements are results docs",
+    "2026-06-25 15:05:38 [INFO] finagent.earnings.parser: PyMuPDF extraction accepted (quality ok): 72684 chars, 1 tables"
+]

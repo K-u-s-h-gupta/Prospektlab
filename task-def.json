@@ -1,0 +1,296 @@
+﻿{
+    "taskDefinition": {
+        "taskDefinitionArn": "arn:aws:ecs:ap-south-1:121488480221:task-definition/finagent-backend:19",
+        "containerDefinitions": [
+            {
+                "name": "backend",
+                "image": "121488480221.dkr.ecr.ap-south-1.amazonaws.com/finagent-backend:finagent-backend-build-efffa828-64cc-444d-bd98-58fd73ba1a2d",
+                "cpu": 0,
+                "links": [],
+                "portMappings": [
+                    {
+                        "containerPort": 8080,
+                        "hostPort": 8080,
+                        "protocol": "tcp"
+                    }
+                ],
+                "essential": true,
+                "entryPoint": [],
+                "command": [],
+                "environment": [
+                    {
+                        "name": "TELEMETRY_BURNER_BURST_SIZE",
+                        "value": "12"
+                    },
+                    {
+                        "name": "AUTH_SMS_DEFAULT_COUNTRY_CODE",
+                        "value": "+91"
+                    },
+                    {
+                        "name": "ACS_EMAIL_CONNECTION_STRING",
+                        "value": ""
+                    },
+                    {
+                        "name": "SUPABASE_JWT_SECRET",
+                        "value": ""
+                    },
+                    {
+                        "name": "FINAGENT_REPORT_CACHE_DIR",
+                        "value": "/tmp/annual_reports"
+                    },
+                    {
+                        "name": "TELEMETRY_BURNER_SESSION_FANOUT",
+                        "value": "3"
+                    },
+                    {
+                        "name": "MEMORY_DATABASE_URL",
+                        "value": "postgresql://postgres.qysdwdjzzihscythlxzp:Prospektlab%40123@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require"
+                    },
+                    {
+                        "name": "FINAGENT_FRONTEND_URL",
+                        "value": "https://prospektlab.com"
+                    },
+                    {
+                        "name": "SUPABASE_DB_URL",
+                        "value": ""
+                    },
+                    {
+                        "name": "MEMORY_EMBEDDINGS_ENABLED",
+                        "value": "false"
+                    },
+                    {
+                        "name": "FINAGENT_ANNUAL_REPORT_EXTRACT_MODE",
+                        "value": "metadata_only"
+                    },
+                    {
+                        "name": "ACS_SMS_FROM",
+                        "value": ""
+                    },
+                    {
+                        "name": "JWT_SECRET",
+                        "value": "QaASrfUFHWv4HMgdd/TKwDWLMf7kvxubxaM/iDfsIeyMLi2wFn7NaPdefcTSlmlm"
+                    },
+                    {
+                        "name": "ACS_EMAIL_SENDER_USERNAME",
+                        "value": "auth"
+                    },
+                    {
+                        "name": "FINAGENT_PIPELINE_LOG_DIR",
+                        "value": "/tmp/pipeline_logs"
+                    },
+                    {
+                        "name": "FINAGENT_OPENAI_MODEL",
+                        "value": "gpt-4.1-mini"
+                    },
+                    {
+                        "name": "FINAGENT_SEARXNG_URL",
+                        "value": ""
+                    },
+                    {
+                        "name": "PROSPEKTLAB_ENV",
+                        "value": "production"
+                    },
+                    {
+                        "name": "FINAGENT_OPENAI_MODEL_MICRO",
+                        "value": "gpt-4.1-mini"
+                    },
+                    {
+                        "name": "CORS_ORIGINS",
+                        "value": "https://prospektlab.com,https://www.prospektlab.com,https://production.d1z5h6v6ty54e7.amplifyapp.com,https://main.d1z5h6v6ty54e7.amplifyapp.com,https://d1pw8a1zc1b4q.cloudfront.net,https://d1pw81azc1b4q.cloudfront.net,https://dobiy4fdx7cb.cloudfront.net,https://dobiy4fdxr7cb.cloudfront.net,https://app.prospektlab.com"
+                    },
+                    {
+                        "name": "AZURE_DI_ENDPOINT",
+                        "value": ""
+                    },
+                    {
+                        "name": "MEMORY_BACKEND",
+                        "value": "prospekt_tiered"
+                    },
+                    {
+                        "name": "TELEMETRY_BURNER_REPLAY_LIMIT",
+                        "value": "5000"
+                    },
+                    {
+                        "name": "IKG_SCHEDULER_LOCK_TTL_MINUTES",
+                        "value": "240"
+                    },
+                    {
+                        "name": "TELEMETRY_BURNER_ENABLED",
+                        "value": "false"
+                    },
+                    {
+                        "name": "IKG_BACKEND",
+                        "value": "postgres"
+                    },
+                    {
+                        "name": "MCP_QUANT_URL",
+                        "value": ""
+                    },
+                    {
+                        "name": "ACS_EMAIL_FROM",
+                        "value": "auth@notify.prospektlab.com"
+                    },
+                    {
+                        "name": "TELEMETRY_BURNER_EXCEPTION_EVERY",
+                        "value": "5"
+                    },
+                    {
+                        "name": "SUPABASE_URL",
+                        "value": "https://qysdwdjzzihscythlxzp.supabase.co"
+                    },
+                    {
+                        "name": "APPINSIGHTS_CONNECTION_STRING",
+                        "value": ""
+                    },
+                    {
+                        "name": "APPINSIGHTS_ENABLED",
+                        "value": "false"
+                    },
+                    {
+                        "name": "MCP_DISCOVERY_URL",
+                        "value": ""
+                    },
+                    {
+                        "name": "DATABASE_URL",
+                        "value": ""
+                    },
+                    {
+                        "name": "TELEMETRY_BURNER_ROTATE_AFTER_CYCLES",
+                        "value": "60"
+                    },
+                    {
+                        "name": "ACS_EMAIL_DOMAIN",
+                        "value": "notify.prospektlab.com"
+                    },
+                    {
+                        "name": "APPINSIGHTS_ROLE_NAME",
+                        "value": "prospektlab-backend"
+                    },
+                    {
+                        "name": "SUPABASE_KEY",
+                        "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5c2R3ZGp6emloc2N5dGhseHpwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njg3ODYwMywiZXhwIjoyMDkyNDU0NjAzfQ.PzdLsGxLH10JFlM9DBNshGTscr2j_O8z46lBVPBiOaE"
+                    },
+                    {
+                        "name": "MEMORY_VECTOR_DIM",
+                        "value": "1536"
+                    },
+                    {
+                        "name": "FINAGENT_GRAPHRAG_CACHE",
+                        "value": "/tmp/graphrag"
+                    },
+                    {
+                        "name": "TAVILY_API_KEY",
+                        "value": ""
+                    },
+                    {
+                        "name": "TELEMETRY_BURNER_INTERVAL_S",
+                        "value": "5"
+                    },
+                    {
+                        "name": "FRONTEND_URL",
+                        "value": "https://prospektlab.com"
+                    },
+                    {
+                        "name": "ACS_SMS_CONNECTION_STRING",
+                        "value": ""
+                    },
+                    {
+                        "name": "TELEMETRY_BURNER_PAYLOAD_KB",
+                        "value": "12"
+                    },
+                    {
+                        "name": "OPENAI_BASE_URL",
+                        "value": "https://prospektus-resource.services.ai.azure.com/openai/v1/responses"
+                    },
+                    {
+                        "name": "OPENAI_API_KEY",
+                        "value": "Cki9eniOvEdB1z2MW0bzfsuqn6dom2jR8U4WkHY3dNkhHUoCbrUqJQQJ99CEACHYHv6XJ3w3AAAAACOGeTJ6"
+                    },
+                    {
+                        "name": "AZURE_DI_KEY",
+                        "value": ""
+                    },
+                    {
+                        "name": "IKG_DATABASE_URL",
+                        "value": "postgresql://ikg_user:ikg_password_change_me@127.0.0.1:15432/ikg"
+                    },
+                    {
+                        "name": "FINAGENT_OPENAI_MODEL_SIMPLE",
+                        "value": "gpt-4.1-mini"
+                    }
+                ],
+                "environmentFiles": [],
+                "mountPoints": [],
+                "volumesFrom": [],
+                "secrets": [],
+                "dnsServers": [],
+                "dnsSearchDomains": [],
+                "extraHosts": [],
+                "dockerSecurityOptions": [],
+                "dockerLabels": {},
+                "ulimits": [],
+                "logConfiguration": {
+                    "logDriver": "awslogs",
+                    "options": {
+                        "awslogs-group": "/ecs/finagent-backend",
+                        "awslogs-region": "ap-south-1",
+                        "awslogs-stream-prefix": "ecs"
+                    },
+                    "secretOptions": []
+                },
+                "systemControls": [],
+                "credentialSpecs": []
+            }
+        ],
+        "family": "finagent-backend",
+        "taskRoleArn": "arn:aws:iam::121488480221:role/finagent-backend-stack-ECSTaskRole-3eXnQ8qrQqzP",
+        "executionRoleArn": "arn:aws:iam::121488480221:role/finagent-backend-stack-ECSTaskExecutionRole-7BixDV1LX0rT",
+        "networkMode": "awsvpc",
+        "revision": 19,
+        "volumes": [],
+        "status": "ACTIVE",
+        "requiresAttributes": [
+            {
+                "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+            },
+            {
+                "name": "ecs.capability.execution-role-awslogs"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.ecr-auth"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.17"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.task-iam-role"
+            },
+            {
+                "name": "ecs.capability.execution-role-ecr-pull"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+            },
+            {
+                "name": "ecs.capability.task-eni"
+            }
+        ],
+        "placementConstraints": [],
+        "compatibilities": [
+            "EC2",
+            "MANAGED_INSTANCES",
+            "FARGATE"
+        ],
+        "requiresCompatibilities": [
+            "FARGATE"
+        ],
+        "cpu": "2048",
+        "memory": "4096",
+        "registeredAt": "2026-06-25T20:12:47.044000+05:30",
+        "registeredBy": "arn:aws:sts::121488480221:assumed-role/finagent-backend-stack-CodeBuildRole-mQKD3VFs4oTi/AWSCodeBuild-efffa828-64cc-444d-bd98-58fd73ba1a2d"
+    },
+    "tags": []
+}
