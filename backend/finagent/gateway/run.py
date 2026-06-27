@@ -4501,8 +4501,8 @@ async def get_metrics_snapshot(current_user: dict = Depends(get_current_user)):
 
 
 @app.get("/company/{cin}/governance")
-async def get_company_governance(cin: str, current_user: dict = Depends(get_current_user)):
-    """Forensic Governance Score for a single company by CIN."""
+async def get_company_governance(cin: str, current_user: dict | None = Depends(get_current_user_optional)):
+    """Forensic Governance Score for a single company by CIN. Public (no auth)."""
     from finagent.ikg.governance_score import (
         GovernanceLookupError,
         get_governance_scorer,
@@ -4554,20 +4554,22 @@ async def get_company_governance(cin: str, current_user: dict = Depends(get_curr
 async def get_governance_leaderboard(
     bands: str | None = None,
     limit: int = 50,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict | None = Depends(get_current_user_optional),
 ):
     """Governance-tab leaderboard: data-backed companies ranked by governance risk.
 
-    ``bands`` is an optional comma list (e.g. "HIGH,ELEVATED"). Only companies with
-    a real model contribution are returned — no-data companies are never shown as
-    risk. This powers the governance tab's headline "who to worry about" view.
+    Public (no auth required) so the governance tab works for guests. ``bands`` is
+    an optional comma list (e.g. "HIGH,ELEVATED"). Only companies with a real model
+    contribution are returned — no-data companies are never shown as risk. This
+    powers the governance tab's headline "who to worry about" view.
     """
     from finagent.ikg.igs.scoring import top_risk_companies
 
     band_list = [b.strip().upper() for b in bands.split(",") if b.strip()] if bands else None
     limit = max(1, min(int(limit), 200))
     rows = await asyncio.to_thread(top_risk_companies, None, limit, band_list)
-    _record_metric_event(current_user, "governance_leaderboard_view")
+    if current_user:
+        _record_metric_event(current_user, "governance_leaderboard_view")
     return {
         "as_of": str(rows[0]["as_of_date"]) if rows else None,
         "count": len(rows),
