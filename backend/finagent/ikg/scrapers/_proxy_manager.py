@@ -58,7 +58,10 @@ _VALIDATION_TIMEOUT = 6.0
 _MAX_FAILURES = 3         # remove proxy after this many consecutive failures
 _REFRESH_INTERVAL_S = 1800  # refresh source lists every 30 min
 _MIN_POOL_SIZE = 5          # trigger refresh when pool drops below this
-_VALIDATE_SAMPLE_SIZE = 30  # validate this many proxies per refresh cycle
+# Free-proxy liveness is ~5-10%, so a 30-sample yields only ~2 live. Validate a
+# much larger sample (concurrently, sem=20) so the usable pool is tens not single
+# digits. Override via FINAGENT_PROXY_VALIDATE_SAMPLE.
+_VALIDATE_SAMPLE_SIZE = int(os.getenv("FINAGENT_PROXY_VALIDATE_SAMPLE", "250"))
 
 
 class ProxyPool:
