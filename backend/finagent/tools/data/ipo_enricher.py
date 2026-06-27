@@ -46,10 +46,6 @@ _SECTOR_MAP: list[tuple[tuple[str, ...], str]] = [
     (("export",), "Exports & Trade"),
 ]
 
-# How many days after an RHP filing before we assume the IPO has listed
-# (3 days subscription + 2 days allotment + 7 days listing window = 12 days minimum)
-_RHP_LIVE_CUTOFF_DAYS = 12
-
 # How many days back to show in "recently listed" bucket
 RECENTLY_LISTED_DAYS = 60
 
@@ -67,31 +63,57 @@ def _infer_status(
     filing_date_str: str | None,
     prospectus_date_str: str | None,
     current_status: str | None,
+    subscription_open_str: str | None = None,
+    subscription_close_str: str | None = None,
+    listing_date_str: str | None = None,
 ) -> str:
-    """Determine the correct bucket status from document type and filing age."""
-    # Respect manually-set live/listed statuses unless the data clearly contradicts them
-    if doc_type == "prospectus":
-        return "listed"
-    if doc_type == "drhp":
-        return "upcoming"
-    if doc_type == "rhp":
-        # If there's a prospectus date, the IPO has listed
-        if prospectus_date_str:
-            return "listed"
-        if filing_date_str:
-            try:
-                filing = date.fromisoformat(filing_date_str)
-                days_old = (date.today() - filing).days
-                if days_old <= _RHP_LIVE_CUTOFF_DAYS:
-                    return "live"
-                else:
-                    # IPO has definitely listed by now
-                    return "listed"
-            except ValueError:
-                pass
-        return "live"
-    return current_status or "upcoming"
+    """Determine the correct bucket status from dates and document type.
 
+    Live means currently open for subscription. Closed-but-not-listed issues
+    are marked as ``closed`` so the live tab cannot show stale subscriptions.
+    """
+    today = date.today()
+    current = (current_status or "").strip().lower()
+
+    listing: date | None = None
+    if listing_date_str:
+        try:
+            listing = date.fromisoformat(listing_date_str[:10])
+            if listing <= today:
+                return "listed"
+        except ValueError:
+            pass
+
+    if subscription_open_str and subscription_close_str:
+        try:
+            sub_open = date.fromisoformat(subscription_open_str[:10])
+            sub_close = date.fromisoformat(subscription_close_str[:10])
+            if sub_open <= today <= sub_close:
+                return "live"
+            if today > sub_close:
+                return "closed"
+            if today < sub_open:
+                return "upcoming"
+        except ValueError:
+            pass
+    elif subscription_open_str:
+        try:
+            sub_open = date.fromisoformat(subscription_open_str[:10])
+            if sub_open <= today and current == "live":
+                return "live"
+            return "upcoming"
+        except ValueError:
+            pass
+
+    if doc_type == "prospectus" or prospectus_date_str:
+        return "listed"
+
+    if current in {"live", "listed", "closed", "upcoming"}:
+        return "upcoming" if current == "live" else current
+
+    if doc_type in {"drhp", "rhp"}:
+        return "upcoming"
+    return current_status or "upcoming"
 
 def _estimate_listing_date(
     doc_type: str,
@@ -138,6 +160,9 @@ def enrich_filing(payload: dict[str, Any]) -> dict[str, Any]:
     filing_date = payload.get("filing_date")
     prospectus_date = payload.get("prospectus_filing_date")
     current_status = payload.get("status")
+    subscription_open = payload.get("subscription_open")
+    subscription_close = payload.get("subscription_close")
+    listing_date = payload.get("listing_date")
 
     # RHP filing date
     rhp_date = payload.get("rhp_filing_date") or (filing_date if doc_type == "rhp" else None)
@@ -148,11 +173,11 @@ def enrich_filing(payload: dict[str, Any]) -> dict[str, Any]:
     if not enriched.get("sector"):
         enriched["sector"] = _infer_sector(company_name)
 
-    # Status
-    if doc_type in ("rhp", "drhp", "prospectus"):
-        enriched["status"] = _infer_status(doc_type, filing_date, prospectus_date, current_status)
-    elif not current_status:
-        enriched["status"] = "upcoming"
+    # Status - use subscription dates for accurate live detection
+    enriched["status"] = _infer_status(
+        doc_type, filing_date, prospectus_date, current_status,
+        subscription_open, subscription_close, listing_date
+    )
 
     inferred_status = enriched.get("status", "upcoming")
 

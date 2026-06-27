@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -6,19 +6,37 @@ import {
   BarChart3,
   Briefcase,
   CheckCircle2,
+  ChevronRight,
   Circle,
   Clock,
   DollarSign,
   FileText,
   Landmark,
+  Lock,
+  MessageSquare,
   PieChart,
+  Rocket,
+  Search,
   Shield,
+  Sparkles,
   TrendingUp,
   Users,
 } from 'lucide-react';
 import { AppShell } from '../components/layout/AppShell';
+import FeatureTabs, { FeatureTabId } from '../components/layout/FeatureTabs';
 import { IpoScoreBars } from '../components/ipo/IpoCard';
-import { IpoAnalysisResponse } from '../api/client';
+import { ChatInput } from '../components/chat/ChatInput';
+import { MessageBubble } from '../components/chat/MessageBubble';
+import { AgentThinking } from '../components/chat/AgentThinking';
+import ExportPanel from '../components/chat/ExportPanel';
+import { useAuth } from '../context/AuthContext';
+import {
+  IpoAnalysisResponse,
+  startResearch,
+  streamSession,
+  getSessionResult,
+  AgentEventData,
+} from '../api/client';
 
 type DetailTab = 'business' | 'financials' | 'growth' | 'valuation' | 'promoters' | 'proceeds' | 'risks' | 'institutional';
 
@@ -35,13 +53,18 @@ const TAB_CONFIG: { key: DetailTab; label: string; icon: React.ReactNode }[] = [
 
 const fmtCr = (v?: number | null) => (v != null ? `₹${v} cr` : '—');
 
-// Cached date formatter to avoid repeated Date parsing
+// Cached date formatter — capped at 200 entries to prevent memory leak in long SPA sessions
 const dateCache = new Map<string, string>();
+const DATE_CACHE_MAX = 200;
 const fmtDate = (value?: string | null) => {
   if (!value) return null;
   if (dateCache.has(value)) return dateCache.get(value);
   try {
     const formatted = new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    if (dateCache.size >= DATE_CACHE_MAX) {
+      // Evict oldest entry (first inserted)
+      dateCache.delete(dateCache.keys().next().value!);
+    }
     dateCache.set(value, formatted);
     return formatted;
   } catch {
@@ -120,7 +143,7 @@ const getSignalIcon = (signal: Signal) => {
 // Signal computation functions based on drhp.md interpretation rules
 const computeBusinessSignal = (analysis: any, scores: any): Signal => {
   const hasStrengths = (analysis.strengths || []).length >= 3;
-  const hasOverview = (analysis.business_overview_paragraphs || []).length > 0 || analysis.business_synthesis;
+  const hasOverview = (analysis.business_overview_paragraphs || []).length > 0 || Boolean(analysis.business_overview_excerpt);
   const businessScore = scores.business_quality;
   if (businessScore >= 70 && hasStrengths) return 'positive';
   if (businessScore >= 45 || hasOverview) return 'neutral';
@@ -236,14 +259,27 @@ const buildFallbackLifecycle = (filing: any): IpoLifecycleStage[] => {
   const docType = String(filing.doc_type || 'drhp').toLowerCase();
   const status = String(filing.status || 'upcoming').toLowerCase();
   const hasRhp = docType === 'rhp' || docType === 'prospectus' || Boolean(filing.rhp_filing_date);
-  const isOpen = status === 'live' || Boolean(filing.subscription_open);
-  const isListed = status === 'listed' || Boolean(filing.listing_date);
+  const parseDate = (value?: string | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const listingDate = parseDate(filing.listing_date);
+  const isListed = status === 'listed' || (Boolean(listingDate) && listingDate! <= today && status !== 'live' && status !== 'upcoming');
+  const isProspectus = docType === 'prospectus';
+  const rhpLabel = isProspectus ? 'Prospectus Filed' : 'RHP Approved';
+  const rhpDesc = isProspectus ? 'Final Prospectus filed - issue ready for subscription' : 'Red Herring Prospectus approved by SEBI';
+  const rhpDate = filing.prospectus_filing_date || filing.rhp_filing_date || (hasRhp ? filing.filing_date : null);
+  const rhpPdf = (docType === 'rhp' || docType === 'prospectus') ? filing.pdf_url : null;
+  // Lifecycle: DRHP -> RHP/Prospectus -> Listed (no Bidding Open / Allotment)
   return [
-    { key: 'drhp', label: 'DRHP Filed', description: 'Draft Red Herring Prospectus filed with SEBI', state: docType === 'drhp' && !isOpen && !isListed ? 'current' : 'done', date: filing.filing_date, pdf_url: docType === 'drhp' ? filing.pdf_url : null },
-    { key: 'rhp', label: 'RHP Approved', description: 'Red Herring Prospectus approved by SEBI', state: hasRhp ? (docType === 'rhp' && !isOpen && !isListed ? 'current' : 'done') : 'pending', date: filing.rhp_filing_date || (hasRhp ? filing.filing_date : null), pdf_url: docType === 'rhp' ? filing.pdf_url : null },
-    { key: 'ipo_open', label: 'Bidding Open', description: 'IPO subscription window', state: status === 'live' ? 'current' : (isOpen || isListed ? 'done' : 'pending'), date: filing.subscription_open, end_date: filing.subscription_close },
-    { key: 'allotment', label: 'Allotment', description: 'Share allotment finalized', state: filing.allotment_date || isListed ? 'done' : 'pending', date: filing.allotment_date },
-    { key: 'listed', label: 'Listed', description: 'Trading commenced on exchange', state: status === 'listed' ? 'current' : (isListed ? 'done' : 'pending'), date: filing.listing_date },
+    { key: 'drhp', label: 'DRHP Filed', description: 'Draft Red Herring Prospectus filed with SEBI', state: docType === 'drhp' && !isListed ? 'current' : 'done', date: filing.filing_date, pdf_url: docType === 'drhp' ? filing.pdf_url : null },
+    { key: 'rhp', label: rhpLabel, description: rhpDesc, state: hasRhp ? (docType !== 'drhp' && !isListed ? 'current' : 'done') : 'pending', date: rhpDate, pdf_url: rhpPdf },
+    { key: 'listed', label: 'Listed', description: 'Trading commenced on exchange', state: isListed ? 'done' : 'pending', date: filing.listing_date },
   ];
 };
 
@@ -386,8 +422,8 @@ const BusinessTab = React.memo<{ analysis: any; scores: any; filing: any }>(({
           businessParagraphs.map((paragraph: string, index: number) => (
             <p key={index} className="ipo-prose">{paragraph}</p>
           ))
-        ) : analysis.business_synthesis || analysis.business_overview_excerpt ? (
-          <p className="ipo-prose">{analysis.business_synthesis || analysis.business_overview_excerpt}</p>
+        ) : analysis.business_overview_excerpt ? (
+          <p className="ipo-prose">{analysis.business_overview_excerpt}</p>
         ) : (
           <p className="ipo-prose muted">
             Business overview will be available once the {fmtDocType(filing.doc_type)} document is analyzed.
@@ -779,21 +815,25 @@ const GrowthTab = React.memo<{ financials: any; kpis?: any }>(({ financials, kpi
                   </tbody>
                 </table>
               </div>
-              {/* Margin trend assessment */}
-              {marginSeries.length >= 2 && (() => {
-                const first = marginSeries[0].ebitdaMargin ? parseFloat(marginSeries[0].ebitdaMargin!) : null;
-                const last = marginSeries[marginSeries.length - 1].ebitdaMargin ? parseFloat(marginSeries[marginSeries.length - 1].ebitdaMargin!) : null;
-                if (first != null && last != null) {
-                  const diff = last - first;
-                  return (
-                    <div className="ipo-trend-row" style={{ marginTop: 12 }}>
-                      <span className={`ipo-trend-chip ${diff >= 0 ? '' : 'warning'}`}>
-                        EBITDA Margin: {diff >= 0 ? '+' : ''}{diff.toFixed(1)}pp over period
-                      </span>
-                    </div>
-                  );
-                }
-                return null;
+              {/* Margin trend — compute outside JSX to avoid inline IIFE */}
+              {(() => {
+                if (marginSeries.length < 2) return null;
+                const firstVal = marginSeries[0].ebitdaMargin ? parseFloat(marginSeries[0].ebitdaMargin!) : null;
+                const lastVal = marginSeries[marginSeries.length - 1].ebitdaMargin
+                  ? parseFloat(marginSeries[marginSeries.length - 1].ebitdaMargin!)
+                  : null;
+                if (firstVal == null || lastVal == null) return null;
+                const diff = lastVal - firstVal;
+                return (
+                  <div className="ipo-trend-row" style={{ marginTop: 12 }}>
+                    <span className={`ipo-trend-chip${diff < 0 ? ' warning' : ''}`}>
+                      EBITDA Margin: {diff >= 0 ? '+' : ''}{diff.toFixed(1)}pp over period
+                    </span>
+                    <span className={`ipo-cagr-badge ${diff >= 2 ? 'good' : diff >= 0 ? 'ok' : 'weak'}`} style={{ fontSize: 10.5 }}>
+                      {diff >= 0 ? 'Expanding' : 'Compressing'}
+                    </span>
+                  </div>
+                );
               })()}
             </section>
           )}
@@ -868,7 +908,7 @@ const ValuationTab = React.memo<{ peerVal: any; summary?: string; filing: any }>
 
       {(peerVal.peers || []).length > 0 && (
         <section className="ipo-detail-block">
-          <h3 className="ipo-detail-block-title">Peer comparison (listed peers from DRHP)</h3>
+          <h3 className="ipo-detail-block-title">Peer comparison (listed peers from offer document)</h3>
           <div className="ipo-fin-table-wrap">
             <table className="ipo-fin-table">
               <thead>
@@ -1416,17 +1456,72 @@ const InstitutionalTab = React.memo<{ filing: any; scores: any }>(({ filing, sco
 
 InstitutionalTab.displayName = 'InstitutionalTab';
 
-// ── Main Detail Page ──────────────────────────────────────────────────────────
+// ── Chat Message Interface ────────────────────────────────────────────────────
+interface Message {
+  sender: 'user' | 'ai';
+  text: string;
+  richData?: any;
+  depth?: 'standard' | 'deep';
+  elapsedMs?: number;
+  tokenLimitDetail?: any;
+  sessionId?: string;
+  wantsDocument?: boolean;
+}
+
+const DOC_INTENT_RE = /\b(report|document|doc|pdf|docx|memo|write[- ]?up|deck|dossier|whitepaper|white paper|one[- ]?pager|file)\b/i;
+const DOC_VERB_RE = /\b(export|download|save|generate|create|make|produce|prepare|draft|build|give me|send me|put together)\b/i;
+const DOC_NEG_RE = /\b(do not|don'?t|no need|without|skip|not a (report|document|pdf))\b/i;
+function queryWantsDocument(text: string): boolean {
+  const t = (text || '').toLowerCase();
+  if (!t) return false;
+  if (DOC_NEG_RE.test(t)) return false;
+  if (/\b(as|to|in)\s+(a\s+)?(pdf|docx?|document|report|file)\b/.test(t)) return true;
+  if (/\b(generate|create|make|give me|send me|build|prepare|draft|export|download)\s+(me\s+)?(a\s+|an\s+|the\s+)?(report|document|doc|pdf|docx|memo|deck|dossier|write[- ]?up|one[- ]?pager)\b/.test(t)) return true;
+  return DOC_VERB_RE.test(t) && DOC_INTENT_RE.test(t);
+}
+
+// ── Main Detail Page with Chat ────────────────────────────────────────────────
 export const IpoDetailPage: React.FC = () => {
   const { slug = '' } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [data, setData] = React.useState<IpoAnalysisResponse | null>(null);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState('');
-  const [activeTab, setActiveTab] = React.useState<DetailTab>('business');
-  const [analysisStatus, setAnalysisStatus] = React.useState<string>('loading');
-  const [statusMessage, setStatusMessage] = React.useState<string>('');
+  const { user, showToast, isAuthenticated, isReadOnly, isPro } = useAuth();
+
+  const [data, setData] = useState<IpoAnalysisResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<DetailTab>('business');
+  const [analysisStatus, setAnalysisStatus] = useState<string>('loading');
+  const [statusMessage, setStatusMessage] = useState<string>('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // ── Chat state ───────────────────────────────────────────────────────────────
+  const chatStorageScope = useMemo(() => {
+    if (isAuthenticated && user?.email) return user.email.toLowerCase();
+    return 'guest';
+  }, [isAuthenticated, user?.email]);
+
+  const getMessageStorageKey = (ipoSlug: string) =>
+    `prospektlab_ipo_messages:${chatStorageScope}:${ipoSlug}`;
+
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isThinking, setIsThinking] = useState(false);
+  const [thinkingEvents, setThinkingEvents] = useState<AgentEventData[]>([]);
+  const [pendingChatQuery, setPendingChatQuery] = useState<{ id: string; text: string; depth: 'standard' | 'deep' } | null>(null);
+  const [isChatHighlighted, setIsChatHighlighted] = useState(false);
+
+  const [chatWidth, setChatWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('prospektlab_ipo_chat_width');
+    return saved ? parseInt(saved, 10) : 380;
+  });
+  const [isDraggingChat, setIsDraggingChat] = useState(false);
+  const [isChatHidden, setIsChatHidden] = useState(() => {
+    const savedWidth = localStorage.getItem('prospektlab_ipo_chat_width');
+    return savedWidth ? parseInt(savedWidth, 10) <= 0 : false;
+  });
+
+  const abortStreamRef = useRef<(() => void) | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Get card data from router state (passed from dashboard)
   const cardFromState = (location.state as { card?: any } | null)?.card;
@@ -1435,7 +1530,44 @@ export const IpoDetailPage: React.FC = () => {
     ? (location.state as { from: string }).from
     : '/dashboard/ipo';
 
-  React.useEffect(() => {
+  // Load messages on slug change
+  useEffect(() => {
+    const stored = localStorage.getItem(getMessageStorageKey(slug));
+    setMessages(stored ? JSON.parse(stored) : []);
+  }, [slug, chatStorageScope]);
+
+  // Persist messages
+  useEffect(() => {
+    if (!slug) return;
+    localStorage.setItem(getMessageStorageKey(slug), JSON.stringify(messages));
+  }, [messages, slug, chatStorageScope]);
+
+  // Chat drag resize
+  useEffect(() => {
+    if (!isDraggingChat) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = Math.max(280, Math.min(600, window.innerWidth - e.clientX));
+      setChatWidth(newWidth);
+    };
+    const handleMouseUp = () => {
+      setIsDraggingChat(false);
+      localStorage.setItem('prospektlab_ipo_chat_width', chatWidth.toString());
+      if (chatWidth < 100) {
+        setIsChatHidden(true);
+        setChatWidth(0);
+        localStorage.setItem('prospektlab_ipo_chat_width', '0');
+      }
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingChat, chatWidth]);
+
+  // Load IPO analysis
+  useEffect(() => {
     let cancelled = false;
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
     
@@ -1465,7 +1597,6 @@ export const IpoDetailPage: React.FC = () => {
           return;
         }
 
-        // Completed status but actual data may have been cleared — only trust it if has_analysis is true
         if (status.analysis_status === 'completed' && status.has_analysis) {
           if (!cancelled) {
             setStatusMessage('Loading analysis...');
@@ -1497,7 +1628,7 @@ export const IpoDetailPage: React.FC = () => {
         
         if (status.analysis_status === 'pending' || !status.has_analysis) {
           if (!cancelled) {
-            setStatusMessage('Preparing analysis... Waiting for a background worker to parse the DRHP.');
+            setStatusMessage('Preparing analysis... Waiting for a background worker to parse the official IPO document.');
             setAnalysisStatus('processing');
           }
           
@@ -1538,8 +1669,8 @@ export const IpoDetailPage: React.FC = () => {
     };
   }, [slug]);
   
-  // Background refresh for live data (only when analysis is ready)
-  React.useEffect(() => {
+  // Background refresh for live data
+  useEffect(() => {
     if (analysisStatus !== 'ready') return;
     
     let cancelled = false;
@@ -1581,7 +1712,7 @@ export const IpoDetailPage: React.FC = () => {
   const hasAlert = fraudSignals.length >= 2;
 
   // Compute all signals
-  const signals: Record<string, Signal> = React.useMemo(() => ({
+  const signals: Record<string, Signal> = useMemo(() => ({
     business: computeBusinessSignal(analysis, scores),
     financials: computeFinancialSignal(financials),
     growth: computeGrowthSignal(financials),
@@ -1592,15 +1723,195 @@ export const IpoDetailPage: React.FC = () => {
     institutional: computeInstitutionalSignal(filing),
   }), [analysis, scores, financials, peerVal, objects, promoters, risks, filing]);
 
-  // Memoized handlers to prevent child re-renders
-  const handleBack = React.useCallback(() => navigate(backPath), [navigate, backPath]);
-  const handleTabChange = React.useCallback((key: DetailTab) => setActiveTab(key), []);
+  const companyName = filing.company_name || cardFromState?.company_name || 'this IPO';
 
-  // Show error state
+  // ── Feature tabs navigation ──────────────────────────────────────────────────
+  const handleFeatureTabChange = (tab: FeatureTabId) => {
+    switch (tab) {
+      case 'overview': navigate('/dashboard/overview'); break;
+      case 'portfolio': navigate('/dashboard/portfolio'); break;
+      case 'watchlist': navigate('/dashboard/watchlist'); break;
+      case 'screener': navigate('/dashboard/screener'); break;
+      case 'ipo': navigate('/dashboard/ipo'); break;
+      case 'earnings': navigate('/dashboard/earnings'); break;
+      case 'governance': navigate('/dashboard/governance'); break;
+      default: navigate('/dashboard/overview'); break;
+    }
+  };
+
+  // ── Chat handlers ────────────────────────────────────────────────────────────
+  const handleSuggestQuery = (query: string, depth: 'standard' | 'deep' = 'standard') => {
+    if (isReadOnly) {
+      navigate('/login?redirect=' + encodeURIComponent(location.pathname));
+      return;
+    }
+    if (isChatHidden) {
+      setIsChatHidden(false);
+      const w = 380;
+      setChatWidth(w);
+      localStorage.setItem('prospektlab_ipo_chat_width', w.toString());
+    }
+    setPendingChatQuery({ id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, text: query, depth });
+    setIsChatHighlighted(true);
+    setTimeout(() => setIsChatHighlighted(false), 1600);
+    setTimeout(() => {
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      }
+    }, 120);
+  };
+
+  const handleSendMessage = async (message: string, depth: 'standard' | 'deep' = 'standard') => {
+    if (!message.trim() || isThinking || isReadOnly) return;
+
+    const userMsg: Message = { sender: 'user', text: message, depth };
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
+    localStorage.setItem(getMessageStorageKey(slug), JSON.stringify(updatedMessages));
+
+    setIsThinking(true);
+    setThinkingEvents([{
+      seq: 0,
+      type: 'phase',
+      timestamp: new Date().toISOString(),
+      payload: { phase: 'queued', note: `Analyzing ${companyName}` },
+    }]);
+
+    const startMs = performance.now();
+    const wantsDoc = queryWantsDocument(message);
+    let streamedMemoText = '';
+    let runCompleted = false;
+
+    const completeWithResponse = (aiResponse: Message) => {
+      if (runCompleted) return;
+      runCompleted = true;
+      setMessages((prev) => {
+        const next = [...prev, aiResponse];
+        try { localStorage.setItem(getMessageStorageKey(slug), JSON.stringify(next)); } catch { /* ignore */ }
+        return next;
+      });
+      setIsThinking(false);
+      setThinkingEvents([]);
+    };
+
+    try {
+      // Prefix query with IPO context
+      const contextualQuery = `[IPO: ${companyName}] ${message}`;
+      const startRes = await startResearch(contextualQuery, depth);
+      const backendSessionId = startRes.session_id;
+
+      const unsubscribe = streamSession(
+        backendSessionId,
+        (event) => {
+          if (event.type === 'memo_token' && typeof event.payload?.chunk === 'string') {
+            streamedMemoText += event.payload.chunk;
+          }
+          setThinkingEvents((prev) => [...prev, event]);
+        },
+        async (parsedEvent: any) => {
+          if (runCompleted) return;
+          const elapsed = Math.round(performance.now() - startMs);
+          let aiResponse: Message;
+          try {
+            const finalResult = await getSessionResult(backendSessionId);
+            const richPayload = finalResult.final?.rich || parsedEvent?.rich || null;
+            const memoText =
+              finalResult.memo || finalResult.final?.memo || finalResult.final?.memo_preview ||
+              richPayload?.markdown_body || finalResult.memo_event?.preview ||
+              streamedMemoText.trim() || parsedEvent?.memo || parsedEvent?.memo_preview ||
+              parsedEvent?.preview || 'Analysis complete.';
+            aiResponse = { sender: 'ai', text: memoText, richData: richPayload, depth, elapsedMs: elapsed, sessionId: backendSessionId, wantsDocument: depth === 'deep' && wantsDoc };
+          } catch (resErr) {
+            console.error('Failed to retrieve final memo', resErr);
+            const fallbackRich = parsedEvent?.rich || null;
+            const fallbackText = parsedEvent?.memo || parsedEvent?.memo_preview || parsedEvent?.preview || fallbackRich?.markdown_body || streamedMemoText.trim() || 'Analysis complete.';
+            aiResponse = { sender: 'ai', text: fallbackText, richData: fallbackRich, depth, elapsedMs: elapsed, sessionId: backendSessionId, wantsDocument: depth === 'deep' && wantsDoc };
+            showToast('Failed to load full answer. Showing cached preview.', 'error');
+          }
+          completeWithResponse(aiResponse);
+        },
+        (err) => {
+          if (runCompleted) return;
+          const errMsg = err.message || 'Stream processing failed.';
+          showToast(errMsg, 'error');
+          completeWithResponse({ sender: 'ai', text: `**Research failed**: ${errMsg}\n\nPlease try again.` });
+        }
+      );
+      abortStreamRef.current = unsubscribe;
+    } catch (err: any) {
+      setIsThinking(false);
+      setThinkingEvents([]);
+      const errMsg = err.message || 'Failed to connect.';
+      showToast(errMsg, 'error');
+
+      if (err.detail?.code === 'WEEKLY_TOKEN_LIMIT_EXCEEDED' || err.detail?.code === 'DEEP_PREMIUM_REQUIRED') {
+        const limitResponse: Message = {
+          sender: 'ai',
+          text: err.detail?.code === 'DEEP_PREMIUM_REQUIRED' ? 'Deep Mode Limit Reached' : 'Weekly Token Limit Exceeded',
+          tokenLimitDetail: err.detail,
+        };
+        setMessages((prev) => {
+          const next = [...prev, limitResponse];
+          try { localStorage.setItem(getMessageStorageKey(slug), JSON.stringify(next)); } catch { /* ignore */ }
+          return next;
+        });
+      } else {
+        setMessages((prev) => [...prev, { sender: 'ai', text: `**Connection Error**: ${errMsg}` }]);
+      }
+    }
+  };
+
+  const handleStopGeneration = () => {
+    if (abortStreamRef.current) { abortStreamRef.current(); abortStreamRef.current = null; }
+    setIsThinking(false);
+  };
+
+  const handleBack = () => navigate(backPath);
+  const handleTabChange = (key: DetailTab) => {
+    setActiveTab(key);
+    if (scrollRef.current) {
+      const tabNav = scrollRef.current.querySelector('.ipo-tab-nav');
+      if (tabNav) {
+        tabNav.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  };
+
+  const hasEngaged = messages.some((msg, index) => msg.sender === 'user' || index > 0);
+
+  const getArthikGreeting = (): string => {
+    const hour = new Date().getHours();
+    const name = user?.name?.split(' ')[0] || '';
+    const timeGreet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    if (companyName && companyName !== 'this IPO') {
+      return name
+        ? `${timeGreet}, ${name}. Ask me anything about ${companyName} — risks, valuation, promoters, or DRHP insights.`
+        : `${timeGreet}! I can analyze ${companyName}'s filing, explain risks, assess valuation, or discuss any section.`;
+    }
+    return name
+      ? `${timeGreet}, ${name}. Ask me about this IPO — DRHP risks, valuation, promoters, or industry context.`
+      : `${timeGreet}! I can analyse this IPO filing, explain risks, assess valuation versus peers, or compare deals.`;
+  };
+  const arthikGreeting = getArthikGreeting();
+
+  const suggestions = companyName && companyName !== 'this IPO' ? [
+    `What are the key risks in ${companyName}'s DRHP?`,
+    `Is ${companyName} fairly valued vs peers?`,
+    `Explain the promoter background and OFS structure`,
+  ] : [
+    'What are the key risks in this DRHP?',
+    'Is this IPO fairly valued vs peers?',
+    'Explain the promoter background and OFS',
+  ];
+
+  // ── Error state ──────────────────────────────────────────────────────────────
   if (error) {
     return (
       <AppShell title="IPO Analysis">
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-deep)' }}>
+          <div className="workspace-tabs-wrap">
+            <FeatureTabs active="ipo" onChange={handleFeatureTabChange} />
+          </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: 'clamp(16px, 3vw, 24px) clamp(14px, 4vw, 32px) 60px' }}>
             <button type="button" className="ipo-back-btn" onClick={handleBack}>
               <ArrowLeft size={14} />
@@ -1613,11 +1924,14 @@ export const IpoDetailPage: React.FC = () => {
     );
   }
 
-  // Show loading/processing state
+  // ── Loading state ────────────────────────────────────────────────────────────
   if (loading || analysisStatus === 'processing') {
     return (
       <AppShell title={cardFromState?.company_name || 'IPO Analysis'}>
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-deep)' }}>
+          <div className="workspace-tabs-wrap">
+            <FeatureTabs active="ipo" onChange={handleFeatureTabChange} />
+          </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: 'clamp(16px, 3vw, 24px) clamp(14px, 4vw, 32px) 60px' }}>
             <button type="button" className="ipo-back-btn" onClick={handleBack}>
               <ArrowLeft size={14} />
@@ -1668,123 +1982,397 @@ export const IpoDetailPage: React.FC = () => {
     );
   }
 
+  // ── Main render with workbench layout ────────────────────────────────────────
   return (
     <AppShell title={filing.company_name || 'IPO Analysis'}>
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-deep)' }}>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 'clamp(16px, 3vw, 24px) clamp(14px, 4vw, 32px) 60px' }}>
+      <div
+        className={`workbench ${isChatHidden ? 'chat-closed' : 'chat-open'}`}
+        style={
+          typeof window !== 'undefined' && window.innerWidth > 768
+            ? {
+                gridTemplateColumns: `minmax(0, 1fr) ${isChatHidden ? '0px' : `${chatWidth}px`}`,
+                transition: isDraggingChat ? 'none' : undefined,
+              }
+            : undefined
+        }
+      >
+        {/* ══════════════════════ LEFT: IPO DETAIL ══════════════════════ */}
+        <div className="workbench-data">
+          <div className="workspace-tabs-wrap">
+            <FeatureTabs active="ipo" onChange={handleFeatureTabChange} />
+          </div>
+          <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', minWidth: 0, padding: 'clamp(14px, 3vw, 24px) clamp(12px, 4vw, 32px) 60px' }}>
 
-          <button type="button" className="ipo-back-btn" onClick={handleBack}>
-            <ArrowLeft size={14} />
-            IPO Pipeline
-          </button>
+            <button type="button" className="ipo-back-btn" onClick={handleBack}>
+              <ArrowLeft size={13} />
+              IPO Pipeline
+            </button>
 
-          {/* Hero header */}
-          <div className="ipo-detail-hero">
-            <div className="ipo-detail-hero-main">
-              <div className="ipo-detail-eyebrow">
-                {filing.exchange && <span className="ipo-exchange-tag">{filing.exchange}</span>}
-                {filing.is_sme && <span className="ipo-sme-tag">SME</span>}
-                {filing.sector && <span>{filing.sector}</span>}
-              </div>
-              <h1 className="ipo-detail-title">{filing.company_name}</h1>
-              <div className="ipo-detail-meta-row">
-                {isLikelyIssueCr(filing.issue_size_cr) && <span>Issue {fmtCr(filing.issue_size_cr)}</span>}
-                {isLikelyIssueCr(objects.fresh_issue_cr ?? filing.fresh_issue_cr) && <span>Fresh {fmtCrValidated(objects.fresh_issue_cr ?? filing.fresh_issue_cr)}</span>}
-                {isLikelyIssueCr(objects.ofs_cr ?? filing.ofs_cr) && <span>OFS {fmtCrValidated(objects.ofs_cr ?? filing.ofs_cr)}</span>}
-                {filing.subscription_open && (
-                  <span>Sub {fmtDate(filing.subscription_open)}{filing.subscription_close ? ` – ${fmtDate(filing.subscription_close)}` : ''}</span>
-                )}
-                {filing.allotment_date && (
-                  <span>Allotment {fmtDate(filing.allotment_date)}</span>
-                )}
-                {filing.lot_size && (
-                  <span>Lot {filing.lot_size} shares</span>
-                )}
-                {ofsPct != null && ofsPct >= 50 && (
-                  <span className="ipo-flag amber">
-                    <AlertTriangle size={11} />
-                    High OFS ({ofsPct}%)
-                  </span>
-                )}
-              </div>
-              {hasAlert && (
-                <div className="ipo-governance-alert-inline">
-                  <AlertTriangle size={14} />
-                  {fraudSignals.length} governance signals flagged from DRHP
+            {/* ── Hero ────────────────────────────────────────────────────── */}
+            <div className="ipo-detail-hero">
+              <div className="ipo-detail-hero-main">
+                <div className="ipo-detail-eyebrow">
+                  {filing.exchange && <span className="ipo-exchange-tag">{filing.exchange}</span>}
+                  {filing.is_sme && <span className="ipo-sme-tag">SME</span>}
+                  {filing.doc_type && (
+                    <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 4, background: 'rgba(139,92,246,0.1)', color: '#a78bfa', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {fmtDocType(filing.doc_type)}
+                    </span>
+                  )}
+                  {filing.sector && <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{filing.sector}</span>}
                 </div>
+
+                <h1 className="ipo-detail-title">{filing.company_name}</h1>
+
+                <div className="ipo-detail-meta-row">
+                  {filing.price_band?.low && filing.price_band?.high && (
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 13 }}>
+                      ₹{filing.price_band.low}–₹{filing.price_band.high}
+                    </span>
+                  )}
+                  {isLikelyIssueCr(filing.issue_size_cr) && <span>Issue {fmtCr(filing.issue_size_cr)}</span>}
+                  {isLikelyIssueCr(objects.fresh_issue_cr ?? filing.fresh_issue_cr) && (
+                    <span>Fresh {fmtCrValidated(objects.fresh_issue_cr ?? filing.fresh_issue_cr)}</span>
+                  )}
+                  {isLikelyIssueCr(objects.ofs_cr ?? filing.ofs_cr) && (
+                    <span>OFS {fmtCrValidated(objects.ofs_cr ?? filing.ofs_cr)}</span>
+                  )}
+                  {filing.subscription_open && (
+                    <span>
+                      Sub {fmtDate(filing.subscription_open)}
+                      {filing.subscription_close ? ` – ${fmtDate(filing.subscription_close)}` : ''}
+                    </span>
+                  )}
+                  {filing.lot_size && <span>Lot {filing.lot_size} sh</span>}
+                  {ofsPct != null && ofsPct >= 50 && (
+                    <span className="ipo-flag amber" style={{ fontSize: 11 }}>
+                      <AlertTriangle size={10} />
+                      High OFS ({ofsPct}%)
+                    </span>
+                  )}
+                  {filing.pdf_url && (
+                    <a
+                      href={filing.pdf_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        fontSize: 11, padding: '2px 8px', borderRadius: 5,
+                        border: '1px solid rgba(96,165,250,0.2)',
+                        background: 'rgba(96,165,250,0.07)',
+                        color: '#93c5fd', textDecoration: 'none', fontWeight: 600,
+                        transition: 'background 0.15s, border-color 0.15s',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(96,165,250,0.14)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(96,165,250,0.07)'; }}
+                    >
+                      <FileText size={11} />
+                      {fmtDocType(filing.doc_type)} PDF
+                    </a>
+                  )}
+                </div>
+
+                {hasAlert && (
+                  <div className="ipo-governance-alert-inline">
+                    <AlertTriangle size={13} />
+                    {fraudSignals.length} governance signal{fraudSignals.length !== 1 ? 's' : ''} from {fmtDocType(filing.doc_type)}
+                  </div>
+                )}
+              </div>
+
+              <div className="ipo-detail-hero-score">
+                <IpoScoreBars
+                  scores={scores}
+                  composite={scores.composite_score ?? filing.composite_score}
+                />
+              </div>
+            </div>
+
+            {/* ── Lifecycle ───────────────────────────────────────────────── */}
+            <IpoLifecyclePanel lifecycle={lifecycle} filing={filing} />
+
+            {/* ── Signal Framework ────────────────────────────────────────── */}
+            <IpoSignalSummary signals={signals} />
+
+            {/* ── Tab nav ─────────────────────────────────────────────────── */}
+            <div className="ipo-tab-nav" role="tablist" aria-label="IPO analysis sections">
+              {TAB_CONFIG.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.key}
+                  className={`ipo-tab-btn${activeTab === tab.key ? ' active' : ''}`}
+                  onClick={() => handleTabChange(tab.key)}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                  <SignalBadge signal={signals[tab.key] || 'pending'} compact />
+                  {tab.key === 'risks' && (risks.total_count ?? 0) > 0 && (
+                    <span className="ipo-tab-count">{risks.total_count}</span>
+                  )}
+                  {tab.key === 'promoters' && hasAlert && (
+                    <span className="ipo-tab-alert">!</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Tab content ── */}
+            <div key={activeTab} style={{ animation: 'ipo-tab-fade 0.18s ease' }}>
+              {activeTab === 'business' && (
+                <BusinessTab analysis={analysis} scores={scores} filing={filing} />
+              )}
+              {activeTab === 'financials' && (
+                <FinancialsTab financials={financials} kpis={analysis.kpis} kpiRows={analysis.kpi_rows} summary={analysis.financial_summary} />
+              )}
+              {activeTab === 'growth' && (
+                <GrowthTab financials={financials} kpis={analysis.kpis} />
+              )}
+              {activeTab === 'valuation' && (
+                <ValuationTab peerVal={peerVal} summary={analysis.valuation_summary} filing={filing} />
+              )}
+              {activeTab === 'promoters' && (
+                <PromotersTab
+                  promoters={promoters}
+                  objects={objects}
+                  management={management}
+                  fraudSignals={fraudSignals}
+                  filing={filing}
+                  summary={analysis.governance_summary}
+                />
+              )}
+              {activeTab === 'proceeds' && (
+                <ProceedsTab objects={objects} filing={filing} />
+              )}
+              {activeTab === 'risks' && (
+                <RisksTab risks={risks} scores={scores} summary={analysis.risk_summary} />
+              )}
+              {activeTab === 'institutional' && (
+                <InstitutionalTab filing={filing} scores={scores} />
               )}
             </div>
-            <div className="ipo-detail-hero-score">
-              <IpoScoreBars
-                scores={scores}
-                composite={scores.composite_score ?? filing.composite_score}
+
+          </div>
+        </div>
+
+        {/* ══════════════════════ RIGHT: ARTHIK CHAT ══════════════════════ */}
+        <div
+          className="workbench-chat"
+          style={{
+            position: 'relative',
+            width: isChatHidden ? '0px' : `${chatWidth}px`,
+            display: 'flex',
+            flexDirection: 'column',
+            borderLeft: isChatHidden ? 'none' : undefined,
+            overflow: 'visible',
+            transition: isDraggingChat ? 'none' : 'box-shadow 0.4s ease',
+            boxShadow: isChatHighlighted
+              ? '0 0 0 2px rgba(56, 189, 248, 0.45), -4px 0 24px rgba(56, 189, 248, 0.08)'
+              : undefined,
+          }}
+        >
+          {/* Login overlay */}
+          {isReadOnly && (
+            <div
+              onClick={() => navigate('/login?redirect=' + encodeURIComponent(location.pathname))}
+              style={{
+                position: 'absolute', inset: 0, zIndex: 20,
+                backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+                background: 'rgba(15, 23, 42, 0.35)',
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                gap: '12px', borderRadius: '12px', cursor: 'pointer',
+              }}
+            >
+              <Lock size={32} color="var(--text-muted)" />
+              <span style={{ color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600 }}>
+                Login to unlock
+              </span>
+            </div>
+          )}
+
+          {/* Inner content */}
+          <div style={{
+            display: isChatHidden ? 'none' : 'flex',
+            flexDirection: 'column', width: '100%', height: '100%', overflow: 'hidden',
+          }}>
+            {/* Mobile drag handle */}
+            <button
+              className="chat-mobile-handle"
+              onClick={() => { setIsChatHidden(true); setChatWidth(0); localStorage.setItem('prospektlab_ipo_chat_width', '0'); }}
+              aria-label="Close chat"
+            >
+              <div className="chat-mobile-handle-bar" />
+            </button>
+
+            {/* Desktop drag handle */}
+            <div
+              className="drag-handle-vertical drag-handle-left"
+              onMouseDown={() => setIsDraggingChat(true)}
+              style={{ width: '6px' }}
+            />
+
+            {/* Header */}
+            <div className="chat-rail-head">
+              <div className="chat-rail-title">
+                <Rocket size={13} style={{ color: '#38BDF8', marginRight: 6 }} />
+                Arthik
+              </div>
+              <div className="chat-rail-actions">
+                <button
+                  className="chat-rail-iconbtn"
+                  title="Collapse Chat"
+                  onClick={() => { setIsChatHidden(true); setChatWidth(0); localStorage.setItem('prospektlab_ipo_chat_width', '0'); }}
+                >
+                  <ChevronRight size={16} color="#38BDF8" style={{ minWidth: 16, minHeight: 16, display: 'block' }} />
+                </button>
+              </div>
+            </div>
+
+            {/* Messages / greeting */}
+            <div className="chat-rail-body" ref={chatContainerRef}>
+              {!hasEngaged ? (
+                <>
+                  <div className="chat-rail-greeting">{arthikGreeting}</div>
+
+                  {suggestions.map((s, i) => (
+                    <button key={i} className="suggestion-card" onClick={() => handleSuggestQuery(s, 'standard')}>
+                      <span>{s}</span>
+                      <span className="suggestion-card-icon"><Search size={11} /></span>
+                    </button>
+                  ))}
+
+                  <div className="explore-label">Or try one of these</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    <button
+                      className="mode-chip"
+                      onClick={() => handleSuggestQuery(`Deep research: full investment thesis for ${companyName} — DRHP risks, valuation, promoters, and industry position.`, 'deep')}
+                      style={{ position: 'relative' }}
+                    >
+                      <Sparkles size={12} /> Full thesis
+                      {!isPro && (
+                        <span style={{ position: 'absolute', top: -6, right: -6, background: 'var(--gradient-brand)', color: '#0f172a', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 999 }}>
+                          PRO
+                        </span>
+                      )}
+                    </button>
+                    <button className="mode-chip" onClick={() => handleSuggestQuery(`What is the OFS percentage and who is selling in ${companyName}?`, 'standard')}>
+                      OFS analysis
+                    </button>
+                    <button className="mode-chip" onClick={() => handleSuggestQuery(`What are the top risk factors in ${companyName}'s DRHP?`, 'standard')}>
+                      DRHP risks
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {messages.map((msg, i) => {
+                    if (i === 0 && msg.sender === 'ai') return null;
+
+                    if (msg.tokenLimitDetail) {
+                      const detail = msg.tokenLimitDetail;
+                      const isDeepPremium = detail.code === 'DEEP_PREMIUM_REQUIRED';
+                      if (isDeepPremium && isPro) return null;
+                      return (
+                        <div key={i} className="glass-card token-limit-card animate-slide-in-up" style={{
+                          padding: '20px', margin: '12px 0', borderRadius: '12px',
+                          border: isDeepPremium ? '1px solid rgba(56,189,248,0.25)' : '1px solid rgba(239,68,68,0.25)',
+                          background: isDeepPremium ? 'rgba(56,189,248,0.05)' : 'rgba(239,68,68,0.05)',
+                          display: 'flex', flexDirection: 'column', gap: '12px',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{
+                              background: isDeepPremium ? 'rgba(56,189,248,0.15)' : 'rgba(239,68,68,0.15)',
+                              color: isDeepPremium ? '#38BDF8' : '#F87171',
+                              width: 36, height: 36, borderRadius: '50%',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: 18, fontWeight: 'bold',
+                            }}>{isDeepPremium ? '🔒' : '⚠️'}</div>
+                            <div>
+                              <h4 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: isDeepPremium ? '#38BDF8' : '#F87171' }}>
+                                {isDeepPremium ? 'Deep Mode is Pro' : 'Research Limit Reached'}
+                              </h4>
+                              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                {isDeepPremium ? 'Free tier includes 1 deep run per week' : 'Weekly allocation exhausted'}
+                              </span>
+                            </div>
+                          </div>
+                          <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+                            {detail.message || "You've consumed all allocated tokens for this period."}
+                          </p>
+                          {detail.upgrade_available && !isPro && (
+                            <button onClick={() => navigate('/pricing')} style={{ width: '100%', padding: 10, borderRadius: 8, border: 'none', background: 'var(--gradient-brand)', color: '#0f172a', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                              Subscribe to Pro — Unlock Deep Mode
+                            </button>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={i} className="animate-slide-in-up">
+                        <MessageBubble
+                          sender={msg.sender}
+                          text={msg.text}
+                          richData={msg.richData}
+                          depth={msg.depth}
+                          elapsedMs={msg.elapsedMs}
+                        />
+                        {msg.sender === 'ai' && msg.depth === 'deep' && msg.wantsDocument && msg.sessionId && (
+                          <ExportPanel sessionId={msg.sessionId} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+
+            {isThinking && (
+              <div className="chat-live-pipeline-panel" aria-live="polite" aria-label="Arthik live pipeline">
+                <AgentThinking events={thinkingEvents} isActive={isThinking} />
+              </div>
+            )}
+
+            <div className="chat-rail-dock">
+              <ChatInput
+                onSend={handleSendMessage}
+                onStop={handleStopGeneration}
+                disabled={isThinking || isReadOnly}
+                pendingDraft={isReadOnly ? null : pendingChatQuery}
+                onPendingConsumed={() => setPendingChatQuery(null)}
               />
+              <div className="chat-rail-footer">
+                {isReadOnly
+                  ? 'Login to access Arthik AI — ask about any IPO or DRHP filing'
+                  : isPro
+                    ? 'Arthik • Pro • Unlimited Deep • Esc to stop'
+                    : 'Arthik • Free • 1 Deep run/week • Esc to stop'}
+              </div>
             </div>
           </div>
-
-          <IpoLifecyclePanel lifecycle={lifecycle} filing={filing} />
-
-          {/* Signal Framework Summary */}
-          <IpoSignalSummary signals={signals} />
-
-          {/* Tab nav */}
-          <div className="ipo-tab-nav" role="tablist">
-            {TAB_CONFIG.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === tab.key}
-                className={`ipo-tab-btn${activeTab === tab.key ? ' active' : ''}`}
-                onClick={() => handleTabChange(tab.key)}
-              >
-                {tab.icon}
-                {tab.label}
-                <SignalBadge signal={signals[tab.key] || 'pending'} compact />
-                {tab.key === 'risks' && risks.total_count > 0 && (
-                  <span className="ipo-tab-count">{risks.total_count}</span>
-                )}
-                {tab.key === 'promoters' && hasAlert && (
-                  <span className="ipo-tab-alert">!</span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab content */}
-          {activeTab === 'business' && (
-            <BusinessTab analysis={analysis} scores={scores} filing={filing} />
-          )}
-          {activeTab === 'financials' && (
-            <FinancialsTab financials={financials} kpis={analysis.kpis} kpiRows={analysis.kpi_rows} summary={analysis.financial_summary} />
-          )}
-          {activeTab === 'growth' && (
-            <GrowthTab financials={financials} kpis={analysis.kpis} />
-          )}
-          {activeTab === 'valuation' && (
-            <ValuationTab peerVal={peerVal} summary={analysis.valuation_summary} filing={filing} />
-          )}
-          {activeTab === 'promoters' && (
-            <PromotersTab
-              promoters={promoters}
-              objects={objects}
-              management={management}
-              fraudSignals={fraudSignals}
-              filing={filing}
-              summary={analysis.governance_summary}
-            />
-          )}
-          {activeTab === 'proceeds' && (
-            <ProceedsTab objects={objects} filing={filing} />
-          )}
-          {activeTab === 'risks' && (
-            <RisksTab risks={risks} scores={scores} summary={analysis.risk_summary} />
-          )}
-          {activeTab === 'institutional' && (
-            <InstitutionalTab filing={filing} scores={scores} />
-          )}
         </div>
       </div>
+
+      {/* Mobile backdrop */}
+      {!isChatHidden && (
+        <div
+          className="chat-mobile-backdrop"
+          onClick={() => { setIsChatHidden(true); setChatWidth(0); localStorage.setItem('prospektlab_ipo_chat_width', '0'); }}
+        />
+      )}
+
+      {/* Floating restore button */}
+      {isChatHidden && (
+        <button
+          className="chat-restore-btn"
+          onClick={() => { setIsChatHidden(false); const w = 380; setChatWidth(w); localStorage.setItem('prospektlab_ipo_chat_width', w.toString()); }}
+          title="Ask Arthik about this IPO"
+        >
+          <MessageSquare size={20} />
+        </button>
+      )}
     </AppShell>
   );
 };

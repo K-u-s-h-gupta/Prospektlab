@@ -4889,6 +4889,10 @@ button[style*="06B6D4"]:hover {
 @keyframes ipo-spin {
   to { transform: rotate(360deg); }
 }
+@keyframes ipo-tab-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 .ipo-spin { animation: ipo-spin 0.8s linear infinite; }
 
 .ipo-pulse-dot {
@@ -5366,6 +5370,14 @@ button[style*="06B6D4"]:hover {
 }
 .ipo-stat-value { font-size: 13px; font-weight: 600; }
 .ipo-ofs-warn { color: #fbbf24; flex-shrink: 0; }
+.ipo-ofs-pct-tag {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.ipo-ofs-pct-tag.high {
+  color: #fca5a5;
+}
 
 /* Subscription bar */
 .ipo-card-sub-section {
@@ -6352,7 +6364,7 @@ button[style*="06B6D4"]:hover {
 }
 .ipo-lifecycle-track {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
 }
 .ipo-lifecycle-step {
@@ -6468,7 +6480,7 @@ button[style*="06B6D4"]:hover {
     justify-content: center;
   }
   .ipo-lifecycle-track {
-    grid-template-columns: repeat(5, minmax(110px, 1fr));
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
     overflow-x: auto;
     padding-bottom: 4px;
   }
@@ -7145,4 +7157,622 @@ button[style*="06B6D4"]:hover {
   font-size: 12px;
   max-width: 340px;
   line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   IPO DETAIL PAGE — THEME OVERHAUL v2
+   Matches ProspektLab glass-card aesthetic throughout
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Detail hero — glass panel with edge glow ───────────────────────────── */
+.ipo-detail-hero {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 0;
+  margin-bottom: 20px;
+  padding: 0;
+  background: var(--gradient-panel, linear-gradient(145deg, rgba(9,18,38,0.94) 0%, rgba(8,28,62,0.78) 56%, rgba(20,41,88,0.62) 100%));
+  border: 1px solid rgba(96, 165, 250, 0.14);
+  border-radius: 18px;
+  box-shadow: var(--edge-glow);
+  overflow: hidden;
+}
+.ipo-detail-hero-main {
+  min-width: 0;
+  padding: 22px 24px;
+}
+.ipo-detail-hero-score {
+  border-left: 1px solid rgba(147, 197, 253, 0.1);
+  padding: 22px 22px;
+  background: rgba(0,0,0,0.12);
+}
+
+/* ── Detail tab blocks — elevated glass cards with hover ────────────────── */
+.ipo-detail-block {
+  padding: 20px 22px;
+  background: rgba(8, 16, 36, 0.62);
+  border: 1px solid rgba(147, 197, 253, 0.09);
+  border-radius: 16px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.ipo-detail-block:hover {
+  border-color: rgba(96, 165, 250, 0.18);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+.ipo-detail-block-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Lifecycle panel — 3 stages, clean milestone view ───────────────────── */
+.ipo-lifecycle-panel {
+  margin: 0 0 18px;
+  padding: 18px 22px 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(147, 197, 253, 0.1);
+  background: rgba(8, 16, 36, 0.55);
+  transition: border-color 0.2s;
+}
+.ipo-lifecycle-panel:hover {
+  border-color: rgba(96, 165, 250, 0.16);
+}
+.ipo-lifecycle-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.ipo-lifecycle-subtitle {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+/* Larger, more readable dots */
+.ipo-lifecycle-dot {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid rgba(71, 85, 105, 0.8);
+  background: rgba(10, 18, 38, 0.9);
+  color: #475569;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.ipo-lifecycle-step.done .ipo-lifecycle-dot {
+  border-color: rgba(34, 197, 94, 0.6);
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+}
+.ipo-lifecycle-step.current .ipo-lifecycle-dot {
+  border-color: rgba(245, 158, 11, 0.7);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.1);
+  animation: lifecycle-pulse 2s ease infinite;
+}
+@keyframes lifecycle-pulse {
+  0%, 100% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.1); }
+  50%       { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0.04); }
+}
+.ipo-lifecycle-label {
+  margin-top: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+.ipo-lifecycle-step.done .ipo-lifecycle-label  { color: var(--text-primary); }
+.ipo-lifecycle-step.current .ipo-lifecycle-label { color: #fcd34d; }
+
+/* ── Signal Framework — premium grid layout ─────────────────────────────── */
+.ipo-signal-summary {
+  margin-bottom: 18px;
+  padding: 20px 22px;
+  border-radius: 16px;
+  border: 1px solid rgba(147, 197, 253, 0.1);
+  background: rgba(8, 16, 36, 0.55);
+  transition: border-color 0.2s;
+}
+.ipo-signal-summary:hover { border-color: rgba(96, 165, 250, 0.18); }
+.ipo-signal-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.ipo-signal-summary-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin: 0;
+}
+.ipo-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.ipo-signal-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(147, 197, 253, 0.07);
+  background: rgba(15, 23, 42, 0.45);
+  transition: border-color 0.18s, background 0.18s, transform 0.18s;
+  cursor: default;
+}
+.ipo-signal-cell:hover {
+  border-color: rgba(96, 165, 250, 0.2);
+  background: rgba(20, 30, 55, 0.6);
+  transform: translateY(-1px);
+}
+.ipo-signal-cell-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  line-height: 1.3;
+}
+.ipo-signal-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(147, 197, 253, 0.07);
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.ipo-signal-legend-item { display: flex; align-items: center; gap: 5px; }
+
+/* ── Signal badge — refined ─────────────────────────────────────────────── */
+.ipo-signal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.ipo-signal-badge--positive {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.1);
+  border-color: rgba(74, 222, 128, 0.25);
+}
+.ipo-signal-badge--neutral {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.22);
+}
+.ipo-signal-badge--negative {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.22);
+}
+.ipo-signal-badge--pending {
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.07);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+.ipo-signal-icon { font-weight: 900; font-size: 11px; line-height: 1; }
+.ipo-signal-text { font-size: 11px; }
+
+/* ── Verdict badge ──────────────────────────────────────────────────────── */
+.ipo-verdict {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: 1px solid;
+}
+.ipo-verdict--positive { background: rgba(74,222,128,0.1);  color: #4ade80; border-color: rgba(74,222,128,0.25); }
+.ipo-verdict--neutral  { background: rgba(251,191,36,0.08); color: #fbbf24; border-color: rgba(251,191,36,0.2); }
+.ipo-verdict--negative { background: rgba(248,113,113,0.08);color: #f87171; border-color: rgba(248,113,113,0.2); }
+.ipo-verdict--pending  { background: rgba(148,163,184,0.07);color: var(--text-muted); border-color: rgba(148,163,184,0.15); }
+
+/* ── Interpretation card ────────────────────────────────────────────────── */
+.ipo-interpretation {
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(147, 197, 253, 0.1);
+  background: rgba(8, 16, 32, 0.5);
+}
+.ipo-interpretation--positive { border-color: rgba(74,222,128,0.2);  background: rgba(74,222,128,0.03); }
+.ipo-interpretation--neutral  { border-color: rgba(251,191,36,0.18); background: rgba(251,191,36,0.03); }
+.ipo-interpretation--negative { border-color: rgba(248,113,113,0.18);background: rgba(248,113,113,0.03); }
+.ipo-interpretation--pending  { border-color: rgba(148,163,184,0.1); }
+.ipo-interpretation-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ipo-interpretation-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.ipo-interpretation-body p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ── Tab nav — more polished ────────────────────────────────────────────── */
+.ipo-tab-nav {
+  display: flex;
+  gap: 2px;
+  background: rgba(8, 16, 36, 0.7);
+  border: 1px solid rgba(147, 197, 253, 0.1);
+  border-radius: 14px;
+  padding: 4px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+.ipo-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 13px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, background 0.15s;
+  position: relative;
+}
+.ipo-tab-btn:hover { color: var(--text-secondary); background: rgba(96,165,250,0.05); }
+.ipo-tab-btn.active {
+  background: rgba(96, 165, 250, 0.14);
+  color: #93c5fd;
+  font-weight: 600;
+  box-shadow: 0 1px 0 rgba(96,165,250,0.1);
+}
+
+/* ── Financial table — zebra rows + sticky header ───────────────────────── */
+.ipo-fin-table th {
+  background: rgba(8, 16, 36, 0.7);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 12px;
+}
+.ipo-fin-table tbody tr:nth-child(even) td {
+  background: rgba(148, 163, 184, 0.025);
+}
+.ipo-fin-table tbody tr {
+  transition: background 0.15s;
+}
+.ipo-fin-table tbody tr:hover td {
+  background: rgba(96, 165, 250, 0.05);
+}
+.ipo-fin-table td { padding: 10px 12px; }
+.ipo-fin-growth-inline {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.ipo-fin-growth-inline.up   { color: #4ade80; background: rgba(74,222,128,0.08); }
+.ipo-fin-growth-inline.down { color: #f87171; background: rgba(248,113,113,0.08); }
+.ipo-row-flagged { background: rgba(245,158,11,0.04) !important; }
+.ipo-row-flagged td { border-color: rgba(245,158,11,0.08) !important; }
+
+/* ── KPI cards — hover-interactive ─────────────────────────────────────── */
+.ipo-kpi-card {
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(147, 197, 253, 0.08);
+  border-radius: 12px;
+  transition: border-color 0.18s, background 0.18s, transform 0.18s;
+  cursor: default;
+}
+.ipo-kpi-card:hover {
+  border-color: rgba(96, 165, 250, 0.22);
+  background: rgba(20, 30, 55, 0.65);
+  transform: translateY(-1px);
+}
+.ipo-kpi-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+.ipo-kpi-value { font-size: 17px; font-weight: 700; line-height: 1.1; }
+
+/* ── Valuation summary cards — hover-interactive ────────────────────────── */
+.ipo-val-summary-card {
+  padding: 14px 16px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(147, 197, 253, 0.08);
+  border-radius: 12px;
+  transition: border-color 0.18s, background 0.18s, transform 0.18s;
+  cursor: default;
+}
+.ipo-val-summary-card:hover {
+  border-color: rgba(96, 165, 250, 0.2);
+  background: rgba(20, 30, 55, 0.65);
+  transform: translateY(-1px);
+}
+.ipo-val-summary-label { font-size: 10.5px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+.ipo-val-summary-val { font-size: 20px; font-weight: 800; line-height: 1; }
+
+/* ── Risk items — hover-interactive ─────────────────────────────────────── */
+.ipo-risk-item {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(10, 18, 38, 0.6);
+  border: 1px solid rgba(147, 197, 253, 0.07);
+  transition: border-color 0.18s, background 0.18s;
+  cursor: default;
+}
+.ipo-risk-item:hover {
+  background: rgba(15, 25, 50, 0.75);
+  border-color: rgba(96, 165, 250, 0.14);
+}
+.ipo-risk-item--high:hover { border-color: rgba(239,68,68,0.2); }
+.ipo-risk-item--medium:hover { border-color: rgba(245,158,11,0.18); }
+
+/* ── Promoter + management cards ─────────────────────────────────────────── */
+.ipo-promoter-card, .ipo-management-card {
+  transition: border-color 0.18s, background 0.18s, transform 0.18s;
+  cursor: default;
+}
+.ipo-promoter-card:hover, .ipo-management-card:hover {
+  border-color: rgba(96,165,250,0.18);
+  background: rgba(20,30,55,0.6);
+  transform: translateY(-1px);
+}
+.ipo-promoter-name, .ipo-management-name { font-size: 12.5px; }
+
+/* ── Utilization items ───────────────────────────────────────────────────── */
+.ipo-util-item {
+  padding: 14px 16px;
+  border-radius: 12px;
+  transition: border-color 0.18s, background 0.18s;
+  cursor: default;
+}
+.ipo-util-item:hover { border-color: rgba(96,165,250,0.18); background: rgba(15,25,50,0.7); }
+.ipo-util-item--good   { border-color: rgba(74,222,128,0.1);  }
+.ipo-util-item--neutral { border-color: rgba(148,163,184,0.08); }
+.ipo-util-item--concern { border-color: rgba(245,158,11,0.1);  }
+.ipo-util-footer { display: flex; justify-content: space-between; align-items: center; gap: 4px; margin-top: 6px; }
+.ipo-util-quality {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ipo-util-quality--good    { background: rgba(74,222,128,0.1);  color: #4ade80; }
+.ipo-util-quality--neutral { background: rgba(148,163,184,0.08); color: var(--text-muted); }
+.ipo-util-quality--concern { background: rgba(245,158,11,0.1);  color: #fbbf24; }
+.ipo-util-bar-fill { background: linear-gradient(90deg, #2563eb, #60a5fa); }
+
+/* ── Score bars — animated fill + hover labels ───────────────────────────── */
+.ipo-score-row:hover .ipo-score-row-label { color: var(--text-secondary); }
+.ipo-score-fill { transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* ── Prose text ──────────────────────────────────────────────────────────── */
+.ipo-prose { font-size: 13px; line-height: 1.7; color: var(--text-secondary); }
+.ipo-prose.muted { color: var(--text-muted); font-size: 12.5px; }
+
+/* ── Bullet list ─────────────────────────────────────────────────────────── */
+.ipo-bullet-list { margin: 0; padding: 0 0 0 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.75; }
+.ipo-bullet-list li { margin-bottom: 6px; padding-left: 4px; }
+.ipo-bullet-list li::marker { color: var(--accent-cyan); }
+
+/* ── Position grid ───────────────────────────────────────────────────────── */
+.ipo-position-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+.ipo-position-item {
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(147, 197, 253, 0.08);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.18s, background 0.18s;
+}
+.ipo-position-item:hover { border-color: rgba(96,165,250,0.18); background: rgba(20,30,55,0.6); }
+.ipo-position-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+.ipo-position-value { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+
+/* ── Institutional section ───────────────────────────────────────────────── */
+.ipo-institutional-grid { display: flex; flex-direction: column; gap: 12px; }
+.ipo-institutional-item {
+  padding: 14px 16px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(147, 197, 253, 0.07);
+  border-radius: 12px;
+  transition: border-color 0.18s, background 0.18s;
+}
+.ipo-institutional-item:hover { border-color: rgba(96,165,250,0.16); background: rgba(20,30,55,0.6); }
+.ipo-institutional-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+.ipo-institutional-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Back button — improved ─────────────────────────────────────────────── */
+.ipo-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 18px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12.5px;
+  padding: 6px 0;
+  transition: color 0.15s, gap 0.15s;
+}
+.ipo-back-btn:hover { color: var(--accent-cyan); gap: 8px; }
+
+/* ── Lifecycle doc link ─────────────────────────────────────────────────── */
+.ipo-lifecycle-doc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  background: rgba(96, 165, 250, 0.07);
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ipo-lifecycle-doc-link:hover {
+  border-color: rgba(96,165,250,0.4);
+  background: rgba(96,165,250,0.12);
+}
+
+/* ── OFS bar indicator ───────────────────────────────────────────────────── */
+.ipo-ofs-indicator { position: relative; }
+.ipo-ofs-bar-wrap {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.1);
+  overflow: hidden;
+  position: relative;
+}
+.ipo-ofs-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4ade80, #fbbf24, #f87171);
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ipo-ofs-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: calc(100% + 6px);
+  border-radius: 1px;
+  background: rgba(255,255,255,0.3);
+  transform: translateX(-50%);
+}
+.ipo-ofs-marker.warning { background: rgba(251,191,36,0.6); }
+
+/* ── IPO hero title + meta row fixes ────────────────────────────────────── */
+.ipo-detail-title {
+  margin: 0 0 8px;
+  font-size: clamp(1.2rem, 2.5vw, 1.65rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.ipo-detail-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  align-items: center;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+.ipo-detail-meta-row > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ipo-detail-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+/* ── Loading progress bar animation (smooth) ────────────────────────────── */
+.ipo-loading-progress-bar {
+  animation: ipo-loading-sweep 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes ipo-loading-sweep {
+  0%   { transform: translateX(-100%) scaleX(0.4); }
+  50%  { transform: translateX(80%)   scaleX(0.8); }
+  100% { transform: translateX(220%)  scaleX(0.4); }
+}
+
+/* ── Section gaps ────────────────────────────────────────────────────────── */
+.ipo-tab-content { gap: 16px; }
+
+/* ── Tag fixes for OFS ───────────────────────────────────────────────────── */
+.ipo-ofs-pct-tag { font-size: 10px; color: var(--text-muted); font-weight: 500; display: inline; }
+.ipo-ofs-pct-tag.high { color: #fca5a5; }
+
+/* ── Responsive detail page ─────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .ipo-detail-hero { grid-template-columns: 1fr; }
+  .ipo-detail-hero-score { border-left: none; border-top: 1px solid rgba(147,197,253,0.1); padding-top: 18px; }
+  .ipo-signal-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 680px) {
+  .ipo-signal-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .ipo-signal-cell { padding: 10px 11px; }
+  .ipo-val-summary-grid { grid-template-columns: 1fr 1fr; }
+  .ipo-kpi-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+}
+@media (max-width: 480px) {
+  .ipo-signal-grid { grid-template-columns: 1fr 1fr; gap: 5px; }
+  .ipo-position-grid { grid-template-columns: 1fr 1fr; }
+  .ipo-tab-btn { padding: 6px 9px; font-size: 11.5px; gap: 4px; }
+  .ipo-detail-hero-main, .ipo-detail-hero-score { padding: 16px; }
 }

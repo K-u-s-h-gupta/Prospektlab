@@ -88,12 +88,37 @@ class MetricSpec:
 
 
 METRIC_SPECS: tuple[MetricSpec, ...] = (
-    MetricSpec("revenue", "Revenue", "Rs Cr", ("revenue from operations", "revenue", "total income", "income from operations")),
-    MetricSpec("pat", "PAT", "Rs Cr", ("profit after tax", "pat", "net profit", "profit for the period")),
-    MetricSpec("ebitda", "EBITDA", "Rs Cr", ("ebitda", "operating ebitda", "operating profit", "pbdit", "pbida")),
-    MetricSpec("eps", "EPS", "Rs", ("basic eps", "diluted eps", "earnings per share", "eps")),
-    MetricSpec("ebitda_margin", "EBITDA Margin", "%", ("ebitda margin", "operating margin")),
-    MetricSpec("pat_margin", "PAT Margin", "%", ("pat margin", "net profit margin", "net margin")),
+    MetricSpec("revenue", "Revenue", "Rs Cr", (
+        "revenue from operations", "revenue", "total income", "income from operations",
+        "net sales", "gross revenue", "total revenue", "sales", "turnover",
+        "net revenue", "operating income", "operating revenue",
+    )),
+    MetricSpec("pat", "PAT", "Rs Cr", (
+        "profit after tax", "pat", "net profit", "profit for the period",
+        "profit for the quarter", "profit for the year", "profit/(loss) after tax",
+        "profit / (loss) after tax", "net profit/(loss)", "net profit / (loss)",
+        "profit attributable", "profit/(loss) for the period",
+        "total comprehensive income", "profit after taxation",
+    )),
+    MetricSpec("ebitda", "EBITDA", "Rs Cr", (
+        "ebitda", "operating ebitda", "operating profit", "pbdit", "pbida",
+        "profit before interest", "profit before depreciation",
+        "earnings before interest", "operating earnings",
+        "profit before finance cost", "profit from operations",
+        "segment profit", "total segment profit",
+    )),
+    MetricSpec("eps", "EPS", "Rs", (
+        "basic eps", "diluted eps", "earnings per share", "eps",
+        "basic earnings per share", "diluted earnings per share",
+        "eps (basic)", "eps (diluted)", "earnings per equity share",
+    )),
+    MetricSpec("ebitda_margin", "EBITDA Margin", "%", (
+        "ebitda margin", "operating margin", "ebitda %", "operating margin %",
+    )),
+    MetricSpec("pat_margin", "PAT Margin", "%", (
+        "pat margin", "net profit margin", "net margin", "profit margin",
+        "pat %", "net margin %",
+    )),
 )
 
 
@@ -302,10 +327,36 @@ def _metric_pattern(alias: str) -> re.Pattern[str]:
     )
 
 
+def _extract_metric_from_line(line: str, spec_aliases: tuple[str, ...], scale: float) -> float | None:
+    """Extract a metric value from a line that may contain label and number."""
+    line_lower = line.lower()
+    for alias in spec_aliases:
+        if alias.lower() in line_lower:
+            # Find all numbers in the line
+            numbers = _NUMBER_RE.findall(line)
+            for num_str in numbers:
+                # Skip dates, percentages that are clearly not the metric
+                if '/' in num_str or '-' in num_str[:4]:
+                    continue
+                value = _coerce_number(num_str)
+                if value is not None and abs(value) > 0.01:
+                    return value * scale
+    return None
+
+
 def extract_financial_metrics(text: str) -> dict[str, float]:
+    """Extract financial metrics from document text.
+    
+    Uses multiple strategies:
+    1. Pattern matching for "metric_name ... value" patterns
+    2. Line-by-line extraction for tabular text
+    3. Structured table-like text parsing
+    """
     body = re.sub(r"\s+", " ", str(text or ""))
     scale = _detect_text_unit_scale(body)
     metrics: dict[str, float] = {}
+    
+    # Strategy 1: Pattern matching (original)
     for spec in METRIC_SPECS:
         for alias in spec.aliases:
             match = _metric_pattern(alias).search(body)
@@ -318,10 +369,66 @@ def extract_financial_metrics(text: str) -> dict[str, float]:
                     value = round(value * scale, 2)
                 metrics[spec.key] = value
                 break
+    
+    # Strategy 2: Line-by-line extraction for metrics still missing
+    lines = text.split('\n')
+    for spec in METRIC_SPECS:
+        if spec.key in metrics:
+            continue
+        for line in lines:
+            # Skip very long lines (likely paragraph text)
+            if len(line) > 500:
+                continue
+            value = _extract_metric_from_line(line, spec.aliases, scale if spec.unit not in ("%",) and spec.key != "eps" else 1.0)
+            if value is not None:
+                # Sanity checks
+                if spec.key in ('ebitda_margin', 'pat_margin') and abs(value) > 100:
+                    continue
+                if spec.key == 'eps' and abs(value) > 10000:
+                    continue
+                metrics[spec.key] = round(value, 2)
+                break
+    
+    # Strategy 3: Look for specific patterns common in Indian filings
+    # "Revenue from Operations ... 2,69,496"
+    # "Profit After Tax ... 22,167"
+    specific_patterns = [
+        (r"revenue\s+from\s+operations[^\d]*(" + _NUMBER_RE.pattern + r")", "revenue"),
+        (r"total\s+income[^\d]*(" + _NUMBER_RE.pattern + r")", "revenue"),
+        (r"profit\s+after\s+tax[^\d]*(" + _NUMBER_RE.pattern + r")", "pat"),
+        (r"net\s+profit[^\d]*(" + _NUMBER_RE.pattern + r")", "pat"),
+        (r"profit\s+for\s+the\s+(?:period|quarter|year)[^\d]*(" + _NUMBER_RE.pattern + r")", "pat"),
+        (r"ebitda[^\d]*(" + _NUMBER_RE.pattern + r")", "ebitda"),
+        (r"(?:basic|diluted)\s+eps[^\d]*(" + _NUMBER_RE.pattern + r")", "eps"),
+        (r"earnings\s+per\s+share[^\d]*(" + _NUMBER_RE.pattern + r")", "eps"),
+    ]
+    
+    for pattern, key in specific_patterns:
+        if key in metrics:
+            continue
+        match = re.search(pattern, body, re.IGNORECASE)
+        if match:
+            value = _coerce_number(match.group(1))
+            if value is not None:
+                if key in ('revenue', 'pat', 'ebitda'):
+                    value = round(value * scale, 2)
+                else:
+                    value = round(value, 2)
+                # Sanity check
+                if key in ('ebitda_margin', 'pat_margin') and abs(value) > 100:
+                    continue
+                metrics[key] = value
+
+    # Compute margins if we have the components
     if "pat_margin" not in metrics and metrics.get("pat") is not None and metrics.get("revenue"):
-        metrics["pat_margin"] = round((metrics["pat"] / metrics["revenue"]) * 100, 2)
+        margin = (metrics["pat"] / metrics["revenue"]) * 100
+        if abs(margin) <= 100:
+            metrics["pat_margin"] = round(margin, 2)
     if "ebitda_margin" not in metrics and metrics.get("ebitda") is not None and metrics.get("revenue"):
-        metrics["ebitda_margin"] = round((metrics["ebitda"] / metrics["revenue"]) * 100, 2)
+        margin = (metrics["ebitda"] / metrics["revenue"]) * 100
+        if abs(margin) <= 100:
+            metrics["ebitda_margin"] = round(margin, 2)
+    
     return metrics
 
 

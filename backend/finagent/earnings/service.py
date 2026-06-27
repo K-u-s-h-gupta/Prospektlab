@@ -1,4 +1,4 @@
-﻿"""Table-backed earnings API service with deterministic local fallbacks."""
+"""Table-backed earnings API service with deterministic local fallbacks."""
 
 from __future__ import annotations
 
@@ -119,7 +119,7 @@ _COMPANIES_CACHE_TTL_S = 60.0  # Cache company results for 1 minute
 
 def _get_cache_ttl_for_date(date_str: str | date) -> float:
     """Return cache TTL based on date: 1 hour for historical, 1 minute for recent.
-    
+
     Historical data (past quarters) never changes but was being re-queried every 60s.
     This dynamic TTL reduces DB load while keeping recent/upcoming data fresh.
     """
@@ -214,7 +214,7 @@ def ensure_earnings_tables(database_url: str | None = None) -> bool:
             _EXTENDED_BOOTSTRAPPED.add(f"ext:{db_url}")
         except Exception as ext_exc:
             logger.debug("extended earnings table bootstrap skipped: %s", ext_exc)
-        
+
         # Run startup backfill in background thread so it doesn't block server startup
         try:
             import threading
@@ -227,7 +227,7 @@ def ensure_earnings_tables(database_url: str | None = None) -> bool:
             thread.start()
         except Exception as backfill_exc:
             logger.debug("startup backfill trigger failed (non-fatal): %s", backfill_exc)
-        
+
         return True
     except Exception as exc:  # noqa: BLE001
         logger.debug("earnings table bootstrap failed: %s", exc)
@@ -237,7 +237,7 @@ def ensure_earnings_tables(database_url: str | None = None) -> bool:
 
 def get_earnings_overview(start_date: str, end_date: str, page_size: int = 50) -> dict[str, Any]:
     """Combined calendar + companies fetch using a single DB connection.
-    
+
     This avoids the overhead of opening 2 separate connections to the remote
     database, which was causing timeouts on the overview Earnings Pulse section.
     """
@@ -249,27 +249,27 @@ def get_earnings_overview(start_date: str, end_date: str, page_size: int = 50) -
     # Check both caches first
     cal_cache_key = f"{start.isoformat()}:{end.isoformat()}"
     comp_cache_key = f"{start.isoformat()}:{end.isoformat()}:1:{page_size}"
-    
+
     cal_cached = _CALENDAR_CACHE.get(cal_cache_key)
     comp_cached = _COMPANIES_CACHE.get(comp_cache_key)
-    
+
     cal_rows = None
     comp_result = None
-    
+
     if cal_cached:
         cached_at, cached_rows = cal_cached
         # Use tiered TTL: longer cache for historical data
         ttl = _get_cache_ttl_for_date(start)
         if time.monotonic() - cached_at < ttl:
             cal_rows = cached_rows
-    
+
     if comp_cached:
         cached_at, cached_result = comp_cached
         # Use tiered TTL: longer cache for historical data
         ttl = _get_cache_ttl_for_date(start)
         if time.monotonic() - cached_at < ttl:
             comp_result = cached_result
-    
+
     # If both are cached, return immediately
     if cal_rows is not None and comp_result is not None:
         cal_response = _build_calendar_response(start, end, cal_rows)
@@ -286,7 +286,7 @@ def get_earnings_overview(start_date: str, end_date: str, page_size: int = 50) -
                 "items": comp_rows,
             },
         }
-    
+
     # Fetch both in a single DB connection
     if not _query_available():
         # Fallback to demo data
@@ -304,21 +304,21 @@ def get_earnings_overview(start_date: str, end_date: str, page_size: int = 50) -
                 "items": [],
             },
         }
-    
+
     universe_sql, universe_params = earnings_universe_sql_filter("a")
     where_sql = "a.meeting_date between %s and %s"
     params: list[Any] = [start, end]
     if universe_sql:
         where_sql += f" and {universe_sql}"
         params.extend(universe_params)
-    
+
     try:
         from psycopg.rows import dict_row
 
         with connect_postgres(row_factory=dict_row, connect_timeout=_READ_CONNECT_TIMEOUT_S) as conn:
             with conn.cursor() as cur:
                 _configure_read_timeouts(cur)
-                
+
                 # Calendar query
                 cur.execute(
                     f"""
@@ -351,14 +351,14 @@ def get_earnings_overview(start_date: str, end_date: str, page_size: int = 50) -
                     params,
                 )
                 cal_rows_raw = [dict(row) for row in cur.fetchall()]
-                
+
                 # Companies query (same connection)
                 cur.execute(
                     f"select count(*) as total from earnings_announcements a where {where_sql}",
                     params,
                 )
                 comp_total = int((cur.fetchone() or {}).get("total") or 0)
-                
+
                 cur.execute(
                     f"""
                     select
@@ -395,17 +395,17 @@ def get_earnings_overview(start_date: str, end_date: str, page_size: int = 50) -
                     [*params, page_size, 0],
                 )
                 comp_rows = [_company_row_from_db(dict(row)) for row in cur.fetchall()]
-        
+
         # Process calendar rows
         for row in cal_rows_raw:
             row["summary"] = f"{row.get('company_count', 0)} earnings call(s)"
             row["sectors"] = list(row.get("sectors") or [])
             row["timings"] = dict(row.get("timings") or {})
-        
+
         # Cache both results
         _CALENDAR_CACHE[cal_cache_key] = (time.monotonic(), cal_rows_raw)
         _COMPANIES_CACHE[comp_cache_key] = (time.monotonic(), (comp_rows, comp_total))
-        
+
         cal_response = _build_calendar_response(start, end, cal_rows_raw)
         return {
             "calendar": cal_response,
@@ -581,7 +581,7 @@ def get_earnings_companies(
 
 def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
     """Fetch complete result detail for a past earnings announcement.
-    
+
     Returns dict with:
       - symbol, name, sector, fiscal_quarter, timing, meeting_date, current_price
       - quarter_tabs: last 8 quarters with labels, move_1d_pct, is_current
@@ -598,16 +598,17 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
     selected = parse_date(target_date)
     if not clean_symbol or not selected:
         return None
-    
+
     # Fetch all data in ONE unified query for maximum performance
     result = _query_earnings_result_complete(clean_symbol, selected)
     if not result:
         return None  # No announcement or parsed detail available
-    
+
     detail_row = result["detail_row"]
     history_for_quarter = result["history"]
     prev_metrics = result["prev_metrics"]
     yoy_metrics = result["yoy_metrics"]
+    prev_footnotes = result.get("prev_footnotes")
 
     # If only the announcement fallback exists (no parsed PDF detail), trigger a
     # synchronous parse of the outcome PDF so the first click returns real data.
@@ -627,11 +628,12 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
                         history_for_quarter = refreshed["history"]
                         prev_metrics = refreshed["prev_metrics"]
                         yoy_metrics = refreshed["yoy_metrics"]
+                        prev_footnotes = refreshed.get("prev_footnotes")
         except Exception as sync_exc:
             logger.debug("Synchronous detail parse failed/timed out for %s %s: %s", clean_symbol, selected, sync_exc)
 
     current_price = None
-    
+
     # Build metrics rows: revenue, EPS, margins from earnings_details + Yahoo
     revenue_actual = None
     revenue_estimated = None
@@ -642,7 +644,7 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
     move_1d_pct = None
     pre_close = None
     post_close = None
-    
+
     # Extract Yahoo-sourced history data (already fetched in unified query)
     if history_for_quarter:
         h = history_for_quarter
@@ -655,7 +657,7 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
         move_1d_pct = h.get("post_earnings_move_1d")
         pre_close = h.get("pre_close")
         post_close = h.get("post_close")
-    
+
     # Fetch financial comparison rows from stored parser payload
     financials_payload = _financials_payload(detail_row.get("financials") or detail_row.get("financials_json") or {})
 
@@ -664,26 +666,33 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
     # not on every GET. This keeps the earnings result endpoint fast and avoids
     # NSE network timeouts in the hot path.
 
-    # Enrich QoQ/YoY: if rows exist but have no QoQ/YoY, use already-fetched historical data
+    # Build/enrich financial rows from stored metrics + historical data
     try:
         rows = financials_payload.get("rows") or []
+        stored_metrics = _dict_json(financials_payload.get("metrics") or {})
+
+        # Check if rows are missing data that metrics have
+        row_keys_with_current = {r.get("key") for r in rows if r.get("current") is not None}
+        metric_keys = {k for k, v in stored_metrics.items() if v is not None}
+        missing_in_rows = metric_keys - row_keys_with_current
+
+        # Rebuild rows if: no current values OR metrics have more data OR no QoQ data
         has_current = any(r.get("current") is not None for r in rows)
         has_qoq = any(r.get("qoq_pct") is not None for r in rows)
-        if has_current and not has_qoq:
-            # prev_metrics and yoy_metrics already fetched in unified query
-            if prev_metrics or yoy_metrics:
-                # Use stored direct metrics when available (more complete than row extraction)
-                stored_metrics = _dict_json(financials_payload.get("metrics") or {})
-                current_m: dict[str, Any] = {k: v for k, v in stored_metrics.items() if v is not None}
-                # Supplement from rows
-                for r in rows:
-                    if r.get("key") and r.get("current") is not None and r["key"] not in current_m:
-                        current_m[r["key"]] = r["current"]
-                if current_m:
-                    rebuilt = build_financial_comparison_rows(current_m, prev_metrics, yoy_metrics)
-                    financials_payload["rows"] = rebuilt
+        should_rebuild = (not has_current) or missing_in_rows or (has_current and not has_qoq and (prev_metrics or yoy_metrics))
+
+        if should_rebuild and (stored_metrics or rows):
+            # Build current metrics dict from both sources
+            current_m: dict[str, Any] = {k: v for k, v in stored_metrics.items() if v is not None}
+            for r in rows:
+                if r.get("key") and r.get("current") is not None and r["key"] not in current_m:
+                    current_m[r["key"]] = r["current"]
+
+            if current_m:
+                rebuilt = build_financial_comparison_rows(current_m, prev_metrics, yoy_metrics)
+                financials_payload["rows"] = rebuilt
     except Exception as qoq_exc:
-        logger.debug("QoQ/YoY enrichment failed for %s: %s", clean_symbol, qoq_exc)
+        logger.debug("Financial rows rebuild failed for %s: %s", clean_symbol, qoq_exc)
 
     # Assemble highlights from detail row or generate from summary
     highlights = []
@@ -696,14 +705,14 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
             highlights = build_ai_highlights(detail_row.get("summary") or "", source_url="")
         except Exception:
             pass
-    
+
     # Transcript
     transcript = {}
     try:
         transcript = _transcript_payload(detail_row.get("transcript") or {})
     except Exception:
         pass
-    
+
     # Documents
     documents = []
     try:
@@ -718,11 +727,61 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
     except Exception as qt_exc:
         logger.debug("quarter_tabs query failed for %s: %s", clean_symbol, qt_exc)
 
-    # AI summary: use stored value if available
-    ai_summary: dict[str, Any] | None = detail_row.get("ai_summary") or None
+    # AI summary: prefer stored LLM output, otherwise build a deterministic
+    # filing-grounded research note so the detail tab never collapses to blank.
+    ai_summary: dict[str, Any] | None = _dict_json(detail_row.get("ai_summary") or {})
     if not ai_summary:
-        ai_summary = None
-    
+        ai_summary = _build_local_ai_summary(
+            company_name=str(detail_row.get("name") or clean_symbol),
+            symbol=clean_symbol,
+            fiscal_quarter=str(detail_row.get("fiscal_quarter") or ""),
+            meeting_date=str(detail_row.get("date") or selected.isoformat()),
+            financials_payload=financials_payload,
+            highlights=highlights,
+        ) or None
+
+    # === NEW: Subsidiary Cash-Drain Matrix ===
+    subsidiary_analysis: dict[str, Any] | None = None
+    try:
+        raw_sub = _dict_json(detail_row.get("subsidiary_analysis_json") or detail_row.get("subsidiary_analysis"))
+        # Only use if it has meaningful data (alert_level != none)
+        if raw_sub and raw_sub.get("alert_level") and raw_sub.get("alert_level") != "none":
+            subsidiary_analysis = raw_sub
+    except Exception:
+        pass
+
+    # If no stored subsidiary analysis, try to compute from financials
+    if not subsidiary_analysis:
+        try:
+            standalone_m = _dict_json(financials_payload.get("standalone_metrics") or {})
+            consolidated_m = _dict_json(financials_payload.get("consolidated_metrics") or financials_payload.get("metrics") or {})
+            if standalone_m and consolidated_m and standalone_m != consolidated_m:
+                from finagent.earnings.subsidiary_analysis import extract_subsidiary_analysis
+                computed = extract_subsidiary_analysis(standalone_m, consolidated_m)
+                # Only use if meaningful analysis
+                if computed and computed.get("alert_level") and computed.get("alert_level") != "none":
+                    subsidiary_analysis = computed
+        except Exception as sub_exc:
+            logger.debug("On-the-fly subsidiary analysis failed for %s: %s", clean_symbol, sub_exc)
+
+    # === NEW: Footnote QoQ Diff Analysis ===
+    footnotes_diff: dict[str, Any] | None = None
+    try:
+        current_footnotes = detail_row.get("footnotes_text")
+        if current_footnotes and prev_footnotes:
+            from finagent.earnings.footnote_analysis import analyze_footnotes_for_earnings
+            current_quarter = detail_row.get("fiscal_quarter") or ""
+            # Previous quarter label (approx)
+            prev_quarter = _get_previous_quarter_label(current_quarter)
+            footnotes_diff = analyze_footnotes_for_earnings(
+                current_footnotes,
+                prev_footnotes,
+                current_quarter,
+                prev_quarter,
+            )
+    except Exception as fn_exc:
+        logger.debug("Footnote diff computation failed for %s: %s", clean_symbol, fn_exc)
+
     return {
         "symbol": clean_symbol,
         "name": detail_row.get("name") or clean_symbol,
@@ -749,6 +808,8 @@ def get_earnings_result(symbol: str, target_date: str) -> dict[str, Any] | None:
         },
         "highlights": highlights[:5],
         "ai_summary": ai_summary,
+        "subsidiary_analysis": subsidiary_analysis,
+        "footnotes_diff": footnotes_diff,
         "transcript": transcript,
         "documents": documents,
         "financials": financials_payload,
@@ -855,6 +916,8 @@ def ensure_earnings_detail_for_result(symbol: str, target_date: str, *, generate
                             symbol=clean_symbol,
                             fiscal_quarter=str(detail.get("fiscal_quarter") or record.get("quarter_ref") or ""),
                             meeting_date=str(record.get("meeting_date") or ""),
+                            standalone_metrics=fin.get("standalone_metrics"),
+                            consolidated_metrics=fin.get("consolidated_metrics"),
                         )
                         if ai_summary:
                             _store_ai_summary(event_uid, ai_summary)
@@ -1197,12 +1260,14 @@ def upsert_detail(record: dict[str, Any], database_url: str | None = None) -> bo
                       event_uid, symbol, company_name, meeting_date, fiscal_quarter,
                       timing, highlights_json, management_json, transcript_json,
                       documents_json, financials_json, text_excerpt, parser_version,
+                      subsidiary_analysis_json, footnotes_text,
                       updated_at
                     )
                     values (
                       %s, %s, %s, %s, %s,
                       %s, %s::jsonb, %s::jsonb, %s::jsonb,
                       %s::jsonb, %s::jsonb, %s, %s,
+                      %s::jsonb, %s,
                       now()
                     )
                     on conflict (event_uid) do update set
@@ -1215,6 +1280,8 @@ def upsert_detail(record: dict[str, Any], database_url: str | None = None) -> bo
                       financials_json = excluded.financials_json,
                       text_excerpt = excluded.text_excerpt,
                       parser_version = excluded.parser_version,
+                      subsidiary_analysis_json = COALESCE(excluded.subsidiary_analysis_json, earnings_details.subsidiary_analysis_json),
+                      footnotes_text = COALESCE(excluded.footnotes_text, earnings_details.footnotes_text),
                       updated_at = now()
                     """,
                     (
@@ -1231,6 +1298,8 @@ def upsert_detail(record: dict[str, Any], database_url: str | None = None) -> bo
                         json.dumps(record.get("financials") or {}),
                         str(record.get("text_excerpt") or ""),
                         str(record.get("parser_version") or ""),
+                        json.dumps(record.get("subsidiary_analysis")) if record.get("subsidiary_analysis") else None,
+                        record.get("footnotes_text"),
                     ),
                 )
             conn.commit()
@@ -1252,7 +1321,7 @@ def _query_available() -> bool:
 def _query_calendar_rows(start: date, end: date) -> list[dict[str, Any]] | None:
     if not _query_available():
         return None
-    
+
     # Check cache first
     cache_key = f"{start.isoformat()}:{end.isoformat()}"
     cached = _CALENDAR_CACHE.get(cache_key)
@@ -1262,7 +1331,7 @@ def _query_calendar_rows(start: date, end: date) -> list[dict[str, Any]] | None:
         ttl = _get_cache_ttl_for_date(start)
         if time.monotonic() - cached_at < ttl:
             return cached_rows
-    
+
     universe_sql, universe_params = earnings_universe_sql_filter("a")
     where_sql = "a.meeting_date between %s and %s"
     params: list[Any] = [start, end]
@@ -1413,7 +1482,7 @@ def _query_company_rows_range(
     """Return companies across a date range, ordered by date desc, then name."""
     if not _query_available():
         return None
-    
+
     # Check cache for unfiltered range queries (overview pulse)
     is_unfiltered = (
         not _active_filter(index_filter)
@@ -1429,7 +1498,7 @@ def _query_company_rows_range(
             ttl = _get_cache_ttl_for_date(range_start)
             if time.monotonic() - cached_at < ttl:
                 return cached_result
-    
+
     clauses = ["a.meeting_date between %s and %s"]
     params: list[Any] = [range_start, range_end]
     if _active_filter(index_filter):
@@ -1507,13 +1576,13 @@ def _query_earnings_result_complete(
     symbol: str, selected: date
 ) -> dict[str, Any] | None:
     """Unified query that fetches all data needed for get_earnings_result() in ONE database call.
-    
+
     Returns dict with keys:
       - detail_row: main announcement + detail data
       - history: earnings_history row (EPS/revenue estimates, 1D move)
       - prev_metrics: previous quarter financial metrics
       - yoy_metrics: year-over-year quarter financial metrics
-    
+
     This replaces 3 separate calls:
       - _query_result_detail_row()
       - _query_earnings_history_for_date()
@@ -1521,10 +1590,10 @@ def _query_earnings_result_complete(
     """
     if not _query_available():
         return None
-    
+
     try:
         from psycopg.rows import dict_row
-        
+
         # Date ranges for lookups
         history_min = selected - timedelta(days=3)
         history_max = selected + timedelta(days=3)
@@ -1532,7 +1601,7 @@ def _query_earnings_result_complete(
         prev_max = selected - timedelta(days=60)
         yoy_min = selected - timedelta(days=400)
         yoy_max = selected - timedelta(days=300)
-        
+
         with connect_postgres(row_factory=dict_row, connect_timeout=8) as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -1543,7 +1612,7 @@ def _query_earnings_result_complete(
                             d.symbol as detail_symbol,
                             d.company_name as detail_company_name,
                             d.meeting_date as detail_meeting_date,
-                            d.quarter_ref as detail_quarter_ref,
+                            d.fiscal_quarter as detail_quarter_ref,
                             d.timing as detail_timing,
                             d.financials_json,
                             d.highlights_json as headline_highlights,
@@ -1551,6 +1620,8 @@ def _query_earnings_result_complete(
                             -- d.transcript_json excluded: 10-50KB per result, removed from UI, still stored in DB
                             d.documents_json as documents,
                             d.ai_summary_json as ai_summary,
+                            d.subsidiary_analysis_json,
+                            d.footnotes_text,
                             d.updated_at as detail_updated_at,
                             a.event_uid as announcement_event_uid,
                             a.symbol as announcement_symbol,
@@ -1573,7 +1644,7 @@ def _query_earnings_result_complete(
                         LIMIT 1
                     ),
                     history AS (
-                        SELECT 
+                        SELECT
                             actual_eps, estimated_eps, surprise_eps_pct,
                             actual_revenue, estimated_revenue, surprise_revenue_pct,
                             post_earnings_move_1d, pre_close, post_close
@@ -1584,7 +1655,7 @@ def _query_earnings_result_complete(
                         LIMIT 1
                     ),
                     prev_quarter AS (
-                        SELECT d.financials_json
+                        SELECT d.financials_json, d.footnotes_text as prev_footnotes_text
                         FROM earnings_details d
                         JOIN earnings_announcements a ON a.event_uid = d.event_uid
                         WHERE a.symbol = %s AND a.meeting_date BETWEEN %s AND %s
@@ -1599,7 +1670,7 @@ def _query_earnings_result_complete(
                         ORDER BY a.meeting_date DESC
                         LIMIT 1
                     )
-                    SELECT 
+                    SELECT
                         main.*,
                         history.actual_eps,
                         history.estimated_eps,
@@ -1611,6 +1682,7 @@ def _query_earnings_result_complete(
                         history.pre_close,
                         history.post_close,
                         prev_quarter.financials_json as prev_quarter_financials,
+                        prev_quarter.prev_footnotes_text,
                         yoy_quarter.financials_json as yoy_quarter_financials
                     FROM main
                     LEFT JOIN history ON true
@@ -1625,12 +1697,12 @@ def _query_earnings_result_complete(
                     ),
                 )
                 row = cur.fetchone()
-        
+
         if not row:
             return None
-        
+
         data = dict(row)
-        
+
         # Build detail_row (same logic as _query_result_detail_row)
         detail_row = None
         if data.get("detail_event_uid"):
@@ -1647,6 +1719,8 @@ def _query_earnings_result_complete(
                 "transcript": data.get("transcript"),
                 "documents": data.get("documents"),
                 "ai_summary": data.get("ai_summary"),
+                "subsidiary_analysis_json": data.get("subsidiary_analysis_json"),
+                "footnotes_text": data.get("footnotes_text"),
                 "sector": data.get("sector"),
                 "index_bucket": data.get("index_bucket"),
                 "market_cap_bucket": data.get("market_cap_bucket"),
@@ -1671,7 +1745,7 @@ def _query_earnings_result_complete(
                 "summary": data.get("announcement_summary"),
                 "updated_at": data.get("announcement_updated_at"),
             })
-        
+
         # Build history dict (same as _query_earnings_history_for_date)
         history = None
         if any(data.get(k) is not None for k in ["actual_eps", "estimated_eps", "actual_revenue"]):
@@ -1686,7 +1760,7 @@ def _query_earnings_result_complete(
                 "pre_close": data.get("pre_close"),
                 "post_close": data.get("post_close"),
             }
-        
+
         # Extract historical metrics (same logic as _query_historical_metrics)
         def _extract_metrics(financials_json: Any) -> dict[str, float]:
             if not financials_json:
@@ -1700,17 +1774,19 @@ def _query_earnings_result_complete(
                 for r in (fin.get("rows") or [])
                 if r.get("key") and r.get("current") is not None
             }
-        
+
         prev_metrics = _extract_metrics(data.get("prev_quarter_financials"))
         yoy_metrics = _extract_metrics(data.get("yoy_quarter_financials"))
-        
+        prev_footnotes = data.get("prev_footnotes_text")
+
         return {
             "detail_row": detail_row,
             "history": history,
             "prev_metrics": prev_metrics,
             "yoy_metrics": yoy_metrics,
+            "prev_footnotes": prev_footnotes,
         }
-    
+
     except Exception as exc:  # noqa: BLE001
         logger.debug("unified earnings result query failed: %s", exc)
         _trip_db_circuit()
@@ -1924,8 +2000,8 @@ def _set_announcement_processing_status(event_uid: str, status: str) -> bool:
 
 
 def _query_earnings_history_for_date(symbol: str, selected: date) -> dict[str, Any] | None:
-    """Return the Yahoo-sourced history row matching the given earnings date (±3 days).
-    
+    """Return the Yahoo-sourced history row matching the given earnings date (+/-3 days).
+
     DEPRECATED: Use _query_earnings_result_complete() instead for better performance.
     This function is kept for backward compatibility.
     """
@@ -1965,7 +2041,7 @@ def _query_historical_metrics(
 
     Source: earnings_details (parsed from PDF via Azure DI).
     XBRL-based QoQ/YoY is now populated at parse time, so the hot path stays DB-only.
-    
+
     DEPRECATED: Use _query_earnings_result_complete() instead for better performance.
     This function is kept for backward compatibility.
     """
@@ -2117,6 +2193,197 @@ def _query_quarter_tabs(symbol: str, current_date: date) -> list[dict[str, Any]]
         return []
 
 
+def _as_number(value: Any) -> float | None:
+    try:
+        if value is None or value == "":
+            return None
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number
+
+
+def _earnings_rows_by_key(financials_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rows = financials_payload.get("rows") or []
+    return {
+        str(row.get("key") or ""): row
+        for row in rows
+        if isinstance(row, dict) and row.get("key")
+    }
+
+
+def _format_summary_metric(value: Any, unit: str) -> str:
+    number = _as_number(value)
+    if number is None:
+        return "not disclosed"
+    if unit == "%":
+        return f"{number:.1f}%"
+    if unit == "Rs":
+        return f"Rs {number:.2f}"
+    return f"Rs {number:,.2f} Cr"
+
+
+def _row_change_phrase(row: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for key, label in (("qoq_pct", "QoQ"), ("yoy_pct", "YoY")):
+        number = _as_number(row.get(key))
+        if number is None:
+            continue
+        direction = "up" if number >= 0 else "down"
+        parts.append(f"{direction} {abs(number):.1f}% {label}")
+    return ", ".join(parts)
+
+
+def _metric_summary_sentence(row: dict[str, Any], label: str) -> str:
+    value = _format_summary_metric(row.get("current"), str(row.get("unit") or "Rs Cr"))
+    change = _row_change_phrase(row)
+    tail = f", {change}" if change else ""
+    display_label = f"{label[:1].upper()}{label[1:]}" if label else "Metric"
+    return f"{display_label} was {value}{tail}"
+
+
+def _row_change(rows_by_key: dict[str, dict[str, Any]], metric: str, field: str) -> float | None:
+    row = rows_by_key.get(metric) or {}
+    return _as_number(row.get(field))
+
+
+def _infer_local_rating(rows_by_key: dict[str, dict[str, Any]]) -> str:
+    revenue_growth = _row_change(rows_by_key, "revenue", "yoy_pct")
+    if revenue_growth is None:
+        revenue_growth = _row_change(rows_by_key, "revenue", "qoq_pct")
+
+    profit_changes = [
+        _row_change(rows_by_key, "pat", "yoy_pct"),
+        _row_change(rows_by_key, "ebitda", "yoy_pct"),
+        _row_change(rows_by_key, "eps", "yoy_pct"),
+    ]
+    profit_values = [value for value in profit_changes if value is not None]
+    profit_growth = sum(profit_values) / len(profit_values) if profit_values else None
+
+    if revenue_growth is not None and revenue_growth > 5 and (profit_growth is None or profit_growth > 3):
+        return "Positive"
+    if revenue_growth is not None and revenue_growth < -5 and profit_growth is not None and profit_growth < -5:
+        return "Negative"
+    if profit_growth is not None and profit_growth < -20 and (revenue_growth is None or revenue_growth <= 5):
+        return "Negative"
+    return "Neutral"
+
+
+def _build_local_ai_summary(
+    *,
+    company_name: str,
+    symbol: str,
+    fiscal_quarter: str,
+    meeting_date: str,
+    financials_payload: dict[str, Any],
+    highlights: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build a deterministic earnings note when the LLM summary is unavailable."""
+    rows_by_key = _earnings_rows_by_key(financials_payload)
+    metric_rows = [
+        rows_by_key[key]
+        for key in ("revenue", "pat", "ebitda", "eps", "ebitda_margin", "pat_margin")
+        if rows_by_key.get(key) and rows_by_key[key].get("current") is not None
+    ]
+    highlight_texts = [
+        str(item.get("text") or "").strip()
+        for item in highlights
+        if isinstance(item, dict) and str(item.get("text") or "").strip()
+    ]
+    if not metric_rows and not highlight_texts:
+        return {}
+
+    company_label = company_name or symbol or "The company"
+    quarter_label = fiscal_quarter or "the reported quarter"
+    lead = f"{company_label} reported {quarter_label} results"
+    if meeting_date:
+        lead = f"{lead} for the filing dated {meeting_date}"
+
+    metric_sentences: list[str] = []
+    if rows_by_key.get("revenue") and rows_by_key["revenue"].get("current") is not None:
+        metric_sentences.append(_metric_summary_sentence(rows_by_key["revenue"], "revenue"))
+    if rows_by_key.get("pat") and rows_by_key["pat"].get("current") is not None:
+        metric_sentences.append(_metric_summary_sentence(rows_by_key["pat"], "profit after tax"))
+    if rows_by_key.get("ebitda") and rows_by_key["ebitda"].get("current") is not None:
+        metric_sentences.append(_metric_summary_sentence(rows_by_key["ebitda"], "EBITDA"))
+    if rows_by_key.get("eps") and rows_by_key["eps"].get("current") is not None:
+        metric_sentences.append(_metric_summary_sentence(rows_by_key["eps"], "EPS"))
+
+    if metric_sentences:
+        performance_narrative = f"{lead}. " + ". ".join(metric_sentences[:4]) + "."
+    else:
+        performance_narrative = f"{lead}. " + " ".join(highlight_texts[:3])
+
+    rating = _infer_local_rating(rows_by_key)
+    rev_yoy = _row_change(rows_by_key, "revenue", "yoy_pct")
+    pat_yoy = _row_change(rows_by_key, "pat", "yoy_pct")
+    ebitda_margin = rows_by_key.get("ebitda_margin")
+    pat_margin = rows_by_key.get("pat_margin")
+
+    if rev_yoy is not None and rev_yoy > 0 and pat_yoy is not None and pat_yoy < 0:
+        pov_analysis = (
+            "The quarter is mixed: top-line momentum improved, but profit conversion weakened. "
+            "Investors should watch whether higher revenue begins to flow through to EBITDA and PAT in the next result."
+        )
+    elif rating == "Positive":
+        pov_analysis = (
+            "The quarter supports the operating thesis, with reported growth translating into healthier profitability. "
+            "Sustainability will depend on whether the company can hold this margin profile in subsequent quarters."
+        )
+    elif rating == "Negative":
+        pov_analysis = (
+            "The quarter weakens the near-term thesis because reported profitability moved in the wrong direction. "
+            "A recovery in revenue quality, cost absorption, or working capital discipline is needed before confidence improves."
+        )
+    else:
+        pov_analysis = (
+            "The result is best read as in-line to mixed based on the parsed filing. "
+            "There is enough data to assess headline growth and margins, but not enough operating detail to call a durable inflection."
+        )
+
+    revenue_drivers = "Revenue movement is captured in the reported financial statement"
+    if rows_by_key.get("revenue"):
+        revenue_drivers += f": {_metric_summary_sentence(rows_by_key['revenue'], 'revenue')}"
+    revenue_drivers += ". The parsed filing does not provide a reliable volume, pricing, segment, or product bridge."
+
+    margin_bits: list[str] = []
+    if ebitda_margin and ebitda_margin.get("current") is not None:
+        margin_bits.append(_metric_summary_sentence(ebitda_margin, "EBITDA margin"))
+    if pat_margin and pat_margin.get("current") is not None:
+        margin_bits.append(_metric_summary_sentence(pat_margin, "PAT margin"))
+    if rows_by_key.get("ebitda") and rows_by_key["ebitda"].get("current") is not None:
+        margin_bits.append(_metric_summary_sentence(rows_by_key["ebitda"], "EBITDA"))
+    margin_quality = ". ".join(margin_bits) + "." if margin_bits else "Margin detail was not disclosed in the parsed filing."
+
+    if rating == "Negative":
+        verdict = "Weak quarter: the parsed filing shows pressure in the key profitability metrics."
+    elif rating == "Positive":
+        verdict = "Good quarter: reported growth and profitability both moved in a constructive direction."
+    else:
+        verdict = "Mixed quarter: the filing shows useful headline progress, but profitability or disclosure depth keeps the read-through balanced."
+
+    risks_outlook = (
+        "Key risks are margin sustainability, the quality of revenue growth, and the absence of detailed operating commentary in the parsed filing. "
+        "The next quarter should be monitored for EBITDA margin, PAT conversion, and whether management provides clearer demand or guidance detail."
+    )
+
+    return {
+        "performance_narrative": performance_narrative,
+        "pov_analysis": pov_analysis,
+        "key_highlights": {
+            "revenue_drivers": revenue_drivers,
+            "margin_quality": margin_quality,
+            "demand_geography": "No reliable demand, segment, or geography split was available in the parsed official filing.",
+            "management_guidance": "No explicit management guidance was available in the parsed official filing.",
+            "order_book": "No order book, backlog, or pipeline disclosure was available in the parsed official filing.",
+        },
+        "operational_kpis": "No reliable operational KPIs such as capacity utilization, store additions, volumes, subscribers, or employee count were available in the parsed official filing.",
+        "risks_outlook": risks_outlook,
+        "verdict": verdict,
+        "rating": rating,
+        "confidence_factors": "Based on extracted financial statement rows and official filing highlights. Confidence is lower for operational drivers, guidance, geography, and order book because those disclosures were not present in the parsed text.",
+    }
+
 def _generate_ai_summary(
     *,
     text_excerpt: str,
@@ -2125,6 +2392,8 @@ def _generate_ai_summary(
     symbol: str,
     fiscal_quarter: str,
     meeting_date: str,
+    standalone_metrics: dict[str, Any] | None = None,
+    consolidated_metrics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Call LLM to produce structured earnings intelligence. Returns {} on any failure."""
     if not text_excerpt or len(text_excerpt) < 200:
@@ -2144,52 +2413,87 @@ def _generate_ai_summary(
         "ebitda_margin": "EBITDA Margin (%)",
         "pat_margin": "PAT Margin (%)",
     }
-    metrics_text = "\n".join(
-        f"{_metric_labels[k]}: {metrics[k]}" for k in _metric_labels if metrics.get(k) is not None
-    ) or "Not available"
 
-    system_prompt = (
-        "You are a senior equity research analyst specialising in Indian listed companies. "
-        "Analyse the earnings results and return ONLY valid JSON — no markdown, no prose outside the JSON. "
-        "Required JSON structure:\n"
-        "{\n"
-        '  "performance_narrative": "2-3 sentence overall performance summary",\n'
-        '  "pov_analysis": "1-2 sentence qualitative POV on what this result means for investors",\n'
-        '  "key_highlights": {\n'
-        '    "revenue_drivers": "Key revenue driver commentary",\n'
-        '    "margin_quality": "Margin analysis — quality, drivers, sustainability",\n'
-        '    "demand_geography": "Demand trends by segment, geography, or product line",\n'
-        '    "management_guidance": "Guidance for next quarter or full year",\n'
-        '    "order_book": "Order book or backlog commentary if applicable"\n'
-        "  },\n"
-        '  "risks_outlook": "Key risks and near-term outlook in 1-2 sentences",\n'
-        '  "verdict": "One-sentence verdict on the quarter",\n'
-        '  "rating": "Positive or Neutral or Negative"\n'
-        "}"
-    )
-    user_prompt = (
-        f"Company: {company_name} ({symbol})\n"
-        f"Quarter: {fiscal_quarter}\n"
-        f"Meeting Date: {meeting_date}\n\n"
-        f"Financial Metrics:\n{metrics_text}\n\n"
-        f"Document Text (excerpt):\n{text_excerpt[:4000]}"
-    )
+    # Build comprehensive metrics text
+    metrics_lines = []
+    for k in _metric_labels:
+        if metrics.get(k) is not None:
+            metrics_lines.append(f"{_metric_labels[k]}: {metrics[k]}")
+    metrics_text = "\n".join(metrics_lines) or "Not available"
+
+    # Add standalone vs consolidated comparison if available
+    subsidiary_context = ""
+    if standalone_metrics and consolidated_metrics:
+        sub_lines = []
+        for k in ['revenue', 'pat', 'ebitda']:
+            s_val = standalone_metrics.get(k)
+            c_val = consolidated_metrics.get(k)
+            if s_val is not None and c_val is not None and s_val != c_val:
+                diff = c_val - s_val
+                sub_lines.append(f"  {k.upper()}: Standalone={s_val}, Consolidated={c_val}, Subsidiary Impact={diff:+.2f}")
+        if sub_lines:
+            subsidiary_context = "\n\nSubsidiary Analysis (Standalone vs Consolidated):\n" + "\n".join(sub_lines)
+
+    system_prompt = """You are a senior equity research analyst specializing in Indian listed companies (NSE/BSE).
+Analyze the quarterly earnings results thoroughly and return ONLY valid JSON with deep, actionable insights.
+
+Required JSON structure:
+{
+  "performance_narrative": "3-4 sentence comprehensive performance summary covering revenue growth trajectory, profitability trends, and key operational metrics. Include YoY and QoQ context where data allows.",
+
+  "pov_analysis": "2-3 sentences on what this quarter means for the investment thesis. Is the company executing on strategy? Any inflection points?",
+
+  "key_highlights": {
+    "revenue_drivers": "Detailed analysis of revenue growth drivers - segment mix, volume vs pricing, new product/geography contribution, order execution",
+    "margin_quality": "Deep dive into margin profile - gross margin vs operating margin trends, cost structure changes, one-time items, sustainability of current margins",
+    "demand_geography": "Demand analysis by segment/vertical/geography. Any concentration risks? Diversification progress?",
+    "management_guidance": "What did management guide for? Revenue/margin/capex outlook. Any change in guidance vs prior quarter?",
+    "order_book": "Order book/pipeline/backlog status. Book-to-bill ratio. Quality of order book (duration, margins, customer mix)"
+  },
+
+  "operational_kpis": "Key operational metrics mentioned - capacity utilization, employee count, store additions, subscriber metrics, etc.",
+
+  "risks_outlook": "2-3 sentences on key risks and near-term outlook. Include sector headwinds, company-specific challenges, and catalysts to watch.",
+
+  "verdict": "One clear sentence verdict: Is this a beat/miss/in-line quarter? What's the key takeaway for investors?",
+
+  "rating": "Positive or Neutral or Negative",
+
+  "confidence_factors": "What data in the filing gives high confidence in this analysis? What's missing?"
+}
+
+Guidelines:
+- Be specific with numbers where available
+- Highlight YoY and QoQ changes
+- Note any accounting changes or one-time items
+- Flag if data quality is poor or key metrics are missing
+- For Nifty 500 companies, compare to sector benchmarks if relevant"""
+
+    user_prompt = f"""Company: {company_name} ({symbol})
+Quarter: {fiscal_quarter}
+Meeting Date: {meeting_date}
+
+Financial Metrics (Consolidated unless noted):
+{metrics_text}{subsidiary_context}
+
+Document Text (excerpt):
+{text_excerpt[:6000]}"""
 
     def _run() -> str:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             return asyncio.run(
-                swarm_chat(system_prompt, user_prompt, complexity="medium", json_mode=True, max_tokens=1200)
+                swarm_chat(system_prompt, user_prompt, complexity="high", json_mode=True, max_tokens=2000)
             )
         if not loop.is_running():
             return loop.run_until_complete(
-                swarm_chat(system_prompt, user_prompt, complexity="medium", json_mode=True, max_tokens=1200)
+                swarm_chat(system_prompt, user_prompt, complexity="high", json_mode=True, max_tokens=2000)
             )
         with ThreadPoolExecutor(max_workers=1) as pool:
             return pool.submit(
                 lambda: asyncio.run(
-                    swarm_chat(system_prompt, user_prompt, complexity="medium", json_mode=True, max_tokens=1200)
+                    swarm_chat(system_prompt, user_prompt, complexity="high", json_mode=True, max_tokens=2000)
                 )
             ).result()
 
@@ -2224,6 +2528,19 @@ def _store_ai_summary(event_uid: str, ai_summary: dict[str, Any]) -> bool:
         return False
 
 
+def _get_previous_quarter_label(current_quarter: str) -> str:
+    """Get previous quarter label from current quarter (e.g., Q3 FY26 -> Q2 FY26)."""
+    import re
+    match = re.match(r"Q(\d)\s*FY(\d{2})", current_quarter.upper())
+    if not match:
+        return ""
+    q = int(match.group(1))
+    fy = int(match.group(2))
+    if q == 1:
+        return f"Q4 FY{fy - 1:02d}"
+    return f"Q{q - 1} FY{fy:02d}"
+
+
 def _apply_xbrl_unit_correction(
     symbol: str,
     financials_payload: dict[str, Any],
@@ -2232,7 +2549,7 @@ def _apply_xbrl_unit_correction(
 
     Some companies report financials in Rs Millions (not Crore) in their PDFs.
     If the PDF unit declaration wasn't detected, extracted revenue will be ~10x too high.
-    Cross-validate: if extracted_revenue / xbrl_revenue is ~10 → divide by 10.
+    Cross-validate: if extracted_revenue / xbrl_revenue is ~10 -> divide by 10.
     """
     metrics = _dict_json(financials_payload.get("metrics") or {})
     extracted_revenue = metrics.get("revenue")
@@ -2254,17 +2571,17 @@ def _apply_xbrl_unit_correction(
 
     ratio = extracted_revenue / xbrl_revenue
 
-    # Detect unit mismatch: 8–12x = Rs Millions; 80–120x = Rs Lakhs
+    # Detect unit mismatch: 8-12x = Rs Millions; 80-120x = Rs Lakhs
     if 8.0 <= ratio <= 12.0:
         scale = 0.1
         logger.info(
-            "Unit correction for %s: extracted revenue %.1f Cr is ~10x XBRL %.1f Cr → applying ÷10 (Rs Millions)",
+            "Unit correction for %s: extracted revenue %.1f Cr is ~10x XBRL %.1f Cr -> applying /10 (Rs Millions)",
             symbol, extracted_revenue, xbrl_revenue,
         )
     elif 80.0 <= ratio <= 120.0:
         scale = 0.01
         logger.info(
-            "Unit correction for %s: extracted revenue %.1f Cr is ~100x XBRL %.1f Cr → applying ÷100 (Rs Lakhs)",
+            "Unit correction for %s: extracted revenue %.1f Cr is ~100x XBRL %.1f Cr -> applying /100 (Rs Lakhs)",
             symbol, extracted_revenue, xbrl_revenue,
         )
     else:
@@ -2426,7 +2743,7 @@ def _company_row_from_db(row: dict[str, Any]) -> dict[str, Any]:
     if not highlights:
         source_url = str(attachments[0]) if attachments else ""
         highlights = build_ai_highlights(str(row.get("summary") or ""), source_url=source_url)
-    
+
     # Parse meeting date to determine if past or future
     meeting_date_str = row.get("date") or ""
     try:
@@ -2434,7 +2751,7 @@ def _company_row_from_db(row: dict[str, Any]) -> dict[str, Any]:
         is_past = meeting_date < date.today()
     except (ValueError, TypeError):
         is_past = False
-    
+
     return {
         "event_uid": row.get("event_uid"),
         "symbol": row.get("symbol") or "",
@@ -2467,13 +2784,15 @@ def _detail_row_from_db(row: dict[str, Any]) -> dict[str, Any]:
         "sector": _normalize_sector(row.get("sector")),
         "date": str(row.get("meeting_date") or ""),
         "timing": row.get("timing") or "TAS",
-        "fiscal_quarter": row.get("fiscal_quarter") or "",
-        "headline_highlights": _highlight_items(row.get("highlights_json")),
+        "fiscal_quarter": row.get("fiscal_quarter") or row.get("quarter_ref") or "",
+        "headline_highlights": _highlight_items(row.get("highlights_json") or row.get("headline_highlights")),
         "management_commentary": _highlight_items(row.get("management_json")),
-        "transcript": _transcript_payload(row.get("transcript_json")),
-        "documents": _document_items(row.get("documents_json"), row.get("attachment_urls")),
+        "transcript": _transcript_payload(row.get("transcript_json") or row.get("transcript")),
+        "documents": _document_items(row.get("documents_json") or row.get("documents"), row.get("attachment_urls")),
         "financials": _financials_payload(row.get("financials_json")),
-        "ai_summary": _dict_json(row.get("ai_summary_json")),
+        "ai_summary": _dict_json(row.get("ai_summary_json") or row.get("ai_summary")),
+        "subsidiary_analysis_json": row.get("subsidiary_analysis_json"),
+        "footnotes_text": row.get("footnotes_text"),
         "summary": row.get("summary") or "",
         "updated_at": str(row.get("updated_at") or ""),
     }
@@ -2842,6 +3161,15 @@ _DEMO_DETAILS: dict[str, dict[str, Any]] = {
 _EARNINGS_EXTENDED_BOOTSTRAP_SQL = """
 alter table if exists earnings_details
   add column if not exists ai_summary_json jsonb default '{}'::jsonb;
+
+alter table if exists earnings_details
+  add column if not exists subsidiary_analysis_json jsonb default null;
+
+alter table if exists earnings_details
+  add column if not exists footnotes_text text default null;
+
+alter table if exists earnings_details
+  add column if not exists footnotes_diff_json jsonb default null;
 
 alter table if exists earnings_announcements
   add column if not exists actual_revenue   numeric,

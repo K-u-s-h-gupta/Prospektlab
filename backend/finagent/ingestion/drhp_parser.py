@@ -374,13 +374,103 @@ def _is_business_boilerplate(paragraph: str) -> bool:
         "forward-looking statements",
         "our fiscal year ends",
         "unless the context otherwise requires",
-        "industry and market data used in this section",
-        "technopak report",
+        "unless otherwise indicated",
+        "industry and market data",
         "copy of the technopak report",
+        "prepared and issued by care",
         "references to our company",
         "relevant calendar year",
+        "operational and financial performance indicators",
+        "may not be derived from our restated",
+        "investors are accordingly cautioned",
+        "actual results may differ",
+        "names of certain customers and suppliers",
+        "consents for disclosure",
+        "in this red herring prospectus",
+        "following discussion should be read",
+        "financial information included elsewhere",
+        "management's discussion and analysis",
+        "basis for issue price",
     )
     return any(token in lowered for token in boilerplate_tokens)
+
+
+def _business_overview_score(paragraph: str) -> int:
+    lowered = (paragraph or "").lower()
+    score = 0
+    positive_tokens = (
+        "we are",
+        "we operate",
+        "we provide",
+        "we offer",
+        "we manufacture",
+        "we supply",
+        "we develop",
+        "we deliver",
+        "we specialise",
+        "we specialize",
+        "we have presence",
+        "our company is",
+        "our business is",
+        "engaged in",
+        "incorporated in",
+        "customers",
+        "clients",
+        "products",
+        "services",
+        "solutions",
+        "platform",
+        "facilities",
+        "manufacturing",
+        "operations",
+        "marketplace",
+        "technology",
+    )
+    negative_tokens = (
+        "red herring prospectus",
+        "draft red herring prospectus",
+        "this section",
+        "audited",
+        "restated",
+        "financial performance",
+        "assumptions",
+        "estimates",
+        "cautioned",
+        "source:",
+    )
+    for token in positive_tokens:
+        if token in lowered:
+            score += 1
+    for token in negative_tokens:
+        if token in lowered:
+            score -= 1
+    if lowered.startswith(("we are", "we operate", "we provide", "we offer", "we manufacture", "we develop")):
+        score += 2
+    return score
+
+
+def extract_business_overview_paragraphs(section_text: str, *, limit: int = 3) -> list[str]:
+    """Return only document paragraphs that describe the issuer's actual business.
+
+    DRHP/RHP business chapters often open with legal, market-data, KPI, and
+    forward-looking disclaimers before the true company overview. Those lines
+    are accurate document text, but they are not an issuer overview and should
+    not populate the detail-page Business overview section.
+    """
+    candidates = _extract_clean_paragraphs(section_text, limit=80, min_chars=70)
+    descriptive: list[str] = []
+    fallback: list[str] = []
+
+    for paragraph in candidates:
+        if _is_business_boilerplate(paragraph):
+            continue
+        fallback.append(paragraph)
+        if _business_overview_score(paragraph) >= 2:
+            descriptive.append(paragraph)
+
+    if descriptive:
+        return descriptive[:limit]
+    return fallback[:limit]
 
 
 # Pre-compile a single combined regex for all section aliases
@@ -428,20 +518,29 @@ def _find_section_starts_fast(text: str) -> list[tuple[int, str, str]]:
             line_end = len(text)
         line = text[line_start:line_end].strip()
         lowered = line.lower()
+        normalized_alpha = _normalize_whitespace(re.sub(r"[^a-z ]", " ", lowered))
 
         score = 0
         if _looks_like_toc_line(line):
             score -= 30
+        if re.match(r"^\s*(?:\d{1,3}[.)]|[-*])\s+", line):
+            score -= 30
+        if normalized_alpha == alias:
+            score += 24
+        if re.match(r"^(?:section|chapter)\b", normalized_alpha) and alias in normalized_alpha:
+            score += 18
         if lowered.startswith(alias):
             score += 8
-        if _normalize_whitespace(re.sub(r"[^a-z ]", " ", lowered)) == alias:
-            score += 10
         if len(line) <= max(120, len(alias) + 24):
             score += 4
         if match_start - line_start <= 4:
             score += 4
         if line == line.upper() and sum(ch.isalpha() for ch in line) >= 4:
             score += 2
+        if line[:1] in {'"', "'"} and len(line) > len(alias) + 35:
+            score -= 12
+        if lowered.startswith(alias) and len(line) > len(alias) + 50 and re.search(r"\s[-:]\s", line):
+            score -= 8
         if _digit_ratio(line) >= 0.25:
             score -= 6
         if len(line) > 180:
@@ -456,8 +555,16 @@ def _find_section_starts_fast(text: str) -> list[tuple[int, str, str]]:
         alias = match.group(1).lower()
         section_name = _ALIAS_TO_SECTION.get(alias)
         if section_name:
-            pos = match.start()
+            line_start = text.rfind("\n", 0, match.start()) + 1
+            line_end = text.find("\n", match.end())
+            if line_end == -1:
+                line_end = len(text)
+            line = text[line_start:line_end].strip()
+            normalized_alpha = _normalize_whitespace(re.sub(r"[^a-z ]", " ", line.lower()))
+            pos = line_start if (normalized_alpha == alias or re.match(r"^(?:section|chapter)\b", normalized_alpha)) else match.start()
             score = _candidate_score(match.start(), match.end(), section_name, alias)
+            if score < 6:
+                continue
             current = section_hits.get(section_name)
             if current is None or score > current[2] or (score == current[2] and pos < current[0]):
                 section_hits[section_name] = (pos, alias, score)
@@ -611,6 +718,11 @@ def extract_numbered_risks(risk_section: str) -> list[dict[str, Any]]:
         "specific attention of the investors is invited",
         "company's and selling shareholders' absolute responsibility",
         "you should read this red herring prospectus carefully",
+        "significant differences exist between ind as",
+        "unless the context otherwise requires",
+        "any discrepancies in any table",
+        "forward-looking statements",
+        "section titled",
     )
 
     def _accept_risk(body: str) -> bool:
@@ -794,6 +906,8 @@ def extract_management(management_section: str, full_text: str = "") -> list[dic
         key = name.lower()
         if key in seen_names:
             return
+        if key in {"s no", "name of director", "name of the director"}:
+            return
         if any(tok in key for tok in ("university", "limited", "ltd.", "llp", "institute", "college", "page ")):
             return
         seen_names.add(key)
@@ -823,7 +937,19 @@ def extract_management(management_section: str, full_text: str = "") -> list[dic
 
     working_text = actual_mgmt_text if actual_mgmt_text else management_section
 
-    # Strategy 2: Parse DIN-based director profile cells in pipe tables
+    # Strategy 2: Parse numbered director profile blocks used in several prospectus layouts.
+    block_pattern = re.compile(
+        r"(?:^|\n)\s*\(\d+\)\s*\n\s*([A-Z][A-Za-z .'-]{2,70}?)\*?\s*\n"
+        r"\s*Designation[:\s]+(.{5,180}?)\n\s*(?:Address|Occupation|Date of birth|Term|Period of directorship|DIN)"
+        r".*?DIN[:\s]*(\d{8})",
+        re.IGNORECASE | re.DOTALL,
+    )
+    for match in block_pattern.finditer(working_text):
+        name_raw = _normalize_whitespace(match.group(1)).strip(" *.,")
+        desig_raw = _normalize_whitespace(match.group(2)).strip(" *.,")
+        _add_person(name_raw, desig_raw)
+
+    # Strategy 3: Parse DIN-based director profile cells in pipe tables
     # SEBI format: table cell with "Name DIN: XXXXXXXX Designation: ..."
     din_pattern = re.compile(
         r"([A-Z][A-Za-z\s.]{2,40}?)\s+DIN[:\s]+(\d{8})\s*(?:\n|Designation[:\s]+|\.?\s+)",
@@ -842,7 +968,7 @@ def extract_management(management_section: str, full_text: str = "") -> list[dic
         exp_match = re.search(r"(\d{1,2}\+?\s+years?\s+of\s+(?:experience|expertise)[^.]{0,100})", context, re.IGNORECASE)
         _add_person(name_raw, desig, exp_match.group(1) if exp_match else None)
 
-    # Strategy 3: Titled name + designation regex
+    # Strategy 4: Titled name + designation regex
     designations = [
         "managing director & ceo", "managing director and ceo",
         "whole time director", "whole-time director",
@@ -869,7 +995,7 @@ def extract_management(management_section: str, full_text: str = "") -> list[dic
         full_name = _normalize_whitespace(prefix + " " + name_raw)
         _add_person(full_name, desig_raw, exp_match.group(1) if exp_match else None)
 
-    # Strategy 4: Pipe table with name | designation columns
+    # Strategy 5: Pipe table with name | designation columns
     if not management:
         desig_keywords = {"director", "ceo", "cfo", "chairman", "officer", "secretary", "managing", "independent"}
         for line in working_text.splitlines():
@@ -939,11 +1065,14 @@ def extract_promoters(promoters_section: str, legal_section: str = "", full_text
             "compliance officer", "auditor", "chartered accountant",
             "lead manager", "underwriter", "market maker", "banker", "legal advisor",
             "address:", "telephone:", "website:", "email:",
-            "transfer agent", "depository", "broker",
+            "transfer agent", "depository", "broker", "stock exchange", "broking",
+            "intime", "sponsor bank", "formerly",
         )
         if any(tok in key for tok in noise_tokens):
             return
         if re.search(r"\d{4,}", name):
+            return
+        if key.startswith("of "):
             return
         if name[0].islower():  # starts with lowercase = partial fragment
             return
@@ -989,7 +1118,8 @@ def extract_promoters(promoters_section: str, legal_section: str = "", full_text
     # Noise words that indicate this is not a promoter name
     _NAME_NOISE = re.compile(
         r"(?:issue|public issue|net issue|equity|face value|market|bse|nse|sebi|"
-        r"constitution|article|section|chapter|page|clause|regulation|act\b)",
+        r"constitution|article|section|chapter|page|clause|regulation|act\b|"
+        r"stock exchange|broking|intime|sponsor bank|formerly|lead manager|registrar)",
         re.IGNORECASE
     )
 
@@ -1037,7 +1167,7 @@ def extract_promoters(promoters_section: str, legal_section: str = "", full_text
     # 4. Corporate entity promoters
     for match in re.finditer(
         r"([A-Z][A-Za-z0-9 ,&.()]{3,60}?)\s+(?:Limited|Pvt\.?\s*Ltd\.?|LLP|Trust)",
-        text, re.IGNORECASE,
+        promo_core, re.IGNORECASE,
     ):
         raw_name = _normalize_whitespace(match.group(0))
         if not re.search(r"\d{2,}[\.,]\d{2}", raw_name):
@@ -1101,6 +1231,8 @@ def extract_kpi_rows(kpi_section: str) -> list[dict[str, Any]]:
         "return on net worth": "RoNW",
         "ronw": "RoNW",
         "debt to equity": "Debt / Equity",
+        "debt / equity": "Debt / Equity",
+        "debt/equity": "Debt / Equity",
         "debt equity": "Debt / Equity",
         "earning per share": "EPS",
         "eps": "EPS",
@@ -1114,10 +1246,12 @@ def extract_kpi_rows(kpi_section: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    def _trend_for_values(current: float, prior: float) -> str:
+    def _trend_for_values(label: str, current: float, prior: float) -> str:
         if prior == 0:
             return "stable"
         change = 100.0 * (current - prior) / abs(prior)
+        if "debt" in label.lower():
+            change *= -1
         if change <= -5:
             return "deteriorating"
         if change >= 5:
@@ -1162,7 +1296,7 @@ def extract_kpi_rows(kpi_section: str) -> list[dict[str, Any]]:
                 "label": matched_label,
                 "current": current_raw,
                 "prior": prior_raw,
-                "trend": _trend_for_values(current_val, prior_val),
+                "trend": _trend_for_values(matched_label, current_val, prior_val),
             }
         )
         seen.add(matched_label)
@@ -1176,72 +1310,113 @@ def extract_kpis(kpi_section: str) -> dict[str, Any]:
         return {}
 
     value_map = {
-        "roe": "roe_pct",
-        "return on equity": "roe_pct",
-        "roce": "roce_pct",
         "return on capital employed": "roce_pct",
-        "ebitda margin": "ebitda_margin_pct",
-        "pat margin": "pat_margin_pct",
         "return on net worth": "ronw_pct",
-        "ronw": "ronw_pct",
+        "return on equity": "roe_pct",
+        "ebitda margin": "ebitda_margin_pct",
         "debt to equity": "debt_equity_ratio",
         "debt equity": "debt_equity_ratio",
         "earning per share": "eps",
-        "eps": "eps",
         "price/earning": "pe_ratio",
         "price earning": "pe_ratio",
-        "p/e": "pe_ratio",
         "net asset value": "nav",
+        "pat margin": "pat_margin_pct",
+        "ronw": "ronw_pct",
+        "roce": "roce_pct",
+        "roe": "roe_pct",
+        "eps": "eps",
+        "p/e": "pe_ratio",
         "nav": "nav",
     }
 
-    # Reasonable bounds for each field to reject extraction noise
-    _BOUNDS: dict[str, tuple[float, float]] = {
-        "roe_pct":          (-100.0, 200.0),
-        "roce_pct":         (-100.0, 200.0),
-        "ebitda_margin_pct":(-100.0, 100.0),
-        "pat_margin_pct":   (-100.0, 100.0),
-        "ronw_pct":         (-100.0, 200.0),
-        "debt_equity_ratio":(0.0,    25.0),   # D/E > 25x is almost certainly wrong
-        "eps":              (-10000.0, 100000.0),
-        "pe_ratio":         (0.0,    2000.0),
-        "nav":              (0.0,    100000.0),
+    row_label_map = {
+        "roe": "roe_pct",
+        "roce": "roce_pct",
+        "ebitda margin": "ebitda_margin_pct",
+        "pat margin": "pat_margin_pct",
+        "ronw": "ronw_pct",
+        "debt / equity": "debt_equity_ratio",
+        "debt to equity": "debt_equity_ratio",
+        "debt equity": "debt_equity_ratio",
+        "eps": "eps",
+        "p/e ratio": "pe_ratio",
+        "p/e": "pe_ratio",
+        "nav": "nav",
     }
 
+    _BOUNDS: dict[str, tuple[float, float]] = {
+        "roe_pct": (-100.0, 200.0),
+        "roce_pct": (-100.0, 200.0),
+        "ebitda_margin_pct": (-100.0, 100.0),
+        "pat_margin_pct": (-100.0, 100.0),
+        "ronw_pct": (-100.0, 200.0),
+        "debt_equity_ratio": (-25.0, 25.0),
+        "eps": (-10000.0, 1000.0),
+        "pe_ratio": (0.0, 2000.0),
+        "nav": (0.0, 100000.0),
+    }
+
+    def _parse_numeric(value: Any) -> float | None:
+        raw = str(value or "").replace("(", "-").replace(")", "")
+        raw = re.sub(r"[^\d.-]", "", raw)
+        if raw in {"", "-", "."}:
+            return None
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+
+    def _within_bounds(field_name: str, value: float) -> bool:
+        lo, hi = _BOUNDS.get(field_name, (-1e9, 1e9))
+        return lo <= value <= hi
+
     result: dict[str, Any] = {}
+
+    # Structured KPI tables are much less noisy than paragraph fallback matches.
+    for row in extract_kpi_rows(kpi_section):
+        label = _normalize_whitespace(str(row.get("label") or "")).lower()
+        field_name = row_label_map.get(label)
+        if not field_name:
+            for fragment, candidate_field in row_label_map.items():
+                if fragment in label:
+                    field_name = candidate_field
+                    break
+        if not field_name or field_name in result:
+            continue
+        value = _parse_numeric(row.get("current"))
+        if value is not None and _within_bounds(field_name, value):
+            result[field_name] = value
+
     normalized_text = _clean_copy(kpi_section)
 
-    for alias, field_name in value_map.items():
+    def _alias_re(alias: str) -> str:
+        return rf"(?<![A-Za-z]){re.escape(alias)}(?![A-Za-z])"
+
+    for alias, field_name in sorted(value_map.items(), key=lambda item: len(item[0]), reverse=True):
         if field_name in result:
             continue
         pattern = re.compile(
-            rf"{re.escape(alias)}[^\d]{{0,40}}([\d,]+(?:\.\d+)?)\s*(%|x)?",
+            rf"{_alias_re(alias)}[^\d-]{{0,40}}(-?\(?[\d,]+(?:\.\d+)?\)?)\s*(%|x)?",
             re.IGNORECASE,
         )
         match = pattern.search(normalized_text)
         if not match:
             continue
-        try:
-            val = float(match.group(1).replace(",", ""))
-        except ValueError:
+        value = _parse_numeric(match.group(1))
+        unit = (match.group(2) or "").strip()
+        if value is None:
             continue
-        lo, hi = _BOUNDS.get(field_name, (-1e9, 1e9))
-        if not (lo <= val <= hi):
+        if field_name.endswith("_pct") and unit != "%":
             continue
-        result[field_name] = val
-
-    for row in extract_kpi_rows(kpi_section):
-        label = row.get("label", "").lower()
-        for alias, field_name in value_map.items():
-            if alias in label and field_name not in result:
-                try:
-                    raw_val = float(re.sub(r"[^\d.-]", "", str(row.get("current") or "")))
-                except ValueError:
-                    break
-                lo, hi = _BOUNDS.get(field_name, (-1e9, 1e9))
-                if lo <= raw_val <= hi:
-                    result[field_name] = raw_val
-                break
+        # EPS, NAV and P/E paragraph matches are too often face-value or
+        # peer-table fragments; keep them only when a structured row extractor
+        # found them above.
+        if field_name in {"eps", "pe_ratio", "nav"}:
+            continue
+        if field_name == "eps" and 2010 <= abs(value) <= 2035:
+            continue
+        if _within_bounds(field_name, value):
+            result[field_name] = value
 
     return result
 
@@ -1382,27 +1557,19 @@ def generate_business_synthesis(
     financials: dict[str, Any],
     strengths: list[str],
 ) -> str:
-    """Generate a concise business synthesis from extracted sections."""
-    paragraphs = [
-        paragraph
-        for paragraph in _extract_clean_paragraphs(business_section, limit=40, min_chars=70)
-        if not _is_business_boilerplate(paragraph)
-    ][:2]
-    intro = paragraphs[0] if paragraphs else (strengths[0] if strengths else _clean_copy(business_section, max_chars=420))
-
-    if not intro:
+    """Generate a concise business synthesis from extracted company-overview text."""
+    paragraphs = extract_business_overview_paragraphs(business_section, limit=2)
+    if not paragraphs:
         return ""
 
-    synthesis_parts = [intro]
-    if len(paragraphs) > 1 and paragraphs[1].lower() != intro.lower():
-        synthesis_parts.append(paragraphs[1])
+    synthesis_parts = list(paragraphs)
 
     trends = financials.get("trends") or {}
     rev_cagr = trends.get("revenue_cagr_pct")
     pat_cagr = trends.get("pat_cagr_pct")
 
     if rev_cagr is not None or pat_cagr is not None:
-        growth_note = "The company has shown "
+        growth_note = "The restated financials show "
         if rev_cagr is not None:
             growth_note += f"revenue CAGR of {rev_cagr}%"
             if pat_cagr is not None:
@@ -1418,10 +1585,7 @@ def generate_business_synthesis(
         if top_uses:
             synthesis_parts.append(f"The filing states that the fresh issue proceeds are primarily earmarked for {top_uses}.")
 
-    if strengths and len(strengths) > 0:
-        synthesis_parts.append(f"Key strength: {strengths[0]}")
-
-    return " ".join(synthesis_parts)
+    return " ".join(part for part in synthesis_parts if part)
 
 
 def parse_drhp_markdown(markdown: str) -> dict[str, Any]:
@@ -1443,12 +1607,15 @@ def parse_drhp_markdown(markdown: str) -> dict[str, Any]:
     from finagent.ingestion.financial_table_extractor import extract_restated_financials
     from finagent.ingestion.ipo_score_engine import classify_risks, detect_sme_fraud_signals
 
-    financials = extract_restated_financials(financial_section)
-    risks = extract_numbered_risks(risk_section)
+    full_text = parsed.full_text or markdown
+    financials = extract_restated_financials(financial_section, full_text)
+    risks = extract_numbered_risks(risk_section if len(risk_section) > 5000 else full_text)
     classified_risks = classify_risks(risks)
     objects = extract_objects_split(objects_section)
-    promoters = extract_promoters(promoters_section, legal_section)
-    management = extract_management(management_section or promoters_section)
+    if objects.get("fresh_issue_cr") is None and objects.get("ofs_cr") is None:
+        objects = extract_objects_split(full_text)
+    promoters = extract_promoters(promoters_section, legal_section, full_text)
+    management = extract_management(management_section or promoters_section, full_text)
     kpi_rows = extract_kpi_rows(kpi_section)
     kpis = extract_kpis(kpi_section)
     peers = extract_peer_table(peer_section)
@@ -1468,20 +1635,8 @@ def parse_drhp_markdown(markdown: str) -> dict[str, Any]:
         financials,
         strengths_strategies.get("strengths", []),
     )
-    business_paragraphs = [
-        paragraph
-        for paragraph in _extract_clean_paragraphs(business_section, limit=40, min_chars=70)
-        if not _is_business_boilerplate(paragraph)
-    ][:3]
-    if not business_paragraphs:
-        fallback_paragraphs = [
-            item for item in (
-                strengths_strategies.get("strengths", [])[:1] + strengths_strategies.get("strategies", [])[:1]
-            )
-            if item
-        ]
-        business_paragraphs = fallback_paragraphs[:2]
-    business_excerpt = "\n\n".join(business_paragraphs) if business_paragraphs else _clean_copy(business_section, max_chars=3000)
+    business_paragraphs = extract_business_overview_paragraphs(business_section, limit=3)
+    business_excerpt = "\n\n".join(business_paragraphs) if business_paragraphs else ""
 
     return {
         "sections_present": {name: sec.present for name, sec in sections.items()},
@@ -1577,7 +1732,8 @@ async def parse_drhp_markdown_parallel(markdown: str) -> dict[str, Any]:
         # Always search the full_text for the actual chapter using LAST occurrence
         kpis_text = kpi_section
         found_via_search = False
-        for heading in ["BASIS FOR ISSUE PRICE", "Basis for Issue Price",
+        for heading in ["BASIS FOR OFFER PRICE", "Basis for Offer Price",
+                         "BASIS FOR ISSUE PRICE", "Basis for Issue Price",
                          "KEY PERFORMANCE INDICATORS", "Key Performance Indicators",
                          "KPIs of our Company"]:
             idx = full_text.rfind(heading)
@@ -1599,7 +1755,8 @@ async def parse_drhp_markdown_parallel(markdown: str) -> dict[str, Any]:
         # Find actual peer comparison chapter using LAST occurrence
         result: list = []
         for heading in ["COMPARISON WITH LISTED PEERS", "Comparison with Listed Peers",
-                         "PEER COMPARISON", "Basis for Issue Price", "BASIS FOR ISSUE PRICE"]:
+                         "PEER COMPARISON", "Basis for Offer Price", "BASIS FOR OFFER PRICE",
+                         "Basis for Issue Price", "BASIS FOR ISSUE PRICE"]:
             idx = full_text.rfind(heading)
             if idx != -1:
                 peer_chunk = full_text[idx: idx + 40000]
@@ -1665,20 +1822,8 @@ async def parse_drhp_markdown_parallel(markdown: str) -> dict[str, Any]:
         financials,
         strengths_strategies.get("strengths", []),
     )
-    business_paragraphs = [
-        paragraph
-        for paragraph in _extract_clean_paragraphs(business_section, limit=40, min_chars=70)
-        if not _is_business_boilerplate(paragraph)
-    ][:3]
-    if not business_paragraphs:
-        fallback_paragraphs = [
-            item for item in (
-                strengths_strategies.get("strengths", [])[:1] + strengths_strategies.get("strategies", [])[:1]
-            )
-            if item
-        ]
-        business_paragraphs = fallback_paragraphs[:2]
-    business_excerpt = "\n\n".join(business_paragraphs) if business_paragraphs else _clean_copy(business_section, max_chars=3000)
+    business_paragraphs = extract_business_overview_paragraphs(business_section, limit=3)
+    business_excerpt = "\n\n".join(business_paragraphs) if business_paragraphs else ""
     
     t_derive = time.perf_counter() - t0
     t_total = time.perf_counter() - start_total

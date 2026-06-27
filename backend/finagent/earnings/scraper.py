@@ -907,6 +907,10 @@ def build_detail_from_announcement(record: dict[str, Any]) -> dict[str, Any] | N
         "financials": parsed.get("financials") or {"rows": []},
         "text_excerpt": parsed.get("text_excerpt") or "",
         "parser_version": parsed.get("parser_version") or _PARSER_VERSION,
+        # NEW: Subsidiary Cash-Drain Matrix analysis
+        "subsidiary_analysis": parsed.get("subsidiary_analysis"),
+        # NEW: Footnotes text for QoQ diff (diff computed at service layer)
+        "footnotes_text": parsed.get("footnotes_text"),
     }
 
 

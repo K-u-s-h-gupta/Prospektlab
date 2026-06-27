@@ -66,10 +66,223 @@ _KNOWN_ISIN_SYMBOLS = {
 }
 
 _SYMBOL_ALIASES = {
+    # Zomato rebranded to Eternal
     "ZOMATO": "ETERNAL",
+    # Companies whose common name / full name != NSE ticker
+    "INFOSYS": "INFY",
+    "INFOSYS LIMITED": "INFY",
+    "INFOSYS LTD": "INFY",
+    "TATA MOTORS": "TATAMOTORS",
+    "TATA MOTORS LIMITED": "TATAMOTORS",
+    "TATA MOTORS LTD": "TATAMOTORS",
+    "HDFC BANK": "HDFCBANK",
+    "HDFC BANK LIMITED": "HDFCBANK",
+    "HDFC BANK LTD": "HDFCBANK",
+    "ICICI BANK": "ICICIBANK",
+    "ICICI BANK LIMITED": "ICICIBANK",
+    "KOTAK BANK": "KOTAKBANK",
+    "KOTAK MAHINDRA BANK": "KOTAKBANK",
+    "KOTAK MAHINDRA": "KOTAKBANK",
+    "STATE BANK OF INDIA": "SBIN",
+    "STATE BANK": "SBIN",
+    "SBI": "SBIN",
+    "BHARTI AIRTEL": "BHARTIARTL",
+    "BHARTI AIRTEL LIMITED": "BHARTIARTL",
+    "AIRTEL": "BHARTIARTL",
+    "ASIAN PAINTS": "ASIANPAINT",
+    "ASIAN PAINTS LIMITED": "ASIANPAINT",
+    "MARUTI SUZUKI": "MARUTI",
+    "MARUTI SUZUKI INDIA": "MARUTI",
+    "SUN PHARMACEUTICAL": "SUNPHARMA",
+    "SUN PHARMA": "SUNPHARMA",
+    "SUN PHARMACEUTICALS": "SUNPHARMA",
+    "ULTRATECH CEMENT": "ULTRACEMCO",
+    "ULTRATECH": "ULTRACEMCO",
+    "BAJAJ FINANCE": "BAJFINANCE",
+    "BAJAJ FINSERV": "BAJAJFINSV",
+    "HINDUSTAN UNILEVER": "HINDUNILVR",
+    "HINDUSTAN UNILEVER LIMITED": "HINDUNILVR",
+    "HUL": "HINDUNILVR",
+    "HCL TECHNOLOGIES": "HCLTECH",
+    "HCL TECH": "HCLTECH",
+    "HCL TECHNOLOGIES LIMITED": "HCLTECH",
+    "TECH MAHINDRA": "TECHM",
+    "TECH MAHINDRA LIMITED": "TECHM",
+    "OIL AND NATURAL GAS": "ONGC",
+    "OIL AND NATURAL GAS CORPORATION": "ONGC",
+    "COAL INDIA": "COALINDIA",
+    "COAL INDIA LIMITED": "COALINDIA",
+    "ADANI ENTERPRISES": "ADANIENT",
+    "ADANI PORTS": "ADANIPORTS",
+    "ADANI PORTS AND SEZ": "ADANIPORTS",
+    "GRASIM INDUSTRIES": "GRASIM",
+    "JSW STEEL": "JSWSTEEL",
+    "JSW STEEL LIMITED": "JSWSTEEL",
+    "TATA STEEL": "TATASTEEL",
+    "TATA STEEL LIMITED": "TATASTEEL",
+    "INDUSIND BANK": "INDUSINDBK",
+    "INDUSIND BANK LIMITED": "INDUSINDBK",
+    "HERO MOTOCORP": "HEROMOTOCO",
+    "HERO MOTOR": "HEROMOTOCO",
+    "HERO MOTORCORP": "HEROMOTOCO",
+    "MAHINDRA AND MAHINDRA": "M&M",
+    "MAHINDRA & MAHINDRA": "M&M",
+    "MAHINDRA": "M&M",
+    "EICHER MOTORS": "EICHERMOT",
+    "EICHER MOTORS LIMITED": "EICHERMOT",
+    "BAJAJ AUTO": "BAJAJ-AUTO",
+    "BAJAJ AUTO LIMITED": "BAJAJ-AUTO",
+    "DR REDDYS": "DRREDDY",
+    "DR REDDY": "DRREDDY",
+    "DR REDDYS LABORATORIES": "DRREDDY",
+    "DR REDDYS LAB": "DRREDDY",
+    "APOLLO HOSPITALS": "APOLLOHOSP",
+    "APOLLO HOSPITALS ENTERPRISE": "APOLLOHOSP",
+    "BRITANNIA INDUSTRIES": "BRITANNIA",
+    "PIDILITE INDUSTRIES": "PIDILITIND",
+    "PIDILITE": "PIDILITIND",
+    "DABUR INDIA": "DABUR",
+    "GODREJ CONSUMER PRODUCTS": "GODREJCP",
+    "GODREJ CONSUMER": "GODREJCP",
+    "LARSEN AND TOUBRO": "LT",
+    "LARSEN & TOUBRO": "LT",
+    "L&T": "LT",
+    "L AND T": "LT",
+    "AXIS BANK": "AXISBANK",
+    "AXIS BANK LIMITED": "AXISBANK",
+    "POWER GRID": "POWERGRID",
+    "POWER GRID CORPORATION": "POWERGRID",
+    "POWERGRID CORPORATION": "POWERGRID",
+    "NTPC LIMITED": "NTPC",
+    "NESTLE INDIA": "NESTLEIND",
+    "NESTLE": "NESTLEIND",
+    "TATA CONSULTANCY SERVICES": "TCS",
+    "TATA CONSULTANCY": "TCS",
+    "RELIANCE INDUSTRIES": "RELIANCE",
+    "RELIANCE INDUSTRIES LIMITED": "RELIANCE",
+    "WIPRO LIMITED": "WIPRO",
+    "TITAN COMPANY": "TITAN",
+    "TITAN COMPANY LIMITED": "TITAN",
+    "BAJAJ ELECTRICALS": "BAJAJELEC",
+    "DIVI S LABORATORIES": "DIVISLAB",
+    "DIVIS LABORATORIES": "DIVISLAB",
+    "DIVIS LAB": "DIVISLAB",
+    "CIPLA LIMITED": "CIPLA",
+    "SIEMENS INDIA": "SIEMENS",
+    "HAL": "HAL",
+    "HINDUSTAN AERONAUTICS": "HAL",
+    "BEL": "BEL",
+    "BHARAT ELECTRONICS": "BEL",
+    "TRENT LIMITED": "TRENT",
+    "HDFC LIFE": "HDFCLIFE",
+    "HDFC LIFE INSURANCE": "HDFCLIFE",
+    "SBI LIFE": "SBILIFE",
+    "SBI LIFE INSURANCE": "SBILIFE",
+    "ICICI PRUDENTIAL": "ICICIPRULI",
+    "ICICI LOMBARD": "ICICIGI",
+    "LTI MINDTREE": "LTIM",
+    "LTIMINDTREE": "LTIM",
+    "MINDTREE": "LTIM",
+    "MPHASIS": "MPHASIS",
+    "PERSISTENT SYSTEMS": "PERSISTENT",
+    "MARICO": "MARICO",
+    "HAVELLS INDIA": "HAVELLS",
+    "VOLTAS": "VOLTAS",
+    "JUBILANT FOODWORKS": "JUBLFOOD",
+    "JUBILANT FOOD": "JUBLFOOD",
+    "DOMINOS": "JUBLFOOD",
+    "ZOMATO LIMITED": "ETERNAL",
+    "ETERNAL LIMITED": "ETERNAL",
+    "SWIGGY": "SWIGGY",
+    "NYKAA": "FSN",
+    "FSN ECOMMERCE": "FSN",
+    "PAYTM": "PAYTM",
+    "ONE97 COMMUNICATIONS": "PAYTM",
+    "DMART": "DMART",
+    "AVENUE SUPERMARTS": "DMART",
+    "AVENUE SUPERMART": "DMART",
+    "PNB": "PNB",
+    "PUNJAB NATIONAL BANK": "PNB",
+    "BANK OF BARODA": "BANKBARODA",
+    "CANARA BANK": "CANBK",
+    "UNION BANK": "UNIONBANK",
 }
 
 _KNOWN_SYMBOL_ISIN = {symbol: isin for isin, symbol in _KNOWN_ISIN_SYMBOLS.items()}
+
+# Static lookup table for the most common NSE-listed companies.
+# Allows the search path to return instant results without any network call.
+# Format: NSE_SYMBOL → (company_name, sector, isin)
+_KNOWN_COMPANIES: dict[str, tuple[str, str, str | None]] = {
+    "RELIANCE":    ("Reliance Industries Ltd",         "Energy",                      "INE002A01018"),
+    "TCS":         ("Tata Consultancy Services Ltd",   "Information Technology",      "INE467B01029"),
+    "INFY":        ("Infosys Ltd",                     "Information Technology",      "INE009A01021"),
+    "HDFCBANK":    ("HDFC Bank Ltd",                   "Financial Services",          "INE040A01034"),
+    "ICICIBANK":   ("ICICI Bank Ltd",                  "Financial Services",          "INE090A01021"),
+    "ITC":         ("ITC Ltd",                         "FMCG",                        "INE154A01025"),
+    "LT":          ("Larsen & Toubro Ltd",             "Capital Goods",               "INE018A01030"),
+    "AXISBANK":    ("Axis Bank Ltd",                   "Financial Services",          "INE238A01034"),
+    "KOTAKBANK":   ("Kotak Mahindra Bank Ltd",         "Financial Services",          "INE237A01028"),
+    "SBIN":        ("State Bank of India",             "Financial Services",          "INE062A01020"),
+    "BHARTIARTL":  ("Bharti Airtel Ltd",               "Telecom",                     "INE397D01024"),
+    "ASIANPAINT":  ("Asian Paints Ltd",                "Consumer Durables",           "INE021A01026"),
+    "TATAMOTORS":  ("Tata Motors Ltd",                 "Automobile",                  "INE155A01022"),
+    "MARUTI":      ("Maruti Suzuki India Ltd",         "Automobile",                  "INE585B01010"),
+    "SUNPHARMA":   ("Sun Pharmaceutical Industries",   "Pharma",                      "INE044A01036"),
+    "ULTRACEMCO":  ("UltraTech Cement Ltd",            "Cement",                      "INE481G01011"),
+    "BAJFINANCE":  ("Bajaj Finance Ltd",               "Financial Services",          "INE296A01024"),
+    "BAJAJFINSV":  ("Bajaj Finserv Ltd",               "Financial Services",          "INE918I01026"),
+    "TITAN":       ("Titan Company Ltd",               "Consumer Durables",           "INE280A01028"),
+    "NESTLEIND":   ("Nestle India Ltd",                "FMCG",                        "INE239A01016"),
+    "POWERGRID":   ("Power Grid Corporation of India", "Utilities",                   "INE752E01010"),
+    "NTPC":        ("NTPC Ltd",                        "Utilities",                   "INE733E01010"),
+    "HINDUNILVR":  ("Hindustan Unilever Ltd",          "FMCG",                        "INE030A01027"),
+    "HCLTECH":     ("HCL Technologies Ltd",            "Information Technology",      "INE860A01027"),
+    "TECHM":       ("Tech Mahindra Ltd",               "Information Technology",      "INE669C01036"),
+    "ONGC":        ("Oil and Natural Gas Corporation", "Energy",                      "INE213A01029"),
+    "COALINDIA":   ("Coal India Ltd",                  "Mining",                      "INE522F01014"),
+    "ADANIENT":    ("Adani Enterprises Ltd",           "Diversified",                 "INE423A01024"),
+    "ADANIPORTS":  ("Adani Ports & SEZ Ltd",           "Infrastructure",              "INE742F01042"),
+    "WIPRO":       ("Wipro Ltd",                       "Information Technology",      "INE075A01022"),
+    "GRASIM":      ("Grasim Industries Ltd",           "Diversified",                 "INE047A01021"),
+    "JSWSTEEL":    ("JSW Steel Ltd",                   "Metals",                      "INE019A01038"),
+    "TATASTEEL":   ("Tata Steel Ltd",                  "Metals",                      "INE081A01020"),
+    "INDUSINDBK":  ("IndusInd Bank Ltd",               "Financial Services",          "INE095A01012"),
+    "HEROMOTOCO":  ("Hero MotoCorp Ltd",               "Automobile",                  "INE158A01026"),
+    "M&M":         ("Mahindra & Mahindra Ltd",         "Automobile",                  "INE101A01026"),
+    "EICHERMOT":   ("Eicher Motors Ltd",               "Automobile",                  "INE066A01021"),
+    "BAJAJ-AUTO":  ("Bajaj Auto Ltd",                  "Automobile",                  "INE917I01010"),
+    "DIVISLAB":    ("Divi's Laboratories Ltd",         "Pharma",                      "INE361B01024"),
+    "DRREDDY":     ("Dr. Reddy's Laboratories Ltd",   "Pharma",                      "INE089A01023"),
+    "APOLLOHOSP":  ("Apollo Hospitals Enterprise Ltd", "Healthcare",                  "INE437A01024"),
+    "CIPLA":       ("Cipla Ltd",                       "Pharma",                      "INE059A01026"),
+    "BRITANNIA":   ("Britannia Industries Ltd",        "FMCG",                        "INE216A01030"),
+    "PIDILITIND":  ("Pidilite Industries Ltd",         "Chemicals",                   "INE318A01026"),
+    "DABUR":       ("Dabur India Ltd",                 "FMCG",                        "INE016A01026"),
+    "GODREJCP":    ("Godrej Consumer Products Ltd",    "FMCG",                        "INE102D01028"),
+    "SIEMENS":     ("Siemens Ltd",                     "Capital Goods",               "INE003A01024"),
+    "BEL":         ("Bharat Electronics Ltd",          "Defence",                     "INE263A01024"),
+    "HAL":         ("Hindustan Aeronautics Ltd",       "Defence",                     "INE066F01012"),
+    "TRENT":       ("Trent Ltd",                       "Retail",                      "INE849A01020"),
+    "HDFCLIFE":    ("HDFC Life Insurance Company Ltd", "Insurance",                   "INE795G01014"),
+    "SBILIFE":     ("SBI Life Insurance Company Ltd",  "Insurance",                   "INE123W01016"),
+    "ICICIPRULI":  ("ICICI Prudential Life Insurance", "Insurance",                   "INE726G01019"),
+    "ICICIGI":     ("ICICI Lombard General Insurance", "Insurance",                   "INE765G01017"),
+    "LTIM":        ("LTIMindtree Ltd",                 "Information Technology",      "INE214T01019"),
+    "ETERNAL":     ("Eternal Ltd (formerly Zomato)",   "Consumer Services",           "INE758T01015"),
+    "PAYTM":       ("One97 Communications Ltd",        "Fintech",                     "INE982J01020"),
+    "DMART":       ("Avenue Supermarts Ltd",           "Retail",                      "INE192R01011"),
+    "SWIGGY":      ("Swiggy Ltd",                      "Consumer Services",           None),
+    "FSN":         ("FSN E-Commerce Ventures (Nykaa)", "E-Commerce",                  "INE388Y01029"),
+    "PNB":         ("Punjab National Bank",            "Financial Services",          "INE160A01022"),
+    "BANKBARODA":  ("Bank of Baroda",                  "Financial Services",          "INE028A01039"),
+    "CANBK":       ("Canara Bank",                     "Financial Services",          "INE476A01014"),
+    "PERSISTENT":  ("Persistent Systems Ltd",          "Information Technology",      "INE262H01021"),
+    "MPHASIS":     ("Mphasis Ltd",                     "Information Technology",      "INE356A01018"),
+    "MARICO":      ("Marico Ltd",                      "FMCG",                        "INE196A01026"),
+    "HAVELLS":     ("Havells India Ltd",               "Consumer Durables",           "INE176B01034"),
+    "JUBLFOOD":    ("Jubilant FoodWorks Ltd",          "Consumer Services",           "INE797F01020"),
+}
 
 # Known CINs for high-traffic symbols so governance/network resolve even when
 # the entity-resolver DB is briefly unavailable. Extend as needed.
@@ -1815,9 +2028,58 @@ class ScreenerService:
         items: list[dict[str, Any]] = []
         seen: set[str] = set()
 
+        # ── Step 0: fast alias / common-name lookup ──────────────────────────
+        # Check _SYMBOL_ALIASES first, then confirm against _KNOWN_COMPANIES for
+        # an instant result with zero network overhead.  This resolves common
+        # names such as "tata motors" → "TATAMOTORS" and "infosys" → "INFY"
+        # even when the IKG database is empty or slow.
+        alias_sym = _SYMBOL_ALIASES.get(text.upper().strip())
+        if alias_sym and alias_sym not in seen:
+            known = _KNOWN_COMPANIES.get(alias_sym)
+            if known:
+                seen.add(alias_sym)
+                items.append(
+                    {
+                        "symbol": alias_sym,
+                        "cin": _KNOWN_SYMBOL_CIN.get(alias_sym),
+                        "isin": _KNOWN_SYMBOL_ISIN.get(alias_sym) or known[2],
+                        "name": known[0],
+                        "sector": known[1],
+                        "confidence": 0.90,
+                        "source": "name_alias_lookup",
+                    }
+                )
+            else:
+                # Unknown company in alias but not in known-companies table —
+                # fall back to a quick market snapshot to confirm it exists.
+                snap = await self._safe_async(
+                    fetch_india_snapshot(alias_sym),
+                    timeout_s=max(2.0, _SNAPSHOT_QUOTE_REFRESH_TIMEOUT_S),
+                    default=None,
+                    label=f"search_alias:{alias_sym}",
+                )
+                if snap is not None:
+                    seen.add(alias_sym)
+                    items.append(
+                        {
+                            "symbol": alias_sym,
+                            "cin": None,
+                            "isin": snap.isin or None,
+                            "name": snap.company_name or alias_sym,
+                            "sector": snap.sector or snap.industry or "",
+                            "confidence": 0.85,
+                            "source": snap.source or "alias_lookup",
+                        }
+                    )
+
         entity: ResolvedCorporateEntity | None = None
         try:
-            entity = await asyncio.to_thread(self._resolver.resolve, text)
+            entity = await asyncio.wait_for(
+                asyncio.to_thread(self._resolver.resolve, text),
+                timeout=2.0,
+            )
+        except asyncio.TimeoutError:
+            logger.debug("screener search resolver timeout for %s", text)
         except EntityLookupError as exc:
             logger.debug("screener search resolver error for %s: %s", text, exc)
         except Exception as exc:
@@ -1842,29 +2104,51 @@ class ScreenerService:
         if len(items) < limit:
             fallback_symbol = _clean_symbol(text)
             if fallback_symbol and fallback_symbol not in seen:
-                snap = await self._safe_async(
-                    fetch_india_snapshot(fallback_symbol),
-                    timeout_s=max(2.0, _SNAPSHOT_QUOTE_REFRESH_TIMEOUT_S),
-                    default=None,
-                    label=f"search_snapshot:{fallback_symbol}",
-                )
-                if snap is not None:
+                # Check static known-companies table first (instant, zero network)
+                known_fb = _KNOWN_COMPANIES.get(fallback_symbol)
+                if known_fb:
                     seen.add(fallback_symbol)
                     items.append(
                         {
                             "symbol": fallback_symbol,
-                            "cin": None,
-                            "isin": snap.isin or None,
-                            "name": snap.company_name or fallback_symbol,
-                            "sector": snap.sector or snap.industry or "",
-                            "confidence": 0.65,
-                            "source": snap.source or "market_data",
+                            "cin": _KNOWN_SYMBOL_CIN.get(fallback_symbol),
+                            "isin": _KNOWN_SYMBOL_ISIN.get(fallback_symbol) or known_fb[2],
+                            "name": known_fb[0],
+                            "sector": known_fb[1],
+                            "confidence": 0.80,
+                            "source": "known_company_lookup",
                         }
                     )
+                else:
+                    snap = await self._safe_async(
+                        fetch_india_snapshot(fallback_symbol),
+                        timeout_s=max(2.0, _SNAPSHOT_QUOTE_REFRESH_TIMEOUT_S),
+                        default=None,
+                        label=f"search_snapshot:{fallback_symbol}",
+                    )
+                    if snap is not None:
+                        seen.add(fallback_symbol)
+                        items.append(
+                            {
+                                "symbol": fallback_symbol,
+                                "cin": None,
+                                "isin": snap.isin or None,
+                                "name": snap.company_name or fallback_symbol,
+                                "sector": snap.sector or snap.industry or "",
+                                "confidence": 0.65,
+                                "source": snap.source or "market_data",
+                            }
+                        )
 
         if len(items) < limit:
             try:
-                name_hits = await asyncio.to_thread(self._resolver.resolve_by_name, text, max(3, limit))
+                name_hits = await asyncio.wait_for(
+                    asyncio.to_thread(self._resolver.resolve_by_name, text, max(3, limit)),
+                    timeout=2.0,
+                )
+            except asyncio.TimeoutError:
+                logger.debug("screener search name resolver timeout for %s", text)
+                name_hits = []
             except EntityLookupError:
                 name_hits = []
             except Exception as exc:
@@ -2583,7 +2867,7 @@ class ScreenerService:
         }
 
     async def analyze(self, identifier: str) -> dict[str, Any]:
-        snapshot = await self.company_snapshot(identifier, period="1Y", _allow_supplemental=False)
+        snapshot = await self.company_snapshot(identifier, period="1Y")
         fundamentals = snapshot.get("fundamentals") or {}
         profile = fundamentals.get("profile") or {}
         score = snapshot.get("score") or {}

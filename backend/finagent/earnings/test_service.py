@@ -1,4 +1,4 @@
-﻿from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from finagent.earnings import service
 
@@ -261,3 +261,27 @@ def test_on_demand_detail_parse_retries_stale_parsing(monkeypatch):
     assert result == {"stored": True, "event_uid": "evt-stale"}
     assert statuses == ["parsing", "parsed"]
 
+def test_local_ai_summary_fallback_uses_extracted_metrics_without_hallucinating():
+    rows = [
+        {"key": "revenue", "label": "Revenue", "unit": "Rs Cr", "current": 60.62, "qoq_pct": 3.2, "yoy_pct": 107.1},
+        {"key": "pat", "label": "PAT", "unit": "Rs Cr", "current": 0.95, "qoq_pct": -42.4, "yoy_pct": -38.3},
+        {"key": "ebitda", "label": "EBITDA", "unit": "Rs Cr", "current": 2.31, "qoq_pct": -31.2, "yoy_pct": -1.7},
+        {"key": "eps", "label": "EPS", "unit": "Rs", "current": 0.05, "qoq_pct": -37.5, "yoy_pct": -44.4},
+        {"key": "ebitda_margin", "label": "EBITDA Margin", "unit": "%", "current": 3.81, "qoq_pct": -33.4, "yoy_pct": -52.6},
+    ]
+
+    summary = service._build_local_ai_summary(
+        company_name="Ajooni Biotech",
+        symbol="AJOONI",
+        fiscal_quarter="Q4 FY26",
+        meeting_date="2026-05-28",
+        financials_payload={"rows": rows},
+        highlights=[],
+    )
+
+    assert summary["rating"] == "Neutral"
+    assert "Revenue was Rs 60.62 Cr" in summary["performance_narrative"]
+    assert "Profit after tax was Rs 0.95 Cr" in summary["performance_narrative"]
+    assert "No explicit management guidance" in summary["key_highlights"]["management_guidance"]
+    assert "No order book" in summary["key_highlights"]["order_book"]
+    assert "not present in the parsed text" in summary["confidence_factors"]

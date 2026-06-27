@@ -184,7 +184,7 @@ const AUTH_TOKEN_KEY = 'prospektlab_auth_token';
 const AUTH_TOKEN_SESSION_KEY = 'prospektlab_auth_token_session';
 const GUEST_ID_KEY = 'prospektlab_guest_id';
 
-// â”€â”€ Runtime Backend URL Support (for Amplify + separate ECS backend) â”€â”€â”€â”€â”€
+// -- Runtime Backend URL Support (for Amplify + separate ECS backend) --
 function getApiBase(): string {
   if (typeof window !== 'undefined') {
     const w = window as any;
@@ -323,7 +323,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-// â”€â”€ Auth state (in-memory only; httpOnly cookie is the source of truth) â”€â”€
+// -- Auth state (in-memory only; httpOnly cookie is the source of truth) --
 let _cachedUser: AuthUser | null = null;
 let _cachedUserPromise: Promise<AuthUser | null> | null = null;
 let _authToken: string | null = null;
@@ -456,7 +456,7 @@ async function fetchApi(url: string, options?: RequestInit): Promise<Response> {
   return res;
 }
 
-// â”€â”€ Auth Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Auth Endpoints --
 
 async function parseJsonSanitized<T = any>(res: Response): Promise<T> {
   const payload = await res.json();
@@ -665,7 +665,7 @@ export async function apiLogout(): Promise<void> {
   setAuthToken(null);
 }
 
-// â”€â”€ Portfolio Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Portfolio Endpoints --
 
 export async function getPortfolioMirror(): Promise<any> {
   const res = await fetchWithTimeout(
@@ -951,7 +951,7 @@ export async function getPortfolioSectors(): Promise<any> {
   return parseJsonSanitized(res);
 }
 
-// â”€â”€ Governance & Network intelligence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Governance & Network intelligence --
 
 export interface GovernanceFlag {
   code: string;
@@ -1236,7 +1236,7 @@ export async function getPortfolioCommentary(): Promise<any> {
   return res.json();
 }
 
-// â”€â”€ Research and Chat SSE Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Research and Chat SSE Endpoints --
 
 export async function startResearch(message: string, mode: 'standard' | 'deep', portfolioContext?: string): Promise<any> {
   const rewrittenMessage = portfolioContext ? `${portfolioContext} ${message}` : message;
@@ -1600,7 +1600,7 @@ export function streamSession(
         phase: 'http_error',
         status_code: resp.status,
       });
-      console.warn("SSE HTTP error status:", resp.status, "â€” retrying in 3s");
+      console.warn("SSE HTTP error status:", resp.status, "- retrying in 3s");
       clearTimeout(sseReconnectTimer);
       sseReconnectTimer = setTimeout(connectSSE, 3000);
       return;
@@ -1706,7 +1706,7 @@ export function streamSession(
 }
 
 
-// â”€â”€ Market Data & Token Usage API Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Market Data & Token Usage API Endpoints --
 
 export async function getUserTokenUsage(): Promise<any> {
   const res = await fetchApi(apiUrl('/user/token-usage'), {
@@ -1850,7 +1850,7 @@ export async function getWatchlistSnapshot(
   return parseJsonSanitized(res);
 }
 
-// â”€â”€ Flash Content Engine API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Flash Content Engine API --
 
 export async function screenerSearch(query: string, limit = 8): Promise<ScreenerSearchResponse> {
   const params = new URLSearchParams({
@@ -2211,7 +2211,7 @@ export function flashJobStatusUrl(jobId: string): string {
 }
 
 
-// â”€â”€ Document export (deep mode only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Document export (deep mode only) --
 
 export type ExportFormat = 'pdf' | 'docx' | 'xlsx';
 
@@ -2270,7 +2270,7 @@ export async function downloadExportAndSave(jobId: string, format: ExportFormat)
   }, 100);
 }
 
-// â”€â”€ IPO Intelligence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- IPO Intelligence --
 
 export interface IpoCard {
   slug: string;
@@ -2593,6 +2593,8 @@ export interface EarningsAISummary {
     order_book?: string;
   };
   risks_outlook?: string;
+  operational_kpis?: string;
+  confidence_factors?: string;
   verdict?: string;
   /** "Positive" | "Neutral" | "Negative" */
   rating?: string;

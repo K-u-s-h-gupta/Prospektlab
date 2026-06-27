@@ -67,6 +67,20 @@ const GmpBadge: React.FC<{ gmp?: number | null; priceBandHigh?: number }> = ({ g
   );
 };
 
+/**
+ * Log-scale subscription bar: preserves visual differentiation across all subscription levels.
+ * 1x ≈ 33%  |  3x ≈ 50%  |  10x ≈ 66%  |  50x ≈ 83%  |  100x+ = 100%
+ * Formula: log₂(ratio + 1) / log₂(101) * 100
+ */
+const subRatioToBarPct = (ratio: number): number => {
+  if (ratio <= 0) return 0;
+  return Math.min(100, (Math.log2(ratio + 1) / Math.log2(101)) * 100);
+};
+
+const fmtCardDate = (d?: string | null) => d
+  ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+  : null;
+
 export const IpoCardView = React.memo<IpoCardViewProps>(({ card, originPath = '/ipo' }) => {
   const navigate = useNavigate();
   const band = card.price_band;
@@ -80,12 +94,24 @@ export const IpoCardView = React.memo<IpoCardViewProps>(({ card, originPath = '/
   const ofsWarning = card.ofs_pct != null && card.ofs_pct >= 50;
   const isLive = card.status === 'live';
   const isListed = card.status === 'listed';
+  const isUpcoming = card.status === 'upcoming';
 
-  // Parse subscription ratio from status string e.g. "Day 2 — 1.8x subscribed"
-  // Or use subscription_times directly from NSE API
+  // Subscription ratio — from direct field or parsed from status string
+  // card.subscription_times may arrive as a string from JSON; coerce to number
   const subMatch = card.subscription_status?.match(/([\d.]+)x/);
-  const subRatio = card.subscription_times ?? (subMatch ? parseFloat(subMatch[1]) : null);
-  const subPct = subRatio ? Math.min(subRatio * 100 / 3, 100) : 0; // cap bar at 3x
+  const rawRatio = card.subscription_times ?? (subMatch ? parseFloat(subMatch[1]) : null);
+  const subRatio = rawRatio != null ? (typeof rawRatio === 'number' ? rawRatio : parseFloat(String(rawRatio))) : null;
+  const subBarPct = subRatio != null && !isNaN(subRatio) ? subRatioToBarPct(subRatio) : 0;
+
+  // OFS percentage — from field or computed
+  const computedOfsPct = card.ofs_pct ?? (() => {
+    const fresh = card.fresh_issue_cr;
+    const ofs = card.ofs_cr;
+    if (fresh != null && ofs != null && fresh + ofs > 0) {
+      return Math.round((ofs / (fresh + ofs)) * 100);
+    }
+    return null;
+  })();
 
   return (
     <button
@@ -94,7 +120,7 @@ export const IpoCardView = React.memo<IpoCardViewProps>(({ card, originPath = '/
       onClick={() => navigate(`/ipo/${card.slug}`, { state: { from: originPath, card } })}
       aria-label={`View analysis for ${card.company_name}`}
     >
-      {/* Top: company info + score */}
+      {/* Company name + score */}
       <div className="ipo-card-head">
         <div className="ipo-card-head-left">
           <div className="ipo-card-company">{card.company_name}</div>
@@ -117,18 +143,27 @@ export const IpoCardView = React.memo<IpoCardViewProps>(({ card, originPath = '/
         )}
       </div>
 
-      {/* Status + GMP row */}
+      {/* Status + GMP */}
       <div className="ipo-card-status-row">
         <StatusBadge status={card.status} subscriptionStatus={card.subscription_status} />
         <GmpBadge gmp={card.gmp} priceBandHigh={band?.high} />
       </div>
 
-      {/* Stats grid */}
+      {/* Stats grid — all available fields */}
       <div className="ipo-card-grid">
+        {/* Issue size */}
         <div className="ipo-stat-cell">
           <div className="ipo-stat-label">Issue size</div>
           <div className="ipo-stat-value">{card.issue_size_cr ? `₹${card.issue_size_cr} cr` : '—'}</div>
         </div>
+
+        {/* Price band */}
+        <div className="ipo-stat-cell">
+          <div className="ipo-stat-label">Price band</div>
+          <div className="ipo-stat-value">{priceLabel}</div>
+        </div>
+
+        {/* Fresh / OFS with OFS% */}
         <div className="ipo-stat-cell">
           <div className="ipo-stat-label">
             Fresh / OFS
@@ -137,66 +172,92 @@ export const IpoCardView = React.memo<IpoCardViewProps>(({ card, originPath = '/
             )}
           </div>
           <div className="ipo-stat-value">
-            {card.fresh_issue_cr ? `₹${card.fresh_issue_cr}` : '—'} / {card.ofs_cr ? `₹${card.ofs_cr} cr` : '—'}
+            {card.fresh_issue_cr ? `₹${card.fresh_issue_cr}` : '—'}
+            {' / '}
+            {card.ofs_cr ? `₹${card.ofs_cr} cr` : '—'}
+            {computedOfsPct != null && (
+              <span className={`ipo-ofs-pct-tag${computedOfsPct >= 50 ? ' high' : ''}`}>
+                {' '}({computedOfsPct}% OFS)
+              </span>
+            )}
           </div>
         </div>
-        <div className="ipo-stat-cell">
-          <div className="ipo-stat-label">Price band</div>
-          <div className="ipo-stat-value">{priceLabel}</div>
-        </div>
+
+        {/* Lot size */}
+        {card.lot_size != null && (
+          <div className="ipo-stat-cell">
+            <div className="ipo-stat-label">Lot size</div>
+            <div className="ipo-stat-value">
+              {card.lot_size} sh{band?.high ? ` / ₹${(card.lot_size * band.high).toLocaleString('en-IN')}` : ''}
+            </div>
+          </div>
+        )}
+
+        {/* Date context — status-specific */}
         {isListed && card.listing_date ? (
           <div className="ipo-stat-cell">
             <div className="ipo-stat-label">Listed on</div>
-            <div className="ipo-stat-value">{new Date(card.listing_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+            <div className="ipo-stat-value">
+              {new Date(card.listing_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </div>
           </div>
         ) : isLive && card.subscription_open ? (
           <div className="ipo-stat-cell">
-            <div className="ipo-stat-label">Sub opens</div>
+            <div className="ipo-stat-label">Subscription</div>
             <div className="ipo-stat-value">
-              {new Date(card.subscription_open).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-              {card.subscription_close && ` – ${new Date(card.subscription_close).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+              {fmtCardDate(card.subscription_open)}
+              {card.subscription_close && ` – ${fmtCardDate(card.subscription_close)}`}
             </div>
+          </div>
+        ) : isUpcoming && card.subscription_open ? (
+          <div className="ipo-stat-cell">
+            <div className="ipo-stat-label">Opens</div>
+            <div className="ipo-stat-value">{fmtCardDate(card.subscription_open)}</div>
           </div>
         ) : (
           <div className="ipo-stat-cell">
-            <div className="ipo-stat-label">GMP</div>
-            <div className={`ipo-stat-value ${card.gmp != null ? (card.gmp >= 0 ? 'text-up' : 'text-down') : ''}`}>
-              {card.gmp != null ? `₹${card.gmp}` : '—'}
+            <div className="ipo-stat-label">Filed</div>
+            <div className="ipo-stat-value">
+              {card.filing_date
+                ? new Date(card.filing_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                : '—'}
             </div>
           </div>
         )}
       </div>
 
-      {/* Live: allotment + listing timeline row */}
-      {isLive && (card.allotment_date || card.listing_date) && (
+      {/* Live: key dates row */}
+      {isLive && (card.allotment_date || card.listing_date || card.subscription_close) && (
         <div className="ipo-card-dates-row">
+          {card.subscription_close && (
+            <span className="ipo-date-chip">
+              Closes: {fmtCardDate(card.subscription_close)}
+            </span>
+          )}
           {card.allotment_date && (
             <span className="ipo-date-chip">
-              Allotment: {new Date(card.allotment_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              Allotment: {fmtCardDate(card.allotment_date)}
             </span>
           )}
           {card.listing_date && (
             <span className="ipo-date-chip">
-              Listing: {new Date(card.listing_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              Listing: {fmtCardDate(card.listing_date)}
             </span>
-          )}
-          {card.lot_size && (
-            <span className="ipo-date-chip">Lot: {card.lot_size} shares</span>
           )}
         </div>
       )}
 
-      {/* Subscription bar (live IPOs) */}
+      {/* Subscription bar — log scale preserves differentiation at any subscription level */}
       {isLive && (card.subscription_status || card.subscription_times != null) && (
         <div className="ipo-card-sub-section">
           {subRatio != null ? (
             <>
               <div className="ipo-sub-bar-wrap">
-                <div className="ipo-sub-bar-fill" style={{ width: `${subPct}%` }} />
+                <div className="ipo-sub-bar-fill" style={{ width: `${subBarPct}%` }} />
               </div>
               <div className="ipo-sub-label">
                 <span>{card.subscription_status || 'Subscribed'}</span>
-                <span className={subRatio >= 1 ? 'text-up' : 'text-down'}>{subRatio.toFixed(2)}x</span>
+                <span className={subRatio >= 1 ? 'text-up' : 'text-down'}>{Number(subRatio).toFixed(2)}x</span>
               </div>
             </>
           ) : (
@@ -208,7 +269,7 @@ export const IpoCardView = React.memo<IpoCardViewProps>(({ card, originPath = '/
         </div>
       )}
 
-      {/* View analysis CTA */}
+      {/* CTA */}
       <div className="ipo-card-cta">
         <span>View analysis</span>
         <ExternalLink size={11} />
@@ -226,11 +287,11 @@ interface ScoreBarsProps {
 
 export const IpoScoreBars = React.memo<ScoreBarsProps>(({ scores, composite }) => {
   const dims = [
-    { key: 'business_quality', label: 'Business Quality', icon: '🏢' },
-    { key: 'valuation_fairness', label: 'Valuation Fairness', icon: '⚖️' },
-    { key: 'management_credibility', label: 'Management', icon: '👤' },
-    { key: 'financial_health', label: 'Financial Health', icon: '💰' },
-    { key: 'risk_profile', label: 'Risk Profile', icon: '🛡️' },
+    { key: 'business_quality', label: 'Business Quality' },
+    { key: 'valuation_fairness', label: 'Valuation Fairness' },
+    { key: 'management_credibility', label: 'Management' },
+    { key: 'financial_health', label: 'Financial Health' },
+    { key: 'risk_profile', label: 'Risk Profile' },
   ];
 
   return (
@@ -239,10 +300,7 @@ export const IpoScoreBars = React.memo<ScoreBarsProps>(({ scores, composite }) =
         <div className="ipo-composite-score">
           <BarChart3 size={20} style={{ color: scoreColor(composite), flexShrink: 0 }} />
           <div className="ipo-composite-inner">
-            <div
-              className="ipo-composite-value"
-              style={{ color: scoreColor(composite) }}
-            >
+            <div className="ipo-composite-value" style={{ color: scoreColor(composite) }}>
               {Math.round(composite)}
             </div>
             <div className="ipo-composite-meta">

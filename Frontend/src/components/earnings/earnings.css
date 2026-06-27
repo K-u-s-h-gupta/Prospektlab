@@ -27,7 +27,7 @@
   --ew-card-border: rgba(148, 163, 184, 0.14);
 }
 
-/* ── workspace shell ─────────────────────────────────────────── */
+/* -- workspace shell -- */
 .ew-root {
   display: flex;
   flex-direction: column;
@@ -37,7 +37,7 @@
   color: var(--ew-text);
 }
 
-/* ── date strip ──────────────────────────────────────────────── */
+/* -- date strip -- */
 .ew-strip-bar {
   display: flex;
   align-items: stretch;
@@ -117,7 +117,7 @@
 .ew-calendar-toggle:hover  { background: rgba(59, 130, 246, 0.08); color: var(--ew-text); }
 .ew-calendar-toggle.is-open { background: var(--ew-accent-dim); color: var(--ew-accent); }
 
-/* ── monthly calendar collapse ───────────────────────────────── */
+/* -- monthly calendar collapse -- */
 .ew-calendar-shell {
   max-height: 0;
   overflow: hidden;
@@ -213,7 +213,7 @@
   margin-top: 2px;
 }
 
-/* ── list section ────────────────────────────────────────────── */
+/* -- list section -- */
 .ew-list-section { flex: 1; padding: var(--ew-gap); }
 
 .ew-list-header {
@@ -231,7 +231,7 @@
   color: var(--ew-text);
 }
 
-/* ── company cards ───────────────────────────────────────────── */
+/* -- company cards -- */
 .ew-list { display: flex; flex-direction: column; gap: 8px; }
 
 .ew-company-card {
@@ -291,7 +291,7 @@
 }
 .ew-sep { opacity: 0.4; }
 
-/* ── EPS row for past results ── */
+/* -- EPS row for past results -- */
 .ew-card-eps {
   font-size: 11px;
   display: flex;
@@ -387,7 +387,7 @@
 }
 .ew-days-away { opacity: 0.7; }
 
-/* ── pagination ──────────────────────────────────────────────── */
+/* -- pagination -- */
 .ew-pagination {
   display: flex;
   align-items: center;
@@ -398,7 +398,7 @@
   color: var(--ew-muted);
 }
 
-/* ── shared utility ──────────────────────────────────────────── */
+/* -- shared utility -- */
 .ew-ghost-btn {
   display: inline-flex;
   align-items: center;
@@ -646,6 +646,123 @@
 /* highlights panel */
 .erd-highlights-panel { display: flex; flex-direction: column; gap: 24px; }
 
+/* Quick Take - prominent verdict card */
+.erd-quick-take {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: var(--ew-card-bg);
+  border: 1px solid var(--ew-card-border);
+  border-radius: var(--ew-radius);
+  padding: 16px 18px;
+  border-left: 4px solid var(--ew-muted);
+}
+
+.erd-quick-take.positive {
+  border-left-color: var(--ew-positive);
+  background: rgba(52, 211, 153, 0.06);
+}
+
+.erd-quick-take.negative {
+  border-left-color: var(--ew-negative);
+  background: rgba(251, 113, 133, 0.06);
+}
+
+.erd-quick-take.neutral {
+  border-left-color: var(--ew-accent);
+}
+
+.erd-quick-take-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.erd-quick-take.positive .erd-quick-take-icon {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--ew-positive);
+}
+
+.erd-quick-take.negative .erd-quick-take-icon {
+  background: rgba(251, 113, 133, 0.15);
+  color: var(--ew-negative);
+}
+
+.erd-quick-take.neutral .erd-quick-take-icon {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--ew-accent);
+}
+
+.erd-quick-take-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.erd-quick-take-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ew-muted);
+  margin-bottom: 4px;
+}
+
+.erd-quick-take-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ew-text);
+}
+
+.erd-quick-take-rating {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.erd-quick-take-rating.positive {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--ew-positive);
+}
+
+.erd-quick-take-rating.negative {
+  background: rgba(251, 113, 133, 0.15);
+  color: var(--ew-negative);
+}
+
+.erd-quick-take-rating.neutral {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--ew-accent);
+}
+
+/* No highlights placeholder */
+.erd-no-highlights {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--ew-muted);
+}
+
+.erd-no-highlights p {
+  margin: 0;
+  font-size: 13px;
+  max-width: 280px;
+}
+
 .erd-highlights-list {
   display: flex;
   flex-direction: column;
@@ -669,6 +786,39 @@
   padding: 2px;
 }
 .erd-highlight-source:hover { opacity: 1; }
+.erd-official-highlights {
+  margin-top: 1.25rem;
+  background: var(--ew-card-bg);
+  border: 1px solid var(--ew-card-border);
+  border-radius: var(--ew-radius);
+  padding: 14px 16px;
+}
+
+.erd-section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.erd-section-kicker {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ew-muted);
+}
+
+.erd-highlight-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ew-accent);
+  margin-top: 8px;
+  flex-shrink: 0;
+}
 
 /* Key metrics summary (revenue / EPS / PAT with QoQ/YoY) */
 .erd-key-metrics {
@@ -893,7 +1043,7 @@
   padding: 8px 0;
 }
 
-/* ── responsive ──────────────────────────────────────────────── */
+/* -- responsive -- */
   .ew-company-card { padding: 12px; }
   .ew-card-name { font-size: 13px; }
 
@@ -976,6 +1126,42 @@
   line-height: 1.5;
 }
 
+.erd-ai-note-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem;
+  margin-bottom: 0.875rem;
+}
+
+.erd-ai-note {
+  border: 1px solid var(--ew-border);
+  border-radius: 6px;
+  padding: 0.625rem 0.7rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.erd-ai-note span,
+.erd-analysis-copy-grid span {
+  display: block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ew-muted);
+  margin-bottom: 0.25rem;
+}
+
+.erd-ai-note p,
+.erd-analysis-copy-grid p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--ew-text);
+}
+
+@media (max-width: 640px) {
+  .erd-ai-note-grid { grid-template-columns: 1fr; }
+}
 .erd-ai-risks {
   font-size: 0.8rem;
   color: #b45309;
@@ -1013,3 +1199,500 @@
 .erd-ai-rating.positive { background: rgba(52, 211, 153, 0.15); color: var(--ew-positive); }
 .erd-ai-rating.neutral  { background: rgba(255, 255, 255, 0.1); color: var(--ew-muted); }
 .erd-ai-rating.negative { background: rgba(251, 113, 133, 0.15); color: var(--ew-negative); }
+
+/* ============================================================
+   Analysis Tab - Subsidiary Matrix & Footnote Diff
+   ============================================================ */
+
+.erd-analysis-brief {
+  background: var(--ew-card-bg);
+  border: 1px solid var(--ew-card-border);
+  border-radius: var(--ew-radius);
+  padding: 16px;
+}
+
+.erd-analysis-lead {
+  margin: 0 0 14px;
+  color: var(--ew-text);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.erd-analysis-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.erd-analysis-metric {
+  min-width: 0;
+  border: 1px solid var(--ew-border);
+  border-radius: 6px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.erd-analysis-metric-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ew-muted);
+  margin-bottom: 4px;
+}
+
+.erd-analysis-metric strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1.25;
+  color: var(--ew-text);
+  overflow-wrap: anywhere;
+}
+
+.erd-analysis-deltas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.erd-analysis-deltas .positive { color: var(--ew-positive); }
+.erd-analysis-deltas .negative { color: var(--ew-negative); }
+.erd-analysis-deltas .neutral { color: var(--ew-muted); }
+
+.erd-analysis-copy-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.erd-analysis-copy-grid > div {
+  border-top: 1px solid var(--ew-border);
+  padding-top: 10px;
+}
+
+@media (max-width: 760px) {
+  .erd-analysis-metric-grid,
+  .erd-analysis-copy-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.erd-analysis-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* -- Subsidiary Cash-Drain Matrix -------------------------------- */
+.erd-subsidiary-matrix {
+  background: var(--ew-card-bg);
+  border: 1px solid var(--ew-card-border);
+  border-radius: var(--ew-radius);
+  padding: 16px;
+}
+
+.erd-subsidiary-matrix.alert-high {
+  border-color: rgba(251, 113, 133, 0.4);
+  background: rgba(251, 113, 133, 0.05);
+}
+
+.erd-subsidiary-matrix.alert-medium {
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.05);
+}
+
+.erd-subsidiary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.erd-subsidiary-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 100px;
+  margin-left: 8px;
+}
+
+.erd-subsidiary-alert.high {
+  background: rgba(251, 113, 133, 0.15);
+  color: var(--ew-negative);
+}
+
+.erd-subsidiary-alert.medium {
+  background: rgba(251, 191, 36, 0.15);
+  color: #b45309;
+}
+
+.erd-subsidiary-alert.low {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--ew-accent);
+}
+
+.erd-subsidiary-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.erd-subsidiary-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 1fr 1.2fr;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ew-border);
+  gap: 12px;
+}
+
+.erd-subsidiary-row.header {
+  padding-top: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ew-muted);
+  font-weight: 600;
+}
+
+.erd-subsidiary-row:last-child {
+  border-bottom: none;
+}
+
+.erd-subsidiary-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ew-text);
+}
+
+.erd-subsidiary-row span:not(.erd-subsidiary-label):not(.erd-subsidiary-delta) {
+  font-size: 13px;
+  color: var(--ew-text);
+}
+
+.erd-subsidiary-delta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.erd-subsidiary-delta small {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.erd-subsidiary-delta.positive { color: var(--ew-positive); }
+.erd-subsidiary-delta.negative { color: var(--ew-negative); }
+.erd-subsidiary-delta.neutral { color: var(--ew-muted); }
+
+.erd-subsidiary-delta .icon-drain {
+  color: var(--ew-negative);
+}
+
+.erd-subsidiary-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ew-border);
+}
+
+.erd-flag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 100px;
+  letter-spacing: 0.03em;
+}
+
+.erd-flag.danger {
+  background: rgba(251, 113, 133, 0.15);
+  color: var(--ew-negative);
+}
+
+.erd-flag.warning {
+  background: rgba(251, 191, 36, 0.15);
+  color: #b45309;
+}
+
+.erd-flag.info {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--ew-accent);
+}
+
+.erd-subsidiary-verdict {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--ew-text);
+  line-height: 1.5;
+  padding-top: 12px;
+  border-top: 1px solid var(--ew-border);
+}
+
+/* -- Footnote QoQ Diff ------------------------------------------- */
+.erd-footnote-diff {
+  background: var(--ew-card-bg);
+  border: 1px solid var(--ew-card-border);
+  border-radius: var(--ew-radius);
+  padding: 16px;
+}
+
+.erd-footnote-diff.alert-high {
+  border-color: rgba(251, 113, 133, 0.4);
+  background: rgba(251, 113, 133, 0.05);
+}
+
+.erd-footnote-diff.alert-medium {
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.05);
+}
+
+.erd-footnote-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.erd-footnote-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 100px;
+  margin-left: 8px;
+}
+
+.erd-footnote-alert.high {
+  background: rgba(251, 113, 133, 0.15);
+  color: var(--ew-negative);
+}
+
+.erd-footnote-alert.medium {
+  background: rgba(251, 191, 36, 0.15);
+  color: #b45309;
+}
+
+.erd-footnote-expand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--ew-muted);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.erd-footnote-expand:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ew-text);
+}
+
+.erd-footnote-summary {
+  font-size: 13px;
+  color: var(--ew-text);
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.erd-footnote-summary.success {
+  color: var(--ew-positive);
+}
+
+.erd-footnote-quarters {
+  font-size: 11px;
+  color: var(--ew-muted);
+  margin: 6px 0 0;
+}
+
+.erd-footnote-clauses {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.erd-clauses-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.erd-clauses-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.erd-clauses-title.added { color: var(--ew-positive); }
+.erd-clauses-title.removed { color: var(--ew-negative); }
+
+.erd-footnote-clause {
+  background: var(--ew-surface);
+  border: 1px solid var(--ew-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.erd-footnote-clause.added {
+  border-left: 3px solid var(--ew-positive);
+}
+
+.erd-footnote-clause.removed {
+  border-left: 3px solid var(--ew-negative);
+}
+
+.erd-footnote-clause.high {
+  background: rgba(251, 113, 133, 0.05);
+}
+
+.erd-clause-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.erd-clause-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.erd-clause-badge.added {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--ew-positive);
+}
+
+.erd-clause-badge.removed {
+  background: rgba(251, 113, 133, 0.15);
+  color: var(--ew-negative);
+}
+
+.erd-clause-category {
+  font-size: 10px;
+  color: var(--ew-muted);
+  text-transform: capitalize;
+}
+
+.erd-clause-severity {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  margin-left: auto;
+}
+
+.erd-clause-severity.high {
+  background: rgba(251, 113, 133, 0.15);
+  color: var(--ew-negative);
+}
+
+.erd-clause-severity.medium {
+  background: rgba(251, 191, 36, 0.15);
+  color: #b45309;
+}
+
+.erd-clause-severity.low {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ew-muted);
+}
+
+.erd-clause-text {
+  font-size: 12px;
+  color: var(--ew-text);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* Tab badge for alerts */
+.erd-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--ew-negative);
+  color: #fff;
+  border-radius: 50%;
+  margin-left: 4px;
+}
+
+/* Analysis empty state */
+.erd-analysis-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 40px 24px;
+  background: var(--ew-card-bg);
+  border: 1px solid var(--ew-card-border);
+  border-radius: var(--ew-radius);
+  color: var(--ew-muted);
+}
+
+.erd-analysis-empty svg {
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.erd-analysis-empty h4 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ew-text);
+}
+
+.erd-analysis-empty p {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 400px;
+}
+
+.erd-analysis-empty ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  text-align: left;
+}
+
+.erd-analysis-empty li {
+  position: relative;
+  padding-left: 16px;
+  margin-bottom: 6px;
+}
+
+.erd-analysis-empty li::before {
+  content: '*';
+  position: absolute;
+  left: 0;
+  color: var(--ew-accent);
+}

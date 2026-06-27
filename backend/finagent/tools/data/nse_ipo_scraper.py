@@ -81,38 +81,35 @@ def _parse_price_band(price_str: str | None) -> tuple[float | None, float | None
         return None, None
 
 
+
+def _to_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(float(str(value).replace(",", "").strip()))
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(str(value).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
 def _parse_record(raw: dict[str, Any]) -> NseIpoRecord:
     """Parse raw NSE API response into NseIpoRecord."""
-    # Handle numeric fields that may come as strings or scientific notation
-    issue_size = raw.get("issueSize") or raw.get("noOfSharesOffered")
-    if isinstance(issue_size, str):
-        issue_size = int(float(issue_size.replace(",", "")))
-    elif isinstance(issue_size, float):
-        issue_size = int(issue_size)
-
-    shares_bid = raw.get("noOfsharesBid")
-    if shares_bid:
-        if isinstance(shares_bid, str) and shares_bid.strip():
-            shares_bid = int(float(shares_bid.replace(",", "")))
-        elif isinstance(shares_bid, float):
-            shares_bid = int(shares_bid)
-        else:
-            shares_bid = None
-
-    times_sub = raw.get("noOfTime")
-    if times_sub:
-        if isinstance(times_sub, str) and times_sub.strip():
-            times_sub = float(times_sub)
-        elif isinstance(times_sub, (int, float)):
-            times_sub = float(times_sub)
-        else:
-            times_sub = None
+    issue_size = _to_int(raw.get("issueSize") or raw.get("noOfSharesOffered"))
+    shares_bid = _to_int(raw.get("noOfsharesBid"))
+    times_sub = _to_float(raw.get("noOfTime"))
 
     return NseIpoRecord(
-        company_name=raw.get("companyName", "").strip(),
-        symbol=raw.get("symbol", "").strip(),
-        series=raw.get("series", "EQ").strip(),
-        status=raw.get("status", "Active").strip(),
+        company_name=str(raw.get("companyName") or "").strip(),
+        symbol=str(raw.get("symbol") or "").strip(),
+        series=str(raw.get("series") or "EQ").strip() or "EQ",
+        status=str(raw.get("status") or "Active").strip() or "Active",
         issue_start_date=raw.get("issueStartDate"),
         issue_end_date=raw.get("issueEndDate"),
         issue_price=raw.get("issuePrice"),
@@ -121,6 +118,17 @@ def _parse_record(raw: dict[str, Any]) -> NseIpoRecord:
         shares_bid=shares_bid,
         is_bse_only=raw.get("isBse") == "1",
     )
+
+
+def _rows_from_payload(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return [row for row in data if isinstance(row, dict)]
+    if isinstance(data, dict):
+        for key in ("data", "issues", "records", "result"):
+            rows = data.get(key)
+            if isinstance(rows, list):
+                return [row for row in rows if isinstance(row, dict)]
+    return []
 
 
 async def _fetch_with_session(client: httpx.AsyncClient, url: str) -> list[dict[str, Any]]:
@@ -136,7 +144,7 @@ async def _fetch_with_session(client: httpx.AsyncClient, url: str) -> list[dict[
         if resp.status_code != 200:
             logger.warning("NSE API returned %d for %s", resp.status_code, url)
             return []
-        return resp.json()
+        return _rows_from_payload(resp.json())
     except Exception as exc:
         logger.warning("NSE API error for %s: %s", url, exc)
         return []
@@ -191,16 +199,28 @@ def nse_record_to_enrichment(record: NseIpoRecord) -> dict[str, Any]:
     - is_sme (True if SME series)
     """
     low, high = _parse_price_band(record.issue_price)
+    issue_size_cr = None
+    if record.issue_size_shares and high:
+        issue_size_cr = round((record.issue_size_shares * high) / 10_000_000, 2)
+    subscription_status = (
+        f"{record.times_subscribed:.2f}x subscribed"
+        if record.times_subscribed is not None
+        else None
+    )
     return {
         "subscription_open": _parse_nse_date(record.issue_start_date),
         "subscription_close": _parse_nse_date(record.issue_end_date),
         "price_band_low": low,
         "price_band_high": high,
         "issue_size_shares": record.issue_size_shares,
+        "issue_size_cr": issue_size_cr,
         "subscription_times": record.times_subscribed,
+        "subscription_status": subscription_status,
         "nse_symbol": record.symbol,
+        "exchange": "NSE SME" if record.series == "SME" else "NSE",
         "is_sme": record.series == "SME",
         "nse_status": "live" if record.status == "Active" else "forthcoming",
+        "source_url": NSE_CURRENT_ISSUES if record.status == "Active" else NSE_UPCOMING_ISSUES,
     }
 
 

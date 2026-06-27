@@ -47,19 +47,52 @@ def _to_number(raw: str) -> float | None:
         return None
 
 
-def _find_metric_row(rows: list[list[str]], metric_aliases: tuple[str, ...]) -> list[str] | None:
-    """Find a row whose LABEL matches one of the aliases.
-    Checks first 3 cells to handle leading empty columns (common in PyMuPDF output).
-    """
+def _metric_label_allowed(label: str, metric_name: str | None) -> bool:
+    label = re.sub(r"\s+", " ", (label or "").lower()).strip()
+    if not label:
+        return False
+    if metric_name == "revenue" and re.search(r"\brevenue\s+(?:by|mix)", label):
+        return False
+    if metric_name in {"ebitda", "pat"} and "margin" in label:
+        return False
+    if metric_name == "pat" and "profit after tax" not in label and re.search(r"\bpat\s+margin\b", label):
+        return False
+    if metric_name == "total_debt" and (
+        "debt to equity" in label
+        or "debt-to-equity" in label
+        or "debt / equity" in label
+        or "debt/equity" in label
+        or "equity ratio" in label
+    ):
+        return False
+    return True
+
+
+def _label_candidates(row: list[str]) -> list[tuple[int, str]]:
+    for cell_idx in range(min(3, len(row))):
+        label = str(row[cell_idx] or "").lower()
+        label_clean = re.sub(r"\s*\([ivxlcdm0-9]+\)\s*$", "", label).strip()
+        if label_clean:
+            return [(cell_idx, label_clean)]
+    return []
+
+
+def _alias_matches_label(label: str, alias: str) -> bool:
+    alias = alias.lower().strip()
+    if re.fullmatch(r"[a-z]{2,4}", alias):
+        return re.search(rf"\b{re.escape(alias)}\b", label) is not None
+    return alias in label
+
+
+def _find_metric_row(rows: list[list[str]], metric_aliases: tuple[str, ...], metric_name: str | None = None) -> list[str] | None:
+    """Find a row whose first real label cell matches the metric."""
     for row in rows:
         if not row:
             continue
-        # Check first 3 cells for label
-        for cell_idx in range(min(3, len(row))):
-            label = str(row[cell_idx] or "").lower()
-            # Strip footnote markers like (i), (ii), (xi)
-            label_clean = re.sub(r"\s*\([ivxlcdm]+\)\s*$", "", label).strip()
-            if label_clean and any(alias in label_clean for alias in metric_aliases):
+        for _, label_clean in _label_candidates(row):
+            if not _metric_label_allowed(label_clean, metric_name):
+                continue
+            if any(_alias_matches_label(label_clean, alias) for alias in metric_aliases):
                 return row
     return None
 
@@ -93,6 +126,115 @@ def _extract_values_from_row(row: list[str], year_cols: list[tuple[int, str]]) -
         else:
             values.append(None)
     return values
+
+
+def _value_scale_for_unit(unit: str, metric_name: str) -> float:
+    lowered = (unit or "").lower()
+    if metric_name not in {"revenue", "ebitda", "pat", "total_debt", "cash_flow"}:
+        return 1.0
+    if any(token in lowered for token in ("times", "ratio", "%")):
+        return 1.0
+    if "lakh" in lowered or "lac" in lowered:
+        return 0.01
+    if "million" in lowered or "mn" in lowered:
+        return 0.1
+    if "thousand" in lowered:
+        return 0.00001
+    return 1.0
+
+
+def _metric_label_col(row: list[str], metric_name: str, aliases: tuple[str, ...]) -> int | None:
+    for cell_idx, label_clean in _label_candidates(row):
+        if _metric_label_allowed(label_clean, metric_name) and any(_alias_matches_label(label_clean, alias) for alias in aliases):
+            return cell_idx
+    return None
+
+
+def _row_unit(row: list[str], label_col: int) -> str:
+    for cell in row[label_col + 1: min(label_col + 4, len(row))]:
+        lowered = str(cell or "").lower()
+        if any(token in lowered for token in ("lakh", "lac", "crore", "million", "mn", "thousand", "rs", "inr", "%", "times")):
+            return str(cell or "")
+    return ""
+
+
+def _scaled_metric_values(row: list[str], year_cols: list[tuple[int, str]], metric_name: str, aliases: tuple[str, ...]) -> list[float | None]:
+    label_col = _metric_label_col(row, metric_name, aliases)
+    unit = _row_unit(row, label_col if label_col is not None else 0)
+    scale = _value_scale_for_unit(unit, metric_name)
+    values: list[float | None] = []
+    for idx, _ in year_cols:
+        value = _to_number(row[idx]) if idx < len(row) else None
+        values.append(round(value * scale, 4) if value is not None else None)
+    return values
+
+
+def _combined_header_rows(rows: list[list[str]], width: int) -> list[str]:
+    combined: list[str] = []
+    for col_idx in range(width):
+        pieces: list[str] = []
+        seen: set[str] = set()
+        for row in rows:
+            if col_idx >= len(row):
+                continue
+            cell = re.sub(r"\s+", " ", str(row[col_idx] or "")).strip()
+            if not cell or cell in seen:
+                continue
+            pieces.append(cell)
+            seen.add(cell)
+        combined.append(" ".join(pieces))
+    return combined
+
+
+def _try_extract_from_multirow_pipe_rows(rows: list[list[str]]) -> dict[str, Any] | None:
+    """Parse PyMuPDF tables whose year headers are split across several rows."""
+    if not rows:
+        return None
+    candidate_indices = [
+        idx for idx, row in enumerate(rows)
+        if any(_FIN_TABLE_ANCHOR_RE.search(str(cell or "")) for cell in row[:3])
+    ]
+    best_result: dict[str, Any] | None = None
+    best_score = -1
+
+    for start_idx in candidate_indices:
+        width = max((len(row) for row in rows[max(0, start_idx - 12): start_idx + 12]), default=0)
+        if width < 3:
+            continue
+        header_rows = rows[max(0, start_idx - 12): start_idx]
+        header = _combined_header_rows(header_rows, width)
+        year_cols = _year_columns(header)
+        if len(year_cols) < 2:
+            continue
+        data_rows = rows[start_idx: min(len(rows), start_idx + 80)]
+        metrics: dict[str, list[float | None]] = {}
+        unit_hits = 0
+        for metric_name, aliases in _METRIC_MAP.items():
+            row = _find_metric_row(data_rows, aliases, metric_name)
+            if row:
+                label_col = _metric_label_col(row, metric_name, aliases)
+                if _row_unit(row, label_col if label_col is not None else 0):
+                    unit_hits += 1
+                metrics[metric_name] = _scaled_metric_values(row, year_cols, metric_name, aliases)
+            else:
+                metrics[metric_name] = [None] * len(year_cols)
+
+        coverage = sum(
+            1 for key in ("revenue", "ebitda", "pat")
+            if any(value is not None for value in metrics.get(key, []))
+        )
+        if coverage < 2 and unit_hits == 0:
+            continue
+        if not any(any(v is not None for v in metrics.get(key, [])) for key in ("revenue", "pat")):
+            continue
+
+        result = _build_result([label for _, label in year_cols], metrics)
+        score = coverage * 10 + unit_hits * 4 + len(year_cols)
+        if score > best_score:
+            best_score = score
+            best_result = result
+
+    return best_result
 
 
 # ---------------------------------------------------------------------------
@@ -344,6 +486,11 @@ def extract_restated_financials(financial_section: str, full_text: str = "") -> 
     # ------------------------------------------------------------------
     search_text = full_text if full_text else financial_section
     if search_text:
+        pipe_rows = _parse_markdown_table_rows(search_text)
+        multirow_result = _try_extract_from_multirow_pipe_rows(pipe_rows)
+        if multirow_result:
+            return multirow_result
+
         found = _find_best_financial_table(search_text)
         if found:
             years, data_rows = found
@@ -416,27 +563,21 @@ def _extract_metrics_from_data_rows(data_rows: list[list[str]], years: list[str]
     n = len(years)
     metrics: dict[str, list[float | None]] = {}
     for metric_name, aliases in _METRIC_MAP.items():
-        row = _find_metric_row(data_rows, aliases)
+        row = _find_metric_row(data_rows, aliases, metric_name)
         if row is None:
             metrics[metric_name] = [None] * n
             continue
-        # Find the label column (first non-empty cell in first 3)
-        label_col = 0
-        for ci in range(min(3, len(row))):
-            if row[ci]:
-                label_col = ci
-                break
-        # Collect all numeric cells after the label
+        label_col = _metric_label_col(row, metric_name, aliases)
+        unit = _row_unit(row, label_col if label_col is not None else 0)
+        scale = _value_scale_for_unit(unit, metric_name)
         nums: list[float | None] = []
-        for cell in row[label_col + 1:]:
-            nums.append(_to_number(cell))
-        # Remove trailing None values, keep only n values
+        for cell in row[(label_col or 0) + 1:]:
+            value = _to_number(cell)
+            nums.append(round(value * scale, 4) if value is not None else None)
         nums_clean = [v for v in nums if v is not None]
         if len(nums_clean) >= n:
-            # Take the first n values (columns are in document order)
             metrics[metric_name] = nums_clean[:n]
         elif nums_clean:
-            # Pad left with None
             padded: list[float | None] = [None] * (n - len(nums_clean)) + nums_clean
             metrics[metric_name] = padded
         else:
@@ -468,14 +609,11 @@ def _try_extract_from_pipe_rows(rows: list[list[str]]) -> dict[str, Any] | None:
     n = len(year_cols)
     metrics: dict[str, list[float | None]] = {}
     for metric_name, aliases in _METRIC_MAP.items():
-        row = _find_metric_row(data_rows, aliases)
+        row = _find_metric_row(data_rows, aliases, metric_name)
         if not row:
             metrics[metric_name] = [None] * n
             continue
-        values: list[float | None] = []
-        for idx, _ in year_cols:
-            values.append(_to_number(row[idx]) if idx < len(row) else None)
-        metrics[metric_name] = values
+        metrics[metric_name] = _scaled_metric_values(row, year_cols, metric_name, aliases)
 
     has_data = any(any(v is not None for v in vals) for k, vals in metrics.items() if k in ("revenue", "pat"))
     if not has_data:
@@ -571,11 +709,11 @@ def _build_result(years: list[str], metrics: dict[str, list[float | None]]) -> d
     if revenue_vals:
         cagr = _compute_cagr(revenue_vals)
         trends["revenue_cagr_pct"] = cagr
-        if len(all_revenue) >= 2 and all_revenue[-1] < all_revenue[-2]:
+        if len(revenue_vals) >= 2 and revenue_vals[-1] < revenue_vals[-2]:
             flags.append("revenue_decline")
     if pat_vals:
         trends["pat_cagr_pct"] = _compute_cagr(pat_vals)
-        if len(all_pat) >= 2 and all_pat[-1] < all_pat[-2]:
+        if len(pat_vals) >= 2 and pat_vals[-1] < pat_vals[-2]:
             flags.append("pat_decline")
     if ebitda_all and rev_all and len(ebitda_all) == len(rev_all):
         margins = []

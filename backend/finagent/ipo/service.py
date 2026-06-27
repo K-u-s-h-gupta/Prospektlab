@@ -13,11 +13,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from difflib import SequenceMatcher
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from finagent.ingestion.drhp_parser import parse_drhp_markdown, parse_drhp_markdown_parallel
+from finagent.ingestion.drhp_parser import (
+    extract_business_overview_paragraphs,
+    parse_drhp_markdown,
+    parse_drhp_markdown_parallel,
+)
 from finagent.ingestion.ipo_score_engine import compute_ipo_score, compute_peer_valuation
 from finagent.ipo.store import IpoStore, get_ipo_store
 from finagent.tools.data.ipo_cover_parser import parse_ipo_cover
@@ -32,7 +37,6 @@ from finagent.tools.data.ipo_fetcher import (
     IpoFilingRecord,
     discover_new_filings,
     download_drhp,
-    load_cached_pdf,
     run_daily_watcher,
     slugify_company,
 )
@@ -44,7 +48,9 @@ IPO_POLL_INTERVAL_HOURS = int(os.getenv("IPO_POLL_INTERVAL_HOURS", "4"))
 IPO_BATCH_SIZE = int(os.getenv("IPO_BATCH_SIZE", "5"))
 IPO_DRHP_LIMIT = int(os.getenv("IPO_DRHP_LIMIT", "10"))
 IPO_BACKGROUND_WORKERS = int(os.getenv("IPO_BACKGROUND_WORKERS", "1"))
-IPO_ANALYSIS_VERSION = "pymupdf-v2"
+IPO_EXCHANGE_REFRESH_TTL_SECONDS = int(os.getenv("IPO_EXCHANGE_REFRESH_TTL_SECONDS", "900"))
+IPO_DASHBOARD_REFRESH_BSE = os.getenv("IPO_DASHBOARD_REFRESH_BSE", "false").strip().lower() in {"1", "true", "yes"}
+IPO_ANALYSIS_VERSION = "pymupdf-v9"
 
 _DOC_STAGE_RANK = {"drhp": 1, "rhp": 2, "prospectus": 3}
 
@@ -85,6 +91,10 @@ class IpoService:
         self._workers_started = False
         self._worker_tasks: list[asyncio.Task] = []
         self._queue_sequence = 0
+        self._last_exchange_refresh_at: datetime | None = None
+        self._last_exchange_current_slugs: set[str] = set()
+        self._last_exchange_error: str | None = None
+        self._last_exchange_refresh_task: asyncio.Task | None = None
     
     async def start_background_workers(self) -> None:
         """Start background workers for pre-processing IPO analyses."""
@@ -132,25 +142,28 @@ class IpoService:
         metrics = financials.get("metrics") or {}
         if len(set(years)) < 2:
             return False
+        if metrics and years:
+            for values in metrics.values():
+                if isinstance(values, list) and values and len(values) != len(years):
+                    return False
         revenue_values = [value for value in (metrics.get("revenue") or []) if isinstance(value, (int, float))]
         if len(revenue_values) >= 2:
             min_revenue = min(abs(float(value)) for value in revenue_values if value is not None)
             max_revenue = max(abs(float(value)) for value in revenue_values if value is not None)
-            if min_revenue > 0 and max_revenue / min_revenue > 15:
+            # Raised from 15 to 100 to accommodate hyper-growth IPOs (e.g. Ola, Paytm-style curves)
+            if min_revenue > 0 and max_revenue / min_revenue > 100:
                 return False
         return any(any(value is not None for value in values) for values in metrics.values())
 
     def _build_business_synthesis_copy(self, analysis: dict[str, Any]) -> str:
         paragraphs = [str(p).strip() for p in (analysis.get("business_overview_paragraphs") or []) if str(p).strip()]
-        strengths = [str(item).strip() for item in (analysis.get("strengths") or []) if str(item).strip()]
         objects = analysis.get("objects_of_issue") or {}
         financials = analysis.get("financials") or {}
 
-        parts: list[str] = []
-        if paragraphs:
-            parts.extend(paragraphs[:2])
-        elif strengths:
-            parts.append(strengths[0])
+        if not paragraphs:
+            return ""
+
+        parts: list[str] = list(paragraphs[:2])
 
         trends = financials.get("trends") or {}
         rev_cagr = trends.get("revenue_cagr_pct")
@@ -168,11 +181,6 @@ class IpoService:
             labels = [item.get("label") for item in utilization if item.get("label")]
             if labels:
                 parts.append(f"The fresh-issue proceeds are primarily intended for {', '.join(labels[:3])}.")
-
-        if strengths and not paragraphs:
-            first_strength = strengths[0]
-            if not any(first_strength in part for part in parts):
-                parts.append(f"A key strength highlighted in the filing is: {first_strength}")
 
         return " ".join(part.strip() for part in parts if part).strip()
     
@@ -297,10 +305,15 @@ class IpoService:
         if not filing:
             return {"exists": False, "status": "not_found"}
         
+        # Repair local document metadata cheaply so rows created from NSE/IPOWatch
+        # can still use an already cached or already discovered SEBI document.
+        filing, local_pdf = await self._ensure_official_document(filing, allow_network=False)
+
         analysis = await self.store.get_analysis(slug)
         scores = await self.store.get_scores(slug)
 
         has_full_analysis = self._analysis_has_required_content(analysis) and not self._analysis_needs_refresh(analysis)
+        has_pdf = bool(filing.get("pdf_url") or local_pdf or self._select_best_cached_pdf(slug, filing))
         
         queue_status = self._analysis_status.get(slug, {})
         
@@ -308,7 +321,7 @@ class IpoService:
             "exists": True,
             "slug": slug,
             "company_name": filing.get("company_name"),
-            "has_pdf": bool(filing.get("pdf_url")),
+            "has_pdf": has_pdf,
             "has_analysis": has_full_analysis,
             "has_scores": bool(scores and scores.get("composite_score")),
             "analysis_status": queue_status.get("status") if queue_status else (
@@ -393,7 +406,7 @@ class IpoService:
         *,
         download: bool = True,
         cover_parse: bool = True,
-        include_bse: bool = True,
+        include_bse: bool = False,  # Default False: BSE scraper calls same NSE API, wasteful
         batch_process: bool = True,
     ) -> dict[str, Any]:
         """Run full IPO watcher pipeline.
@@ -564,19 +577,227 @@ class IpoService:
             payload["prospectus_filing_date"] = prospectus_dates[record.slug]
         return payload
 
-    async def _enrich_from_nse(self) -> int:
-        """Enrich filings from NSE APIs (authoritative source)."""
-        nse_data = await fetch_nse_ipo_data()
-        all_nse = nse_data.get("current", []) + nse_data.get("upcoming", [])
+    def _clean_exchange_company_name(self, name: str) -> str:
+        """Normalize exchange company names before slug matching."""
+        import re
+
+        cleaned = str(name or "").strip()
+        cleaned = re.sub(r"\s*-\s*Issue\s+postponed.*$", "", cleaned, flags=re.IGNORECASE)
+        for suffix in ("Limited", "Ltd", "Private", "Pvt"):
+            cleaned = re.sub(rf"\s*-?\s*{suffix}\.?\s*$", "", cleaned, flags=re.IGNORECASE)
+        return cleaned.strip(" -")
+
+    def _nse_slug(self, record: NseIpoRecord) -> str:
+        return slugify_company(self._clean_exchange_company_name(record.company_name))
+
+    def _is_issue_postponed(self, value: Any) -> bool:
+        if isinstance(value, dict):
+            name = value.get("company_name") or value.get("name") or ""
+        else:
+            name = value
+        return "issue postponed" in str(name or "").lower()
+
+    def _positive_number(self, value: Any) -> bool:
+        try:
+            return float(value) > 0
+        except (TypeError, ValueError):
+            return False
+
+    def _has_official_exchange_data(self, row: dict[str, Any]) -> bool:
+        source_url = str(row.get("source_url") or "").lower()
+        source = str(row.get("source") or "").lower()
+        return (
+            "nseindia.com" in source_url
+            or "bseindia.com" in source_url
+            or source in {"nse_api", "bse_api"}
+        )
+
+    def _has_complete_live_exchange_metrics(self, row: dict[str, Any]) -> bool:
+        return (
+            not self._is_issue_postponed(row)
+            and self._has_official_exchange_data(row)
+            and self._is_subscription_live_today(row)
+            and self._positive_number(row.get("price_band_high"))
+            and self._positive_number(row.get("issue_size_cr"))
+        )
+
+    def _parse_exchange_date(self, value: Any) -> date | None:
+        if not value:
+            return None
+        raw = str(value).strip()
+        try:
+            return date.fromisoformat(raw[:10])
+        except ValueError:
+            pass
+        for fmt in ("%d-%b-%Y", "%d/%m/%Y", "%d-%m-%Y", "%d %b %Y", "%d %B %Y"):
+            try:
+                return datetime.strptime(raw, fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    def _is_nse_live_today(self, record: NseIpoRecord) -> bool:
+        if self._is_issue_postponed(record.company_name):
+            return False
+        if str(record.status or "").strip().lower() != "active":
+            return False
+        if not record.issue_price or not record.issue_size_shares:
+            return False
+        opened = self._parse_exchange_date(record.issue_start_date)
+        closed = self._parse_exchange_date(record.issue_end_date)
+        if not opened or not closed:
+            return False
+        today = date.today()
+        return opened <= today <= closed
+
+    def _is_subscription_live_today(self, row: dict[str, Any]) -> bool:
+        opened = self._parse_exchange_date(row.get("subscription_open"))
+        closed = self._parse_exchange_date(row.get("subscription_close"))
+        if not opened or not closed:
+            return False
+        today = date.today()
+        return opened <= today <= closed
+
+    async def _live_exchange_slugs_from_store(self) -> set[str]:
+        """Fallback live slug set from rows already enriched by official exchange data."""
+        slugs: set[str] = set()
+        try:
+            filings = await self.store.list_filings(limit=500)
+        except Exception:
+            return slugs
+        for row in filings:
+            if not self._has_complete_live_exchange_metrics(row):
+                continue
+            slug = str(row.get("slug") or "").lower()
+            if slug:
+                slugs.add(slug)
+        return slugs
+
+    def _start_exchange_refresh_background(self) -> None:
+        """Kick off exchange enrichment without blocking the dashboard response."""
+        if self._last_exchange_refresh_task and not self._last_exchange_refresh_task.done():
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        self._last_exchange_refresh_task = loop.create_task(self._refresh_exchange_for_dashboard(force=True))
+
+    async def _dashboard_official_live_slugs(self) -> set[str]:
+        """Return current official live slugs without blocking on exchange HTTP."""
+        live_slugs = await self._live_exchange_slugs_from_store()
+        self._last_exchange_current_slugs = live_slugs
+
+        now = datetime.now(timezone.utc)
+        refresh_stale = (
+            not self._last_exchange_refresh_at
+            or (now - self._last_exchange_refresh_at).total_seconds() >= IPO_EXCHANGE_REFRESH_TTL_SECONDS
+        )
+        if refresh_stale:
+            self._start_exchange_refresh_background()
+        return live_slugs
+
+    async def _refresh_exchange_for_dashboard(self, *, force: bool = False) -> None:
+        """Refresh official exchange data used by the IPO dashboard live bucket.
+
+        This method may make network calls. The public dashboard starts it in
+        the background and renders from already-enriched exchange rows so the UI
+        does not fail when NSE/BSE are slow or blocking automated requests.
+        """
+        now = datetime.now(timezone.utc)
+        if (
+            not force
+            and self._last_exchange_refresh_at
+            and (now - self._last_exchange_refresh_at).total_seconds() < IPO_EXCHANGE_REFRESH_TTL_SECONDS
+        ):
+            return
+
+        live_slugs: set[str] = set()
+        errors: list[str] = []
+
+        try:
+            nse_data = await fetch_nse_ipo_data()
+            live_slugs.update(
+                self._nse_slug(record)
+                for record in nse_data.get("current", [])
+                if self._is_nse_live_today(record)
+            )
+            await self._enrich_from_nse(nse_data=nse_data)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            errors.append(f"NSE: {exc}")
+            logger.warning("NSE dashboard refresh failed: %s", exc)
+
+        if IPO_DASHBOARD_REFRESH_BSE:
+            try:
+                from finagent.tools.data.bse_ipo_scraper import fetch_bse_ipo_data
+
+                bse_data = await fetch_bse_ipo_data()
+                for record in bse_data.get("current", []):
+                    opened = self._parse_exchange_date(getattr(record, "issue_start_date", None))
+                    closed = self._parse_exchange_date(getattr(record, "issue_end_date", None))
+                    if str(getattr(record, "status", "")).lower() == "active" and opened and closed and opened <= date.today() <= closed:
+                        live_slugs.add(slugify_company(self._clean_exchange_company_name(getattr(record, "company_name", ""))))
+                await self._enrich_from_bse(bse_data=bse_data)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                errors.append(f"BSE: {exc}")
+                logger.warning("BSE dashboard refresh failed: %s", exc)
+
+        if not live_slugs:
+            live_slugs = await self._live_exchange_slugs_from_store()
+        self._last_exchange_current_slugs = live_slugs
+        self._last_exchange_refresh_at = now
+        self._last_exchange_error = "; ".join(errors) if errors else None
+
+    async def _enrich_from_nse(self, nse_data: dict[str, list[NseIpoRecord]] | None = None) -> int:
+        """Enrich filings from NSE APIs (authoritative source).
+        
+        Also creates new IPO records for NSE listings that don't have SEBI documents yet.
+        """
+        if nse_data is None:
+            nse_data = await fetch_nse_ipo_data()
+        all_nse = [
+            record for record in (nse_data.get("current", []) + nse_data.get("upcoming", []))
+            if not self._is_issue_postponed(record.company_name)
+        ]
         
         if not all_nse:
             logger.info("NSE returned no IPO data")
             return 0
         
         filings = await self.store.list_filings(limit=200)
+        existing_slugs = {f.get("slug", "").lower() for f in filings}
         enrichment_map = build_nse_enrichment_map(all_nse, filings)
         
         updated_count = 0
+        
+        # First: create new records for NSE IPOs not in store
+        for nse_rec in all_nse:
+            slug = self._nse_slug(nse_rec)
+            if not slug or slug in existing_slugs:
+                continue
+            
+            from finagent.tools.data.nse_ipo_scraper import nse_record_to_enrichment
+
+            enrichment = nse_record_to_enrichment(nse_rec)
+            payload = {
+                "slug": slug,
+                "company_name": nse_rec.company_name.strip(),
+                "doc_type": "rhp",  # NSE lists issues only after the offer document stage.
+                "status": "live" if self._is_nse_live_today(nse_rec) else "upcoming",
+                "source": "nse_api",
+                **{k: v for k, v in enrichment.items() if v is not None},
+            }
+            enriched = enrich_filing(payload)
+            await self.store.upsert_filing(enriched)
+            existing_slugs.add(slug)
+            updated_count += 1
+            logger.info("Created new IPO from NSE: %s", nse_rec.company_name)
+        
+        # Then: enrich existing filings
         for filing in filings:
             slug = filing.get("slug") or ""
             extra = enrichment_map.get(slug)
@@ -586,23 +807,24 @@ class IpoService:
             updated = dict(filing)
             changed = False
             
-            # NSE is authoritative for these fields
-            for k in ("subscription_open", "subscription_close", "price_band_low",
-                      "price_band_high", "nse_symbol", "is_sme"):
+            for k in (
+                "subscription_open", "subscription_close", "price_band_low",
+                "price_band_high", "issue_size_shares", "issue_size_cr",
+                "nse_symbol", "exchange", "is_sme", "subscription_status", "source_url",
+            ):
                 v = extra.get(k)
                 if v is not None and updated.get(k) != v:
                     updated[k] = v
                     changed = True
             
-            # Subscription times
             sub_times = extra.get("subscription_times")
-            if sub_times is not None and sub_times > 0:
+            if sub_times is not None and updated.get("subscription_times") != sub_times:
                 updated["subscription_times"] = sub_times
                 changed = True
             
-            # Status update
             nse_status = extra.get("nse_status")
-            if nse_status == "live" and updated.get("status") != "live":
+            has_complete_offer_metrics = self._positive_number(extra.get("price_band_high")) and self._positive_number(extra.get("issue_size_cr"))
+            if nse_status == "live" and has_complete_offer_metrics and updated.get("status") != "live":
                 updated["status"] = "live"
                 changed = True
             elif nse_status == "forthcoming" and updated.get("status") not in ("live", "listed"):
@@ -617,7 +839,7 @@ class IpoService:
         logger.info("NSE enrichment: updated %d filings", updated_count)
         return updated_count
 
-    async def _enrich_from_bse(self) -> int:
+    async def _enrich_from_bse(self, bse_data: dict[str, list[Any]] | None = None) -> int:
         """Enrich filings from BSE APIs."""
         try:
             from finagent.tools.data.bse_ipo_scraper import (
@@ -628,7 +850,8 @@ class IpoService:
             logger.warning("BSE scraper not available")
             return 0
         
-        bse_data = await fetch_bse_ipo_data()
+        if bse_data is None:
+            bse_data = await fetch_bse_ipo_data()
         all_bse = bse_data.get("current", []) + bse_data.get("upcoming", [])
         
         if not all_bse:
@@ -649,14 +872,16 @@ class IpoService:
             changed = False
             
             # IPO data from exchange (don't override existing data if present)
-            for k in ("scrip_code", "nse_symbol", "lot_size", "times_subscribed"):
+            for k in ("bse_scrip_code", "nse_symbol", "lot_size", "subscription_times",
+                      "subscription_status", "source_url", "exchange"):
                 v = extra.get(k)
                 if v is not None and not updated.get(k):
                     updated[k] = v
                     changed = True
             
-            # Only use BSE dates if NSE didn't provide them
-            for k in ("subscription_open", "subscription_close", "price_band_low", "price_band_high"):
+            # Only use BSE dates/price/size if NSE did not provide them.
+            for k in ("subscription_open", "subscription_close", "price_band_low",
+                      "price_band_high", "issue_size_cr"):
                 v = extra.get(k)
                 if v is not None and not updated.get(k):
                     updated[k] = v
@@ -671,8 +896,57 @@ class IpoService:
         return updated_count
 
     async def _enrich_from_ipowatch(self) -> int:
-        """Enrich filings from ipowatch.in (GMP, financials, KPIs)."""
+        """Enrich filings from ipowatch.in (GMP, financials, KPIs).
+        
+        Also creates new IPO records for ipowatch listings that don't exist yet.
+        """
         ipowatch_records = await fetch_ipowatch_data(include_details=True)
+        filings = await self.store.list_filings(limit=200)
+        existing_slugs = {f.get("slug", "").lower() for f in filings}
+        
+        # First: create new records for ipowatch IPOs not in store
+        for rec in ipowatch_records:
+            from finagent.tools.data.ipo_fetcher import slugify_company
+            slug = slugify_company(rec.name)
+            
+            if slug in existing_slugs:
+                continue
+            
+            # Create new IPO record from ipowatch data
+            payload = {
+                "slug": slug,
+                "company_name": rec.name.strip(),
+                "doc_type": "rhp",  # ipowatch tracks RHP+ stage IPOs
+                "status": "live" if rec.subscription_open and rec.subscription_close else "upcoming",
+                "subscription_open": rec.subscription_open,
+                "subscription_close": rec.subscription_close,
+                "price_band_low": rec.price_band_low,
+                "price_band_high": rec.price_band_high,
+                "issue_size_cr": rec.issue_size_cr,
+                "fresh_issue_cr": rec.fresh_issue_cr,
+                "ofs_cr": rec.ofs_cr,
+                "gmp": rec.gmp,
+                "listing_date": rec.listing_date,
+                "allotment_date": rec.allotment_date,
+                "lot_size": rec.lot_size,
+                "exchange": rec.exchange,
+                "source": "ipowatch",
+            }
+            enriched = enrich_filing(payload)
+            await self.store.upsert_filing(enriched)
+            existing_slugs.add(slug)
+            logger.info("Created new IPO from ipowatch: %s", rec.name)
+            
+            # Save financials if available
+            if rec.financials or rec.kpis:
+                analysis = {
+                    "financials": rec.financials or {},
+                    "kpis": rec.kpis or {},
+                    "business_synthesis": f"{rec.name} is an upcoming IPO. Data sourced from ipowatch.in.",
+                }
+                await self.store.save_analysis(slug, analysis)
+        
+        # Reload filings after creating new ones
         filings = await self.store.list_filings(limit=200)
         enrichment_map = build_enrichment_map(ipowatch_records, filings)
         
@@ -688,9 +962,17 @@ class IpoService:
             
             updated = dict(filing)
             changed = False
+            has_exchange_data = bool(updated.get("nse_symbol") or updated.get("bse_scrip_code") or updated.get("source") == "nse_api")
+            official_exchange_fields = {
+                "subscription_open", "subscription_close", "price_band_low", "price_band_high",
+                "issue_size_cr", "subscription_times", "subscription_status", "exchange",
+                "nse_symbol", "bse_scrip_code", "lot_size",
+            }
             
             for k, v in extra.items():
                 if v is None:
+                    continue
+                if has_exchange_data and k in official_exchange_fields and updated.get(k) not in (None, "", 0):
                     continue
                 if k in ("subscription_open", "subscription_close", "price_band_low",
                          "price_band_high", "gmp", "listing_date", "fresh_issue_cr",
@@ -700,7 +982,11 @@ class IpoService:
                         changed = True
                 elif k == "issue_size_cr":
                     current_val = updated.get("issue_size_cr") or 0
-                    if float(v) > float(current_val):
+                    try:
+                        should_update = float(v) > float(current_val)
+                    except (TypeError, ValueError):
+                        should_update = not updated.get(k)
+                    if should_update:
                         updated[k] = v
                         changed = True
                 elif not updated.get(k):
@@ -814,29 +1100,46 @@ class IpoService:
         
         Returns:
             Buckets (live, upcoming, listed) with IPO cards
+        
+        Status is computed fresh on each call using subscription dates
+        to ensure IPOs move between buckets in real-time.
         """
         await self.ensure_seed_data()
+        official_live_slugs = await self._dashboard_official_live_slugs()
         filings = await self.store.list_filings(limit=200)
         buckets: dict[str, list[dict[str, Any]]] = {"upcoming": [], "live": [], "listed": []}
         
         for row in filings:
-            status = (row.get("status") or "upcoming").lower()
-            if status not in buckets:
-                status = "upcoming"
-            # Only show recently listed
-            if status == "listed" and not is_recently_listed(row):
+            # Re-enrich each filing to compute current status from dates.
+            enriched = enrich_filing(row)
+            status = (enriched.get("status") or "upcoming").lower()
+
+            if status == "live":
+                slug = str(enriched.get("slug") or "").lower()
+                if slug not in official_live_slugs or not self._has_complete_live_exchange_metrics(enriched):
+                    continue
+            elif status == "closed":
                 continue
-            card = self._to_card(row)
+            elif status == "listed" and not is_recently_listed(enriched):
+                continue
+            elif status not in buckets:
+                status = "upcoming"
+
+            card = self._to_card(enriched)
             buckets[status].append(card)
         
-        # Sort by filing date descending
-        for key in buckets:
-            buckets[key].sort(key=lambda c: c.get("filing_date") or "", reverse=True)
+        # Sort: live by subscription_close ascending (soonest closing first)
+        # upcoming by subscription_open ascending (soonest opening first)
+        # listed by listing_date descending (most recent first)
+        buckets["live"].sort(key=lambda c: c.get("subscription_close") or c.get("filing_date") or "")
+        buckets["upcoming"].sort(key=lambda c: c.get("subscription_open") or c.get("filing_date") or "")
+        buckets["listed"].sort(key=lambda c: c.get("listing_date") or c.get("filing_date") or "", reverse=True)
         
         return {
             "as_of": datetime.now(timezone.utc).isoformat(),
             "buckets": buckets,
             "counts": {k: len(v) for k, v in buckets.items()},
+            "exchange_data_error": self._last_exchange_error,
             "gmp_disclaimer": (
                 "Grey Market Premium (GMP) reflects informal off-exchange sentiment and is not a price guarantee. "
                 "Use alongside the ProspektLab IPO Score for fundamental context."
@@ -852,6 +1155,8 @@ class IpoService:
         filing = await self.store.get_filing(slug)
         if not filing:
             return None
+        filing = enrich_filing(filing)
+        filing, _local_pdf = await self._ensure_official_document(filing, allow_network=False)
         
         analysis = await self.store.get_analysis(slug)
         scores = await self.store.get_scores(slug)
@@ -859,15 +1164,19 @@ class IpoService:
         has_full_analysis = self._analysis_has_required_content(analysis)
         needs_refresh = self._analysis_needs_refresh(analysis)
 
-        if auto_analyze and (not has_full_analysis or needs_refresh) and filing.get("pdf_url"):
+        if auto_analyze and (not has_full_analysis or needs_refresh):
             logger.info("Auto-triggering analysis for %s", slug)
             try:
                 result = await self.fetch_and_analyze(slug)
                 analysis = result.get("analysis") or {}
                 scores = result.get("scores") or {}
+                refreshed_filing = await self.store.get_filing(slug)
+                if refreshed_filing:
+                    filing = enrich_filing(refreshed_filing)
             except Exception as exc:
                 logger.warning("Auto-analysis failed for %s: %s", slug, exc)
                 analysis = self._build_basic_analysis(filing)
+                analysis["document_resolution_error"] = str(exc)
                 scores = {}
         
         if not analysis:
@@ -886,8 +1195,16 @@ class IpoService:
                     )},
                 }
         
+        # Add nested price_band to filing for frontend compatibility
+        # The detail page uses filing.price_band.low/high; the raw filing has flat fields
+        filing_with_band = dict(filing)
+        filing_with_band["price_band"] = {
+            "low": filing.get("price_band_low"),
+            "high": filing.get("price_band_high"),
+        }
+        
         return {
-            "filing": filing,
+            "filing": filing_with_band,
             "analysis": analysis or {},
             "scores": scores,
             "lifecycle": self._build_lifecycle(filing),
@@ -901,12 +1218,8 @@ class IpoService:
         doc_type = filing.get("doc_type", "DRHP").upper()
         
         analysis: dict[str, Any] = {}
-        analysis["business_synthesis"] = (
-            f"{company_name} operates in the {sector} sector. "
-            f"The company has filed its {doc_type} with SEBI. "
-            f"Detailed analysis will be available once the document is processed."
-        )
-        analysis["business_overview_paragraphs"] = [analysis["business_synthesis"]]
+        analysis["business_synthesis"] = ""
+        analysis["business_overview_paragraphs"] = []
         
         objects: dict[str, Any] = {
             "fresh_issue_cr": filing.get("fresh_issue_cr"),
@@ -959,12 +1272,25 @@ class IpoService:
         ):
             objects["ofs_cr"] = filing.get("ofs_cr")
         filing_total_issue = filing.get("issue_size_cr")
+        component_total_for_check = 0.0
+        for component in (objects.get("fresh_issue_cr"), objects.get("ofs_cr")):
+            if isinstance(component, (int, float)):
+                component_total_for_check += float(component)
+        parsed_total_issue = objects.get("total_issue_cr")
         if filing_total_issue is not None and (
-            objects.get("total_issue_cr") is None or
-            not isinstance(objects.get("total_issue_cr"), (int, float)) or
-            abs(float(objects.get("total_issue_cr") or 0) - float(filing_total_issue)) > max(50.0, float(filing_total_issue) * 0.35)
+            parsed_total_issue is None or
+            not isinstance(parsed_total_issue, (int, float)) or
+            abs(float(parsed_total_issue or 0) - float(filing_total_issue)) > max(25.0, float(filing_total_issue) * 0.20) or
+            (component_total_for_check > 0 and float(parsed_total_issue or 0) < component_total_for_check * 0.90)
         ):
             objects["total_issue_cr"] = filing.get("issue_size_cr")
+        if (
+            objects.get("ofs_cr") in (None, 0)
+            and isinstance(objects.get("fresh_issue_cr"), (int, float))
+            and isinstance(objects.get("total_issue_cr"), (int, float))
+            and float(objects.get("fresh_issue_cr") or 0) > float(objects.get("total_issue_cr") or 0) * 1.10
+        ):
+            objects["fresh_issue_cr"] = objects.get("total_issue_cr")
         if objects.get("ofs_pct") is None and objects.get("fresh_issue_cr") is not None and objects.get("ofs_cr") is not None:
             total_issue = (objects.get("fresh_issue_cr") or 0) + (objects.get("ofs_cr") or 0)
             if total_issue > 0:
@@ -1001,12 +1327,18 @@ class IpoService:
         hydrated["kpis"] = kpis
         hydrated["kpi_rows"] = hydrated.get("kpi_rows") or []
 
-        if not hydrated.get("business_overview_paragraphs"):
-            business = str(hydrated.get("business_synthesis") or hydrated.get("business_overview_excerpt") or "").strip()
-            hydrated["business_overview_paragraphs"] = [business] if business else []
+        paragraphs = [
+            str(paragraph).strip()
+            for paragraph in (hydrated.get("business_overview_paragraphs") or [])
+            if str(paragraph).strip()
+        ]
+        if not paragraphs and hydrated.get("business_overview_excerpt"):
+            paragraphs = extract_business_overview_paragraphs(str(hydrated.get("business_overview_excerpt") or ""), limit=3)
+        hydrated["business_overview_paragraphs"] = paragraphs
+        hydrated["business_overview_excerpt"] = "\n\n".join(paragraphs) if paragraphs else ""
 
         synthesized_business = self._build_business_synthesis_copy(hydrated)
-        hydrated["business_synthesis"] = synthesized_business or self._build_basic_analysis(filing)["business_synthesis"]
+        hydrated["business_synthesis"] = synthesized_business
 
         peer_valuation = hydrated.get("peer_valuation") or {}
         hydrated["objects_summary"] = self._build_objects_summary(objects)
@@ -1152,31 +1484,317 @@ class IpoService:
             return None
         return {"filing": filing, "tracking": tracking}
 
+    def _document_doc_type_from_path(self, path: Path | None) -> str | None:
+        if not path:
+            return None
+        stem = path.stem.lower()
+        for doc_type in ("prospectus", "rhp", "drhp"):
+            if stem.endswith(f"_{doc_type}") or stem == doc_type:
+                return doc_type
+        return None
+
+    def _document_date_from_path(self, path: Path | None) -> str | None:
+        if not path:
+            return None
+        stem = path.stem
+        if "_" in stem:
+            candidate = stem.rsplit("_", 1)[0]
+            try:
+                return date.fromisoformat(candidate[:10]).isoformat()
+            except ValueError:
+                return None
+        return None
+
+    def _document_match_score(self, target: dict[str, Any], candidate: dict[str, Any] | str) -> float:
+        target_slug = str(target.get("slug") or "").lower()
+        target_name = self._clean_exchange_company_name(str(target.get("company_name") or target_slug))
+        target_name_slug = slugify_company(target_name)
+
+        if isinstance(candidate, dict):
+            candidate_slug = str(candidate.get("slug") or "").lower()
+            candidate_name = self._clean_exchange_company_name(str(candidate.get("company_name") or candidate_slug))
+            candidate_name_slug = slugify_company(candidate_name)
+        else:
+            candidate_slug = str(candidate or "").lower()
+            candidate_name_slug = candidate_slug
+
+        def _score_slug(a: str, b: str) -> float:
+            if not a or not b:
+                return 0.0
+            if a == b:
+                return 1.0
+            shorter, longer = sorted((a, b), key=len)
+            if len(shorter) >= 8 and longer.startswith(shorter):
+                return 0.93
+            a_tokens = {token for token in a.split("-") if len(token) >= 3}
+            b_tokens = {token for token in b.split("-") if len(token) >= 3}
+            shared = len(a_tokens & b_tokens)
+            token_score = shared / max(1, min(len(a_tokens), len(b_tokens)))
+            ratio = SequenceMatcher(None, a, b).ratio()
+            if shared >= 2:
+                return max(ratio, token_score * 0.9)
+            return ratio * 0.75
+
+        return max(
+            _score_slug(target_slug, candidate_slug),
+            _score_slug(target_name_slug, candidate_name_slug),
+            _score_slug(target_slug, candidate_name_slug),
+            _score_slug(target_name_slug, candidate_slug),
+        )
+
+    def _is_stale_nse_offer_url(self, url: Any) -> bool:
+        raw = str(url or "").lower()
+        return "nsearchives.nseindia.com/corporate/" in raw and raw.endswith(".zip")
+
+    def _merge_document_fields(
+        self,
+        filing: dict[str, Any],
+        document_row: dict[str, Any],
+        *,
+        local_path: Path | None = None,
+    ) -> dict[str, Any]:
+        updated = dict(filing)
+        doc_type = str(document_row.get("doc_type") or self._document_doc_type_from_path(local_path) or updated.get("doc_type") or "drhp").lower()
+        filing_date = document_row.get("filing_date") or self._document_date_from_path(local_path) or updated.get("filing_date")
+
+        for key in ("pdf_url", "metadata"):
+            value = document_row.get(key)
+            if value:
+                updated[key] = value
+        if document_row.get("company_name") and len(str(document_row.get("company_name"))) > len(str(updated.get("company_name") or "")):
+            updated["company_name"] = document_row.get("company_name")
+        updated["doc_type"] = doc_type
+        if filing_date:
+            updated["filing_date"] = filing_date
+        if doc_type == "rhp" and filing_date:
+            updated["rhp_filing_date"] = filing_date
+        if doc_type == "prospectus" and filing_date:
+            updated["prospectus_filing_date"] = filing_date
+        updated["document_source"] = document_row.get("source") or "sebi"
+        if local_path:
+            updated["local_pdf_path"] = str(local_path)
+        return enrich_filing(updated)
+
+    async def _find_local_document_match(self, filing: dict[str, Any]) -> tuple[dict[str, Any] | None, Path | None]:
+        """Find a matching SEBI document already present in the store or local PDF cache."""
+        from finagent.tools.data.ipo_fetcher import drhp_cache_dir
+
+        target_slug = str(filing.get("slug") or "").lower()
+        best: tuple[float, int, dict[str, Any], Path | None] | None = None
+
+        rows = await self.store.list_filings(limit=1000)
+        for row in rows:
+            row_slug = str(row.get("slug") or "").lower()
+            cached = self._select_best_cached_pdf(row_slug, row)
+            if self._is_stale_nse_offer_url(row.get("pdf_url")) and not cached:
+                continue
+            if not row.get("pdf_url") and not cached:
+                continue
+            score = self._document_match_score(filing, row)
+            if score < 0.86:
+                continue
+            doc_type = row.get("doc_type") or self._document_doc_type_from_path(cached)
+            rank = _doc_stage_rank(doc_type)
+            candidate = (score, rank, row, cached)
+            if best is None or candidate[:2] > best[:2]:
+                best = candidate
+
+        cache_root = drhp_cache_dir("__probe__").parent
+        if cache_root.exists():
+            for cache_dir in cache_root.iterdir():
+                if not cache_dir.is_dir():
+                    continue
+                cached = self._select_best_cached_pdf(cache_dir.name, None)
+                if not cached:
+                    continue
+                score = self._document_match_score(filing, cache_dir.name)
+                if score < 0.86:
+                    continue
+                doc_type = self._document_doc_type_from_path(cached)
+                rank = _doc_stage_rank(doc_type)
+                row = {
+                    "slug": cache_dir.name,
+                    "company_name": cache_dir.name.replace("-", " ").title(),
+                    "doc_type": doc_type or "drhp",
+                    "filing_date": self._document_date_from_path(cached),
+                    "source": "sebi",
+                }
+                candidate = (score, rank, row, cached)
+                if best is None or candidate[:2] > best[:2]:
+                    best = candidate
+
+        if not best:
+            return None, None
+        _, _, row, cached = best
+        return row, cached
+
+    async def _find_sebi_document_match(self, filing: dict[str, Any]) -> IpoFilingRecord | None:
+        """Resolve an official SEBI/NSE DRHP/RHP/Prospectus row for a filing on demand."""
+        records = await discover_new_filings(drhp_limit=80, rhp_limit=120, prospectus_limit=120)
+        best: tuple[float, int, IpoFilingRecord] | None = None
+        target = {"slug": filing.get("slug"), "company_name": filing.get("company_name")}
+        for record in records:
+            score = self._document_match_score(target, {"slug": record.slug, "company_name": record.company_name})
+            if score < 0.86:
+                continue
+            candidate = (score, _doc_stage_rank(record.doc_type), record)
+            if best is None or candidate[:2] > best[:2]:
+                best = candidate
+        return best[2] if best else None
+
+    async def _ensure_official_document(
+        self,
+        filing: dict[str, Any],
+        *,
+        allow_network: bool,
+    ) -> tuple[dict[str, Any], Path | None]:
+        """Ensure the filing has the best available official offer-document URL/cache path."""
+        slug = str(filing.get("slug") or "")
+        if self._is_stale_nse_offer_url(filing.get("pdf_url")):
+            filing = {k: v for k, v in filing.items() if k != "pdf_url"}
+        cached = self._select_best_cached_pdf(slug, filing)
+        if cached:
+            if not filing.get("local_pdf_path"):
+                updated = dict(filing)
+                updated["local_pdf_path"] = str(cached)
+                doc_type = self._document_doc_type_from_path(cached)
+                filing_date = self._document_date_from_path(cached)
+                if doc_type and not updated.get("doc_type"):
+                    updated["doc_type"] = doc_type
+                if filing_date and not updated.get("filing_date"):
+                    updated["filing_date"] = filing_date
+                filing = enrich_filing(updated)
+            return filing, cached
+
+        local_row, local_path = await self._find_local_document_match(filing)
+        if local_row:
+            updated = self._merge_document_fields(filing, local_row, local_path=local_path)
+            await self.store.upsert_filing(updated)
+            return updated, local_path
+
+        if allow_network:
+            try:
+                record = await self._find_sebi_document_match(filing)
+            except Exception as exc:
+                logger.warning("Official offer-document resolution failed for %s: %s", slug, exc)
+                record = None
+            if record:
+                updated = self._merge_document_fields(filing, record.__dict__)
+                await self.store.upsert_filing(updated)
+                try:
+                    downloaded = await download_drhp(record)
+                    if downloaded.local_path:
+                        updated["local_pdf_path"] = downloaded.local_path
+                        await self.store.upsert_filing(updated)
+                        return updated, Path(downloaded.local_path)
+                except Exception as exc:
+                    logger.warning("Official offer-document download failed for %s: %s", slug, exc)
+                return updated, None
+
+        return filing, None
+
+    def _critical_fields_present(self, parsed: dict[str, Any]) -> dict[str, bool]:
+        """Check which critical fields were extracted successfully."""
+        return {
+            "management": bool(parsed.get("management")),
+            "strengths": len(parsed.get("strengths") or []) >= 2,
+            "financials": bool((parsed.get("financials") or {}).get("metrics")),
+            "risk_factors": (parsed.get("risk_factors") or {}).get("total_count", 0) >= 3,
+            "promoters": bool((parsed.get("promoters") or {}).get("promoters")),
+            "business_overview": bool(parsed.get("business_overview_paragraphs")),
+        }
+
+    def _select_best_cached_pdf(self, slug: str, filing: dict[str, Any] | None) -> Path | None:
+        """Select the best cached PDF by doc type priority: Prospectus > RHP > DRHP."""
+        from finagent.tools.data.ipo_fetcher import drhp_cache_dir
+        cache_dir = drhp_cache_dir(slug)
+        if not cache_dir.exists():
+            return None
+        pdfs = list(cache_dir.glob("*.pdf"))
+        if not pdfs:
+            return None
+
+        def _get_doc_type(p: Path) -> str:
+            """Extract doc type from filename like '2024-01-01_rhp.pdf'."""
+            stem = p.stem.lower()  # e.g. "2024-01-01_rhp"
+            # Exact suffix match to avoid 'rhp' matching inside 'drhp'
+            for dt in ("prospectus", "rhp", "drhp"):
+                if stem.endswith(f"_{dt}") or stem == dt:
+                    return dt
+            return "drhp"  # default
+
+        def _priority_key(p: Path) -> tuple[int, float]:
+            dt = _get_doc_type(p)
+            rank = {"prospectus": 0, "rhp": 1, "drhp": 2}.get(dt, 3)
+            return (rank, -p.stat().st_mtime)
+
+        pdfs.sort(key=_priority_key)
+        best = pdfs[0]
+        logger.debug(
+            "[DOC-PRIORITY] %s: selected %s (rank=%d) from %d cached PDFs",
+            slug, best.name, _priority_key(best)[0], len(pdfs)
+        )
+        return best
+
     async def fetch_and_analyze(self, slug: str, *, pdf_path: str | None = None) -> dict[str, Any]:
-        """Fetch and analyze document using the IPO PyMuPDF extraction pipeline."""
+        """Fetch and analyze document using the IPO PyMuPDF extraction pipeline.
+        
+        Uses document version priority: Prospectus > RHP > DRHP.
+        Implements multi-pass parsing: if critical fields are missing after first
+        pass, a second pass is attempted with the synchronous parser (different
+        internal buffering) before gracefully leaving empty fields.
+        """
         filing = await self.store.get_filing(slug)
         if not filing and not pdf_path:
             raise ValueError(f"Unknown IPO slug: {slug}")
         
-        # Get PDF
-        path = pdf_path or load_cached_pdf(slug)
+        # Select PDF with document priority: Prospectus > RHP > DRHP.
+        # Rows created from NSE/IPOWatch often start without pdf_url, so repair
+        # the official SEBI document link/cache on demand before failing.
+        path = pdf_path
+        if filing:
+            filing = enrich_filing(filing)
+        if not path:
+            path = self._select_best_cached_pdf(slug, filing)
+        if not path and filing:
+            filing, resolved_path = await self._ensure_official_document(filing, allow_network=True)
+            if resolved_path:
+                path = str(resolved_path)
         if not path:
             record = IpoFilingRecord(
-                company_name=filing.get("company_name", slug),
+                company_name=(filing or {}).get("company_name", slug),
                 slug=slug,
-                doc_type=filing.get("doc_type", "drhp"),
-                filing_date=filing.get("filing_date") or date.today().isoformat(),
-                pdf_url=filing.get("pdf_url") or "",
-                source=filing.get("source") or "manual",
+                doc_type=(filing or {}).get("doc_type", "drhp"),
+                filing_date=(filing or {}).get("filing_date") or date.today().isoformat(),
+                pdf_url=(filing or {}).get("pdf_url") or "",
+                source=(filing or {}).get("document_source") or (filing or {}).get("source") or "sebi",
             )
             if record.pdf_url:
-                record = await download_drhp(record)
-                path = record.local_path
+                try:
+                    record = await download_drhp(record)
+                    path = record.local_path
+                except Exception as exc:
+                    logger.warning("Official IPO offer-document download failed for %s: %s", slug, exc)
+                    if filing:
+                        filing, resolved_path = await self._ensure_official_document(filing, allow_network=True)
+                        if resolved_path:
+                            path = str(resolved_path)
         
         if not path:
-            raise ValueError(f"No PDF available for {slug}")
+            raise ValueError(
+                f"No official SEBI/NSE/BSE DRHP/RHP/Prospectus PDF available for {slug}. "
+                "Run the IPO watcher or verify the official offer-document URL for this issue."
+            )
         
         pdf_bytes = Path(path).read_bytes()
+        # Record which doc type we're actually parsing (from filename)
+        actual_doc_type = (filing or {}).get("doc_type", "drhp")
+        path_stem = Path(path).stem.lower()
+        for dt in ("prospectus", "rhp", "drhp"):
+            if path_stem.endswith(f"_{dt}") or path_stem == dt:
+                actual_doc_type = dt
+                break
+        logger.info("Analyzing %s using %s document: %s", slug, actual_doc_type, Path(path).name)
 
         try:
             from finagent.ingestion.ipo_pdf_extractor import extract_ipo_pdf_markdown
@@ -1192,17 +1810,70 @@ class IpoService:
             self._extraction_stats["extraction_failures"] += 1
             raise ValueError(f"PyMuPDF extraction returned empty markdown for {slug}")
         
-        # Parse DRHP sections using PARALLEL extractor for speed
+        # ── Pass 1: Parallel async parser ──────────────────────────────────
         import time
         t_parse_start = time.perf_counter()
         parsed = await parse_drhp_markdown_parallel(markdown)
         t_parse = time.perf_counter() - t_parse_start
-        logger.info("[PERF] DRHP parsing took %.2fs (parallel)", t_parse)
+        logger.info("[PERF] DRHP parsing pass-1 took %.2fs (parallel) for %s", t_parse, slug)
+
+        # ── Multi-pass: check if critical fields extracted ──────────────────
+        field_status = self._critical_fields_present(parsed)
+        missing = [k for k, ok in field_status.items() if not ok]
+        
+        if missing:
+            logger.info(
+                "[MULTI-PASS] %s missing fields after pass-1: %s — attempting pass-2 (sync parser)",
+                slug, missing
+            )
+            t2_start = time.perf_counter()
+            try:
+                parsed_p2 = parse_drhp_markdown(markdown)
+                # Merge: use pass-2 results only for fields that were missing in pass-1
+                p2_field_status = self._critical_fields_present(parsed_p2)
+                improved = 0
+                for field in missing:
+                    if field == "management" and p2_field_status.get("management"):
+                        if not parsed.get("management"):
+                            parsed["management"] = parsed_p2.get("management", [])
+                            improved += 1
+                    elif field == "strengths" and p2_field_status.get("strengths"):
+                        if len(parsed.get("strengths") or []) < len(parsed_p2.get("strengths") or []):
+                            parsed["strengths"] = parsed_p2.get("strengths", [])
+                            improved += 1
+                    elif field == "financials" and p2_field_status.get("financials"):
+                        if not (parsed.get("financials") or {}).get("metrics"):
+                            parsed["financials"] = parsed_p2.get("financials", {})
+                            improved += 1
+                    elif field == "risk_factors" and p2_field_status.get("risk_factors"):
+                        p1_count = (parsed.get("risk_factors") or {}).get("total_count", 0)
+                        p2_count = (parsed_p2.get("risk_factors") or {}).get("total_count", 0)
+                        if p2_count > p1_count:
+                            parsed["risk_factors"] = parsed_p2.get("risk_factors", {})
+                            improved += 1
+                    elif field == "promoters" and p2_field_status.get("promoters"):
+                        if not (parsed.get("promoters") or {}).get("promoters"):
+                            parsed["promoters"] = parsed_p2.get("promoters", {})
+                            improved += 1
+                    elif field == "business_overview" and p2_field_status.get("business_overview"):
+                        if not parsed.get("business_overview_paragraphs"):
+                            parsed["business_overview_paragraphs"] = parsed_p2.get("business_overview_paragraphs", [])
+                            improved += 1
+                logger.info(
+                    "[MULTI-PASS] %s pass-2 took %.2fs, improved %d/%d missing fields",
+                    slug, time.perf_counter() - t2_start, improved, len(missing)
+                )
+            except Exception as exc:
+                logger.warning("[MULTI-PASS] %s pass-2 failed: %s — proceeding with pass-1 results", slug, exc)
+        else:
+            logger.info("[MULTI-PASS] %s all critical fields present after pass-1, skipping pass-2", slug)
 
         parsed = self._hydrate_analysis_from_filing(parsed, filing or {})
         parsed["_parser_version"] = IPO_ANALYSIS_VERSION
         parsed["_extractor_used"] = extraction.extractor_used
         parsed["_extraction_diagnostics"] = extraction.diagnostics
+        parsed["_doc_type_analyzed"] = actual_doc_type
+        parsed["_multi_pass_fields_missing"] = missing if missing else []
 
         # Compute scores
         kpis_data = parsed.get("kpis") or {}
@@ -1290,6 +1961,7 @@ class IpoService:
             "subscription_open": row.get("subscription_open"),
             "subscription_close": row.get("subscription_close"),
             "pdf_url": row.get("pdf_url"),
+            "source_url": row.get("source_url"),
             "issue_size_cr": row.get("issue_size_cr"),
             "fresh_issue_cr": fresh,
             "ofs_cr": ofs,
@@ -1316,10 +1988,30 @@ class IpoService:
         status = str(filing.get("status") or "upcoming").lower()
         has_rhp = doc_type in {"rhp", "prospectus"} or bool(filing.get("rhp_filing_date"))
         has_prospectus = doc_type == "prospectus" or bool(filing.get("prospectus_filing_date"))
-        is_open = status == "live" or bool(filing.get("subscription_open"))
-        is_listed = status == "listed" or bool(filing.get("listing_date"))
-        
         now = datetime.now(timezone.utc).date()
+
+        def _parse_stage_date(value: Any) -> date | None:
+            if not value:
+                return None
+            text = str(value).strip()
+            if not text:
+                return None
+            try:
+                return datetime.fromisoformat(text.replace("Z", "+00:00")).date()
+            except (ValueError, TypeError):
+                parsed = self._parse_exchange_date(text)
+                if isinstance(parsed, datetime):
+                    return parsed.date()
+                return parsed
+
+        listing_date = _parse_stage_date(filing.get("listing_date"))
+        subscription_open = _parse_stage_date(filing.get("subscription_open"))
+        subscription_close = _parse_stage_date(filing.get("subscription_close"))
+        is_open = (
+            status == "live"
+            or (subscription_open is not None and subscription_open <= now and (subscription_close is None or subscription_close >= now))
+        )
+        is_listed = status == "listed" or (listing_date is not None and listing_date <= now and status not in {"live", "upcoming"})
         
         def stage_state(done: bool, active: bool = False) -> str:
             if active:
@@ -1327,16 +2019,26 @@ class IpoService:
             return "done" if done else "pending"
         
         def _countdown(date_str: str | None) -> dict[str, Any] | None:
-            if not date_str:
+            target = _parse_stage_date(date_str)
+            if not target:
                 return None
-            try:
-                target = datetime.fromisoformat(date_str.replace("Z", "+00:00")).date()
-                days = (target - now).days
-                if days < 0:
-                    return None
-                return {"days": days, "target_date": date_str}
-            except (ValueError, TypeError):
+            days = (target - now).days
+            if days < 0:
                 return None
+            return {"days": days, "target_date": date_str}
+        
+        # Lifecycle shows 3 document milestones: DRHP -> RHP/Prospectus -> Listed.
+        # Bidding Open and Allotment are operational steps, not document milestones.
+        rhp_label = "Prospectus Filed" if has_prospectus else "RHP Approved"
+        rhp_description = "Final Prospectus filed - issue ready for subscription" if has_prospectus else "Red Herring Prospectus approved by SEBI"
+        rhp_date = filing.get("prospectus_filing_date") or filing.get("rhp_filing_date") or (filing.get("filing_date") if has_rhp else None)
+        
+        # Determine RHP/Prospectus PDF URL: prefer prospectus, then rhp
+        rhp_pdf = None
+        if doc_type == "prospectus":
+            rhp_pdf = filing.get("pdf_url")
+        elif doc_type == "rhp":
+            rhp_pdf = filing.get("pdf_url")
         
         stages = [
             {
@@ -1349,28 +2051,12 @@ class IpoService:
             },
             {
                 "key": "rhp",
-                "label": "RHP Approved",
-                "description": "Red Herring Prospectus approved by SEBI",
-                "state": stage_state(has_rhp, doc_type == "rhp" and not is_open and not is_listed),
-                "date": filing.get("rhp_filing_date") or (filing.get("filing_date") if has_rhp else None),
-                "pdf_url": filing.get("pdf_url") if doc_type == "rhp" else None,
-            },
-            {
-                "key": "ipo_open",
-                "label": "Bidding Open",
-                "description": "IPO subscription window",
-                "state": stage_state(is_open or is_listed, status == "live"),
-                "date": filing.get("subscription_open"),
-                "end_date": filing.get("subscription_close"),
-                "countdown": _countdown(filing.get("subscription_close")) if status == "live" else _countdown(filing.get("subscription_open")),
-            },
-            {
-                "key": "allotment",
-                "label": "Allotment",
-                "description": "Share allotment finalized",
-                "state": stage_state(bool(filing.get("allotment_date")) or is_listed, False),
-                "date": filing.get("allotment_date"),
-                "countdown": _countdown(filing.get("allotment_date")),
+                "label": rhp_label,
+                "description": rhp_description,
+                "state": stage_state(has_rhp, doc_type in ("rhp", "prospectus") and not is_listed),
+                "date": rhp_date,
+                "pdf_url": rhp_pdf,
+                "countdown": _countdown(rhp_date) if not has_rhp else None,
             },
             {
                 "key": "listed",
@@ -1378,19 +2064,16 @@ class IpoService:
                 "description": "Trading commenced on exchange",
                 "state": stage_state(is_listed, status == "listed"),
                 "date": filing.get("listing_date"),
-                "countdown": _countdown(filing.get("listing_date")),
+                "countdown": _countdown(filing.get("listing_date")) if not is_listed else None,
             },
         ]
-        
-        if has_prospectus:
-            stages[1]["description"] = "RHP / Final Prospectus available"
         
         return {
             "current_doc_type": doc_type,
             "current_status": status,
-            "source": filing.get("source") or "sebi",
+            "source": filing.get("document_source") or filing.get("source") or "sebi",
             "latest_document_url": filing.get("pdf_url"),
-            "latest_document_date": filing.get("filing_date"),
+            "latest_document_date": filing.get("prospectus_filing_date") or filing.get("rhp_filing_date") or filing.get("filing_date"),
             "stages": stages,
             "last_updated": datetime.now(timezone.utc).isoformat(),
         }

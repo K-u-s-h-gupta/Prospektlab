@@ -9,6 +9,10 @@ Local paths:
 - finagent_data/ipo/details/{slug}/analysis.json — DRHP analysis
 - finagent_data/ipo/details/{slug}/scores.json — scoring data
 - finagent_data/ipo/details/{slug}/post_listing.json — tracking data
+
+Document version management:
+- When a filing is upserted with a newer/higher doc_type (prospectus > rhp > drhp),
+  the existing analysis sidecar is deleted so re-analysis is triggered automatically.
 """
 
 from __future__ import annotations
@@ -25,6 +29,9 @@ from finagent.paths import finagent_data_path, finagent_home
 logger = logging.getLogger("finagent.ipo.store")
 
 _LOCAL_PATH = finagent_data_path("ipo", "filings.json")
+
+# Document type priority for version management (higher = newer/more complete)
+_DOC_TYPE_PRIORITY: dict[str, int] = {"drhp": 1, "rhp": 2, "prospectus": 3}
 
 
 def _supabase_configured() -> bool:
@@ -55,8 +62,20 @@ class IpoStore:
             payload["created_at"] = now
         payload["updated_at"] = now
         
+        doc_upgraded = False
         for idx, row in enumerate(rows):
             if (row.get("slug") or "").lower() == slug:
+                # Detect document version upgrade (e.g. DRHP → RHP → Prospectus)
+                old_doc_priority = _DOC_TYPE_PRIORITY.get(str(row.get("doc_type") or "drhp").lower(), 1)
+                new_doc_priority = _DOC_TYPE_PRIORITY.get(str(payload.get("doc_type") or "drhp").lower(), 1)
+                if new_doc_priority > old_doc_priority:
+                    doc_upgraded = True
+                    logger.info(
+                        "[DOC-UPGRADE] %s: %s → %s — analysis cache will be invalidated",
+                        slug,
+                        row.get("doc_type", "drhp"),
+                        payload.get("doc_type", "drhp"),
+                    )
                 rows[idx] = {**row, **payload, "slug": slug}
                 updated = True
                 break
@@ -65,7 +84,35 @@ class IpoStore:
         await self._save_all(rows)
         if _supabase_configured():
             await self._upsert_supabase("ipo_filings", payload, match={"slug": slug})
+        
+        # Invalidate stale analysis when a newer document version arrives
+        if doc_upgraded:
+            await self._invalidate_analysis(slug)
+        
         return payload
+
+    async def _invalidate_analysis(self, slug: str) -> None:
+        """Delete analysis and scores sidecars so the detail page triggers fresh re-analysis."""
+        for kind in ("analysis", "scores"):
+            path = await self._sidecar_path(slug, kind)
+            if path.exists():
+                try:
+                    path.unlink()
+                    logger.info("[DOC-UPGRADE] Deleted stale %s for %s — will re-parse on next access", kind, slug)
+                except Exception as exc:
+                    logger.warning("[DOC-UPGRADE] Could not delete %s for %s: %s", kind, slug, exc)
+        # Also clear from Supabase if configured
+        if _supabase_configured():
+            try:
+                from finagent.gateway.supabase_client import get_headers, _supabase_async_client
+                headers = get_headers()
+                base_url = os.environ["SUPABASE_URL"].rstrip("/")
+                async with _supabase_async_client() as client:
+                    for table in ("ipo_analyses", "ipo_scores"):
+                        url = f"{base_url}/rest/v1/{table}?slug=eq.{slug}"
+                        await client.delete(url, headers=headers)
+            except Exception as exc:
+                logger.debug("Supabase analysis invalidation failed for %s: %s", slug, exc)
 
     async def delete_filing(self, slug: str) -> None:
         slug = slug.strip().lower()

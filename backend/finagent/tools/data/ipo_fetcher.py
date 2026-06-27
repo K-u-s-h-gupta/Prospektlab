@@ -14,14 +14,17 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import logging
 import re
+import zipfile
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from html import unescape
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
+import xml.etree.ElementTree as ET
 
 import httpx
 
@@ -32,6 +35,9 @@ logger = logging.getLogger("finagent.tools.data.ipo_fetcher")
 _SEBI_DRHP_URL = "https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=15&smid=10"
 _SEBI_RHP_URL = "https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=15&smid=11"
 _SEBI_PROSPECTUS_URL = "https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=3&ssid=15&smid=12"
+_NSE_OFFER_DOCUMENTS_RSS = "https://nsearchives.nseindia.com/content/RSS/Offer_Documents.xml"
+_NSE_OFFER_DOCUMENTS_API = "https://www.nseindia.com/api/corporates/offerdocs"
+_NSE_OFFER_DOCUMENTS_PAGE = "https://www.nseindia.com/companies-listing/corporate-filings-offer-documents"
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -127,15 +133,15 @@ def _extract_company_name(title: str) -> str:
     return text or text
 
 
-async def _fetch_text(url: str, *, headers: dict[str, str] | None = None) -> str:
-    async with httpx.AsyncClient(timeout=45.0, follow_redirects=True, headers=headers or _HEADERS) as client:
+async def _fetch_text(url: str, *, headers: dict[str, str] | None = None, trust_env: bool = True) -> str:
+    async with httpx.AsyncClient(timeout=45.0, follow_redirects=True, headers=headers or _HEADERS, trust_env=trust_env) as client:
         response = await client.get(url)
         response.raise_for_status()
         return response.text
 
 
-async def _fetch_bytes(url: str, *, headers: dict[str, str] | None = None) -> bytes:
-    async with httpx.AsyncClient(timeout=120.0, follow_redirects=True, headers=headers or _HEADERS) as client:
+async def _fetch_bytes(url: str, *, headers: dict[str, str] | None = None, trust_env: bool = True) -> bytes:
+    async with httpx.AsyncClient(timeout=120.0, follow_redirects=True, headers=headers or _HEADERS, trust_env=trust_env) as client:
         response = await client.get(url)
         response.raise_for_status()
         return response.content
@@ -272,6 +278,170 @@ async def _scrape_sebi_page(url: str, doc_type: str, *, limit: int | None = None
     return records
 
 
+def _records_from_nse_offer_rss(xml_text: str, *, limit: int | None = None) -> list[IpoFilingRecord]:
+    """Parse NSE's official offer-document RSS feed into filing records."""
+    records: list[IpoFilingRecord] = []
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as exc:
+        logger.warning("NSE offer-document RSS parse failed: %s", exc)
+        return records
+
+    for item in root.findall(".//item"):
+        title = _clean_title(item.findtext("title") or "")
+        link = (item.findtext("link") or "").strip()
+        description = _clean_title(item.findtext("description") or "")
+        published = _clean_title(item.findtext("pubDate") or "")
+        if not title or not link:
+            continue
+        if not link.lower().endswith((".pdf", ".zip")):
+            continue
+        if _should_skip(f"{title} {description} {link}"):
+            continue
+
+        doc_type = _detect_doc_type(f"{description} {link} {title}")
+        company_name = _extract_company_name(title)
+        filing_date = _parse_sebi_date(published)
+        records.append(
+            IpoFilingRecord(
+                company_name=company_name,
+                slug=slugify_company(company_name),
+                doc_type=doc_type,
+                filing_date=filing_date,
+                pdf_url=link,
+                source="nse_offer_documents",
+                exchange="NSE",
+                metadata={"nse_offer_document_url": link, "nse_offer_title": title, "nse_offer_description": description},
+            )
+        )
+        if limit is not None and len(records) >= limit:
+            break
+    return records
+
+
+def _records_from_nse_offer_api_rows(
+    rows: list[dict[str, Any]],
+    *,
+    index: str,
+    limit: int | None = None,
+) -> list[IpoFilingRecord]:
+    """Normalize NSE offer-document API rows into filing records."""
+    records: list[IpoFilingRecord] = []
+    exchange = "NSE SME" if index == "sme" else "NSE"
+    doc_fields = (
+        ("prospectus", "fp", "fpDate", "fpAttach"),
+        ("rhp", "rhp", "rhpDate", "rhpAttach"),
+        ("drhp", "drhp", "drhpDate", "drhpAttach"),
+    )
+    for row in rows:
+        company_name = _clean_title(str(row.get("company") or ""))
+        if not company_name:
+            continue
+        for doc_type, label_key, date_key, attach_key in doc_fields:
+            attach = str(row.get(attach_key) or "").strip()
+            if not attach or attach == "-":
+                continue
+            if not attach.lower().endswith((".pdf", ".zip")):
+                continue
+            descriptor = f"{company_name} {row.get(label_key) or ''} {attach}"
+            if _should_skip(descriptor):
+                continue
+            filing_date = _parse_sebi_date(str(row.get(date_key) or ""))
+            records.append(
+                IpoFilingRecord(
+                    company_name=company_name,
+                    slug=slugify_company(company_name),
+                    doc_type=doc_type,
+                    filing_date=filing_date,
+                    pdf_url=attach,
+                    source="nse_offer_documents",
+                    exchange=exchange,
+                    metadata={
+                        "nse_offer_index": index,
+                        "nse_offer_document_url": attach,
+                        "nse_pan": row.get("pan_no"),
+                        "nse_symbol": row.get("symbol"),
+                    },
+                )
+            )
+            if limit is not None and len(records) >= limit:
+                return records
+    return records
+
+
+async def scrape_nse_offer_documents_api(index: str = "sme", limit: int = 500) -> list[IpoFilingRecord]:
+    """Scrape NSE's official offer-document API for equity/SME issues."""
+    end = date.today()
+    start = date(end.year - 2, end.month, end.day)
+    params = {
+        "index": index,
+        "from_date": start.strftime("%d-%m-%Y"),
+        "to_date": end.strftime("%d-%m-%Y"),
+    }
+    headers = {
+        **_HEADERS,
+        "Accept": "application/json,text/plain,*/*",
+        "Referer": _NSE_OFFER_DOCUMENTS_PAGE,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=45.0, follow_redirects=True, headers=headers, trust_env=False) as client:
+            await client.get("https://www.nseindia.com")
+            response = await client.get(_NSE_OFFER_DOCUMENTS_API, params=params)
+            response.raise_for_status()
+            rows = response.json()
+    except Exception as exc:
+        logger.warning("NSE offer-document API scrape failed for %s: %s", index, exc)
+        return []
+    if not isinstance(rows, list):
+        logger.warning("NSE offer-document API returned unexpected payload for %s: %s", index, type(rows))
+        return []
+    return _records_from_nse_offer_api_rows(rows, index=index, limit=limit)
+
+
+async def scrape_nse_offer_documents(limit: int = 500) -> list[IpoFilingRecord]:
+    """Scrape NSE's official offer-document feeds/API.
+
+    NSE SME issues often publish RHP/DRHP documents through nsearchives as ZIP
+    bundles rather than SEBI's public-issues listing, so this is an official
+    fallback for detail-page analysis.
+    """
+    results: list[IpoFilingRecord] = []
+    api_batches = await asyncio.gather(
+        scrape_nse_offer_documents_api(index="equities", limit=limit),
+        scrape_nse_offer_documents_api(index="sme", limit=limit),
+        return_exceptions=True,
+    )
+    for batch in api_batches:
+        if isinstance(batch, Exception):
+            logger.warning("NSE offer-document API batch failed: %s", batch)
+            continue
+        results.extend(batch)
+
+    headers = {
+        **_HEADERS,
+        "Accept": "application/xml,text/xml,*/*",
+        "Referer": "https://www.nseindia.com/",
+    }
+    try:
+        xml_text = await _fetch_text(_NSE_OFFER_DOCUMENTS_RSS, headers=headers, trust_env=False)
+        results.extend(_records_from_nse_offer_rss(xml_text, limit=limit))
+    except Exception as exc:
+        logger.warning("NSE offer-document RSS scrape failed: %s", exc)
+
+    seen: set[tuple[str, str, str]] = set()
+    deduped: list[IpoFilingRecord] = []
+    for record in results:
+        key = (record.slug, record.doc_type, record.pdf_url)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(record)
+
+    doc_rank = {"drhp": 1, "rhp": 2, "prospectus": 3}
+    deduped.sort(key=lambda record: (record.filing_date or "", doc_rank.get(record.doc_type, 0)), reverse=True)
+    return deduped[:limit] if limit is not None else deduped
+
+
 async def scrape_sebi_drhp(limit: int = 3) -> list[IpoFilingRecord]:
     """Scrape SEBI DRHP listing page.
 
@@ -294,6 +464,34 @@ def drhp_cache_dir(company_slug: str) -> Path:
     return finagent_data_path("drhp_cache", company_slug)
 
 
+def _extract_pdf_from_zip(content: bytes, record: IpoFilingRecord) -> bytes:
+    """Return the best full offer-document PDF from an NSE/BSE ZIP bundle."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            pdf_names = [
+                name for name in zf.namelist()
+                if name.lower().endswith(".pdf") and not _should_skip(name)
+            ]
+            if not pdf_names:
+                raise ValueError("ZIP archive did not contain a usable PDF")
+
+            wanted = str(record.doc_type or "").lower()
+
+            def rank(name: str) -> tuple[int, int, str]:
+                lower = name.lower()
+                exact_doc = 0 if wanted and wanted in lower else 1
+                full_doc = 0 if any(token in lower for token in ("rhp", "drhp", "prospectus")) else 1
+                return (exact_doc, full_doc, lower)
+
+            for name in sorted(pdf_names, key=rank):
+                data = zf.read(name)
+                if data.startswith(b"%PDF"):
+                    return data
+    except zipfile.BadZipFile as exc:
+        raise ValueError("Downloaded content is not a valid ZIP archive") from exc
+    raise ValueError("ZIP archive did not contain a valid PDF")
+
+
 async def download_drhp(record: IpoFilingRecord, *, force: bool = False) -> IpoFilingRecord:
     """Download a DRHP/RHP/Prospectus PDF to the local cache."""
     cache_dir = drhp_cache_dir(record.slug)
@@ -304,10 +502,15 @@ async def download_drhp(record: IpoFilingRecord, *, force: bool = False) -> IpoF
         record.local_path = str(target)
         return record
 
-    content = await _fetch_bytes(record.pdf_url)
-    if not content.startswith(b"%PDF"):
-        raise ValueError(f"Downloaded content is not a PDF: {record.pdf_url}")
-    target.write_bytes(content)
+    trust_env = "nsearchives.nseindia.com" not in record.pdf_url.lower()
+    content = await _fetch_bytes(record.pdf_url, trust_env=trust_env)
+    if content.startswith(b"%PDF"):
+        pdf_content = content
+    elif content.startswith(b"PK"):
+        pdf_content = _extract_pdf_from_zip(content, record)
+    else:
+        raise ValueError(f"Downloaded content is neither a PDF nor ZIP bundle: {record.pdf_url}")
+    target.write_bytes(pdf_content)
     record.local_path = str(target)
     logger.info("Cached SEBI IPO PDF: %s -> %s", record.company_name, target)
     return record
@@ -319,10 +522,12 @@ async def discover_new_filings(*, drhp_limit: int = 3, rhp_limit: int = 50, pros
     DRHP is intentionally limited to the top N most recent filings so only the
     freshest upcoming IPOs appear on the radar.
     """
+    nse_limit = max(drhp_limit or 0, rhp_limit or 0, prospectus_limit or 0, 500)
     batches = await asyncio.gather(
         scrape_sebi_drhp(limit=drhp_limit),
         scrape_sebi_rhp(limit=rhp_limit),
         scrape_sebi_prospectus(limit=prospectus_limit),
+        scrape_nse_offer_documents(limit=nse_limit),
         return_exceptions=True,
     )
     merged: dict[str, IpoFilingRecord] = {}

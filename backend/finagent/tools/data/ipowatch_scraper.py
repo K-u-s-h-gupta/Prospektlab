@@ -334,7 +334,11 @@ def _parse_financials(html: str) -> dict[str, Any]:
                 in_fin_table = False
 
     if years and metrics:
-        return {"years": years, "metrics": metrics}
+        for key, values in list(metrics.items()):
+            if isinstance(values, list) and len(values) > len(years):
+                metrics[key] = values[:len(years)]
+        if any(isinstance(values, list) and len(values) == len(years) for values in metrics.values()):
+            return {"years": years, "metrics": metrics}
     return {}
 
 

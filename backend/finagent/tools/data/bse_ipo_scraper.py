@@ -121,16 +121,13 @@ def _parse_nse_price(price_str: str | None) -> tuple[float | None, float | None]
     return None, None
 
 
-def _parse_issue_size(size_str: str | None) -> float | None:
-    """Parse issue size from NSE (in shares) and convert to crores if needed."""
+def _parse_issue_size_shares(size_str: str | None) -> float | None:
+    """Parse NSE issue size as number of shares."""
     if not size_str:
         return None
     
     try:
-        # NSE returns issue size as number of shares (e.g., "11130880")
-        shares = float(str(size_str).replace(",", ""))
-        # Cannot convert to crores without price, so return raw shares
-        return shares
+        return float(str(size_str).replace(",", ""))
     except (ValueError, TypeError):
         return None
 
@@ -162,8 +159,9 @@ def _nse_record_to_bse_record(nse_data: dict[str, Any]) -> BseIpoRecord | None:
     # Parse price band
     price_low, price_high = _parse_nse_price(nse_data.get("issuePrice"))
     
-    # Parse issue size (NSE returns number of shares)
-    issue_size = _parse_issue_size(nse_data.get("issueSize"))
+    # Parse issue size (NSE returns number of shares; convert to rupee crores using upper band)
+    issue_size_shares = _parse_issue_size_shares(nse_data.get("issueSize") or nse_data.get("noOfSharesOffered"))
+    issue_size = round((issue_size_shares * price_high) / 10_000_000, 2) if issue_size_shares and price_high else None
     
     # Parse subscription times
     times_subscribed = _parse_subscription_times(nse_data.get("noOfTime"))
@@ -200,7 +198,7 @@ def _nse_record_to_bse_record(nse_data: dict[str, Any]) -> BseIpoRecord | None:
         issue_end_date=end_date,
         price_band_low=price_low,
         price_band_high=price_high,
-        issue_size_cr=issue_size,  # Note: this is shares, not crores
+        issue_size_cr=issue_size,
         times_subscribed=times_subscribed,
         nse_symbol=symbol,
     )
@@ -312,11 +310,14 @@ def bse_record_to_enrichment(record: BseIpoRecord) -> dict[str, Any]:
         "issue_size_cr": record.issue_size_cr,
         "lot_size": record.lot_size,
         "nse_symbol": record.nse_symbol,
-        "scrip_code": record.scrip_code,
+        "bse_scrip_code": record.scrip_code,
         "is_sme": record.series == "SME",
         "ipo_status": "live" if record.status == "Active" else "forthcoming",
         "listing_date": record.listing_date,
-        "times_subscribed": record.times_subscribed,
+        "subscription_times": record.times_subscribed,
+        "subscription_status": f"{record.times_subscribed:.2f}x subscribed" if record.times_subscribed is not None else None,
+        "exchange": "BSE SME" if record.series == "SME" else "BSE",
+        "source_url": NSE_IPO_CURRENT,
     }
 
 

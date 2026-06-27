@@ -33,7 +33,7 @@ const TABS: TabDef[] = [
   { id: 'screener', label: 'Screener', icon: SlidersHorizontal },
   { id: 'earnings', label: 'Earnings', icon: CalendarClock },
   { id: 'ipo', label: 'IPO', icon: Rocket },
-  { id: 'governance', label: 'Governance', icon: ShieldCheck, comingSoon: true },
+  { id: 'governance', label: 'Governance', icon: ShieldCheck },
 ];
 
 interface FeatureTabsProps {

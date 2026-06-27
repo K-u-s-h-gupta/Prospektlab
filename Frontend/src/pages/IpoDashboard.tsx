@@ -191,7 +191,7 @@ export const IpoDashboardContent: React.FC<IpoDashboardContentProps> = ({
           </div>
           <h1 className="ipo-hero-title">IPO Pipeline</h1>
           <p className="ipo-hero-body">
-            Live DRHP analysis across upcoming, open, and recently listed IPOs &mdash; including SME issues that most platforms skip.
+            Official exchange data across currently open, upcoming, and recently listed IPOs &mdash; with document analysis for DRHP/RHP filings.
           </p>
           {data && <StatsPills live={liveCount} upcoming={upcomingCount} listed={listedCount} />}
         </div>
@@ -282,7 +282,7 @@ export const IpoDashboardContent: React.FC<IpoDashboardContentProps> = ({
           {(activeFilter === 'all' || activeFilter === 'live') && (
             <IpoSection
               title="Live for subscription"
-              subtitle="Currently open IPOs with DRHP/RHP analysis and live subscription context"
+              subtitle="Currently open subscription windows from NSE/BSE exchange data"
               cards={filtered.live}
               originPath={originPath}
               variant="live"
@@ -291,7 +291,7 @@ export const IpoDashboardContent: React.FC<IpoDashboardContentProps> = ({
           {(activeFilter === 'all' || activeFilter === 'upcoming') && (
             <IpoSection
               title="Upcoming pipeline"
-              subtitle="DRHP filed &mdash; subscription not yet open"
+              subtitle="Offer documents filed; subscription not yet open"
               cards={filtered.upcoming}
               originPath={originPath}
               variant="upcoming"

@@ -12,3 +12,14 @@ backend/finagent/.env
 backend/finagent/.env.*
 frontend/.env
 frontend/.env.*
+
+# backend image build context trim (Dockerfile.ikg-worker copies only backend/finagent+deployment+scripts)
+Frontend/
+frontend/
+*.zip
+*.tar
+*.tar.gz
+source_name
+outreach/
+docs/
+*.md

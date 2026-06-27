@@ -77,8 +77,14 @@
   border-top: 1px solid rgba(148, 163, 184, 0.12);
 }
 
-.screener-search-option:hover {
-  background: rgba(56, 189, 248, 0.1);
+.screener-search-option:hover,
+.screener-search-option.focused {
+  background: rgba(56, 189, 248, 0.13);
+  outline: none;
+}
+
+.screener-search-option.focused {
+  border-left: 2px solid rgba(56, 189, 248, 0.6);
 }
 
 .screener-search-option-head {
@@ -859,7 +865,7 @@
 
 .screener-mini-table {
   width: 100%;
-  min-width: 520px;
+  min-width: 820px;
   border-collapse: collapse;
 }
 
@@ -967,4 +973,240 @@
   color: var(--text-muted);
   background: rgba(148, 163, 184, 0.08);
 }
+
+/* Peer comparison — current company highlight row */
+.screener-peer-self td {
+  background: rgba(56, 189, 248, 0.08);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Peer comparison — sector median row */
+.screener-peer-median td {
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--text-muted);
+  font-style: italic;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+/* Positive / Negative bullet points */
+.screener-bullet-positive {
+  margin: 0 0 6px;
+  color: #a7f3d0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.screener-bullet-negative {
+  margin: 0 0 6px;
+  color: #fecdd3;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* Contradiction card improvements */
+.screener-contradiction + .screener-contradiction {
+  margin-top: 8px;
+}
+
+.screener-contradiction-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.screener-contradiction-severity {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.screener-contradiction-severity.negative {
+  border: 1px solid rgba(251, 113, 133, 0.4);
+  background: rgba(251, 113, 133, 0.12);
+  color: #fca5a5;
+}
+
+.screener-contradiction-severity.neutral {
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.1);
+  color: #fde68a;
+}
+
+.screener-contradiction-severity.positive {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-muted);
+}
+
+.screener-contradiction-datapoints {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.screener-contradiction-dp {
+  font-size: 10px;
+  color: var(--text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 5px;
+  padding: 2px 6px;
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.screener-contradiction-dp strong {
+  color: var(--text-secondary);
+}
+
+/* RSI overbought / oversold labels */
+.screener-val-overbought {
+  color: #fca5a5 !important;
+}
+
+.screener-val-oversold {
+  color: #a7f3d0 !important;
+}
+
+/* Trend color helpers for inline metric values */
+.screener-metric-value.up {
+  color: var(--profit);
+}
+
+.screener-metric-value.down {
+  color: var(--loss);
+}
+
+/* Trend color in tech-grid strong tags */
+.screener-tech-grid strong.up {
+  color: var(--profit);
+}
+
+.screener-tech-grid strong.down {
+  color: var(--loss);
+}
+
+/* ─── Score pillars strip ─────────────────────────────────────────────────── */
+.screener-pillars-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.screener-pillar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 100px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.38);
+  padding: 7px 10px;
+}
+
+.screener-pillar-label {
+  text-transform: capitalize;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.screener-pillar-value {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+/* ─── Sector / ISIN badges ────────────────────────────────────────────────── */
+.screener-sector-badge {
+  display: inline-block;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  background: rgba(56, 189, 248, 0.08);
+  color: var(--accent-cyan);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.screener-isin-badge {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  margin-left: 6px;
+}
+
+/* ─── Refresh / retry buttons ─────────────────────────────────────────────── */
+.screener-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.screener-refresh-btn:hover {
+  color: var(--text-primary);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.screener-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(251, 113, 133, 0.35);
+  background: transparent;
+  color: #fda4af;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: 10px;
+}
+
+/* ─── Peer table refinements ──────────────────────────────────────────────── */
+.screener-peer-self-label {
+  color: var(--accent-cyan);
+  font-size: 9px;
+  font-weight: 700;
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+.screener-peer-name {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+/* ─── Event type badge ────────────────────────────────────────────────────── */
+.screener-event-type-badge {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+/* ─── Neutral trend helpers ───────────────────────────────────────────────── */
+.up { color: var(--profit); }
+.down { color: var(--loss); }
+.neutral { color: var(--text-secondary); }
 
