@@ -960,6 +960,17 @@ export interface GovernanceFlag {
   evidence: Record<string, any>;
 }
 
+export interface GovernanceIgs {
+  band: 'LOW' | 'MODERATE' | 'ELEVATED' | 'HIGH' | null;
+  composite_score: number | null;
+  model_risk: number | null;
+  model_probability: number | null;
+  model_version: string | null;
+  as_of_date: string | null;
+  insufficient_data: boolean;
+  flags?: Array<{ code: string; severity: string; detail: string }>;
+}
+
 export interface GovernanceResult {
   cin: string;
   score: number;
@@ -968,6 +979,37 @@ export interface GovernanceResult {
   flags: GovernanceFlag[];
   coverage: Record<string, boolean>;
   computed_at: string;
+  igs?: GovernanceIgs | null;
+}
+
+export interface GovernanceRiskRow {
+  cin: string;
+  company_name: string | null;
+  nse_symbol: string | null;
+  bse_scrip_code: string | null;
+  composite_score: number;
+  band: 'LOW' | 'MODERATE' | 'ELEVATED' | 'HIGH';
+  model_risk: number;
+  model_probability: number;
+  as_of_date: string;
+  flags: Array<{ code: string; severity: string; detail: string }>;
+}
+
+export interface GovernanceLeaderboard {
+  as_of: string | null;
+  count: number;
+  companies: GovernanceRiskRow[];
+}
+
+export async function getGovernanceLeaderboard(bands?: string, limit: number = 50): Promise<GovernanceLeaderboard> {
+  const q = new URLSearchParams();
+  if (bands) q.set('bands', bands);
+  q.set('limit', String(limit));
+  const res = await fetchApi(apiUrl(`/governance/leaderboard?${q.toString()}`), { credentials: 'include' });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch governance leaderboard: ${res.statusText}`);
+  }
+  return parseJsonSanitized(res);
 }
 
 export interface PortfolioGovernance {
@@ -2244,6 +2286,7 @@ export interface IpoCard {
   subscription_close?: string | null;
   allotment_date?: string | null;
   pdf_url?: string | null;
+  source_url?: string | null;
   issue_size_cr?: number;
   fresh_issue_cr?: number;
   ofs_cr?: number;
@@ -2281,6 +2324,7 @@ export interface IpoPipelineResponse {
     upcoming: number;
     listed: number;
   };
+  exchange_data_error?: string | null;
   gmp_disclaimer: string;
 }
 
@@ -2325,16 +2369,13 @@ export interface IpoTrackingResponse {
 
 export interface IpoStats {
   total_filings: number;
-  by_status: {
-    live: number;
-    upcoming: number;
-    listed: number;
-  };
+  by_status: Record<string, number>;
+  by_doc_type?: Record<string, number>;
   extraction_stats: {
-    docling_success: number;
-    azure_fallback: number;
+    pymupdf_success: number;
     extraction_failures: number;
   };
+  as_of?: string;
 }
 
 export async function getIpoPipeline(): Promise<IpoPipelineResponse> {
@@ -2401,6 +2442,16 @@ export async function refreshIpoData(): Promise<{ status: string; message: strin
     credentials: 'include',
   });
   if (!res.ok) throw new Error(`IPO refresh failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function syncIpoStatuses(forceRecheck?: boolean): Promise<Record<string, any>> {
+  const params = forceRecheck ? '?force_recheck=true' : '';
+  const res = await fetchApi(apiUrl(`/ipo/sync${params}`), {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error(`IPO sync failed: ${res.statusText}`);
   return res.json();
 }
 
@@ -2547,6 +2598,62 @@ export interface EarningsAISummary {
   rating?: string;
 }
 
+/** Subsidiary Cash-Drain Matrix - compares Standalone vs Consolidated financials */
+export interface EarningsSubsidiaryAnalysis {
+  standalone: {
+    revenue?: number;
+    pat?: number;
+    ebitda?: number;
+  };
+  consolidated: {
+    revenue?: number;
+    pat?: number;
+    ebitda?: number;
+  };
+  subsidiary_contribution: {
+    revenue?: number;
+    revenue_pct?: number;
+    pat?: number;
+    pat_pct?: number;
+    ebitda?: number;
+    margin_drag?: number;
+    standalone_ebitda_margin?: number;
+    consolidated_ebitda_margin?: number;
+  };
+  flags: {
+    profit_drain?: boolean;
+    margin_dilution?: boolean;
+    revenue_dependent?: boolean;
+    profit_concentration?: boolean;
+  };
+  verdict: string;
+  alert_level: 'high' | 'medium' | 'low' | 'none';
+}
+
+/** Footnote QoQ Diff - tracks accounting policy changes between quarters */
+export interface FootnoteClause {
+  text: string;
+  category: string;
+  severity: 'high' | 'medium' | 'low';
+}
+
+export interface EarningsFootnotesDiff {
+  current_quarter?: string;
+  previous_quarter?: string;
+  added_clauses: FootnoteClause[];
+  removed_clauses: FootnoteClause[];
+  modified_clauses?: Array<{
+    previous: string;
+    current: string;
+    category: string;
+    severity: 'high' | 'medium' | 'low';
+    similarity: number;
+  }>;
+  summary: string;
+  alert_level: 'high' | 'medium' | 'low' | 'none';
+  error?: string;
+}
+
 export interface EarningsResultResponse {
   symbol: string;
   name: string;
@@ -2573,6 +2680,8 @@ export interface EarningsResultResponse {
   };
   highlights: EarningsHighlight[];
   ai_summary?: EarningsAISummary | null;
+  subsidiary_analysis?: EarningsSubsidiaryAnalysis | null;
+  footnotes_diff?: EarningsFootnotesDiff | null;
   transcript: {
     prepared_remarks: EarningsTranscriptBlock[];
     qa: EarningsTranscriptBlock[];
