@@ -4,6 +4,7 @@ import App from './App.tsx'
 import { initializeTelemetry } from './telemetry'
 import './index.css'
 import './styles/enhancements.css'
+import './styles/research-terminal.css'
 import './components/charts/ThemeProvider'
 
 /**

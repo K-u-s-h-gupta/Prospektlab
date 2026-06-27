@@ -1,0 +1,687 @@
+/* ProspektLab blue polish layer.
+   This preserves the deployed blue identity while tightening app surfaces. */
+
+:root {
+  --bg-deep: #03060d;
+  --bg-surface: rgba(8, 16, 32, 0.7);
+  --bg-elevated: rgba(10, 22, 44, 0.82);
+  --bg-hover: rgba(96, 165, 250, 0.065);
+  --border-subtle: rgba(148, 163, 184, 0.12);
+  --border-hover: rgba(147, 197, 253, 0.26);
+  --border-active: rgba(96, 165, 250, 0.46);
+
+  --accent-cyan: #60a5fa;
+  --accent-indigo: #2563eb;
+  --accent-violet: #8b5cf6;
+  --accent-ice: #c7d2fe;
+  --gradient-brand: linear-gradient(135deg, #eaf3ff 0%, #60a5fa 46%, #1d4ed8 100%);
+  --gradient-panel: linear-gradient(145deg, rgba(9, 18, 38, 0.94) 0%, rgba(8, 28, 62, 0.78) 56%, rgba(20, 41, 88, 0.62) 100%);
+  --edge-glow: 0 0 0 1px rgba(96, 165, 250, 0.1), 0 18px 58px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --blue-aura: 0 0 28px rgba(37, 99, 235, 0.22), 0 0 70px rgba(96, 165, 250, 0.1);
+
+  --profit: #34d399;
+  --profit-dim: rgba(52, 211, 153, 0.1);
+  --loss: #fb7185;
+  --loss-dim: rgba(251, 113, 133, 0.1);
+  --neutral: #60a5fa;
+  --neutral-dim: rgba(96, 165, 250, 0.1);
+  --warning: #fbbf24;
+  --warning-dim: rgba(251, 191, 36, 0.12);
+
+  --text-primary: #f8fbff;
+  --text-secondary: #a8b4c8;
+  --text-muted: #5f6f88;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+  --transition-slow: border-color 0.22s ease, background-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+html,
+body,
+#root {
+  background: var(--bg-deep) !important;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+#root::before {
+  background:
+    radial-gradient(ellipse 760px 520px at 18% 10%, rgba(37, 99, 235, 0.14) 0%, transparent 62%),
+    radial-gradient(ellipse 620px 480px at 82% 22%, rgba(96, 165, 250, 0.09) 0%, transparent 66%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.32), rgba(3, 6, 13, 0.96)) !important;
+  background-size: auto !important;
+}
+
+::selection {
+  background: rgba(96, 165, 250, 0.32);
+  color: var(--text-primary);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-sans);
+}
+
+button.primary,
+.primary,
+.portfolio-top-action-btn.primary,
+.portfolio-empty-btn.primary,
+.lp-btn-primary,
+.lp-nav-btn-primary {
+  background: var(--gradient-brand) !important;
+  border-color: rgba(147, 197, 253, 0.62) !important;
+  color: #020617 !important;
+  font-weight: 800;
+}
+
+button:not(.lp-faq-question):active,
+.data-panel-link:active,
+.summary-cta:active,
+.portfolio-empty-btn:active,
+.portfolio-top-action-btn:active,
+.ipo-card-cta:active,
+.screener-action-btn:active {
+  transform: translateY(1px);
+}
+
+input,
+select,
+textarea,
+.auth-input,
+.ipo-search-input,
+.screener-search-input,
+.cmdk-input {
+  background: rgba(2, 6, 23, 0.72) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-primary) !important;
+  border-radius: 8px !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.auth-input:focus,
+.ipo-search-input:focus,
+.screener-search-input:focus {
+  border-color: var(--border-active) !important;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.12) !important;
+}
+
+.text-gradient,
+.text-gradient-animated,
+.auth-logo,
+.chat-rail-title {
+  background: none !important;
+  -webkit-background-clip: initial !important;
+  -webkit-text-fill-color: currentColor !important;
+  color: var(--text-primary) !important;
+}
+
+.glass,
+.glass-interactive,
+.data-panel,
+.summary-card,
+.stat-tile,
+.movers-col,
+.news-card,
+.earnings-list,
+.earnings-row,
+.index-ticker-card,
+.suggestion-card,
+.auth-card,
+.onboarding-card,
+.cmdk-panel,
+.prov-card,
+.gov-panel,
+.gov-flag-row,
+.cim-modal,
+.ar-modal,
+.ar-data-panel,
+.ar-rail-block,
+.ipo-card,
+.ipo-section,
+.ipo-detail-hero,
+.ipo-detail-block,
+.ipo-lifecycle-panel,
+.ipo-return-card,
+.ipo-risk-cat-card,
+.ipo-risk-item,
+.ipo-promoter-card,
+.ipo-management-card,
+.ipo-issue-summary-item,
+.ipo-util-item,
+.ipo-val-summary-card,
+.ipo-kpi-card,
+.screener-head-card,
+.screener-section,
+.screener-table-card,
+.screener-quick-card,
+.screener-metric-card,
+.screener-fact,
+.screener-ratio-group,
+.screener-health-pill,
+.coming-soon {
+  background: var(--gradient-panel) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--edge-glow) !important;
+}
+
+.glass-interactive:hover,
+.data-panel:hover,
+.summary-card:hover,
+.stat-tile:hover,
+.news-card:hover,
+.earnings-row:hover,
+.index-ticker-card:hover,
+.suggestion-card:hover,
+.ipo-card:hover,
+.screener-quick-card:hover,
+.screener-action-btn:hover,
+.portfolio-top-action-btn:hover,
+.cmdk-item-active {
+  border-color: var(--border-hover) !important;
+  background: linear-gradient(145deg, rgba(12, 24, 52, 0.96), rgba(9, 30, 68, 0.82)) !important;
+  box-shadow: var(--edge-glow), 0 0 0 1px rgba(96, 165, 250, 0.08) !important;
+}
+
+.app-container,
+.workbench {
+  background:
+    radial-gradient(ellipse 660px 360px at 16% 2%, rgba(96, 165, 250, 0.09), transparent 66%),
+    #03060d !important;
+  background-size: auto !important;
+}
+
+.mobile-topbar,
+.workspace-tabs-wrap {
+  background: rgba(3, 6, 13, 0.88) !important;
+  border-color: var(--border-subtle) !important;
+  backdrop-filter: blur(16px);
+}
+
+.workbench-data {
+  padding: 22px 28px 64px !important;
+  background: rgba(3, 6, 13, 0.22) !important;
+  border-right-color: var(--border-subtle) !important;
+}
+
+.workbench-chat,
+.sidebar-container aside {
+  background: linear-gradient(180deg, rgba(8, 16, 32, 0.96), rgba(3, 6, 13, 0.98)) !important;
+  border-color: var(--border-subtle) !important;
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.03) !important;
+}
+
+.feature-tabs-list,
+.market-tabs,
+.analytics-tabs-row,
+.screener-tabbar,
+.ipo-filter-tabs,
+.ipo-tab-nav,
+.auth-tabs {
+  border-radius: 12px !important;
+  border: 1px solid var(--border-subtle) !important;
+  background: rgba(2, 6, 23, 0.68) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.feature-tab,
+.market-tab,
+.analytics-tabs-row button,
+.screener-tabbar button,
+.ipo-filter-tab,
+.ipo-tab-btn,
+.auth-tab {
+  border-radius: 8px !important;
+  color: var(--text-secondary) !important;
+}
+
+.feature-tab:hover,
+.market-tab:hover,
+.analytics-tabs-row button:hover,
+.screener-tabbar button:hover,
+.ipo-filter-tab:hover,
+.ipo-tab-btn:hover,
+.auth-tab:hover {
+  color: var(--text-primary) !important;
+  background: rgba(96, 165, 250, 0.07) !important;
+}
+
+.feature-tab.active,
+.market-tab[data-active='true'],
+.analytics-tabs-row button.active,
+.screener-tabbar button.active,
+.ipo-filter-tab.active,
+.ipo-tab-btn.active,
+.auth-tab-active {
+  color: var(--text-primary) !important;
+}
+
+.feature-tab-indicator {
+  border-radius: 8px !important;
+  border: 1px solid rgba(96, 165, 250, 0.28) !important;
+  border-left: 3px solid var(--accent-cyan) !important;
+  background: rgba(96, 165, 250, 0.11) !important;
+  box-shadow: none !important;
+}
+
+.section-title,
+.data-panel-title,
+.summary-card-headline,
+.news-headline,
+.earnings-name,
+.portfolio-empty-title,
+.ipo-section-title,
+.ipo-detail-title,
+.screener-company-meta h2,
+.screener-section-head,
+.ar-title {
+  color: var(--text-primary) !important;
+  letter-spacing: 0 !important;
+}
+
+.section-sublabel,
+.stat-tile-label,
+.portfolio-top-label,
+.asset-history-stat-label,
+.explore-label,
+.news-card-meta,
+.news-source,
+.news-time,
+.ipo-section-subtitle,
+.ipo-card-meta,
+.ipo-stat-label,
+.screener-table-meta,
+.screener-section-note,
+.screener-quote-source,
+.cmdk-item-hint {
+  color: var(--text-muted) !important;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em !important;
+}
+
+.data-panel-link,
+.summary-cta,
+.mode-chip,
+.action-chip,
+.portfolio-empty-btn,
+.portfolio-top-action-btn,
+.ipo-refresh-btn,
+.ipo-card-cta,
+.ipo-link-button,
+.ipo-lifecycle-doc-link,
+.screener-action-btn,
+.screener-quick-btn,
+.cmdk-item,
+.ar-source-link,
+.prov-card-link {
+  border-color: var(--border-subtle) !important;
+  background: rgba(2, 6, 23, 0.52) !important;
+  color: var(--text-secondary) !important;
+}
+
+.data-panel-link:hover,
+.summary-cta:hover,
+.mode-chip:hover,
+.action-chip:hover,
+.portfolio-empty-btn:hover,
+.portfolio-top-action-btn:hover,
+.ipo-refresh-btn:hover,
+.ipo-card-cta:hover,
+.ipo-link-button:hover,
+.ipo-lifecycle-doc-link:hover,
+.screener-action-btn:hover,
+.screener-quick-btn:hover,
+.ar-source-link:hover,
+.prov-card-link:hover {
+  border-color: var(--border-hover) !important;
+  color: var(--text-primary) !important;
+  background: var(--bg-hover) !important;
+}
+
+.portfolio-top-hero {
+  background:
+    linear-gradient(90deg, rgba(96, 165, 250, 0.12), transparent 34%),
+    var(--gradient-panel) !important;
+  border-color: rgba(96, 165, 250, 0.28) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--edge-glow) !important;
+}
+
+.portfolio-top-value,
+.stat-tile-value,
+.index-ticker-value,
+.earnings-metric-val,
+.mover-price,
+.screener-head-price,
+.ipo-score-value,
+.ipo-stat-value,
+.ipo-composite-value,
+.ipo-return-value,
+.asset-history-stats strong {
+  font-family: var(--font-mono) !important;
+  color: var(--text-primary);
+  text-shadow: none !important;
+}
+
+.chat-rail-head,
+.chat-rail-dock,
+.chat-live-pipeline-panel,
+.cmdk-input-row,
+.cmdk-footer,
+.cim-head {
+  background: rgba(2, 6, 23, 0.74) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+.chat-rail-head [style*='border-radius: 50%'][style*='linear-gradient'],
+.chat-rail-greeting [style*='border-radius: 50%'][style*='linear-gradient'] {
+  background: var(--gradient-brand) !important;
+  color: #020617 !important;
+  box-shadow: none !important;
+}
+
+.chat-rail-title[style*='linear-gradient'] {
+  background: none !important;
+  color: var(--text-primary) !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+.chat-rail-title {
+  font-size: 16px !important;
+  font-weight: 800 !important;
+}
+
+.chat-rail-iconbtn {
+  background: rgba(2, 6, 23, 0.72) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--accent-cyan) !important;
+}
+
+.chat-rail-iconbtn:hover {
+  background: rgba(96, 165, 250, 0.11) !important;
+  border-color: var(--border-active) !important;
+}
+
+.chat-rail-iconbtn svg,
+.suggestion-card-icon svg,
+.mode-chip svg,
+.data-panel-title svg {
+  stroke: currentColor !important;
+}
+
+.suggestion-card {
+  min-height: 42px;
+  border-left: 3px solid rgba(96, 165, 250, 0.38) !important;
+}
+
+.suggestion-card-icon,
+.coming-soon-ring,
+.coming-soon-bullet-icon,
+.coming-soon-notify,
+.overview-inline-btn {
+  background: var(--neutral-dim) !important;
+  border-color: rgba(96, 165, 250, 0.28) !important;
+  color: var(--accent-cyan) !important;
+}
+
+.coming-soon-ring {
+  border-radius: 12px !important;
+}
+
+.chat-rail-footer,
+.beta-note,
+.portfolio-empty-copy,
+.summary-card-body,
+.news-time,
+.earnings-when,
+.earnings-period,
+.ipo-prose,
+.screener-longtext,
+.screener-empty-inline,
+.ar-dek,
+.ar-context {
+  color: var(--text-secondary) !important;
+}
+
+.cmdk-backdrop,
+.cim-backdrop,
+.ar-backdrop,
+.asset-history-backdrop,
+.portfolio-setup-modal-backdrop {
+  background: rgba(2, 6, 23, 0.76) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.cmdk-panel,
+.cim-modal,
+.ar-modal,
+.asset-history-modal,
+.portfolio-setup-modal-shell {
+  background: var(--gradient-panel) !important;
+  border-color: var(--border-active) !important;
+  border-radius: 12px !important;
+}
+
+.portfolio-table,
+.screener-table,
+.screener-mini-table,
+.ipo-fin-table {
+  border-color: var(--border-subtle) !important;
+}
+
+.portfolio-table th,
+.portfolio-table td,
+.screener-table th,
+.screener-table td,
+.screener-mini-table th,
+.screener-mini-table td,
+.ipo-fin-table th,
+.ipo-fin-table td {
+  border-color: var(--border-subtle) !important;
+}
+
+.portfolio-table th,
+.screener-table th,
+.screener-mini-table th,
+.ipo-fin-table th {
+  background: rgba(2, 6, 23, 0.86) !important;
+  color: var(--text-muted) !important;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+.news-sentiment,
+.news-ticker-pill,
+.portfolio-panel-meta span,
+.ipo-status-badge,
+.ipo-gmp-tag,
+.ipo-exchange-tag,
+.ipo-symbol-tag,
+.ipo-sme-tag,
+.ipo-flag,
+.ipo-chip,
+.screener-score-pill,
+.screener-freshness-badge,
+.screener-sentiment,
+.rt-sources,
+.cim-cite-ratio,
+.prov-cite {
+  border-radius: 8px !important;
+  font-family: var(--font-mono);
+}
+
+.news-sentiment,
+.news-ticker-pill,
+.portfolio-panel-meta span,
+.ipo-symbol-tag,
+.screener-score-pill,
+.rt-sources,
+.cim-cite-ratio,
+.prov-cite {
+  background: var(--neutral-dim) !important;
+  border-color: rgba(96, 165, 250, 0.22) !important;
+  color: var(--accent-cyan) !important;
+}
+
+.beta-pill,
+.mode-chip-beta,
+.feature-tab-soon,
+.badge-info,
+.badge-premium,
+.ipo-flag.amber,
+.ipo-flag-block.amber,
+.ipo-severity.medium,
+.screener-freshness-badge.stale,
+.screener-sentiment.neutral {
+  background: var(--warning-dim) !important;
+  border-color: rgba(251, 191, 36, 0.3) !important;
+  color: #fde68a !important;
+}
+
+.badge-success,
+.text-up,
+.ipo-gmp-tag.positive,
+.ipo-severity.low,
+.screener-head-change.up,
+.screener-sentiment.positive,
+.earnings-impact-pill.positive,
+.overview-watchlist-badge.up,
+.overview-watchlist-change.up,
+.portfolio-top-change.up {
+  color: var(--profit) !important;
+}
+
+.badge-danger,
+.text-down,
+.ipo-gmp-tag.negative,
+.ipo-severity.high,
+.screener-head-change.down,
+.screener-sentiment.negative,
+.earnings-impact-pill.negative,
+.overview-watchlist-badge.down,
+.overview-watchlist-change.down,
+.portfolio-top-change.down {
+  color: var(--loss) !important;
+}
+
+.auth-container,
+.onboarding-screen {
+  background:
+    radial-gradient(ellipse 760px 520px at 18% 10%, rgba(37, 99, 235, 0.14), transparent 62%),
+    #03060d !important;
+  background-size: auto !important;
+}
+
+.auth-container::before {
+  display: none !important;
+}
+
+.auth-card::after {
+  background: linear-gradient(90deg, transparent, var(--accent-cyan), var(--accent-indigo), transparent) !important;
+}
+
+.google-auth-visible,
+.auth-btn-social {
+  background: rgba(2, 6, 23, 0.64) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-primary) !important;
+  border-radius: 8px !important;
+}
+
+.overview-signal-empty,
+.portfolio-empty-state,
+.screener-empty-state,
+.screener-empty-inline,
+.ipo-empty,
+.asset-history-state {
+  background: rgba(2, 6, 23, 0.52) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-secondary) !important;
+  border-radius: 12px !important;
+}
+
+.discover-carousel-shell,
+.discover-carousel-body {
+  overflow: hidden;
+}
+
+.ipo-hero,
+.ipo-detail-hero,
+.ar-hero {
+  border-color: var(--border-subtle) !important;
+}
+
+.ipo-score-track,
+.ipo-risk-cat-bar-wrap,
+.ipo-util-bar-wrap,
+.ipo-promises-progress-wrap,
+.ipo-sub-bar-wrap {
+  background: rgba(148, 163, 184, 0.1) !important;
+}
+
+.ipo-score-fill,
+.ipo-risk-cat-bar-fill,
+.ipo-util-bar-fill,
+.ipo-promises-progress-fill,
+.ipo-sub-bar-fill,
+.progress-bar-pulse {
+  background: var(--gradient-brand) !important;
+}
+
+.screener-sparkline path {
+  stroke: var(--accent-cyan) !important;
+}
+
+.screener-search-dropdown {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border-hover) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--edge-glow) !important;
+}
+
+.screener-search-option:hover {
+  background: var(--bg-hover) !important;
+}
+
+.ar-progress {
+  background: var(--gradient-brand) !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.18) !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(96, 165, 250, 0.34) !important;
+}
+
+@media (max-width: 1024px) {
+  .workbench-data {
+    padding: 16px 16px 72px !important;
+  }
+
+  .workbench-chat {
+    border-radius: 12px 12px 0 0 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

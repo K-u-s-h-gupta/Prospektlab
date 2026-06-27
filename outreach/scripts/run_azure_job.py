@@ -70,6 +70,17 @@ def _truthy(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _live_send_enabled() -> bool:
+    wants_send = _truthy(os.getenv("OUTREACH_SEND", "false"))
+    has_live_ack = _truthy(os.getenv("OUTREACH_ENABLE_LIVE_SEND", "false"))
+    if wants_send and not has_live_ack:
+        print(
+            "OUTREACH_SEND is true but OUTREACH_ENABLE_LIVE_SEND is not true; "
+            "running in dry-run mode."
+        )
+    return wants_send and has_live_ack
+
+
 def _required(name: str) -> str:
     value = os.getenv(name, "").strip()
     if not value:
@@ -156,7 +167,7 @@ def main() -> int:
         "--campaign-name",
         os.getenv("OUTREACH_CAMPAIGN_NAME", "IndiaFinanceOutreach").strip(),
         "--max-send",
-        os.getenv("OUTREACH_MAX_SEND", "300").strip(),
+        os.getenv("OUTREACH_MAX_SEND", "25").strip(),
         "--delay-seconds",
         os.getenv("OUTREACH_DELAY_SECONDS", "8").strip(),
         "--min-email-confidence",
@@ -174,7 +185,7 @@ def main() -> int:
         command.append("--allow-shared-inboxes")
     if _truthy(os.getenv("OUTREACH_SKIP_MX_VERIFY")):
         command.append("--skip-mx-verify")
-    if _truthy(os.getenv("OUTREACH_SEND", "true")):
+    if _live_send_enabled():
         command.append("--send")
 
     print("Azure outreach runner starting with config:", config_path)

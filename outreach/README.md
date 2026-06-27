@@ -66,3 +66,5 @@ Only send after the branded domain is verified and every lead has real personali
 ```
 
 Start with 25-50/day, then ramp only if bounces, complaints, and replies stay healthy. For 10k recipients, request an ACS Email quota increase after the custom domain is verified and the pilot metrics are clean.
+
+Azure scheduled jobs have an extra live-send interlock: `OUTREACH_SEND=true` is ignored unless `OUTREACH_ENABLE_LIVE_SEND=true` is also set. Keep `OUTREACH_MAX_SEND` low when re-enabling.
