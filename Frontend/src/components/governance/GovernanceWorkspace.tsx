@@ -2,19 +2,15 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ShieldCheck,
   ShieldAlert,
-  ChevronLeft,
   AlertTriangle,
-  Info,
   RefreshCw,
   Search,
-  Building2,
 } from 'lucide-react';
 import {
   getGovernanceLeaderboard,
-  getCompanyGovernance,
   GovernanceRiskRow,
-  GovernanceResult,
 } from '../../api/client';
+import GovernanceScorecard from './GovernanceScorecard';
 import './governance.css';
 
 type Band = 'LOW' | 'MODERATE' | 'ELEVATED' | 'HIGH';
@@ -61,157 +57,6 @@ const ScoreBar: React.FC<{ value: number; band: Band }> = ({ value, band }) => {
 const displayName = (row: GovernanceRiskRow) =>
   (row.company_name || row.cin || '').replace(/\s+LIMITED\.?$/i, ' Ltd');
 
-// ── Company scorecard ─────────────────────────────────────────────────────────
-
-const Scorecard: React.FC<{ cin: string; fallbackName?: string; onBack: () => void }> = ({
-  cin,
-  fallbackName,
-  onBack,
-}) => {
-  const [data, setData] = useState<GovernanceResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setError(null);
-    getCompanyGovernance(cin)
-      .then((d) => alive && setData(d))
-      .catch((e) => alive && setError(e?.message || 'Failed to load governance detail'))
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
-    };
-  }, [cin]);
-
-  const igs = data?.igs || null;
-  const insufficient = !!igs?.insufficient_data;
-  const band = (igs?.band || data?.band || null) as Band | null;
-  const composite = igs?.composite_score ?? data?.score ?? null;
-
-  const subscores = useMemo(() => {
-    const s = data?.subscores || {};
-    return Object.entries(s)
-      .filter(([, v]) => typeof v === 'number')
-      .sort((a, b) => (b[1] as number) - (a[1] as number));
-  }, [data]);
-
-  return (
-    <div className="gov-scorecard">
-      <button className="gov-back" onClick={onBack}>
-        <ChevronLeft size={16} /> Back to radar
-      </button>
-
-      <div className="gov-card-head">
-        <div className="gov-card-title">
-          <Building2 size={18} />
-          <div>
-            <div className="gov-co-name">{data?.cin ? fallbackName || cin : fallbackName || cin}</div>
-            <div className="gov-co-cin">{cin}</div>
-          </div>
-        </div>
-        <BandChip band={band} />
-      </div>
-
-      {loading && <div className="gov-empty">Loading governance profile…</div>}
-      {error && (
-        <div className="gov-notice gov-notice-warn">
-          <AlertTriangle size={15} /> {error}
-        </div>
-      )}
-
-      {!loading && !error && data && (
-        <>
-          {insufficient && (
-            <div className="gov-notice">
-              <Info size={15} />
-              <span>
-                <strong>Not rated by the model</strong> — insufficient governance data (no pledge, board, or
-                enforcement history). Showing rules-based signals only.
-              </span>
-            </div>
-          )}
-
-          <div className="gov-metric-row">
-            <div className="gov-metric">
-              <span className="gov-metric-label">Composite risk</span>
-              <span className="gov-metric-value">{composite != null ? composite.toFixed(0) : '—'}<small>/100</small></span>
-            </div>
-            <div className="gov-metric">
-              <span className="gov-metric-label">Rules score</span>
-              <span className="gov-metric-value">{data.score != null ? data.score.toFixed(0) : '—'}</span>
-            </div>
-            <div className="gov-metric">
-              <span className="gov-metric-label">Model risk</span>
-              <span className="gov-metric-value">
-                {igs?.model_risk != null ? igs.model_risk.toFixed(0) : insufficient ? 'N/R' : '—'}
-              </span>
-            </div>
-            <div className="gov-metric">
-              <span className="gov-metric-label">Failure prob.</span>
-              <span className="gov-metric-value">
-                {igs?.model_probability != null ? `${(igs.model_probability * 100).toFixed(1)}%` : '—'}
-              </span>
-            </div>
-          </div>
-
-          {subscores.length > 0 && (
-            <div className="gov-section">
-              <div className="gov-section-title">Risk dimensions</div>
-              {subscores.map(([key, val]) => {
-                const v = val as number;
-                const b: Band = v >= 75 ? 'HIGH' : v >= 50 ? 'ELEVATED' : v >= 25 ? 'MODERATE' : 'LOW';
-                return (
-                  <div key={key} className="gov-dim-row">
-                    <span className="gov-dim-label">{key.replace(/_/g, ' ')}</span>
-                    <ScoreBar value={v} band={b} />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {data.flags && data.flags.length > 0 && (
-            <div className="gov-section">
-              <div className="gov-section-title">Flagged signals — citation-backed</div>
-              {data.flags.slice(0, 12).map((f, i) => (
-                <div key={i} className="gov-flag">
-                  <span
-                    className="gov-flag-sev"
-                    style={{
-                      color: f.severity === 'high' ? '#F87171' : f.severity === 'watch' ? '#FBBF24' : '#94A3B8',
-                    }}
-                  >
-                    ●
-                  </span>
-                  <div className="gov-flag-body">
-                    <div className="gov-flag-detail">{f.detail}</div>
-                    {f.evidence && Object.keys(f.evidence).length > 0 && (
-                      <div className="gov-flag-evidence">
-                        {Object.entries(f.evidence)
-                          .slice(0, 4)
-                          .map(([k, v]) => `${k}: ${String(v)}`)
-                          .join('  ·  ')}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="gov-foot">
-            {igs?.model_version ? `Model ${igs.model_version}` : 'Rules engine'}
-            {igs?.as_of_date ? ` · as of ${igs.as_of_date}` : ''}
-            {data.computed_at ? ` · computed ${new Date(data.computed_at).toLocaleDateString('en-IN')}` : ''}
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
-
 // ── Workspace (leaderboard) ───────────────────────────────────────────────────
 
 const GovernanceWorkspace: React.FC = () => {
@@ -252,7 +97,7 @@ const GovernanceWorkspace: React.FC = () => {
   }, [rows, query]);
 
   if (selected) {
-    return <Scorecard cin={selected.cin} fallbackName={selected.name} onBack={() => setSelected(null)} />;
+    return <GovernanceScorecard cin={selected.cin} fallbackName={selected.name} onBack={() => setSelected(null)} />;
   }
 
   return (

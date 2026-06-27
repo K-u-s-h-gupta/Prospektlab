@@ -4501,8 +4501,12 @@ async def get_metrics_snapshot(current_user: dict = Depends(get_current_user)):
 
 
 @app.get("/company/{cin}/governance")
-async def get_company_governance(cin: str, current_user: dict | None = Depends(get_current_user_optional)):
-    """Forensic Governance Score for a single company by CIN. Public (no auth)."""
+async def get_company_governance(cin: str, detail: bool = False, current_user: dict | None = Depends(get_current_user_optional)):
+    """Forensic Governance Score for a single company by CIN. Public (no auth).
+
+    Pass ?detail=true to include raw signals (pledge history, enforcement actions,
+    auditor history, board stats) for charting and deep-dive display.
+    """
     from finagent.ikg.governance_score import (
         GovernanceLookupError,
         get_governance_scorer,
@@ -4515,8 +4519,14 @@ async def get_company_governance(cin: str, current_user: dict | None = Depends(g
     # only carries the IGS scored table (e.g. Supabase), this returns None — we then
     # serve the IGS score row instead of 404ing.
     result = None
+    signals = None
     try:
-        result = await asyncio.to_thread(get_governance_scorer().score_company, cin)
+        scorer = get_governance_scorer()
+        if detail:
+            signals = await asyncio.to_thread(scorer._fetch_signals, cin)
+            result = await asyncio.to_thread(scorer.score_company, cin)
+        else:
+            result = await asyncio.to_thread(scorer.score_company, cin)
     except GovernanceLookupError as exc:
         logger.warning("Rules governance lookup failed for %s: %s", cin, exc)
     except Exception as exc:  # missing raw tables on the serving DB, etc.
@@ -4560,6 +4570,25 @@ async def get_company_governance(cin: str, current_user: dict | None = Depends(g
             "insufficient_data": igs.get("model_risk") is None,
             "flags": igs.get("flags"),
         }
+
+    # Include raw signals for detail view (charts, explanations)
+    if detail and signals:
+        # Sanitize datetime objects for JSON serialization
+        pledge_history = []
+        for q in (signals.get("pledge_quarters") or []):
+            pledge_history.append({
+                "quarter": q.get("quarter"),
+                "pledge_pct": q.get("total_pledge_pct"),
+                "promoter_holding_pct": q.get("total_promoter_holding_pct"),
+                "as_on_date": str(q.get("as_on_date")) if q.get("as_on_date") else None,
+            })
+        out["signals"] = {
+            "pledge_history": pledge_history,
+            "enforcement_actions": signals.get("enforcement") or [],
+            "auditors": signals.get("auditors") or [],
+            "board": signals.get("board") or {},
+        }
+
     return out
 
 

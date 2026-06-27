@@ -971,6 +971,34 @@ export interface GovernanceIgs {
   flags?: Array<{ code: string; severity: string; detail: string }>;
 }
 
+export interface GovernancePledgeHistory {
+  quarter: string | null;
+  pledge_pct: number | null;
+  promoter_holding_pct: number | null;
+  as_on_date: string | null;
+}
+
+export interface GovernanceEnforcementAction {
+  violation_type: string | null;
+  penalty_amount_inr: number | null;
+  order_date: string | null;
+  status: string | null;
+  pdf_url: string | null;
+}
+
+export interface GovernanceAuditor {
+  auditor_name: string | null;
+  fiscal_year: string | null;
+  source_url: string | null;
+}
+
+export interface GovernanceSignals {
+  pledge_history: GovernancePledgeHistory[];
+  enforcement_actions: GovernanceEnforcementAction[];
+  auditors: GovernanceAuditor[];
+  board: { recent_cessations: number; total: number };
+}
+
 export interface GovernanceResult {
   cin: string;
   score: number;
@@ -980,6 +1008,7 @@ export interface GovernanceResult {
   coverage: Record<string, boolean>;
   computed_at: string;
   igs?: GovernanceIgs | null;
+  signals?: GovernanceSignals | null;
 }
 
 export interface GovernanceRiskRow {
@@ -1034,8 +1063,9 @@ export async function getPortfolioGovernance(): Promise<PortfolioGovernance> {
   return res.json();
 }
 
-export async function getCompanyGovernance(cin: string): Promise<GovernanceResult> {
-  const res = await fetchApi(apiUrl(`/company/${encodeURIComponent(cin)}/governance`), {
+export async function getCompanyGovernance(cin: string, detail: boolean = false): Promise<GovernanceResult> {
+  const q = detail ? '?detail=true' : '';
+  const res = await fetchApi(apiUrl(`/company/${encodeURIComponent(cin)}/governance${q}`), {
     credentials: 'include',
   });
   if (!res.ok) {
