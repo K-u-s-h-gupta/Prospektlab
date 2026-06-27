@@ -3600,7 +3600,7 @@ async def ipo_analysis(
     current_user: dict | None = Depends(get_current_user_optional),
 ):
     service = get_ipo_service()
-    payload = await service.get_analysis(slug)
+    payload = await service.get_analysis(slug, auto_analyze=False)
     if not payload:
         raise HTTPException(status_code=404, detail=f"IPO not found: {slug}")
     return payload
@@ -7446,6 +7446,7 @@ async def stream_session(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
 
 
 
