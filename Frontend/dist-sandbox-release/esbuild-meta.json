@@ -30910,17 +30910,17 @@
       "format": "esm"
     },
     "src/telemetry.ts": {
-      "bytes": 14505,
+      "bytes": 16868,
       "imports": [],
       "format": "esm"
     },
     "src/utils/textSanitizer.ts": {
-      "bytes": 1829,
+      "bytes": 1877,
       "imports": [],
       "format": "esm"
     },
     "src/api/client.ts": {
-      "bytes": 68351,
+      "bytes": 86484,
       "imports": [
         {
           "path": "src/telemetry.ts",
@@ -30966,11 +30966,6 @@
       ],
       "format": "esm"
     },
-    "src/utils/browserStorage.ts": {
-      "bytes": 909,
-      "imports": [],
-      "format": "esm"
-    },
     "src/pages/LandingPage.tsx": {
       "bytes": 69366,
       "imports": [
@@ -31000,11 +30995,6 @@
           "original": "../context/AuthContext"
         },
         {
-          "path": "src/utils/browserStorage.ts",
-          "kind": "import-statement",
-          "original": "../utils/browserStorage"
-        },
-        {
           "path": "node_modules/react/jsx-runtime.js",
           "kind": "import-statement",
           "original": "react/jsx-runtime"
@@ -31012,8 +31002,18 @@
       ],
       "format": "esm"
     },
+    "src/constants/beta.ts": {
+      "bytes": 389,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/utils/browserStorage.ts": {
+      "bytes": 909,
+      "imports": [],
+      "format": "esm"
+    },
     "src/pages/GatewayPage.tsx": {
-      "bytes": 10210,
+      "bytes": 10592,
       "imports": [
         {
           "path": "node_modules/react/index.js",
@@ -31039,6 +31039,11 @@
           "path": "src/telemetry.ts",
           "kind": "import-statement",
           "original": "../telemetry"
+        },
+        {
+          "path": "src/constants/beta.ts",
+          "kind": "import-statement",
+          "original": "../constants/beta"
         },
         {
           "path": "src/utils/browserStorage.ts",
@@ -31059,7 +31064,7 @@
       "format": "esm"
     },
     "src/pages/ManualEntry.tsx": {
-      "bytes": 15309,
+      "bytes": 16046,
       "imports": [
         {
           "path": "node_modules/react/index.js",
@@ -31095,6 +31100,11 @@
           "path": "src/context/AuthContext.tsx",
           "kind": "import-statement",
           "original": "../context/AuthContext"
+        },
+        {
+          "path": "src/constants/beta.ts",
+          "kind": "import-statement",
+          "original": "../constants/beta"
         },
         {
           "path": "node_modules/react/jsx-runtime.js",
@@ -31105,7 +31115,7 @@
       "format": "esm"
     },
     "src/pages/UploadPage.tsx": {
-      "bytes": 26263,
+      "bytes": 26651,
       "imports": [
         {
           "path": "node_modules/react/index.js",
@@ -31143,6 +31153,11 @@
           "original": "../context/AuthContext"
         },
         {
+          "path": "src/constants/beta.ts",
+          "kind": "import-statement",
+          "original": "../constants/beta"
+        },
+        {
           "path": "node_modules/react/jsx-runtime.js",
           "kind": "import-statement",
           "original": "react/jsx-runtime"
@@ -31151,7 +31166,7 @@
       "format": "esm"
     },
     "src/pages/WatchlistStep.tsx": {
-      "bytes": 11358,
+      "bytes": 11985,
       "imports": [
         {
           "path": "node_modules/react/index.js",
@@ -31189,71 +31204,9 @@
           "original": "../context/AuthContext"
         },
         {
-          "path": "node_modules/react/jsx-runtime.js",
+          "path": "src/constants/beta.ts",
           "kind": "import-statement",
-          "original": "react/jsx-runtime"
-        }
-      ],
-      "format": "esm"
-    },
-    "src/utils/runtimeConfig.ts": {
-      "bytes": 3810,
-      "imports": [],
-      "format": "esm"
-    },
-    "src/hooks/useMarketFeed.ts": {
-      "bytes": 16725,
-      "imports": [
-        {
-          "path": "node_modules/react/index.js",
-          "kind": "import-statement",
-          "original": "react"
-        },
-        {
-          "path": "src/api/client.ts",
-          "kind": "import-statement",
-          "original": "../api/client"
-        },
-        {
-          "path": "src/utils/runtimeConfig.ts",
-          "kind": "import-statement",
-          "original": "../utils/runtimeConfig"
-        }
-      ],
-      "format": "esm"
-    },
-    "src/components/layout/Sidebar.tsx": {
-      "bytes": 20197,
-      "imports": [
-        {
-          "path": "node_modules/react/index.js",
-          "kind": "import-statement",
-          "original": "react"
-        },
-        {
-          "path": "node_modules/react-router-dom/dist/index.js",
-          "kind": "import-statement",
-          "original": "react-router-dom"
-        },
-        {
-          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
-          "kind": "import-statement",
-          "original": "lucide-react"
-        },
-        {
-          "path": "src/components/layout/Logo.tsx",
-          "kind": "import-statement",
-          "original": "./Logo"
-        },
-        {
-          "path": "src/context/AuthContext.tsx",
-          "kind": "import-statement",
-          "original": "../../context/AuthContext"
-        },
-        {
-          "path": "src/utils/browserStorage.ts",
-          "kind": "import-statement",
-          "original": "../../utils/browserStorage"
+          "original": "../constants/beta"
         },
         {
           "path": "node_modules/react/jsx-runtime.js",
@@ -31264,7 +31217,7 @@
       "format": "esm"
     },
     "src/components/layout/AppShell.tsx": {
-      "bytes": 2956,
+      "bytes": 1566,
       "imports": [
         {
           "path": "react",
@@ -31272,19 +31225,14 @@
           "external": true
         },
         {
-          "path": "src/components/layout/Sidebar.tsx",
-          "kind": "import-statement",
-          "original": "./Sidebar"
-        },
-        {
           "path": "src/components/layout/Logo.tsx",
           "kind": "import-statement",
           "original": "./Logo"
         },
         {
-          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "path": "src/constants/beta.ts",
           "kind": "import-statement",
-          "original": "lucide-react"
+          "original": "../../constants/beta"
         },
         {
           "path": "node_modules/react/jsx-runtime.js",
@@ -31373,8 +31321,34 @@
       ],
       "format": "esm"
     },
+    "src/utils/runtimeConfig.ts": {
+      "bytes": 3810,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/hooks/useMarketFeed.ts": {
+      "bytes": 18175,
+      "imports": [
+        {
+          "path": "node_modules/react/index.js",
+          "kind": "import-statement",
+          "original": "react"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "import-statement",
+          "original": "../api/client"
+        },
+        {
+          "path": "src/utils/runtimeConfig.ts",
+          "kind": "import-statement",
+          "original": "../utils/runtimeConfig"
+        }
+      ],
+      "format": "esm"
+    },
     "src/utils/coverArt.ts": {
-      "bytes": 9343,
+      "bytes": 22144,
       "imports": [],
       "format": "esm"
     },
@@ -31435,11 +31409,11 @@
       "format": "esm"
     },
     "src/styles/screener.css": {
-      "bytes": 18152,
+      "bytes": 24999,
       "imports": []
     },
     "src/components/screener/ScreenerWorkspace.tsx": {
-      "bytes": 52364,
+      "bytes": 61739,
       "imports": [
         {
           "path": "node_modules/react/index.js",
@@ -31532,7 +31506,7 @@
       "format": "esm"
     },
     "src/components/charts/DonutChart.tsx": {
-      "bytes": 4357,
+      "bytes": 4509,
       "imports": [
         {
           "path": "react",
@@ -31563,7 +31537,7 @@
       "format": "esm"
     },
     "src/components/dashboard/Sparkline.tsx": {
-      "bytes": 2256,
+      "bytes": 2230,
       "imports": [
         {
           "path": "react",
@@ -31579,7 +31553,7 @@
       "format": "esm"
     },
     "src/components/dashboard/IndexTickerCard.tsx": {
-      "bytes": 3643,
+      "bytes": 4186,
       "imports": [
         {
           "path": "react",
@@ -31984,7 +31958,7 @@
       "format": "esm"
     },
     "src/components/layout/FeatureTabs.tsx": {
-      "bytes": 3094,
+      "bytes": 3126,
       "imports": [
         {
           "path": "node_modules/react/index.js",
@@ -32005,17 +31979,12 @@
       "format": "esm"
     },
     "src/pages/Dashboard.tsx": {
-      "bytes": 244446,
+      "bytes": 284586,
       "imports": [
         {
           "path": "node_modules/react/index.js",
           "kind": "import-statement",
           "original": "react"
-        },
-        {
-          "path": "src/hooks/useMarketFeed.ts",
-          "kind": "import-statement",
-          "original": "../hooks/useMarketFeed"
         },
         {
           "path": "node_modules/react-router-dom/dist/index.js",
@@ -32026,11 +31995,6 @@
           "path": "src/components/layout/AppShell.tsx",
           "kind": "import-statement",
           "original": "../components/layout/AppShell"
-        },
-        {
-          "path": "../components/dashboard/WatchlistCard",
-          "kind": "import-statement",
-          "external": true
         },
         {
           "path": "src/components/dashboard/PortfolioTable.tsx",
@@ -32123,9 +32087,9 @@
           "original": "../utils/coverArt"
         },
         {
-          "path": "src/utils/browserStorage.ts",
+          "path": "src/constants/beta.ts",
           "kind": "import-statement",
-          "original": "../utils/browserStorage"
+          "original": "../constants/beta"
         },
         {
           "path": "node_modules/react/jsx-runtime.js",
@@ -32135,8 +32099,8 @@
       ],
       "format": "esm"
     },
-    "src/components/common/ComingSoon.tsx": {
-      "bytes": 1276,
+    "src/components/earnings/SubsidiaryMatrix.tsx": {
+      "bytes": 5112,
       "imports": [
         {
           "path": "react",
@@ -32147,6 +32111,113 @@
           "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
           "kind": "import-statement",
           "original": "lucide-react"
+        },
+        {
+          "path": "../../api/client",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node_modules/react/jsx-runtime.js",
+          "kind": "import-statement",
+          "original": "react/jsx-runtime"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/components/earnings/FootnoteDiff.tsx": {
+      "bytes": 3780,
+      "imports": [
+        {
+          "path": "node_modules/react/index.js",
+          "kind": "import-statement",
+          "original": "react"
+        },
+        {
+          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "kind": "import-statement",
+          "original": "lucide-react"
+        },
+        {
+          "path": "../../api/client",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node_modules/react/jsx-runtime.js",
+          "kind": "import-statement",
+          "original": "react/jsx-runtime"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/components/earnings/EarningsResultDetail.tsx": {
+      "bytes": 25347,
+      "imports": [
+        {
+          "path": "node_modules/react/index.js",
+          "kind": "import-statement",
+          "original": "react"
+        },
+        {
+          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "kind": "import-statement",
+          "original": "lucide-react"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "import-statement",
+          "original": "../../api/client"
+        },
+        {
+          "path": "src/components/earnings/SubsidiaryMatrix.tsx",
+          "kind": "import-statement",
+          "original": "./SubsidiaryMatrix"
+        },
+        {
+          "path": "src/components/earnings/FootnoteDiff.tsx",
+          "kind": "import-statement",
+          "original": "./FootnoteDiff"
+        },
+        {
+          "path": "node_modules/react/jsx-runtime.js",
+          "kind": "import-statement",
+          "original": "react/jsx-runtime"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/components/earnings/earnings.css": {
+      "bytes": 38112,
+      "imports": []
+    },
+    "src/components/earnings/EarningsWorkspace.tsx": {
+      "bytes": 23368,
+      "imports": [
+        {
+          "path": "node_modules/react/index.js",
+          "kind": "import-statement",
+          "original": "react"
+        },
+        {
+          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "kind": "import-statement",
+          "original": "lucide-react"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "import-statement",
+          "original": "../../api/client"
+        },
+        {
+          "path": "src/components/earnings/EarningsResultDetail.tsx",
+          "kind": "import-statement",
+          "original": "./EarningsResultDetail"
+        },
+        {
+          "path": "src/components/earnings/earnings.css",
+          "kind": "import-statement",
+          "original": "./earnings.css"
         },
         {
           "path": "node_modules/react/jsx-runtime.js",
@@ -32157,22 +32228,17 @@
       "format": "esm"
     },
     "src/pages/DashboardEarningsPage.tsx": {
-      "bytes": 2801,
+      "bytes": 28668,
       "imports": [
         {
-          "path": "react",
+          "path": "node_modules/react/index.js",
           "kind": "import-statement",
-          "external": true
+          "original": "react"
         },
         {
           "path": "node_modules/react-router-dom/dist/index.js",
           "kind": "import-statement",
           "original": "react-router-dom"
-        },
-        {
-          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
-          "kind": "import-statement",
-          "original": "lucide-react"
         },
         {
           "path": "src/components/layout/AppShell.tsx",
@@ -32185,14 +32251,79 @@
           "original": "../components/layout/FeatureTabs"
         },
         {
-          "path": "src/components/common/ComingSoon.tsx",
+          "path": "src/components/earnings/EarningsWorkspace.tsx",
           "kind": "import-statement",
-          "original": "../components/common/ComingSoon"
+          "original": "../components/earnings/EarningsWorkspace"
+        },
+        {
+          "path": "src/components/chat/ChatInput.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/ChatInput"
+        },
+        {
+          "path": "src/components/chat/MessageBubble.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/MessageBubble"
+        },
+        {
+          "path": "src/components/chat/AgentThinking.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/AgentThinking"
+        },
+        {
+          "path": "src/components/chat/ExportPanel.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/ExportPanel"
         },
         {
           "path": "src/context/AuthContext.tsx",
           "kind": "import-statement",
           "original": "../context/AuthContext"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "import-statement",
+          "original": "../api/client"
+        },
+        {
+          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "kind": "import-statement",
+          "original": "lucide-react"
+        },
+        {
+          "path": "node_modules/react/jsx-runtime.js",
+          "kind": "import-statement",
+          "original": "react/jsx-runtime"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/components/governance/governance.css": {
+      "bytes": 8282,
+      "imports": []
+    },
+    "src/components/governance/GovernanceWorkspace.tsx": {
+      "bytes": 12537,
+      "imports": [
+        {
+          "path": "node_modules/react/index.js",
+          "kind": "import-statement",
+          "original": "react"
+        },
+        {
+          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "kind": "import-statement",
+          "original": "lucide-react"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "import-statement",
+          "original": "../../api/client"
+        },
+        {
+          "path": "src/components/governance/governance.css",
+          "kind": "import-statement",
+          "original": "./governance.css"
         },
         {
           "path": "node_modules/react/jsx-runtime.js",
@@ -32203,22 +32334,17 @@
       "format": "esm"
     },
     "src/pages/DashboardGovernancePage.tsx": {
-      "bytes": 2794,
+      "bytes": 23940,
       "imports": [
         {
-          "path": "react",
+          "path": "node_modules/react/index.js",
           "kind": "import-statement",
-          "external": true
+          "original": "react"
         },
         {
           "path": "node_modules/react-router-dom/dist/index.js",
           "kind": "import-statement",
           "original": "react-router-dom"
-        },
-        {
-          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
-          "kind": "import-statement",
-          "original": "lucide-react"
         },
         {
           "path": "src/components/layout/AppShell.tsx",
@@ -32231,14 +32357,182 @@
           "original": "../components/layout/FeatureTabs"
         },
         {
-          "path": "src/components/common/ComingSoon.tsx",
+          "path": "src/components/governance/GovernanceWorkspace.tsx",
           "kind": "import-statement",
-          "original": "../components/common/ComingSoon"
+          "original": "../components/governance/GovernanceWorkspace"
+        },
+        {
+          "path": "src/components/chat/ChatInput.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/ChatInput"
+        },
+        {
+          "path": "src/components/chat/MessageBubble.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/MessageBubble"
+        },
+        {
+          "path": "src/components/chat/AgentThinking.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/AgentThinking"
+        },
+        {
+          "path": "src/components/chat/ExportPanel.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/ExportPanel"
         },
         {
           "path": "src/context/AuthContext.tsx",
           "kind": "import-statement",
           "original": "../context/AuthContext"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "import-statement",
+          "original": "../api/client"
+        },
+        {
+          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "kind": "import-statement",
+          "original": "lucide-react"
+        },
+        {
+          "path": "node_modules/react/jsx-runtime.js",
+          "kind": "import-statement",
+          "original": "react/jsx-runtime"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/components/ipo/IpoCard.tsx": {
+      "bytes": 12809,
+      "imports": [
+        {
+          "path": "node_modules/react/index.js",
+          "kind": "import-statement",
+          "original": "react"
+        },
+        {
+          "path": "node_modules/react-router-dom/dist/index.js",
+          "kind": "import-statement",
+          "original": "react-router-dom"
+        },
+        {
+          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "kind": "import-statement",
+          "original": "lucide-react"
+        },
+        {
+          "path": "../../api/client",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node_modules/react/jsx-runtime.js",
+          "kind": "import-statement",
+          "original": "react/jsx-runtime"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/pages/IpoDashboard.tsx": {
+      "bytes": 12468,
+      "imports": [
+        {
+          "path": "node_modules/react/index.js",
+          "kind": "import-statement",
+          "original": "react"
+        },
+        {
+          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "kind": "import-statement",
+          "original": "lucide-react"
+        },
+        {
+          "path": "src/components/layout/AppShell.tsx",
+          "kind": "import-statement",
+          "original": "../components/layout/AppShell"
+        },
+        {
+          "path": "src/components/ipo/IpoCard.tsx",
+          "kind": "import-statement",
+          "original": "../components/ipo/IpoCard"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "import-statement",
+          "original": "../api/client"
+        },
+        {
+          "path": "node_modules/react/jsx-runtime.js",
+          "kind": "import-statement",
+          "original": "react/jsx-runtime"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/pages/DashboardIpoPage.tsx": {
+      "bytes": 25920,
+      "imports": [
+        {
+          "path": "node_modules/react/index.js",
+          "kind": "import-statement",
+          "original": "react"
+        },
+        {
+          "path": "node_modules/react-router-dom/dist/index.js",
+          "kind": "import-statement",
+          "original": "react-router-dom"
+        },
+        {
+          "path": "src/components/layout/AppShell.tsx",
+          "kind": "import-statement",
+          "original": "../components/layout/AppShell"
+        },
+        {
+          "path": "src/components/layout/FeatureTabs.tsx",
+          "kind": "import-statement",
+          "original": "../components/layout/FeatureTabs"
+        },
+        {
+          "path": "src/pages/IpoDashboard.tsx",
+          "kind": "import-statement",
+          "original": "./IpoDashboard"
+        },
+        {
+          "path": "src/components/chat/ChatInput.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/ChatInput"
+        },
+        {
+          "path": "src/components/chat/MessageBubble.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/MessageBubble"
+        },
+        {
+          "path": "src/components/chat/AgentThinking.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/AgentThinking"
+        },
+        {
+          "path": "src/components/chat/ExportPanel.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/ExportPanel"
+        },
+        {
+          "path": "src/context/AuthContext.tsx",
+          "kind": "import-statement",
+          "original": "../context/AuthContext"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "import-statement",
+          "original": "../api/client"
+        },
+        {
+          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "kind": "import-statement",
+          "original": "lucide-react"
         },
         {
           "path": "node_modules/react/jsx-runtime.js",
@@ -32327,7 +32621,7 @@
       "format": "esm"
     },
     "src/components/insights/ArticleReader.tsx": {
-      "bytes": 8167,
+      "bytes": 8373,
       "imports": [
         {
           "path": "node_modules/react/index.js",
@@ -32357,7 +32651,7 @@
       "imports": []
     },
     "src/pages/InsightsStudio.tsx": {
-      "bytes": 58442,
+      "bytes": 59717,
       "imports": [
         {
           "path": "node_modules/react/index.js",
@@ -32417,8 +32711,166 @@
       ],
       "format": "esm"
     },
+    "src/pages/IpoDetailPage.tsx": {
+      "bytes": 110779,
+      "imports": [
+        {
+          "path": "node_modules/react/index.js",
+          "kind": "import-statement",
+          "original": "react"
+        },
+        {
+          "path": "node_modules/react-router-dom/dist/index.js",
+          "kind": "import-statement",
+          "original": "react-router-dom"
+        },
+        {
+          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "kind": "import-statement",
+          "original": "lucide-react"
+        },
+        {
+          "path": "src/components/layout/AppShell.tsx",
+          "kind": "import-statement",
+          "original": "../components/layout/AppShell"
+        },
+        {
+          "path": "src/components/layout/FeatureTabs.tsx",
+          "kind": "import-statement",
+          "original": "../components/layout/FeatureTabs"
+        },
+        {
+          "path": "src/components/ipo/IpoCard.tsx",
+          "kind": "import-statement",
+          "original": "../components/ipo/IpoCard"
+        },
+        {
+          "path": "src/components/chat/ChatInput.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/ChatInput"
+        },
+        {
+          "path": "src/components/chat/MessageBubble.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/MessageBubble"
+        },
+        {
+          "path": "src/components/chat/AgentThinking.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/AgentThinking"
+        },
+        {
+          "path": "src/components/chat/ExportPanel.tsx",
+          "kind": "import-statement",
+          "original": "../components/chat/ExportPanel"
+        },
+        {
+          "path": "src/context/AuthContext.tsx",
+          "kind": "import-statement",
+          "original": "../context/AuthContext"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "import-statement",
+          "original": "../api/client"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "dynamic-import",
+          "original": "../api/client"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "dynamic-import",
+          "original": "../api/client"
+        },
+        {
+          "path": "node_modules/react/jsx-runtime.js",
+          "kind": "import-statement",
+          "original": "react/jsx-runtime"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/pages/IpoTrackingPage.tsx": {
+      "bytes": 8023,
+      "imports": [
+        {
+          "path": "node_modules/react/index.js",
+          "kind": "import-statement",
+          "original": "react"
+        },
+        {
+          "path": "node_modules/react-router-dom/dist/index.js",
+          "kind": "import-statement",
+          "original": "react-router-dom"
+        },
+        {
+          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "kind": "import-statement",
+          "original": "lucide-react"
+        },
+        {
+          "path": "src/components/layout/AppShell.tsx",
+          "kind": "import-statement",
+          "original": "../components/layout/AppShell"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "import-statement",
+          "original": "../api/client"
+        },
+        {
+          "path": "node_modules/react/jsx-runtime.js",
+          "kind": "import-statement",
+          "original": "react/jsx-runtime"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/pages/Login.tsx": {
+      "bytes": 30898,
+      "imports": [
+        {
+          "path": "node_modules/react/index.js",
+          "kind": "import-statement",
+          "original": "react"
+        },
+        {
+          "path": "node_modules/react-router-dom/dist/index.js",
+          "kind": "import-statement",
+          "original": "react-router-dom"
+        },
+        {
+          "path": "src/context/AuthContext.tsx",
+          "kind": "import-statement",
+          "original": "../context/AuthContext"
+        },
+        {
+          "path": "src/components/layout/Logo.tsx",
+          "kind": "import-statement",
+          "original": "../components/layout/Logo"
+        },
+        {
+          "path": "node_modules/lucide-react/dist/esm/lucide-react.js",
+          "kind": "import-statement",
+          "original": "lucide-react"
+        },
+        {
+          "path": "src/api/client.ts",
+          "kind": "import-statement",
+          "original": "../api/client"
+        },
+        {
+          "path": "node_modules/react/jsx-runtime.js",
+          "kind": "import-statement",
+          "original": "react/jsx-runtime"
+        }
+      ],
+      "format": "esm"
+    },
     "src/components/common/CommandPalette.tsx": {
-      "bytes": 5163,
+      "bytes": 5513,
       "imports": [
         {
           "path": "node_modules/react/index.js",
@@ -32444,7 +32896,7 @@
       "format": "esm"
     },
     "src/App.tsx": {
-      "bytes": 6292,
+      "bytes": 7992,
       "imports": [
         {
           "path": "node_modules/react/index.js",
@@ -32497,9 +32949,34 @@
           "original": "./pages/DashboardGovernancePage"
         },
         {
+          "path": "src/pages/DashboardIpoPage.tsx",
+          "kind": "import-statement",
+          "original": "./pages/DashboardIpoPage"
+        },
+        {
           "path": "src/pages/InsightsStudio.tsx",
           "kind": "import-statement",
           "original": "./pages/InsightsStudio"
+        },
+        {
+          "path": "src/pages/IpoDashboard.tsx",
+          "kind": "import-statement",
+          "original": "./pages/IpoDashboard"
+        },
+        {
+          "path": "src/pages/IpoDetailPage.tsx",
+          "kind": "import-statement",
+          "original": "./pages/IpoDetailPage"
+        },
+        {
+          "path": "src/pages/IpoTrackingPage.tsx",
+          "kind": "import-statement",
+          "original": "./pages/IpoTrackingPage"
+        },
+        {
+          "path": "src/pages/Login.tsx",
+          "kind": "import-statement",
+          "original": "./pages/Login"
         },
         {
           "path": "src/context/AuthContext.tsx",
@@ -32517,11 +32994,6 @@
           "original": "./components/common/CommandPalette"
         },
         {
-          "path": "<runtime>",
-          "kind": "import-statement",
-          "external": true
-        },
-        {
           "path": "node_modules/react/jsx-runtime.js",
           "kind": "import-statement",
           "original": "react/jsx-runtime"
@@ -32530,7 +33002,7 @@
       "format": "esm"
     },
     "src/index.css": {
-      "bytes": 97515,
+      "bytes": 188481,
       "imports": [
         {
           "path": "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap",
@@ -32544,7 +33016,7 @@
       "imports": []
     },
     "src/main.tsx": {
-      "bytes": 474,
+      "bytes": 944,
       "imports": [
         {
           "path": "node_modules/react/index.js",
@@ -32591,20 +33063,33 @@
     }
   },
   "outputs": {
-    "dist-sandbox-release/assets/main-4ETO667F.js.map": {
+    "dist-sandbox-release/assets/main-BYRQFAKU.js.map": {
       "imports": [],
       "exports": [],
       "inputs": {},
-      "bytes": 5320769
+      "bytes": 5794190
     },
-    "dist-sandbox-release/assets/main-4ETO667F.js": {
-      "imports": [],
+    "dist-sandbox-release/assets/main-BYRQFAKU.js": {
+      "imports": [
+        {
+          "path": "dist-sandbox-release/assets/chunk-chunk-IVLMB3FR.js",
+          "kind": "import-statement"
+        },
+        {
+          "path": "dist-sandbox-release/assets/chunk-client-W2BFPBH7.js",
+          "kind": "dynamic-import"
+        },
+        {
+          "path": "dist-sandbox-release/assets/chunk-client-W2BFPBH7.js",
+          "kind": "dynamic-import"
+        }
+      ],
       "exports": [],
       "entryPoint": "src/main.tsx",
-      "cssBundle": "dist-sandbox-release/assets/main-H5IIEWW5.css",
+      "cssBundle": "dist-sandbox-release/assets/main-3YDJL5AA.css",
       "inputs": {
         "node_modules/react/cjs/react.development.js": {
-          "bytesInOutput": 77143
+          "bytesInOutput": 77157
         },
         "node_modules/react/index.js": {
           "bytesInOutput": 227
@@ -32616,7 +33101,7 @@
           "bytesInOutput": 239
         },
         "node_modules/react-dom/cjs/react-dom.development.js": {
-          "bytesInOutput": 909578
+          "bytesInOutput": 909579
         },
         "node_modules/react-dom/index.js": {
           "bytesInOutput": 257
@@ -32625,16 +33110,16 @@
           "bytesInOutput": 778
         },
         "node_modules/react/cjs/react-jsx-runtime.development.js": {
-          "bytesInOutput": 36465
+          "bytesInOutput": 36475
         },
         "node_modules/react/jsx-runtime.js": {
           "bytesInOutput": 251
         },
         "src/main.tsx": {
-          "bytesInOutput": 515
+          "bytesInOutput": 740
         },
         "src/App.tsx": {
-          "bytesInOutput": 7822
+          "bytesInOutput": 9242
         },
         "node_modules/react-router-dom/dist/index.js": {
           "bytesInOutput": 25153
@@ -32646,7 +33131,7 @@
           "bytesInOutput": 21039
         },
         "src/pages/LandingPage.tsx": {
-          "bytesInOutput": 80125
+          "bytesInOutput": 80278
         },
         "node_modules/lucide-react/dist/esm/createLucideIcon.js": {
           "bytesInOutput": 423
@@ -32662,6 +33147,9 @@
         },
         "node_modules/lucide-react/dist/esm/icons/activity.js": {
           "bytesInOutput": 237
+        },
+        "node_modules/lucide-react/dist/esm/icons/arrow-down-right.js": {
+          "bytesInOutput": 157
         },
         "node_modules/lucide-react/dist/esm/icons/arrow-left.js": {
           "bytesInOutput": 149
@@ -32681,9 +33169,6 @@
         "node_modules/lucide-react/dist/esm/icons/bar-chart-3.js": {
           "bytesInOutput": 237
         },
-        "node_modules/lucide-react/dist/esm/icons/bell.js": {
-          "bytesInOutput": 188
-        },
         "node_modules/lucide-react/dist/esm/icons/brain.js": {
           "bytesInOutput": 834
         },
@@ -32695,6 +33180,9 @@
         },
         "node_modules/lucide-react/dist/esm/icons/calendar-clock.js": {
           "bytesInOutput": 411
+        },
+        "node_modules/lucide-react/dist/esm/icons/calendar-days.js": {
+          "bytesInOutput": 561
         },
         "node_modules/lucide-react/dist/esm/icons/candlestick-chart.js": {
           "bytesInOutput": 456
@@ -32711,6 +33199,9 @@
         "node_modules/lucide-react/dist/esm/icons/chevron-right.js": {
           "bytesInOutput": 108
         },
+        "node_modules/lucide-react/dist/esm/icons/chevron-up.js": {
+          "bytesInOutput": 99
+        },
         "node_modules/lucide-react/dist/esm/icons/circle-alert.js": {
           "bytesInOutput": 261
         },
@@ -32722,6 +33213,18 @@
         },
         "node_modules/lucide-react/dist/esm/icons/circle-dot.js": {
           "bytesInOutput": 174
+        },
+        "node_modules/lucide-react/dist/esm/icons/circle-minus.js": {
+          "bytesInOutput": 162
+        },
+        "node_modules/lucide-react/dist/esm/icons/circle.js": {
+          "bytesInOutput": 107
+        },
+        "node_modules/lucide-react/dist/esm/icons/clock-3.js": {
+          "bytesInOutput": 172
+        },
+        "node_modules/lucide-react/dist/esm/icons/clock.js": {
+          "bytesInOutput": 168
         },
         "node_modules/lucide-react/dist/esm/icons/cloud-upload.js": {
           "bytesInOutput": 247
@@ -32735,11 +33238,14 @@
         "node_modules/lucide-react/dist/esm/icons/database.js": {
           "bytesInOutput": 242
         },
-        "node_modules/lucide-react/dist/esm/icons/download.js": {
-          "bytesInOutput": 261
+        "node_modules/lucide-react/dist/esm/icons/dollar-sign.js": {
+          "bytesInOutput": 210
         },
         "node_modules/lucide-react/dist/esm/icons/external-link.js": {
           "bytesInOutput": 247
+        },
+        "node_modules/lucide-react/dist/esm/icons/eye-off.js": {
+          "bytesInOutput": 444
         },
         "node_modules/lucide-react/dist/esm/icons/eye.js": {
           "bytesInOutput": 182
@@ -32759,6 +33265,9 @@
         "node_modules/lucide-react/dist/esm/icons/file.js": {
           "bytesInOutput": 198
         },
+        "node_modules/lucide-react/dist/esm/icons/filter.js": {
+          "bytesInOutput": 134
+        },
         "node_modules/lucide-react/dist/esm/icons/gauge.js": {
           "bytesInOutput": 157
         },
@@ -32768,11 +33277,17 @@
         "node_modules/lucide-react/dist/esm/icons/grid-3x3.js": {
           "bytesInOutput": 312
         },
+        "node_modules/lucide-react/dist/esm/icons/history.js": {
+          "bytesInOutput": 229
+        },
         "node_modules/lucide-react/dist/esm/icons/info.js": {
           "bytesInOutput": 197
         },
         "node_modules/lucide-react/dist/esm/icons/keyboard.js": {
           "bytesInOutput": 508
+        },
+        "node_modules/lucide-react/dist/esm/icons/landmark.js": {
+          "bytesInOutput": 457
         },
         "node_modules/lucide-react/dist/esm/icons/layout-dashboard.js": {
           "bytesInOutput": 391
@@ -32786,14 +33301,11 @@
         "node_modules/lucide-react/dist/esm/icons/lock.js": {
           "bytesInOutput": 196
         },
-        "node_modules/lucide-react/dist/esm/icons/log-out.js": {
-          "bytesInOutput": 255
+        "node_modules/lucide-react/dist/esm/icons/mail.js": {
+          "bytesInOutput": 203
         },
         "node_modules/lucide-react/dist/esm/icons/maximize-2.js": {
           "bytesInOutput": 313
-        },
-        "node_modules/lucide-react/dist/esm/icons/menu.js": {
-          "bytesInOutput": 249
         },
         "node_modules/lucide-react/dist/esm/icons/message-circle.js": {
           "bytesInOutput": 127
@@ -32804,11 +33316,20 @@
         "node_modules/lucide-react/dist/esm/icons/message-square.js": {
           "bytesInOutput": 158
         },
+        "node_modules/lucide-react/dist/esm/icons/minus.js": {
+          "bytesInOutput": 85
+        },
         "node_modules/lucide-react/dist/esm/icons/newspaper.js": {
           "bytesInOutput": 373
         },
         "node_modules/lucide-react/dist/esm/icons/pen-line.js": {
           "bytesInOutput": 175
+        },
+        "node_modules/lucide-react/dist/esm/icons/phone.js": {
+          "bytesInOutput": 394
+        },
+        "node_modules/lucide-react/dist/esm/icons/pie-chart.js": {
+          "bytesInOutput": 183
         },
         "node_modules/lucide-react/dist/esm/icons/plus.js": {
           "bytesInOutput": 133
@@ -32818,6 +33339,12 @@
         },
         "node_modules/lucide-react/dist/esm/icons/refresh-ccw.js": {
           "bytesInOutput": 324
+        },
+        "node_modules/lucide-react/dist/esm/icons/refresh-cw.js": {
+          "bytesInOutput": 323
+        },
+        "node_modules/lucide-react/dist/esm/icons/rocket.js": {
+          "bytesInOutput": 513
         },
         "node_modules/lucide-react/dist/esm/icons/search.js": {
           "bytesInOutput": 158
@@ -32883,52 +33410,37 @@
           "bytesInOutput": 5325
         },
         "src/context/AuthContext.tsx": {
-          "bytesInOutput": 23893
+          "bytesInOutput": 23889
         },
-        "src/telemetry.ts": {
-          "bytesInOutput": 11415
+        "src/pages/GatewayPage.tsx": {
+          "bytesInOutput": 11488
         },
-        "src/utils/textSanitizer.ts": {
-          "bytesInOutput": 1693
-        },
-        "src/api/client.ts": {
-          "bytesInOutput": 41033
+        "src/constants/beta.ts": {
+          "bytesInOutput": 348
         },
         "src/utils/browserStorage.ts": {
           "bytesInOutput": 601
         },
-        "src/pages/GatewayPage.tsx": {
-          "bytesInOutput": 11004
-        },
         "src/pages/ManualEntry.tsx": {
-          "bytesInOutput": 15910
+          "bytesInOutput": 16361
         },
         "src/data/indianStocks.ts": {
           "bytesInOutput": 299245
         },
         "src/pages/UploadPage.tsx": {
-          "bytesInOutput": 28239
+          "bytesInOutput": 28729
         },
         "src/pages/WatchlistStep.tsx": {
-          "bytesInOutput": 12144
+          "bytesInOutput": 12606
         },
         "src/pages/Dashboard.tsx": {
-          "bytesInOutput": 258078
-        },
-        "src/hooks/useMarketFeed.ts": {
-          "bytesInOutput": 12297
-        },
-        "src/utils/runtimeConfig.ts": {
-          "bytesInOutput": 3190
-        },
-        "src/components/layout/Sidebar.tsx": {
-          "bytesInOutput": 25043
+          "bytesInOutput": 293770
         },
         "src/components/layout/AppShell.tsx": {
-          "bytesInOutput": 2567
+          "bytesInOutput": 1553
         },
         "src/components/dashboard/PortfolioTable.tsx": {
-          "bytesInOutput": 10686
+          "bytesInOutput": 10645
         },
         "src/components/dashboard/WatchlistWorkspace.tsx": {
           "bytesInOutput": 52987
@@ -32940,16 +33452,22 @@
           "bytesInOutput": 71647
         },
         "node_modules/chart.js/dist/chart.js": {
-          "bytesInOutput": 332417
+          "bytesInOutput": 332415
         },
         "node_modules/react-chartjs-2/dist/index.js": {
           "bytesInOutput": 4014
         },
+        "src/hooks/useMarketFeed.ts": {
+          "bytesInOutput": 13209
+        },
+        "src/utils/runtimeConfig.ts": {
+          "bytesInOutput": 3190
+        },
         "src/utils/coverArt.ts": {
-          "bytesInOutput": 8556
+          "bytesInOutput": 20668
         },
         "src/components/screener/ScreenerWorkspace.tsx": {
-          "bytesInOutput": 68358
+          "bytesInOutput": 70763
         },
         "src/styles/screener.css": {
           "bytesInOutput": 0
@@ -32964,10 +33482,10 @@
           "bytesInOutput": 4066
         },
         "src/components/dashboard/Sparkline.tsx": {
-          "bytesInOutput": 2200
+          "bytesInOutput": 2189
         },
         "src/components/dashboard/IndexTickerCard.tsx": {
-          "bytesInOutput": 4055
+          "bytesInOutput": 4503
         },
         "src/components/charts/InteractiveChart.tsx": {
           "bytesInOutput": 8647
@@ -33012,22 +33530,49 @@
           "bytesInOutput": 16766
         },
         "src/components/chat/ExportPanel.tsx": {
-          "bytesInOutput": 4428
+          "bytesInOutput": 4414
         },
         "src/components/layout/FeatureTabs.tsx": {
-          "bytesInOutput": 2805
-        },
-        "src/components/common/ComingSoon.tsx": {
-          "bytesInOutput": 1612
+          "bytesInOutput": 2814
         },
         "src/pages/DashboardEarningsPage.tsx": {
-          "bytesInOutput": 2807
+          "bytesInOutput": 27802
+        },
+        "src/components/earnings/EarningsWorkspace.tsx": {
+          "bytesInOutput": 22803
+        },
+        "src/components/earnings/EarningsResultDetail.tsx": {
+          "bytesInOutput": 27684
+        },
+        "src/components/earnings/SubsidiaryMatrix.tsx": {
+          "bytesInOutput": 6882
+        },
+        "src/components/earnings/FootnoteDiff.tsx": {
+          "bytesInOutput": 5090
+        },
+        "src/components/earnings/earnings.css": {
+          "bytesInOutput": 0
         },
         "src/pages/DashboardGovernancePage.tsx": {
-          "bytesInOutput": 2808
+          "bytesInOutput": 24823
+        },
+        "src/components/governance/GovernanceWorkspace.tsx": {
+          "bytesInOutput": 15552
+        },
+        "src/components/governance/governance.css": {
+          "bytesInOutput": 0
+        },
+        "src/pages/DashboardIpoPage.tsx": {
+          "bytesInOutput": 28302
+        },
+        "src/pages/IpoDashboard.tsx": {
+          "bytesInOutput": 15149
+        },
+        "src/components/ipo/IpoCard.tsx": {
+          "bytesInOutput": 15815
         },
         "src/pages/InsightsStudio.tsx": {
-          "bytesInOutput": 57325
+          "bytesInOutput": 57328
         },
         "src/components/insights/FlashJobMonitor.tsx": {
           "bytesInOutput": 10304
@@ -33044,8 +33589,17 @@
         "src/components/insights/insightsStudio.css": {
           "bytesInOutput": 0
         },
+        "src/pages/IpoDetailPage.tsx": {
+          "bytesInOutput": 122382
+        },
+        "src/pages/IpoTrackingPage.tsx": {
+          "bytesInOutput": 9316
+        },
+        "src/pages/Login.tsx": {
+          "bytesInOutput": 35008
+        },
         "src/components/common/CommandPalette.tsx": {
-          "bytesInOutput": 5925
+          "bytesInOutput": 6137
         },
         "src/index.css": {
           "bytesInOutput": 0
@@ -33054,15 +33608,245 @@
           "bytesInOutput": 0
         }
       },
-      "bytes": 2826337
+      "bytes": 3159333
     },
-    "dist-sandbox-release/assets/main-H5IIEWW5.css.map": {
+    "dist-sandbox-release/assets/chunk-client-W2BFPBH7.js.map": {
       "imports": [],
       "exports": [],
       "inputs": {},
-      "bytes": 278605
+      "bytes": 93
     },
-    "dist-sandbox-release/assets/main-H5IIEWW5.css": {
+    "dist-sandbox-release/assets/chunk-client-W2BFPBH7.js": {
+      "imports": [
+        {
+          "path": "dist-sandbox-release/assets/chunk-chunk-IVLMB3FR.js",
+          "kind": "import-statement"
+        }
+      ],
+      "exports": [
+        "analyzeIpo",
+        "apiForgotPassword",
+        "apiGoogleAuth",
+        "apiLogin",
+        "apiLogout",
+        "apiResetPassword",
+        "apiSendVerification",
+        "apiSignup",
+        "apiUpdateMobile",
+        "cancelExtraction",
+        "confirmExtraction",
+        "createRazorpayOrder",
+        "deletePortfolioMirror",
+        "downloadExport",
+        "downloadExportAndSave",
+        "flashJobStatusUrl",
+        "flashJobStreamUrl",
+        "generateFlashArticle",
+        "getAuthMe",
+        "getCachedUser",
+        "getCompanyGovernance",
+        "getCompanyHealth",
+        "getCompanyNetwork",
+        "getCompanyProvenance",
+        "getContentArticle",
+        "getContentArticleHtml",
+        "getContentAutomationStatus",
+        "getCorporateActions",
+        "getDividends",
+        "getEarningsCalendar",
+        "getEarningsCompanies",
+        "getEarningsOverview",
+        "getEarningsResult",
+        "getEventSourceAuthToken",
+        "getGovernanceLeaderboard",
+        "getHoldingDetail",
+        "getIpoAnalysis",
+        "getIpoAnalysisStatus",
+        "getIpoPipeline",
+        "getIpoStats",
+        "getIpoTracking",
+        "getMarketHistory",
+        "getMarketIndices",
+        "getMarketNews",
+        "getMarketQuotes",
+        "getMfAnalytics",
+        "getPortfolioAlerts",
+        "getPortfolioAnalytics",
+        "getPortfolioBrief",
+        "getPortfolioCommentary",
+        "getPortfolioGovernance",
+        "getPortfolioMirror",
+        "getPortfolioNews",
+        "getPortfolioSectors",
+        "getScreenerAnalysis",
+        "getScreenerEvents",
+        "getScreenerFinancials",
+        "getScreenerSnapshot",
+        "getScreenerTechnicals",
+        "getSessionResult",
+        "getTaxSummary",
+        "getTodayQueue",
+        "getUserSubscription",
+        "getUserTokenUsage",
+        "getWatchlistSnapshot",
+        "ingestFlashEvents",
+        "listContentArticles",
+        "pollExport",
+        "postStressTest",
+        "publishContentArticle",
+        "queueIpoAnalysis",
+        "refreshIpoData",
+        "replacePortfolioMirror",
+        "requestExport",
+        "runContentAutomationNow",
+        "runIpoWatcher",
+        "runScreenerQuery",
+        "screenerSearch",
+        "searchIpos",
+        "setCachedUser",
+        "startResearch",
+        "stopSession",
+        "streamSession",
+        "syncIpoStatuses",
+        "syncManualPortfolio",
+        "triageFilings",
+        "unpublishContentArticle",
+        "uploadPortfolioDocument",
+        "uploadPortfolioScreenshot",
+        "verifyRazorpayPayment"
+      ],
+      "entryPoint": "src/api/client.ts",
+      "inputs": {},
+      "bytes": 3849
+    },
+    "dist-sandbox-release/assets/chunk-chunk-IVLMB3FR.js.map": {
+      "imports": [],
+      "exports": [],
+      "inputs": {},
+      "bytes": 163461
+    },
+    "dist-sandbox-release/assets/chunk-chunk-IVLMB3FR.js": {
+      "imports": [],
+      "exports": [
+        "__commonJS",
+        "__publicField",
+        "__toESM",
+        "analyzeIpo",
+        "apiForgotPassword",
+        "apiGoogleAuth",
+        "apiLogin",
+        "apiLogout",
+        "apiResetPassword",
+        "apiSendVerification",
+        "apiSignup",
+        "apiUpdateMobile",
+        "cancelExtraction",
+        "clearTelemetryUser",
+        "confirmExtraction",
+        "createRazorpayOrder",
+        "deletePortfolioMirror",
+        "downloadExport",
+        "downloadExportAndSave",
+        "flashJobStatusUrl",
+        "flashJobStreamUrl",
+        "generateFlashArticle",
+        "getAuthMe",
+        "getCachedUser",
+        "getCompanyGovernance",
+        "getCompanyHealth",
+        "getCompanyNetwork",
+        "getCompanyProvenance",
+        "getContentArticle",
+        "getContentArticleHtml",
+        "getContentAutomationStatus",
+        "getCorporateActions",
+        "getDividends",
+        "getEarningsCalendar",
+        "getEarningsCompanies",
+        "getEarningsOverview",
+        "getEarningsResult",
+        "getEventSourceAuthToken",
+        "getGovernanceLeaderboard",
+        "getHoldingDetail",
+        "getIpoAnalysis",
+        "getIpoAnalysisStatus",
+        "getIpoPipeline",
+        "getIpoStats",
+        "getIpoTracking",
+        "getMarketHistory",
+        "getMarketIndices",
+        "getMarketNews",
+        "getMarketQuotes",
+        "getMfAnalytics",
+        "getPortfolioAlerts",
+        "getPortfolioAnalytics",
+        "getPortfolioBrief",
+        "getPortfolioCommentary",
+        "getPortfolioGovernance",
+        "getPortfolioMirror",
+        "getPortfolioNews",
+        "getPortfolioSectors",
+        "getScreenerAnalysis",
+        "getScreenerEvents",
+        "getScreenerFinancials",
+        "getScreenerSnapshot",
+        "getScreenerTechnicals",
+        "getSessionResult",
+        "getTaxSummary",
+        "getTodayQueue",
+        "getUserSubscription",
+        "getUserTokenUsage",
+        "getWatchlistSnapshot",
+        "ingestFlashEvents",
+        "initializeTelemetry",
+        "listContentArticles",
+        "pollExport",
+        "postStressTest",
+        "publishContentArticle",
+        "queueIpoAnalysis",
+        "refreshIpoData",
+        "replacePortfolioMirror",
+        "requestExport",
+        "runContentAutomationNow",
+        "runIpoWatcher",
+        "runScreenerQuery",
+        "screenerSearch",
+        "searchIpos",
+        "setCachedUser",
+        "setTelemetryUser",
+        "startResearch",
+        "stopSession",
+        "streamSession",
+        "syncIpoStatuses",
+        "syncManualPortfolio",
+        "trackEvent",
+        "trackPageView",
+        "triageFilings",
+        "unpublishContentArticle",
+        "uploadPortfolioDocument",
+        "uploadPortfolioScreenshot",
+        "verifyRazorpayPayment"
+      ],
+      "inputs": {
+        "src/telemetry.ts": {
+          "bytesInOutput": 12855
+        },
+        "src/utils/textSanitizer.ts": {
+          "bytesInOutput": 1693
+        },
+        "src/api/client.ts": {
+          "bytesInOutput": 57871
+        }
+      },
+      "bytes": 76158
+    },
+    "dist-sandbox-release/assets/main-3YDJL5AA.css.map": {
+      "imports": [],
+      "exports": [],
+      "inputs": {},
+      "bytes": 530462
+    },
+    "dist-sandbox-release/assets/main-3YDJL5AA.css": {
       "imports": [
         {
           "path": "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap",
@@ -33072,19 +33856,25 @@
       ],
       "inputs": {
         "src/styles/screener.css": {
-          "bytesInOutput": 17086
+          "bytesInOutput": 22193
+        },
+        "src/components/earnings/earnings.css": {
+          "bytesInOutput": 34726
+        },
+        "src/components/governance/governance.css": {
+          "bytesInOutput": 7987
         },
         "src/components/insights/insightsStudio.css": {
           "bytesInOutput": 20496
         },
         "src/index.css": {
-          "bytesInOutput": 84846
+          "bytesInOutput": 165412
         },
         "src/styles/enhancements.css": {
           "bytesInOutput": 19588
         }
       },
-      "bytes": 142339
+      "bytes": 270817
     }
   }
 }

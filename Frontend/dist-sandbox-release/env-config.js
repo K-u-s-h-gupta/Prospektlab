@@ -2,6 +2,7 @@
   var prodBackend = "https://wr7fle8bc1.execute-api.ap-south-1.amazonaws.com";
   var prodRealtimeBase = "https://api.prospektlab.com";
   var host = window.location.hostname || "";
+  var port = String(window.location.port || "");
   var canonicalHost = "prospektlab.com";
   var canonicalAliases = {
     "www.prospektlab.com": true,
@@ -11,7 +12,17 @@
     "dobiy4fdxr7cb.cloudfront.net": true,
     "app.prospektlab.com": true
   };
-  var isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  var isLoopbackHost = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  var isPrivateIpv4 =
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host) ||
+    host === "0.0.0.0";
+  var isDotlessHost = !!host && host.indexOf(".") === -1;
+  var isNamedLocalHost = /\.local$/i.test(host);
+  var isDevPort = port === "3000" || port === "4173" || port === "4174" || port === "5173" || port === "5174";
+  var isHttpDevHost = window.location.protocol === "http:" && isDevPort && host !== canonicalHost && !canonicalAliases[host];
+  var isLocal = isLoopbackHost || isPrivateIpv4 || isNamedLocalHost || (isDotlessHost && isDevPort) || isHttpDevHost;
   if (!isLocal && host && host !== canonicalHost && canonicalAliases[host]) {
     var canonicalUrl = window.location.protocol + "//" + canonicalHost + window.location.pathname + window.location.search + window.location.hash;
     window.location.replace(canonicalUrl);
