@@ -461,6 +461,53 @@ def get_latest_score(cin: str, database_url: str | None = None) -> dict | None:
         return None
 
 
+def top_risk_companies(
+    database_url: str | None = None,
+    limit: int = 50,
+    bands: list[str] | None = None,
+) -> list[dict]:
+    """Governance-tab leaderboard: data-backed companies ranked by governance risk.
+
+    Returns the latest-as_of company_governance_scores rows that have a model
+    contribution (``model_risk`` not null — i.e. real data, not the
+    insufficient-data floor), highest composite first, joined to the master for a
+    display name + exchange symbol. ``bands`` optionally filters (e.g.
+    ["HIGH","ELEVATED"]). This is the "who should I worry about" surface; it never
+    returns no-data companies as risk (they are floored to LOW and excluded here).
+    """
+    db_url = get_database_url(database_url)
+    if not db_url:
+        return []
+    from psycopg.rows import dict_row
+
+    params: list[Any] = []
+    band_filter = ""
+    if bands:
+        band_filter = "and g.band = any(%s)"
+        params.append([b.upper() for b in bands])
+    params.append(int(limit))
+    sql = f"""
+        with latest as (select max(as_of_date) as d from company_governance_scores)
+        select g.cin, m.company_name, m.nse_symbol, m.bse_scrip_code,
+               g.composite_score, g.band, g.model_risk, g.model_probability,
+               g.as_of_date, g.flags
+        from company_governance_scores g
+        join latest on g.as_of_date = latest.d
+        left join ikg_company_master m on m.cin = g.cin
+        where g.model_risk is not null {band_filter}
+        order by g.composite_score desc nulls last
+        limit %s
+    """
+    try:
+        with connect_postgres(db_url, row_factory=dict_row, connect_timeout=30) as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                return [dict(r) for r in cur.fetchall()]
+    except Exception as exc:
+        logger.warning("top_risk_companies failed: %s", exc)
+        return []
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     import argparse
