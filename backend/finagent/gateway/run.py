@@ -4509,44 +4509,57 @@ async def get_company_governance(cin: str, current_user: dict | None = Depends(g
         result_to_dict,
     )
 
-    scorer = get_governance_scorer()
+    from finagent.ikg.igs.scoring import get_latest_score
+
+    # Rules engine (best-effort): needs the full raw IKG tables. Where the serving DB
+    # only carries the IGS scored table (e.g. Supabase), this returns None — we then
+    # serve the IGS score row instead of 404ing.
+    result = None
     try:
-        result = await asyncio.to_thread(scorer.score_company, cin)
+        result = await asyncio.to_thread(get_governance_scorer().score_company, cin)
     except GovernanceLookupError as exc:
-        logger.warning("Company governance lookup failed for %s: %s", cin, exc)
-        raise HTTPException(
-            status_code=503,
-            detail={"ok": False, "code": "GOVERNANCE_LOOKUP_ERROR",
-                    "message": "Could not retrieve governance data. Please retry."},
-        ) from exc
-    if result is None:
+        logger.warning("Rules governance lookup failed for %s: %s", cin, exc)
+    except Exception as exc:  # missing raw tables on the serving DB, etc.
+        logger.warning("Rules governance unavailable for %s: %s", cin, exc)
+
+    igs = None
+    try:
+        igs = await asyncio.to_thread(get_latest_score, cin)
+    except Exception as exc:
+        logger.debug("IGS score lookup failed for %s: %s", cin, exc)
+
+    if result is None and igs is None:
         raise HTTPException(
             status_code=404,
             detail={"ok": False, "code": "NO_GOVERNANCE_DATA",
                     "message": f"No governance data available for {cin}."},
         )
-    out = result_to_dict(result)
-    # Attach the IGS predictive score (percentile band + model risk) from the
-    # scored history table. Guarded: rules-only governance is never broken if IGS
-    # is absent. insufficient_data=True flags companies with no model contribution
-    # (no real features) so the UI shows "Not rated" rather than a hollow score.
-    try:
-        from finagent.ikg.igs.scoring import get_latest_score
 
-        igs = await asyncio.to_thread(get_latest_score, cin)
-        if igs:
-            out["igs"] = {
-                "band": igs.get("band"),
-                "composite_score": igs.get("composite_score"),
-                "model_risk": igs.get("model_risk"),
-                "model_probability": igs.get("model_probability"),
-                "model_version": igs.get("model_version"),
-                "as_of_date": str(igs.get("as_of_date")),
-                "insufficient_data": igs.get("model_risk") is None,
-                "flags": igs.get("flags"),
-            }
-    except Exception as exc:
-        logger.debug("IGS enrich skipped for %s: %s", cin, exc)
+    if result is not None:
+        out = result_to_dict(result)
+    else:
+        # Build a GovernanceResult-shaped response from the IGS score row alone.
+        out = {
+            "cin": cin,
+            "score": igs.get("composite_score"),
+            "band": igs.get("band"),
+            "subscores": igs.get("subscores") or {},
+            "flags": igs.get("flags") or [],
+            "coverage": {},
+            "computed_at": str(igs.get("computed_at")) if igs.get("computed_at") else None,
+        }
+
+    if igs:
+        out["igs"] = {
+            "band": igs.get("band"),
+            "composite_score": igs.get("composite_score"),
+            "model_risk": igs.get("model_risk"),
+            "model_probability": igs.get("model_probability"),
+            "model_version": igs.get("model_version"),
+            "as_of_date": str(igs.get("as_of_date")),
+            "insufficient_data": igs.get("model_risk") is None,
+            "flags": igs.get("flags"),
+        }
     return out
 
 
