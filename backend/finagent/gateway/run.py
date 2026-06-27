@@ -3559,11 +3559,16 @@ async def ipo_pipeline(current_user: dict | None = Depends(get_current_user_opti
 
 @app.post("/ipo/refresh-nse")
 async def ipo_refresh_nse(current_user: dict | None = Depends(get_current_user_optional)):
-    """Quick refresh: only NSE + ipowatch enrichment, no SEBI scraping."""
+    """Quick refresh: fetch IPOs from NSE + ipowatch, create missing records."""
     service = get_ipo_service()
-    await service._enrich_from_nse()
-    await service._enrich_from_ipowatch()
-    return {"status": "ok", "message": "NSE + ipowatch enrichment complete"}
+    nse_count = await service._enrich_from_nse()
+    ipowatch_count = await service._enrich_from_ipowatch()
+    return {
+        "status": "ok",
+        "message": "NSE + ipowatch fetch complete",
+        "nse_created_or_updated": nse_count,
+        "ipowatch_created_or_updated": ipowatch_count,
+    }
 
 
 @app.get("/ipo/search")
@@ -3636,10 +3641,119 @@ async def ipo_post_listing_tracking(
 @app.post("/ipo/watcher/run")
 async def ipo_watcher_run(
     download: bool = True,
+    include_bse: bool = False,
+    batch_process: bool = True,
     current_user: dict | None = Depends(get_current_user_optional),
 ):
+    """Full 8-stage IPO watcher pipeline."""
     service = get_ipo_service()
-    return await service.run_watcher(download=download)
+    return await service.run_watcher(download=download, include_bse=include_bse, batch_process=batch_process)
+
+
+@app.get("/ipo/stats")
+async def ipo_stats(current_user: dict | None = Depends(get_current_user_optional)):
+    """Return summary statistics for the IPO module."""
+    service = get_ipo_service()
+    filings = await service.store.list_filings(limit=500)
+    by_status: dict[str, int] = {}
+    by_doc_type: dict[str, int] = {}
+    for f in filings:
+        s = (f.get("status") or "unknown").lower()
+        by_status[s] = by_status.get(s, 0) + 1
+        dt = (f.get("doc_type") or "unknown").lower()
+        by_doc_type[dt] = by_doc_type.get(dt, 0) + 1
+    extraction_stats = service.get_extraction_stats()
+    return {
+        "total_filings": len(filings),
+        "by_status": by_status,
+        "by_doc_type": by_doc_type,
+        "extraction_stats": extraction_stats,
+        "as_of": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@app.post("/ipo/clear-all")
+async def ipo_clear_all(current_user: dict | None = Depends(get_current_user_optional)):
+    """Clear ALL IPO data to start fresh.
+    
+    WARNING: This is destructive and cannot be undone.
+    Clears local files, Supabase tables, and cached PDFs.
+    """
+    service = get_ipo_service()
+    result = await service.clear_all_data()
+    return result
+
+
+@app.post("/ipo/sync")
+async def ipo_sync(
+    force_recheck: bool = False,
+    current_user: dict | None = Depends(get_current_user_optional),
+):
+    """Active sync: re-check status transitions for all live/upcoming IPOs.
+    
+    Detects:
+    - Live IPOs whose subscription_close date has passed (→ recently listed)
+    - Upcoming IPOs whose subscription_open date has passed (→ live)
+    - Any filings needing analysis re-queue
+    
+    Lighter than the full watcher — just status reclassification and re-queue.
+    """
+    service = get_ipo_service()
+    from datetime import date as _date
+    filings = await service.store.list_filings(limit=500)
+    today = _date.today().isoformat()
+    
+    transitioned_to_listed = 0
+    transitioned_to_live = 0
+    requeued = 0
+    changes = []
+    
+    for filing in filings:
+        slug = filing.get("slug") or ""
+        status = (filing.get("status") or "upcoming").lower()
+        sub_close = filing.get("subscription_close")
+        sub_open = filing.get("subscription_open")
+        
+        updated = dict(filing)
+        changed = False
+        
+        # Live → listed: subscription closed
+        if status == "live" and sub_close and sub_close < today:
+            updated["status"] = "listed"
+            changed = True
+            transitioned_to_listed += 1
+            changes.append({"slug": slug, "from": "live", "to": "listed", "reason": f"sub_close={sub_close}"})
+            logger.info("[SYNC] %s: live → listed (sub_close=%s)", slug, sub_close)
+        
+        # Upcoming → live: subscription opened
+        elif status == "upcoming" and sub_open and sub_open <= today:
+            if not sub_close or sub_close >= today:
+                updated["status"] = "live"
+                changed = True
+                transitioned_to_live += 1
+                changes.append({"slug": slug, "from": "upcoming", "to": "live", "reason": f"sub_open={sub_open}"})
+                logger.info("[SYNC] %s: upcoming → live (sub_open=%s)", slug, sub_open)
+        
+        if changed:
+            from finagent.tools.data.ipo_enricher import enrich_filing
+            updated = enrich_filing(updated)
+            await service.store.upsert_filing(updated)
+        
+        # Re-queue for analysis if needed
+        if force_recheck and filing.get("pdf_url"):
+            analysis = await service.store.get_analysis(slug)
+            if not service._analysis_has_required_content(analysis) or service._analysis_needs_refresh(analysis):
+                await service.queue_analysis(slug, priority=False)
+                requeued += 1
+    
+    return {
+        "synced_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+        "total_checked": len(filings),
+        "transitioned_to_listed": transitioned_to_listed,
+        "transitioned_to_live": transitioned_to_live,
+        "requeued_for_analysis": requeued,
+        "changes": changes,
+    }
 
 
 @app.post("/ipo/{slug}/analyze")
@@ -4411,7 +4525,54 @@ async def get_company_governance(cin: str, current_user: dict = Depends(get_curr
             detail={"ok": False, "code": "NO_GOVERNANCE_DATA",
                     "message": f"No governance data available for {cin}."},
         )
-    return result_to_dict(result)
+    out = result_to_dict(result)
+    # Attach the IGS predictive score (percentile band + model risk) from the
+    # scored history table. Guarded: rules-only governance is never broken if IGS
+    # is absent. insufficient_data=True flags companies with no model contribution
+    # (no real features) so the UI shows "Not rated" rather than a hollow score.
+    try:
+        from finagent.ikg.igs.scoring import get_latest_score
+
+        igs = await asyncio.to_thread(get_latest_score, cin)
+        if igs:
+            out["igs"] = {
+                "band": igs.get("band"),
+                "composite_score": igs.get("composite_score"),
+                "model_risk": igs.get("model_risk"),
+                "model_probability": igs.get("model_probability"),
+                "model_version": igs.get("model_version"),
+                "as_of_date": str(igs.get("as_of_date")),
+                "insufficient_data": igs.get("model_risk") is None,
+                "flags": igs.get("flags"),
+            }
+    except Exception as exc:
+        logger.debug("IGS enrich skipped for %s: %s", cin, exc)
+    return out
+
+
+@app.get("/governance/leaderboard")
+async def get_governance_leaderboard(
+    bands: str | None = None,
+    limit: int = 50,
+    current_user: dict = Depends(get_current_user),
+):
+    """Governance-tab leaderboard: data-backed companies ranked by governance risk.
+
+    ``bands`` is an optional comma list (e.g. "HIGH,ELEVATED"). Only companies with
+    a real model contribution are returned — no-data companies are never shown as
+    risk. This powers the governance tab's headline "who to worry about" view.
+    """
+    from finagent.ikg.igs.scoring import top_risk_companies
+
+    band_list = [b.strip().upper() for b in bands.split(",") if b.strip()] if bands else None
+    limit = max(1, min(int(limit), 200))
+    rows = await asyncio.to_thread(top_risk_companies, None, limit, band_list)
+    _record_metric_event(current_user, "governance_leaderboard_view")
+    return {
+        "as_of": str(rows[0]["as_of_date"]) if rows else None,
+        "count": len(rows),
+        "companies": rows,
+    }
 
 
 @app.get("/company/{cin}/network")
