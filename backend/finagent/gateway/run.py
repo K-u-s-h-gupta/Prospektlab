@@ -4523,14 +4523,18 @@ async def get_company_governance(cin: str, detail: bool = False, current_user: d
     try:
         scorer = get_governance_scorer()
         if detail:
-            signals = await asyncio.to_thread(scorer._fetch_signals, cin)
+            try:
+                signals = await asyncio.to_thread(scorer._fetch_signals, cin)
+            except Exception as sig_exc:
+                logger.warning("Signals fetch failed for %s (non-fatal): %s", cin, sig_exc)
+        try:
             result = await asyncio.to_thread(scorer.score_company, cin)
-        else:
-            result = await asyncio.to_thread(scorer.score_company, cin)
-    except GovernanceLookupError as exc:
-        logger.warning("Rules governance lookup failed for %s: %s", cin, exc)
-    except Exception as exc:  # missing raw tables on the serving DB, etc.
-        logger.warning("Rules governance unavailable for %s: %s", cin, exc)
+        except GovernanceLookupError as exc:
+            logger.warning("Rules governance lookup failed for %s: %s", cin, exc)
+        except Exception as exc:  # missing raw tables on the serving DB, etc.
+            logger.warning("Rules governance unavailable for %s: %s", cin, exc)
+    except Exception as exc:
+        logger.warning("Governance scorer init failed for %s: %s", cin, exc)
 
     igs = None
     try:
